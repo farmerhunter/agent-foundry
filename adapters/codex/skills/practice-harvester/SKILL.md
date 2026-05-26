@@ -1,6 +1,6 @@
 ---
 name: practice-harvester
-description: Use when the user says "harvest practices", "做一次 harvest practice", "discover assets", "发现可打包资产", "提炼实践", "沉淀经验", "import skill", "导入这个 skill", "review practices", "检查 skill rot", "review assets", "检查 asset rot", "publish practices", "发布 practices", or asks to extract, persist, deduplicate, merge, review, import, borrow, approve, or publish reusable engineering practices or assets.
+description: Use when the user says "harvest practices", "做一次 harvest practice", "discover assets", "发现可打包资产", "提炼实践", "沉淀经验", "import skill", "导入这个 skill", "review practices", "检查 skill rot", "review assets", "检查 asset rot", "publish practices", "发布 practices", "refresh practices and assets", "刷新practices和assets", or asks to extract, persist, deduplicate, merge, review, import, borrow, approve, publish, or refresh reusable engineering practices or assets.
 ---
 
 # Practice Harvester
@@ -19,12 +19,13 @@ This skill is an asset that performs a repeatable workflow. During execution, it
 - `publish practices` / `发布 practices`: publish adapters from current active practices.
 - `review practices` / `检查 skill rot`: review for duplicates, stale entries, weak rules, and adapter drift.
 - `review assets` / `检查 asset rot`: review reusable assets for usage, overlap, stale triggers, and adapter coverage.
+- `refresh practices and assets` / `刷新practices和assets`: pull remote updates, conditionally regenerate adapters, and install to local runtimes. Read `workflows/refresh.md` from the agent-foundry repo.
 
 ## Workflow
 
 1. Locate the canonical practice repository.
 2. Select the workflow from the short command or user intent.
-3. Read `references/harvest-workflow.md` for harvesting, `references/import-policy.md` for imports, `references/asset-policy.md` for assets, or the repository workflow file for publish/review.
+3. Read `references/harvest-workflow.md` for harvesting, `references/import-policy.md` for imports, `references/asset-policy.md` for assets, `workflows/refresh.md` from the repo for refresh, or the repository workflow file for publish/review.
 4. Read `references/schema.md`.
 5. Search the practice index before creating anything new.
 6. Classify candidates as principle, pattern, heuristic, playbook, checklist, example, or anti-pattern.

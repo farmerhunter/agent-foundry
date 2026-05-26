@@ -14,6 +14,7 @@ Use these short commands in day-to-day agent work.
 | `publish practices` | `发布 practices` | Publish adapters from current active practices. Usually not needed manually. |
 | `review practices` | `review practices` / `检查 skill rot` | Review the practice repo for duplicates, stale entries, weak rules, and adapter drift. |
 | `review assets` | `review assets` / `检查 asset rot` | Review reusable assets for usage, overlap, stale triggers, and adapter coverage. |
+| `refresh practices and assets` | `刷新practices和assets` | Pull remote updates, conditionally publish adapters, and install to local runtimes. |
 
 ## Approval
 

@@ -29,6 +29,7 @@ adapters:
       publish: ["publish practices", "发布 practices"]
       review: ["review practices", "检查 skill rot"]
       review_assets: ["review assets", "检查 asset rot"]
+      refresh: ["refresh practices and assets", "刷新practices和assets"]
     transform_policy:
       skill_body: "Short trigger and workflow router."
       references: "Workflow summaries, schemas, principles, checklists, and command mappings."
@@ -54,6 +55,7 @@ adapters:
       publish: ["publish practices", "发布 practices"]
       review: ["review practices", "检查 skill rot"]
       review_assets: ["review assets", "检查 asset rot"]
+      refresh: ["refresh practices and assets", "刷新practices和assets"]
     transform_policy:
       CLAUDE.md: "Short dispatcher and durable rules."
       commands: "One command file per workflow."
@@ -80,6 +82,7 @@ adapters:
       publish: ["publish practices", "发布 practices"]
       review: ["review practices", "检查 skill rot"]
       review_assets: ["review assets", "检查 asset rot"]
+      refresh: ["refresh practices and assets", "刷新practices和assets"]
     transform_policy:
       skill_body: "Short trigger and workflow router."
       references: "Full operational references similar to Codex adapter."
@@ -104,6 +107,7 @@ adapters:
       publish: ["publish practices", "发布 practices"]
       review: ["review practices", "检查 skill rot"]
       review_assets: ["review assets", "检查 asset rot"]
+      refresh: ["refresh practices and assets", "刷新practices和assets"]
     transform_policy:
       custom_instructions: "Short dispatcher and approval semantics."
       knowledge_files: "Full workflow, command, schema, and principle references."

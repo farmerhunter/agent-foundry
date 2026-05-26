@@ -19,6 +19,7 @@ Recognize these short commands:
 - `publish practices` / `发布 practices`: publish adapters from current active practices.
 - `review practices` / `检查 skill rot`: review for duplicates, stale entries, weak rules, and adapter drift.
 - `review assets` / `检查 asset rot`: review reusable assets for usage, overlap, stale triggers, and adapter coverage.
+- `refresh practices and assets` / `刷新practices和assets`: pull remote updates, conditionally regenerate adapters, and install to local runtimes.
 
 Follow this route:
 

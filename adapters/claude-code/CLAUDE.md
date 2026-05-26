@@ -22,6 +22,9 @@ Short commands:
 - `publish practices` / `发布 practices`
 - `review practices` / `检查 skill rot`
 - `review assets` / `检查 asset rot`
+- `refresh practices and assets` / `刷新practices和assets`
+
+When asked to refresh, read `workflows/refresh.md` and follow the steps: git pull, conditionally regenerate adapters if canonical files changed, then install to local runtimes.
 
 When asked to harvest, persist, deduplicate, merge, or publish reusable lessons:
 
