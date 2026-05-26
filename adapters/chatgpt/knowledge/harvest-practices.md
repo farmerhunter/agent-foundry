@@ -38,3 +38,6 @@ Runtime publishing safety:
 - Use managed blocks/imports for central files and ownership markers for generated skill directories.
 - Refuse to overwrite unmanaged runtime paths by default.
 - Use dry-runs, backups, and explicit human approval before adopting existing runtime paths.
+- Keep portable adapter intent separate from machine-local deployment state.
+- Store adapter profiles and runtime templates in the repo; store enabled targets, detected paths, and adoption decisions in gitignored local manifests.
+- Exclude machine-local runtime manifests from portable snapshots by default.

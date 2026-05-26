@@ -37,3 +37,10 @@ entries:
     trigger: "harvest runtime publishing safety practice"
     outcome: useful
     note: "Created active RUNTIME-001, updated practice index and adapters, then synced managed Codex, Hermes, and Claude runtime copies."
+  - asset_id: ASSET-META-001
+    date: 2026-05-26
+    agent: "codex"
+    project: "agent-foundry"
+    trigger: "harvest runtime manifest portability practice"
+    outcome: useful
+    note: "Created active RUNTIME-002, updated adapters, and synced managed local runtimes from the local manifest."

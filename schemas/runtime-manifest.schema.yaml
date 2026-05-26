@@ -1,0 +1,27 @@
+# Runtime manifest schema.
+# The tracked template lives at runtime/templates/runtime_manifest.template.yaml.
+# Each machine keeps private deployment state at runtime/local/runtime_manifest.yaml.
+
+required_fields:
+  schema_version: "Manifest schema version."
+  updated: "Last manifest update date."
+  policy: "Global install and safety policy."
+  targets: "Map of runtime target id to deployment configuration."
+
+target_fields:
+  adapter: "Adapter id from adapters/adapter_profiles.yaml."
+  status: "enabled | disabled | missing | manual"
+  install_path: "Runtime root path for this machine. Empty for manual targets."
+  ownership_mode: "managed-directories | managed-block-and-files | manual-import"
+  conflict_policy: "How installer handles existing runtime paths."
+  backup_policy: "Backup behavior for central files."
+  detection: "Default path and marker paths used for local detection."
+  notes: "Human-readable deployment note."
+
+rules:
+  - "Only enabled targets are auto-synced by install_foundry.py."
+  - "Manual targets produce instructions but no local writes."
+  - "Missing targets are not removed automatically."
+  - "Unmanaged runtime paths require explicit adoption before overwrite."
+  - "The tracked template should remain conservative; local enabled/disabled state belongs in runtime/local/."
+  - "Portable snapshots include templates but exclude runtime/local/."

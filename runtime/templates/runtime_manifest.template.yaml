@@ -1,0 +1,61 @@
+schema_version: 1
+updated: 2026-05-26
+
+policy:
+  install_mode: human_approved_plan
+  publish_to_enabled_targets_after_approval: true
+  unmanaged_runtime_paths_require_adoption: true
+  central_files_use_managed_blocks: true
+
+targets:
+  codex:
+    adapter: codex
+    status: disabled
+    install_path: ~/.codex/skills
+    ownership_mode: managed-directories
+    conflict_policy: refuse-unmanaged
+    backup_policy: none
+    detection:
+      default_path: ~/.codex/skills
+      marker_paths:
+        - ~/.codex/skills
+    notes: "Codex skills are installed as managed skill directories."
+
+  claude-code:
+    adapter: claude-code
+    status: disabled
+    install_path: ~/.claude
+    ownership_mode: managed-block-and-files
+    conflict_policy: managed-block-only
+    backup_policy: backup-central-file
+    detection:
+      default_path: ~/.claude
+      marker_paths:
+        - ~/.claude/CLAUDE.md
+        - ~/.claude/settings.json
+    notes: "Generated instructions live under ~/.claude/agent-foundry; ~/.claude/CLAUDE.md only receives a managed import block."
+
+  hermes:
+    adapter: hermes
+    status: disabled
+    install_path: ~/.hermes/skills
+    ownership_mode: managed-directories
+    conflict_policy: refuse-unmanaged
+    backup_policy: none
+    detection:
+      default_path: ~/.hermes/skills
+      marker_paths:
+        - ~/.hermes/skills
+    notes: "Hermes native memory and self-growth remain enabled; Agent Foundry skills are managed runtime copies."
+
+  chatgpt:
+    adapter: chatgpt
+    status: manual
+    install_path: ""
+    ownership_mode: manual-import
+    conflict_policy: human-mediated
+    backup_policy: platform-dependent
+    detection:
+      default_path: ""
+      marker_paths: []
+    notes: "ChatGPT has no stable local runtime. Import custom instructions and knowledge files manually."

@@ -83,6 +83,15 @@ practices:
     tags: [native-learning, memory, skills, hermes, governance]
     aliases: [native skills can suggest but foundry canonizes, do not disable native self-growth]
 
+  - id: META-008
+    title: Route through assets, constrain with practices
+    path: practices/meta/META-008-route-through-assets-constrain-with-practices.md
+    domain: meta
+    type: principle
+    status: active
+    tags: [assets, practices, routing, dispatch, meta]
+    aliases: [assets perform work, practices govern rules, skill vs practice boundary]
+
   - id: RUNTIME-001
     title: Treat agent runtimes as shared, user-owned environments
     path: practices/runtime/RUNTIME-001-treat-agent-runtimes-as-shared-environments.md
@@ -91,6 +100,15 @@ practices:
     status: active
     tags: [runtime, adapters, deployment, ownership, safety]
     aliases: [do not overwrite unmanaged runtime files, runtime directories are shared environments, publish through managed blocks and markers]
+
+  - id: RUNTIME-002
+    title: Separate portable adapter intent from machine-local deployment state
+    path: practices/runtime/RUNTIME-002-separate-portable-adapter-intent-from-machine-local-state.md
+    domain: runtime
+    type: principle
+    status: active
+    tags: [runtime, deployment, manifest, offline-sync, portability]
+    aliases: [runtime manifest is machine-local, keep local deployment state out of git, portable snapshots exclude local runtime state]
 
   - id: ARCH-001
     title: Boundaries before tools

@@ -8,6 +8,18 @@ Installed runtime files are downstream copies. The Agent Foundry repo remains so
 
 Do not overwrite agent-owned or user-owned runtime files. Use managed blocks for central files and `.agent-foundry-managed` markers for generated skill directories.
 
+The runtime template is portable and tracked:
+
+```text
+runtime/templates/runtime_manifest.template.yaml
+```
+
+The runtime manifest is machine-local and ignored by git:
+
+```text
+runtime/local/runtime_manifest.yaml
+```
+
 ## Steps
 
 1. Run consistency check:
@@ -16,15 +28,44 @@ Do not overwrite agent-owned or user-owned runtime files. Use managed blocks for
    python3 scripts/check_consistency.py
    ```
 
-2. Dry run adapter sync:
+2. Initialize the local runtime manifest if needed:
 
    ```bash
-   python3 scripts/sync_adapters.py --target all --dry-run
+   python3 scripts/runtime_manifest.py init
    ```
 
-3. Review destination paths.
+3. Detect local runtimes:
 
-4. Apply only when destinations are correct:
+   ```bash
+   python3 scripts/runtime_manifest.py detect
+   ```
+
+4. Enable or configure the local targets you want:
+
+   ```bash
+   python3 scripts/runtime_manifest.py enable codex
+   python3 scripts/runtime_manifest.py configure hermes --path ~/.hermes/skills
+   ```
+
+5. Review the install plan:
+
+   ```bash
+   python3 scripts/runtime_manifest.py plan
+   ```
+
+6. Dry run manifest-based install:
+
+   ```bash
+   python3 scripts/install_foundry.py
+   ```
+
+7. Apply only when destinations are correct:
+
+   ```bash
+   python3 scripts/install_foundry.py --apply
+   ```
+
+8. For target-specific manual control, use:
 
    ```bash
    python3 scripts/sync_adapters.py --target codex --apply
@@ -32,9 +73,9 @@ Do not overwrite agent-owned or user-owned runtime files. Use managed blocks for
    python3 scripts/sync_adapters.py --target hermes --apply --dest <hermes-skills-dir>
    ```
 
-5. If sync refuses to overwrite an unmanaged skill directory, inspect the existing directory first. Use `--force` only when it is known to be an Agent Foundry runtime copy that should be adopted.
+9. If sync refuses to overwrite an unmanaged skill directory, inspect the existing directory first. Use `--force` only when it is known to be an Agent Foundry runtime copy that should be adopted.
 
-6. For ChatGPT, manually upload `adapters/chatgpt/knowledge/` and copy `custom-instructions.md`.
+10. For ChatGPT, manually upload `adapters/chatgpt/knowledge/` and copy `custom-instructions.md`.
 
 ## Safety
 

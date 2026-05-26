@@ -49,6 +49,8 @@ sync/snapshots/
 
 Each snapshot contains `sync/snapshot-manifest.json` with file paths, sizes, and SHA-256 hashes. Snapshot archives are local transfer artifacts and are ignored by git.
 
+Portable snapshots include `runtime/templates/` but exclude `runtime/local/`. Local runtime deployment state is machine-specific and should be initialized or reviewed on each machine.
+
 ## Snapshot Import
 
 Import is staging-first and non-destructive:
@@ -109,3 +111,4 @@ Preferred order:
 3. Push to GitHub when the network is available.
 4. If GitHub is unavailable, move the snapshot by USB, LAN, or another reliable channel.
 5. On the receiving machine, stage with `scripts/import_snapshot.py`, review, merge, and run consistency checks.
+6. Initialize or review `runtime/local/runtime_manifest.yaml` before installing adapters on the receiving machine.

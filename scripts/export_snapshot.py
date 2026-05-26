@@ -28,6 +28,7 @@ DEFAULT_INCLUDE = [
     "adapters",
     "templates",
     "usage",
+    "runtime",
     "scripts",
 ]
 
@@ -35,6 +36,8 @@ DEFAULT_INCLUDE = [
 def should_include(path: Path) -> bool:
     parts = set(path.parts)
     if ".git" in parts:
+        return False
+    if path.parts[:2] == ("runtime", "local"):
         return False
     if path.parts[:2] == ("sync", "snapshots"):
         return False

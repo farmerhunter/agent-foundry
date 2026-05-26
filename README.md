@@ -33,6 +33,18 @@ work session or external skill
 - Periodic cleanup: `workflows/review-practices.md`
 - Asset cleanup: `workflows/review-assets.md`
 
+## Install On A Machine
+
+```bash
+python3 scripts/runtime_manifest.py init
+python3 scripts/runtime_manifest.py detect
+python3 scripts/runtime_manifest.py plan
+python3 scripts/install_foundry.py
+python3 scripts/install_foundry.py --apply
+```
+
+The install script reads the machine-local `runtime/local/runtime_manifest.yaml`, syncs only enabled local targets, and uses managed runtime writes. The tracked template is `runtime/templates/runtime_manifest.template.yaml`; ChatGPT remains a manual import target.
+
 ## Human Review Gate
 
 New/imported practices and discovered assets should be reviewed per item. After human approval, the agent should apply the approved item, promote it to `active`, update the relevant index, and publish relevant adapters automatically.

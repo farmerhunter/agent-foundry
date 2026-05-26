@@ -7,6 +7,10 @@ description: Use when working on GitHub issues, pull requests, multi-agent repos
 
 This skill applies Agent Foundry collaboration and delivery practices.
 
+## Asset vs Practice
+
+This skill is an asset that performs a repeatable workflow. During execution, it references canonical practices (COLLAB-001 through COLLAB-005, TEST-001, IMPL-001) as behavioral constraints. Do not confuse the skill with the practices it applies.
+
 ## Core Rules
 
 - COLLAB-001: Code changes made to complete a GitHub issue should go through a feature branch and PR unless the user explicitly approves skipping the PR.

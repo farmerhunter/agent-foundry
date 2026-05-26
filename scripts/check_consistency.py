@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Consistency checks for agent-practices.
+"""Consistency checks for Agent Foundry.
 
 No third-party dependencies. Intended to be callable by any local agent.
 """
@@ -58,6 +58,47 @@ def scan_yaml_status(path: Path) -> str | None:
         if line.startswith("status:"):
             return line.split(":", 1)[1].strip()
     return None
+
+
+def extract_yaml_list(text: str, key: str, limit_to_frontmatter: bool = False) -> list[str]:
+    values: list[str] = []
+    lines = text.splitlines()
+    end = len(lines)
+    if limit_to_frontmatter and text.startswith("---\n"):
+        fm_end = text.find("\n---", 4)
+        if fm_end != -1:
+            end = text[:fm_end].count("\n") + 1
+    for i in range(end):
+        stripped = lines[i].strip()
+        if stripped.startswith(f"{key}:"):
+            rest = stripped.split(":", 1)[1].strip()
+            if rest.startswith("[") and rest.endswith("]"):
+                inner = rest[1:-1]
+                return [v.strip().strip('"').strip("'") for v in inner.split(",") if v.strip()]
+            elif rest:
+                return [rest.strip().strip('"').strip("'")]
+            else:
+                j = i + 1
+                while j < end:
+                    next_stripped = lines[j].strip()
+                    if not next_stripped:
+                        j += 1
+                        continue
+                    if next_stripped.startswith("- "):
+                        values.append(next_stripped[2:].strip().strip('"').strip("'"))
+                    elif not lines[j].startswith(" ") and not lines[j].startswith("\t"):
+                        break
+                    j += 1
+                return values
+    return values
+
+
+def load_adapter_names() -> set[str]:
+    names: set[str] = set()
+    for path in (ROOT / "adapters").iterdir():
+        if path.is_dir():
+            names.add(path.name)
+    return names
 
 
 def check_index_paths(index_path: Path, label: str) -> list[str]:
@@ -143,6 +184,37 @@ def check_no_inactive_leakage() -> list[str]:
     return errors
 
 
+def check_adapter_id_references() -> list[str]:
+    errors: list[str] = []
+    valid_ids: set[str] = set()
+    for entry in simple_yaml_entries(read(ROOT / "indexes" / "practice_index.yaml")):
+        pid = entry.get("id")
+        if pid:
+            valid_ids.add(pid)
+    for entry in simple_yaml_entries(read(ROOT / "indexes" / "asset_index.yaml")):
+        aid = entry.get("id")
+        if aid:
+            valid_ids.add(aid)
+    valid_prefixes = {vid.split("-")[0] for vid in valid_ids}
+    id_pattern = re.compile(r"\b(?:ASSET-[A-Z]{2,}-\d{3,}|[A-Z]{2,}-\d{3,})\b")
+    for path in (ROOT / "adapters").rglob("*"):
+        if not path.is_file():
+            continue
+        if path.name in {"adapter_profiles.yaml", ".agent-foundry-managed"}:
+            continue
+        text = read(path)
+        for match in id_pattern.finditer(text):
+            candidate = match.group(0)
+            prefix = candidate.split("-")[0]
+            if prefix not in valid_prefixes:
+                continue
+            if candidate not in valid_ids:
+                errors.append(
+                    f"Adapter {path.relative_to(ROOT)} references unknown ID: {candidate}"
+                )
+    return errors
+
+
 def check_no_deepseek_direct_adapter() -> list[str]:
     if (ROOT / "adapters" / "deepseek").exists():
         return ["Direct DeepSeek adapter exists; DeepSeek should be an underlying model provider only"]
@@ -159,6 +231,156 @@ def check_asset_usage_log() -> list[str]:
     return []
 
 
+def parse_simple_targets(text: str) -> dict[str, dict[str, str]]:
+    targets: dict[str, dict[str, str]] = {}
+    current: str | None = None
+    in_targets = False
+    for line in text.splitlines():
+        if line == "targets:":
+            in_targets = True
+            continue
+        if not in_targets:
+            continue
+        if line.startswith("  ") and not line.startswith("    ") and line.rstrip().endswith(":"):
+            current = line.strip().removesuffix(":")
+            targets[current] = {}
+            continue
+        if current and line.startswith("    ") and ":" in line:
+            key, value = line.strip().split(":", 1)
+            targets[current][key] = value.strip().strip('"')
+    return targets
+
+
+def check_runtime_manifest() -> list[str]:
+    errors: list[str] = []
+    path = ROOT / "runtime" / "templates" / "runtime_manifest.template.yaml"
+    if not path.exists():
+        return ["Missing runtime/templates/runtime_manifest.template.yaml"]
+    targets = parse_simple_targets(read(path))
+    if not targets:
+        return ["runtime_manifest.yaml has no targets"]
+    adapter_text = read(ROOT / "adapters" / "adapter_profiles.yaml")
+    for target, config in targets.items():
+        adapter = config.get("adapter")
+        status = config.get("status")
+        if status not in {"enabled", "disabled", "missing", "manual"}:
+            errors.append(f"Runtime target {target} has invalid status: {status}")
+        if not adapter:
+            errors.append(f"Runtime target {target} has no adapter")
+        elif f"  {adapter}:" not in adapter_text:
+            errors.append(f"Runtime target {target} references unknown adapter: {adapter}")
+        if status == "enabled" and not config.get("install_path"):
+            errors.append(f"Enabled runtime target {target} has no install_path")
+    return errors
+
+
+def check_cross_references() -> list[str]:
+    errors: list[str] = []
+    practice_ids: set[str] = set()
+    for entry in simple_yaml_entries(read(ROOT / "indexes" / "practice_index.yaml")):
+        pid = entry.get("id")
+        if pid:
+            practice_ids.add(pid)
+
+    asset_ids: set[str] = set()
+    for entry in simple_yaml_entries(read(ROOT / "indexes" / "asset_index.yaml")):
+        aid = entry.get("id")
+        if aid:
+            asset_ids.add(aid)
+
+    adapter_names = load_adapter_names()
+
+    for path in sorted((ROOT / "practices").glob("*/*.md")):
+        text = read(path)
+        fm = frontmatter(path)
+        pid = fm.get("id")
+        if not pid:
+            continue
+        for ref in extract_yaml_list(text, "related", limit_to_frontmatter=True):
+            if ref not in practice_ids:
+                errors.append(f"Practice {pid} references unknown practice in related: {ref}")
+        for ref in extract_yaml_list(text, "supersedes", limit_to_frontmatter=True):
+            if ref not in practice_ids:
+                errors.append(f"Practice {pid} references unknown practice in supersedes: {ref}")
+        for ref in extract_yaml_list(text, "superseded_by", limit_to_frontmatter=True):
+            if ref not in practice_ids:
+                errors.append(f"Practice {pid} references unknown practice in superseded_by: {ref}")
+
+    for path in sorted((ROOT / "assets").glob("*/*.yaml")):
+        text = read(path)
+        asset_id = None
+        for line in text.splitlines():
+            if line.startswith("id:"):
+                asset_id = line.split(":", 1)[1].strip()
+                break
+        if not asset_id:
+            continue
+        for ref in extract_yaml_list(text, "canonical_practices"):
+            if ref not in practice_ids:
+                errors.append(f"Asset {asset_id} references unknown practice in canonical_practices: {ref}")
+        for adapter in extract_yaml_list(text, "published_to"):
+            if adapter not in adapter_names:
+                errors.append(f"Asset {asset_id} references unknown adapter in published_to: {adapter}")
+        for ref in extract_yaml_list(text, "related_assets"):
+            if ref not in asset_ids:
+                errors.append(f"Asset {asset_id} references unknown asset in related_assets: {ref}")
+        for ref in extract_yaml_list(text, "supersedes"):
+            if ref not in asset_ids:
+                errors.append(f"Asset {asset_id} references unknown asset in supersedes: {ref}")
+        for ref in extract_yaml_list(text, "superseded_by"):
+            if ref not in asset_ids:
+                errors.append(f"Asset {asset_id} references unknown asset in superseded_by: {ref}")
+
+    return errors
+
+
+def check_supersede_bidirectional() -> list[str]:
+    errors: list[str] = []
+    superseded_by_map: dict[str, str] = {}
+    supersedes_map: dict[str, list[str]] = {}
+
+    for path in sorted((ROOT / "practices").glob("*/*.md")):
+        text = read(path)
+        fm = frontmatter(path)
+        pid = fm.get("id")
+        if not pid:
+            continue
+        for ref in extract_yaml_list(text, "superseded_by", limit_to_frontmatter=True):
+            superseded_by_map[pid] = ref
+        supersedes_map[pid] = extract_yaml_list(text, "supersedes", limit_to_frontmatter=True)
+
+    for pid, refs in supersedes_map.items():
+        for ref in refs:
+            if superseded_by_map.get(ref) != pid:
+                errors.append(
+                    f"Practice {pid} supersedes {ref}, but {ref} does not list {pid} in superseded_by"
+                )
+
+    asset_superseded_by_map: dict[str, str] = {}
+    asset_supersedes_map: dict[str, list[str]] = {}
+    for path in sorted((ROOT / "assets").glob("*/*.yaml")):
+        text = read(path)
+        asset_id = None
+        for line in text.splitlines():
+            if line.startswith("id:"):
+                asset_id = line.split(":", 1)[1].strip()
+                break
+        if not asset_id:
+            continue
+        for ref in extract_yaml_list(text, "superseded_by"):
+            asset_superseded_by_map[asset_id] = ref
+        asset_supersedes_map[asset_id] = extract_yaml_list(text, "supersedes")
+
+    for aid, refs in asset_supersedes_map.items():
+        for ref in refs:
+            if asset_superseded_by_map.get(ref) != aid:
+                errors.append(
+                    f"Asset {aid} supersedes {ref}, but {ref} does not list {aid} in superseded_by"
+                )
+
+    return errors
+
+
 def main() -> int:
     errors: list[str] = []
     errors += check_index_paths(ROOT / "indexes" / "practice_index.yaml", "Practice")
@@ -166,8 +388,12 @@ def main() -> int:
     errors += check_practice_frontmatter()
     errors += check_asset_files()
     errors += check_no_inactive_leakage()
+    errors += check_adapter_id_references()
     errors += check_no_deepseek_direct_adapter()
     errors += check_asset_usage_log()
+    errors += check_runtime_manifest()
+    errors += check_cross_references()
+    errors += check_supersede_bidirectional()
 
     if errors:
         print("Consistency check failed:")

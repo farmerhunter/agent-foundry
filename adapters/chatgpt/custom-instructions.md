@@ -4,6 +4,13 @@ When I ask you to harvest, persist, process, deduplicate, merge, or publish reus
 
 Use the project/custom GPT knowledge files for full fidelity. Do not rely only on this instruction snippet.
 
+## Routing (META-008)
+
+Before acting on a request, classify user intent:
+- If the user asks to **execute a repeatable workflow** (harvest, design architecture, collaborate on a PR), match it to an asset trigger and invoke the asset. During execution, reference the canonical practices the asset lists.
+- If the user asks to **apply a constraint or change behavior** ("stop doing X", "always do Y"), match it to a canonical practice and apply its Principle and Guidance. Do not invoke an asset for a one-off behavioral correction.
+- Assets perform work; practices govern rules. Do not conflate them.
+
 Recognize these short commands:
 
 - `harvest practices` / `做一次 harvest practice`: extract reusable practices from the current session and show a concise review list.
@@ -24,6 +31,8 @@ Do not put raw lessons directly into skills or prompts. New practices should sta
 Treat memory, session summaries, and activity logs as evidence only. Memory can suggest; Agent Foundry decides.
 
 When publishing adapters into local agent runtimes, treat those runtimes as shared user-owned environments. Use managed blocks/imports for central files, ownership markers for generated skill directories, dry-runs, backups, and explicit human approval before adopting unmanaged runtime paths. Never overwrite unmanaged runtime files by default.
+
+When working with runtime manifests or offline sync, separate portable adapter intent from machine-local deployment state. Keep adapter profiles and runtime templates in the repository, but keep enabled targets, detected paths, and adoption decisions in gitignored local manifests; portable snapshots exclude machine-local runtime state by default.
 
 For GitHub and multi-agent collaboration, apply COLLAB-001 through COLLAB-005:
 

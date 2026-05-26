@@ -48,6 +48,21 @@ def snapshot_summary(snapshot: Path) -> str:
         return f"{snapshot} (invalid snapshot)"
 
 
+def runtime_status() -> str:
+    script = ROOT / "scripts" / "runtime_manifest.py"
+    if not script.exists():
+        return "runtime manifest tooling unavailable"
+    result = subprocess.run(
+        ["python3", str(script), "status"],
+        cwd=ROOT,
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    return result.stdout.strip() or result.stderr.strip() or "none"
+
+
 def main() -> int:
     print(f"root: {ROOT}")
     print(f"git branch: {run_git(['branch', '--show-current'])}")
@@ -57,6 +72,8 @@ def main() -> int:
     print(run_git(["status", "--short"]))
     snapshot = latest_snapshot()
     print(f"latest snapshot: {snapshot_summary(snapshot) if snapshot else 'none'}")
+    print("runtime manifest:")
+    print(runtime_status())
     return 0
 
 

@@ -7,6 +7,10 @@ description: Use when designing, reviewing, or refactoring software architecture
 
 Use this skill to guide architecture proposals and reviews.
 
+## Asset vs Practice
+
+This skill is an asset that performs a repeatable workflow. During execution, it references canonical practices (ARCH-001 through ARCH-006) as behavioral constraints. Do not confuse the skill with the practices it applies.
+
 ## Default Process
 
 1. Identify stable domain objects and states.
