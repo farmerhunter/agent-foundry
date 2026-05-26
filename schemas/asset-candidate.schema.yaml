@@ -1,0 +1,26 @@
+# Asset candidate schema.
+# Used by discover-assets before a user approves creating or extending an asset.
+
+required_fields:
+  title: "Candidate reusable asset title"
+  repeated_workflow: "The repeated manual workflow observed"
+  asset_type: "skill | subagent | automation | extend_existing | skip | defer"
+  evidence: "List of source/date/summary records"
+  frequency: "high | medium | low | likely_repeat"
+  confidence: "high | medium | low"
+  existing_coverage: "none | partial | sufficient"
+  recommended_action: "create | extend | skip | defer"
+  why: "Why this is or is not worth packaging"
+
+recommended_fields:
+  canonical_practices_used: "Practice IDs likely to govern the asset"
+  target_agents: "codex | claude-code | hermes | chatgpt"
+  success_criteria: "How to know the asset works"
+  after_approval: "Steps to take if approved"
+
+rules:
+  - "Discovery outputs asset candidates, not canonical practices."
+  - "Do not create assets without human approval."
+  - "Prefer extending an existing asset over creating a near-duplicate."
+  - "Skip or defer candidates with weak evidence, unstable inputs, unclear outputs, or high sensitivity."
+

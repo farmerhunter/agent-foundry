@@ -1,0 +1,210 @@
+schema_version: 1
+updated: 2026-05-26
+
+domains:
+  meta:
+    description: Practices about maintaining Agent Foundry.
+  architecture:
+    description: System design, boundaries, domain modeling, and change management.
+  implementation:
+    description: Coding and refactoring practices.
+  testing:
+    description: Verification, test design, and validation loops.
+  debugging:
+    description: Failure investigation and diagnosis workflows.
+  product:
+    description: Product, UX, and MVP decision practices.
+  agent-collaboration:
+    description: How humans and agents should collaborate.
+  runtime:
+    description: Safe deployment and synchronization into real agent runtime environments.
+
+practices:
+  - id: META-001
+    title: Canonical practices are the source of truth
+    path: practices/meta/META-001-canonical-practices-source-of-truth.md
+    domain: meta
+    type: principle
+    status: active
+    tags: [canonical, source-of-truth, adapters]
+    aliases: [skills are downstream, adapters are not source of truth]
+
+  - id: META-002
+    title: Harvest before publishing
+    path: practices/meta/META-002-harvest-before-publishing.md
+    domain: meta
+    type: principle
+    status: active
+    tags: [harvesting, review, skill-rot]
+    aliases: [do not add raw notes to skills, review gate]
+
+  - id: META-003
+    title: Borrow external skills through review
+    path: practices/meta/META-003-borrow-external-skills-through-review.md
+    domain: meta
+    type: playbook
+    status: active
+    tags: [external-skills, imports, security, provenance]
+    aliases: [external skill import path, borrow skills safely]
+
+  - id: META-004
+    title: Choose the smallest suitable asset
+    path: practices/meta/META-004-choose-smallest-suitable-asset.md
+    domain: meta
+    type: principle
+    status: active
+    tags: [assets, discovery, skill-rot, scope]
+    aliases: [skill is not the default, smallest suitable reusable asset]
+
+  - id: META-005
+    title: Define asset boundaries before creation
+    path: practices/meta/META-005-define-asset-boundaries-before-creation.md
+    domain: meta
+    type: principle
+    status: active
+    tags: [assets, scope, boundaries, discovery]
+    aliases: [define skill scope before creating it, asset boundaries before asset creation]
+
+  - id: META-006
+    title: Memory is evidence, not source of truth
+    path: practices/meta/META-006-memory-is-evidence-not-source-of-truth.md
+    domain: meta
+    type: principle
+    status: active
+    tags: [memory, evidence, source-of-truth, governance]
+    aliases: [memory can suggest but foundry decides, memory is not canonical]
+
+  - id: META-007
+    title: Native agent learning is candidate input
+    path: practices/meta/META-007-native-agent-learning-is-candidate-input.md
+    domain: meta
+    type: principle
+    status: active
+    tags: [native-learning, memory, skills, hermes, governance]
+    aliases: [native skills can suggest but foundry canonizes, do not disable native self-growth]
+
+  - id: RUNTIME-001
+    title: Treat agent runtimes as shared, user-owned environments
+    path: practices/runtime/RUNTIME-001-treat-agent-runtimes-as-shared-environments.md
+    domain: runtime
+    type: principle
+    status: active
+    tags: [runtime, adapters, deployment, ownership, safety]
+    aliases: [do not overwrite unmanaged runtime files, runtime directories are shared environments, publish through managed blocks and markers]
+
+  - id: ARCH-001
+    title: Boundaries before tools
+    path: practices/architecture/ARCH-001-boundaries-before-tools.md
+    domain: architecture
+    type: principle
+    status: active
+    tags: [architecture, boundaries, technical-choice]
+    aliases: [architecture is not a tech stack, tools serve boundaries]
+
+  - id: ARCH-002
+    title: Separate independent axes of change
+    path: practices/architecture/ARCH-002-separate-independent-change-axes.md
+    domain: architecture
+    type: principle
+    status: active
+    tags: [architecture, modeling, change-management]
+    aliases: [do not merge independent dimensions]
+
+  - id: ARCH-003
+    title: Unify protocol, preserve semantics
+    path: practices/architecture/ARCH-003-unify-protocol-preserve-semantics.md
+    domain: architecture
+    type: principle
+    status: active
+    tags: [architecture, domain-modeling, normalization]
+    aliases: [do not erase business differences]
+
+  - id: ARCH-004
+    title: Model inevitable failures as state
+    path: practices/architecture/ARCH-004-model-inevitable-failures-as-state.md
+    domain: architecture
+    type: principle
+    status: active
+    tags: [architecture, errors, external-dependencies]
+    aliases: [failures are domain state]
+
+  - id: ARCH-005
+    title: UI consumes domain summaries
+    path: practices/architecture/ARCH-005-ui-consumes-domain-summaries.md
+    domain: architecture
+    type: principle
+    status: active
+    tags: [architecture, frontend, domain]
+    aliases: [renderer displays state, domain derives state]
+
+  - id: ARCH-006
+    title: MVP validates the main path
+    path: practices/architecture/ARCH-006-mvp-validates-main-path.md
+    domain: architecture
+    type: principle
+    status: active
+    tags: [architecture, mvp, product]
+    aliases: [do not validate all future imagination in MVP]
+
+  - id: COLLAB-001
+    title: Issue code work uses PRs
+    path: practices/agent-collaboration/COLLAB-001-issue-code-work-uses-prs.md
+    domain: agent-collaboration
+    type: playbook
+    status: active
+    tags: [github, issues, pull-requests, traceability]
+    aliases: [issue code changes go through pull requests, bind issue work to PRs]
+
+  - id: COLLAB-002
+    title: Issue review comments include completion and verification
+    path: practices/agent-collaboration/COLLAB-002-issue-review-comments-include-completion-and-verification.md
+    domain: agent-collaboration
+    type: checklist
+    status: active
+    tags: [github, issues, review, verification]
+    aliases: [issue completion comment standard, review-ready issue comment]
+
+  - id: COLLAB-003
+    title: Auto-merge validated PRs by default
+    path: practices/agent-collaboration/COLLAB-003-auto-merge-validated-prs-by-default.md
+    domain: agent-collaboration
+    type: heuristic
+    status: active
+    tags: [github, pull-requests, merge, validation]
+    aliases: [merge after validation unless review requested, default auto merge PR flow]
+
+  - id: COLLAB-004
+    title: Sync repository before multi-agent issue work
+    path: practices/agent-collaboration/COLLAB-004-sync-repository-before-multi-agent-issue-work.md
+    domain: agent-collaboration
+    type: playbook
+    status: active
+    tags: [git, multi-agent, synchronization, github]
+    aliases: [pull before issue work, verify remote sync before coding]
+
+  - id: COLLAB-005
+    title: Do not infer session ending
+    path: practices/agent-collaboration/COLLAB-005-do-not-infer-session-ending.md
+    domain: agent-collaboration
+    type: anti-pattern
+    status: active
+    tags: [conversation, continuity, interruption, compaction]
+    aliases: [do not assume work is done, no premature wrap-up]
+
+  - id: TEST-001
+    title: Render-verify format conversions
+    path: practices/testing/TEST-001-render-verify-format-conversions.md
+    domain: testing
+    type: checklist
+    status: active
+    tags: [documents, conversion, rendering, verification]
+    aliases: [verify generated documents visually, conversion requires render checks]
+
+  - id: IMPL-001
+    title: Avoid shell-interpreted Markdown in CLI comments
+    path: practices/implementation/IMPL-001-avoid-shell-interpreted-markdown-in-cli-comments.md
+    domain: implementation
+    type: anti-pattern
+    status: active
+    tags: [cli, github, markdown, shell-quoting]
+    aliases: [use body-file for gh comments, avoid backticks in double-quoted shell bodies]

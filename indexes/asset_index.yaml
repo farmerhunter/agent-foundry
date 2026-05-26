@@ -1,0 +1,37 @@
+schema_version: 1
+updated: 2026-05-26
+
+asset_types:
+  skill:
+    description: Reusable workflow or operational guide invoked by an agent.
+  subagent:
+    description: Delegable bounded role for investigation, review, or specialized work.
+  automation:
+    description: Scheduled or event-driven check, report, reminder, or monitor.
+
+assets:
+  - id: ASSET-META-001
+    title: Practice Harvester
+    path: assets/skills/ASSET-META-001-practice-harvester.asset.yaml
+    asset_type: skill
+    status: active
+    canonical_practices: [META-001, META-002, META-003, META-004, META-005, META-006, META-007]
+    published_to: [codex, claude-code, hermes, chatgpt]
+    usage_triggers:
+      - harvest practices
+      - 做一次 harvest practice
+      - import skill
+      - review practices
+
+  - id: ASSET-ARCH-001
+    title: Architecture Design
+    path: assets/skills/ASSET-ARCH-001-architecture-design.asset.yaml
+    asset_type: skill
+    status: active
+    canonical_practices: [ARCH-001, ARCH-002, ARCH-003, ARCH-004, ARCH-005, ARCH-006]
+    published_to: [codex, claude-code, hermes, chatgpt]
+    usage_triggers:
+      - architecture design
+      - architecture review
+      - 架构设计
+      - 架构 review

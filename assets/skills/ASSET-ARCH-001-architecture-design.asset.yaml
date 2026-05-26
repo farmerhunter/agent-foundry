@@ -1,0 +1,54 @@
+id: ASSET-ARCH-001
+title: Architecture Design
+asset_type: skill
+status: active
+version: 1
+created: 2026-05-26
+updated: 2026-05-26
+purpose: Guide architecture design and review around boundaries, domain models, failure states, UI/domain separation, and MVP scope.
+responsibility: Help design or review software architecture decisions using canonical architecture principles.
+non_responsibility: Does not maintain Agent Foundry, import external skills, publish adapters, or perform broad product strategy work.
+inputs:
+  - requirements or architecture draft
+  - existing code structure when available
+  - technology constraints
+  - MVP scope or delivery goals
+process:
+  - identify stable domain objects
+  - identify independent axes of change
+  - evaluate boundaries before tools
+  - check semantic preservation
+  - check failure state modeling
+  - check UI/domain separation
+  - check MVP main path
+outputs:
+  - architecture recommendations
+  - risks and tradeoffs
+  - review findings
+  - focused checklist
+canonical_practices:
+  - ARCH-001
+  - ARCH-002
+  - ARCH-003
+  - ARCH-004
+  - ARCH-005
+  - ARCH-006
+published_to:
+  - codex
+  - claude-code
+  - hermes
+  - chatgpt
+usage_triggers:
+  - architecture design
+  - architecture review
+  - 架构设计
+  - 架构 review
+success_criteria:
+  - identifies tool-centered architecture risks
+  - identifies independent axes of change
+  - identifies over-normalized domain models
+  - identifies missing failure states
+  - identifies UI/business logic leakage
+  - identifies MVP scope risks
+review_cadence: monthly
+evidence_summary: Extracted from token-panic architecture redesign.

@@ -1,0 +1,40 @@
+# Canonical practice entry schema.
+# This is a human-readable schema, not a strict machine validator yet.
+
+required_frontmatter:
+  id: "Stable ID such as ARCH-001 or META-003"
+  title: "Short human-readable title"
+  domain: "architecture | implementation | testing | debugging | product | agent-collaboration | meta"
+  type: "principle | pattern | heuristic | playbook | checklist | example | anti-pattern"
+  status: "candidate | proposed | active | revised | superseded | archived"
+  version: "Integer"
+  created: "YYYY-MM-DD"
+  updated: "YYYY-MM-DD"
+  tags: "List of search tags"
+
+recommended_frontmatter:
+  aliases: "Alternative names for dedupe and search"
+  related: "Practice IDs related to this entry"
+  supersedes: "Practice IDs this entry replaces"
+  superseded_by: "Practice ID that replaces this entry"
+  applies_when: "Situations where agents should consider this practice"
+  review_required: "true for candidate/proposed/imported entries"
+  provenance: "Session, repo, external URL, or source note"
+
+required_sections:
+  Principle: "The compact reusable rule"
+  Rationale: "Why the rule exists"
+  Guidance: "How an agent should apply it"
+
+recommended_sections:
+  Use This When: "Triggering situations"
+  Watch Out For: "Failure modes and caveats"
+  Example: "Concrete grounding"
+  Review Notes: "Human review status or open questions"
+
+lifecycle_rules:
+  - "Only active and revised practices are published into default adapters."
+  - "Candidate and proposed entries require human approval before activation."
+  - "Superseded entries remain searchable for traceability."
+  - "Prefer updating an existing practice over creating a duplicate."
+

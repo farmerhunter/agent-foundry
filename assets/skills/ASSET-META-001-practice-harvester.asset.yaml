@@ -1,0 +1,55 @@
+id: ASSET-META-001
+title: Practice Harvester
+asset_type: skill
+status: active
+version: 1
+created: 2026-05-26
+updated: 2026-05-26
+purpose: Maintain reusable practices by harvesting lessons, importing external skills, publishing adapters, and reviewing skill rot.
+responsibility: Maintain the Agent Foundry lifecycle of practices, assets, indexes, adapters, usage evidence, and related review reports.
+non_responsibility: Does not perform domain-specific engineering work except to harvest or package reusable lessons from it.
+inputs:
+  - current session context
+  - external skill source
+  - existing practice and asset indexes
+  - recent work history when discovering assets
+process:
+  - classify candidate practices or assets
+  - deduplicate against indexes
+  - present concise review list
+  - apply approved items
+  - publish relevant adapters
+outputs:
+  - proposed or active practice entries
+  - active asset records
+  - updated indexes
+  - updated adapters
+  - review report
+canonical_practices:
+  - META-001
+  - META-002
+  - META-003
+  - META-004
+  - META-005
+  - META-006
+  - META-007
+published_to:
+  - codex
+  - claude-code
+  - hermes
+  - chatgpt
+usage_triggers:
+  - harvest practices
+  - 做一次 harvest practice
+  - import skill
+  - 导入这个 skill
+  - publish practices
+  - review practices
+  - 检查 skill rot
+success_criteria:
+  - candidates are deduplicated against existing practices and assets
+  - human approval is requested per meaningful new or changed item
+  - approved items are activated and published to relevant adapters
+  - changed files and deferred items are reported clearly
+review_cadence: monthly
+evidence_summary: Created as the first core asset for this repository.

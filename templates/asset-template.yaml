@@ -1,0 +1,19 @@
+id: ASSET-DOMAIN-000
+title:
+asset_type: skill
+status: proposed
+version: 1
+created: YYYY-MM-DD
+updated: YYYY-MM-DD
+purpose:
+responsibility:
+non_responsibility:
+inputs: []
+process: []
+outputs: []
+canonical_practices: []
+published_to: []
+usage_triggers: []
+success_criteria: []
+review_cadence: monthly
+evidence_summary:

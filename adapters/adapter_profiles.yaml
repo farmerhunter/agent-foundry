@@ -1,0 +1,121 @@
+schema_version: 1
+updated: 2026-05-26
+
+global_policy:
+  default_fidelity_for_direct_programming_agents: full
+  full_fidelity_means: "Full access through progressive loading, not one large prompt dump."
+  publish_after_approval: true
+  excluded_statuses: [candidate, proposed, superseded, archived]
+
+adapters:
+  codex:
+    target: "Codex"
+    direct_programming_agent: true
+    fidelity: full
+    supports:
+      - skill_folder
+      - SKILL.md
+      - references
+      - progressive_disclosure
+    outputs:
+      - adapters/codex/skills/practice-harvester/
+      - adapters/codex/skills/architecture-design/
+      - adapters/codex/skills/agent-collaboration/
+    included_domains: [meta, architecture, agent-collaboration, implementation, testing]
+    command_vocabulary:
+      harvest: ["harvest practices", "做一次 harvest practice", "提炼实践", "沉淀经验"]
+      discover_assets: ["discover assets", "发现可打包资产"]
+      import: ["import skill <source>", "导入这个 skill <source>"]
+      publish: ["publish practices", "发布 practices"]
+      review: ["review practices", "检查 skill rot"]
+      review_assets: ["review assets", "检查 asset rot"]
+    transform_policy:
+      skill_body: "Short trigger and workflow router."
+      references: "Workflow summaries, schemas, principles, checklists, and command mappings."
+      canonical_mapping_required: true
+
+  claude-code:
+    target: "Claude Code"
+    direct_programming_agent: true
+    fidelity: full
+    supports:
+      - CLAUDE.md
+      - slash_commands
+      - project_memory
+      - referenced_files
+    outputs:
+      - adapters/claude-code/CLAUDE.md
+      - adapters/claude-code/commands/
+    included_domains: [meta, architecture, agent-collaboration, implementation, testing]
+    command_vocabulary:
+      harvest: ["harvest practices", "做一次 harvest practice"]
+      discover_assets: ["discover assets", "发现可打包资产"]
+      import: ["import skill <source>", "导入这个 skill <source>"]
+      publish: ["publish practices", "发布 practices"]
+      review: ["review practices", "检查 skill rot"]
+      review_assets: ["review assets", "检查 asset rot"]
+    transform_policy:
+      CLAUDE.md: "Short dispatcher and durable rules."
+      commands: "One command file per workflow."
+      canonical_mapping_required: true
+
+  hermes:
+    target: "Hermes"
+    direct_programming_agent: true
+    fidelity: full
+    supports:
+      - skill_folder
+      - SKILL.md
+      - references
+      - progressive_disclosure
+    outputs:
+      - adapters/hermes/skills/practice-harvester/
+      - adapters/hermes/skills/architecture-design/
+      - adapters/hermes/skills/agent-collaboration/
+    included_domains: [meta, architecture, agent-collaboration, implementation, testing]
+    command_vocabulary:
+      harvest: ["harvest practices", "做一次 harvest practice", "提炼实践", "沉淀经验"]
+      discover_assets: ["discover assets", "发现可打包资产"]
+      import: ["import skill <source>", "导入这个 skill <source>"]
+      publish: ["publish practices", "发布 practices"]
+      review: ["review practices", "检查 skill rot"]
+      review_assets: ["review assets", "检查 asset rot"]
+    transform_policy:
+      skill_body: "Short trigger and workflow router."
+      references: "Full operational references similar to Codex adapter."
+      canonical_mapping_required: true
+
+  chatgpt:
+    target: "ChatGPT Projects or Custom GPT"
+    direct_programming_agent: true
+    fidelity: full
+    supports:
+      - custom_instructions
+      - project_instructions
+      - knowledge_files
+    outputs:
+      - adapters/chatgpt/custom-instructions.md
+      - adapters/chatgpt/knowledge/
+    included_domains: [meta, architecture, agent-collaboration, implementation, testing]
+    command_vocabulary:
+      harvest: ["harvest practices", "做一次 harvest practice"]
+      discover_assets: ["discover assets", "发现可打包资产"]
+      import: ["import skill <source>", "导入这个 skill <source>"]
+      publish: ["publish practices", "发布 practices"]
+      review: ["review practices", "检查 skill rot"]
+      review_assets: ["review assets", "检查 asset rot"]
+    transform_policy:
+      custom_instructions: "Short dispatcher and approval semantics."
+      knowledge_files: "Full workflow, command, schema, and principle references."
+      canonical_mapping_required: true
+
+  deepseek:
+    target: "DeepSeek as underlying model provider"
+    direct_programming_agent: false
+    fidelity: none
+    supports: []
+    outputs: []
+    included_domains: []
+    command_vocabulary: {}
+    transform_policy:
+      note: "No direct adapter. Use through a programming agent such as Claude Code, Hermes, or Codex-compatible tooling."

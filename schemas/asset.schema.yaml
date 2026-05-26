@@ -1,0 +1,35 @@
+# Reusable asset schema.
+# Assets are user-facing reusable tools discovered or created from repeated work.
+
+required_fields:
+  id: "Stable ID such as ASSET-ARCH-001"
+  title: "Short title"
+  asset_type: "skill | subagent | automation"
+  status: "candidate | proposed | active | revised | deprecated | retired"
+  version: "Integer"
+  created: "YYYY-MM-DD"
+  updated: "YYYY-MM-DD"
+  purpose: "What reusable work this asset supports"
+  responsibility: "What this asset owns"
+  non_responsibility: "What this asset explicitly does not own"
+  inputs: "Information the asset usually needs"
+  process: "Reusable steps or checks"
+  outputs: "Expected outputs or finish condition"
+  canonical_practices: "Practice IDs that constrain or guide this asset"
+  published_to: "Agent adapters where this asset is available"
+  usage_triggers: "Short commands or situations that should invoke this asset"
+  success_criteria: "Observable outcomes that indicate the asset is useful"
+
+recommended_fields:
+  owner: "Human owner or maintainer"
+  evidence_summary: "Why this asset exists"
+  review_cadence: "monthly | quarterly | on-demand"
+  related_assets: "Other asset IDs"
+  supersedes: "Asset IDs replaced by this asset"
+  superseded_by: "Asset ID that replaces this asset"
+
+rules:
+  - "Assets are not canonical practices. They are tools governed by canonical practices."
+  - "New assets require human approval before becoming active."
+  - "Active assets should be published to relevant direct programming agents."
+  - "Asset usage should be recorded in usage/asset-usage-log.yaml when practical."

@@ -1,0 +1,25 @@
+# Adapter profile schema.
+# Defines how canonical practices are transformed for each agent environment.
+
+required_fields:
+  id: "Stable adapter id, such as codex or claude-code"
+  target: "Human-readable target environment"
+  fidelity: "full | standard | compact"
+  direct_programming_agent: "Boolean; false for model providers not used directly"
+  supports: "Capabilities available in the target environment"
+  outputs: "Files or directories generated for the adapter"
+  included_domains: "Practice domains to include"
+  command_vocabulary: "Short commands supported by the adapter"
+  transform_policy: "How canonical entries are mapped into target files"
+
+fidelity_definitions:
+  full: "Full access to relevant workflows, schemas, commands, and practice references via progressive loading."
+  standard: "Core instructions, commands, and compact rules; detailed canonical content may be referenced but not fully packaged."
+  compact: "Short reminder prompt only."
+
+rules:
+  - "Direct programming agents should target full fidelity unless a platform cannot support it."
+  - "Full fidelity does not mean dumping all content into one instruction file; use progressive loading where possible."
+  - "Every adapter must preserve canonical IDs for included practices."
+  - "Adapters must not include candidate, proposed, superseded, or archived practices."
+
