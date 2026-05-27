@@ -53,6 +53,8 @@ Portable snapshots include `runtime/templates/` but exclude `runtime/local/`. Lo
 
 `scripts/export_snapshot.py` also records the archive SHA-256 in machine-local `sync/local/state.yaml`.
 
+Portable snapshots include sanitized `usage/usage-aggregate.yaml` but exclude raw local usage evidence under `usage/local/`. This lets multiple machines share review statistics without syncing project names, notes, prompts, or other local context.
+
 ## Snapshot Import
 
 Import is staging-first and non-destructive:
@@ -116,13 +118,35 @@ for manual or future scripted sync records. This keeps offline changes explicit 
 High-conflict files:
 
 - `indexes/*.yaml`
-- `usage/asset-usage-log.yaml`
+- `usage/usage-aggregate.yaml`
 
 Mitigations:
 
 - run consistency checks after merges;
-- keep usage notes concise;
-- consider future monthly/agent usage log sharding if conflicts become common.
+- regenerate aggregate rows from local raw logs when needed;
+- keep raw usage notes under gitignored `usage/local/`;
+- aggregate by month, agent, and hashed machine ID to reduce conflict scope.
+
+## Usage Evidence Sync
+
+Usage evidence has two layers:
+
+- raw local evidence: `usage/local/usage-log.yaml`, gitignored and excluded from snapshots;
+- shared aggregate evidence: `usage/usage-aggregate.yaml`, safe to sync and used by review scripts.
+
+Record usage with:
+
+```bash
+python3 scripts/record_asset_usage.py --asset-id ASSET-META-001 --agent codex --outcome useful
+```
+
+Rebuild shared aggregate evidence from local and legacy logs:
+
+```bash
+python3 scripts/aggregate_usage.py --include-legacy
+```
+
+Shared aggregate rows include subject type, subject ID, month, agent, hashed machine ID, outcome counts, and last-used date. They intentionally exclude raw project names, notes, prompts, and transcripts.
 
 ## Multi-Machine Pattern
 

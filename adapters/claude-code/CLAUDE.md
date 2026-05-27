@@ -10,7 +10,7 @@ Before acting on a request, classify user intent:
 
 - If the user asks to **execute a repeatable workflow** (harvest, design architecture, collaborate on a PR), match the request to an asset trigger and invoke the asset. During execution, reference the canonical practices the asset lists.
 - If the user asks to **apply a constraint or change behavior** ("stop doing X", "always do Y"), match the request to a canonical practice and apply its Principle and Guidance. Do not invoke an asset for a one-off behavioral correction.
-- If the user asks to **update or govern agent knowledge**, invoke the Practice Harvester asset (ASSET-META-001, META-001 through META-010, RUNTIME-001 through RUNTIME-003).
+- If the user asks to **update or govern agent knowledge**, invoke the Practice Harvester asset (ASSET-META-001, META-001 through META-010, RUNTIME-001 through RUNTIME-004).
 
 Assets perform work; practices govern rules. Do not conflate them.
 
@@ -54,6 +54,8 @@ Apply RUNTIME-003 after every sync or refresh operation: report the exact commit
 Apply META-009 when publishing adapters: adapter quality must be executable and must verify trigger vocabulary, canonical IDs, published asset IDs, target conventions, and target-specific fidelity, not only generated file existence.
 
 Apply META-010 when reviewing assets: use lifecycle state, usage evidence, overlap, canonical coverage, stale triggers, and published targets before recommending keep, revise, deprecate, archive, split, or merge.
+
+Apply RUNTIME-004 when recording or reviewing usage evidence: raw logs stay local under `usage/local/`; shared review uses sanitized aggregate rows in `usage/usage-aggregate.yaml`.
 
 ## External Skills
 

@@ -18,7 +18,7 @@ This checks:
 - asset records contain boundary fields;
 - inactive statuses do not leak into adapters;
 - no direct DeepSeek adapter exists;
-- usage log exists.
+- shared usage aggregate exists.
 
 ## Manual Fallback
 
@@ -27,9 +27,8 @@ If script execution is unavailable, manually inspect:
 - `indexes/practice_index.yaml`
 - `indexes/asset_index.yaml`
 - changed files under `practices/`, `assets/`, and `adapters/`
-- `usage/asset-usage-log.yaml`
+- `usage/usage-aggregate.yaml`
 
 ## Rule
 
 Do not silently ignore consistency failures. Report them and fix scoped issues before considering the publish complete.
-

@@ -8,12 +8,15 @@ Agent Foundry repo
   -> machine-local runtime manifest
   -> installed runtime copies
   -> real agent usage
-  -> usage evidence back into Agent Foundry
+  -> local raw usage evidence
+  -> shared usage aggregate back into Agent Foundry
 ```
 
 ## Boundaries
 
-- `practices/`, `assets/`, `indexes/`, `usage/`: canonical vault.
+- `practices/`, `assets/`, `indexes/`: canonical vault.
+- `usage/usage-aggregate.yaml`: shared sanitized usage statistics for review.
+- `usage/local/`: machine-local raw usage evidence, ignored by git and portable snapshots.
 - `workflows/`, `schemas/`, `scripts/`, `templates/`: Foundry system.
 - `adapters/`: generated or maintained adapter outputs.
 - `runtime/templates/runtime_manifest.template.yaml`: portable deployment template, tracked in git.

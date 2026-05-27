@@ -44,9 +44,8 @@ Do not use memory as the only authoritative home for:
 - approval policy;
 - lifecycle state.
 
-If a memory contains a durable rule, harvest it into `practices/`. If it indicates repeated work, process it through `discover assets`. If it records useful asset use, add concise evidence to `usage/asset-usage-log.yaml`.
+If a memory contains a durable rule, harvest it into `practices/`. If it indicates repeated work, process it through `discover assets`. If it records useful asset or practice use, record concise evidence through `scripts/record_asset_usage.py` so raw evidence stays local and shared review uses sanitized aggregates.
 
 ## Watch Out For
 
 Do not let automatically written memory silently override approved practices or active assets.
-

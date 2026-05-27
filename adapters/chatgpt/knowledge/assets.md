@@ -37,3 +37,5 @@ create or extend asset
 ```
 
 Usage evidence should be recorded automatically when an active asset is invoked and the note can be concise and non-sensitive. Do not store raw transcripts or secrets.
+
+Raw usage evidence stays local under `usage/local/`. Cross-machine review uses sanitized shared aggregate rows in `usage/usage-aggregate.yaml`.

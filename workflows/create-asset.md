@@ -49,7 +49,7 @@ After asset registry update:
 
 ## 4. Usage Evidence
 
-If the asset was created from specific evidence, add an initial note to `usage/asset-usage-log.yaml` only when useful and concise.
+If the asset was created from specific evidence, run `scripts/record_asset_usage.py` only when useful and concise. It records raw evidence locally and updates the shared usage aggregate.
 
 ## 5. Report
 

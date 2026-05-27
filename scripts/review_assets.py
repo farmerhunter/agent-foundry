@@ -62,7 +62,39 @@ def load_assets() -> list[dict[str, object]]:
     return assets
 
 
-def load_usage() -> dict[str, list[dt.date]]:
+def load_aggregate_usage() -> dict[str, list[dt.date]]:
+    usage_path = ROOT / "usage" / "usage-aggregate.yaml"
+    usage: dict[str, list[dt.date]] = {}
+    current: str | None = None
+    current_counts = 0
+    if not usage_path.exists():
+        return usage
+    for line in read(usage_path).splitlines():
+        stripped = line.strip()
+        if stripped.startswith("- subject_type:"):
+            current = None
+            current_counts = 0
+            subject_type = stripped.split(":", 1)[1].strip()
+            if subject_type != "asset":
+                continue
+        elif stripped.startswith("subject_id:"):
+            current = stripped.split(":", 1)[1].strip()
+            usage.setdefault(current, [])
+        elif current and any(stripped.startswith(f"{name}_count:") for name in ["useful", "neutral", "not_useful", "unknown"]):
+            try:
+                current_counts += int(stripped.split(":", 1)[1].strip() or "0")
+            except ValueError:
+                pass
+        elif current and stripped.startswith("last_used:"):
+            value = stripped.split(":", 1)[1].strip()
+            try:
+                usage[current].extend([dt.date.fromisoformat(value)] * max(current_counts, 1))
+            except ValueError:
+                pass
+    return usage
+
+
+def load_legacy_usage() -> dict[str, list[dt.date]]:
     usage_path = ROOT / "usage" / "asset-usage-log.yaml"
     usage: dict[str, list[dt.date]] = {}
     current: str | None = None
@@ -80,6 +112,13 @@ def load_usage() -> dict[str, list[dt.date]]:
             except ValueError:
                 pass
     return usage
+
+
+def load_usage() -> tuple[dict[str, list[dt.date]], str]:
+    usage = load_aggregate_usage()
+    if usage:
+        return usage, "usage/usage-aggregate.yaml"
+    return load_legacy_usage(), "usage/asset-usage-log.yaml"
 
 
 def trigger_overlaps(assets: list[dict[str, object]]) -> dict[str, list[str]]:
@@ -115,11 +154,12 @@ def main() -> int:
     today = dt.date.fromisoformat(args.today)
 
     assets = load_assets()
-    usage = load_usage()
+    usage, usage_source = load_usage()
     overlaps = trigger_overlaps(assets)
 
     print("# Asset Review")
     print(f"date: {today}")
+    print(f"usage_source: {usage_source}")
     print()
     for asset in assets:
         aid = str(asset["id"])

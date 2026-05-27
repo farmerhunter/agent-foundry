@@ -41,6 +41,8 @@ def should_include(path: Path) -> bool:
         return False
     if path.parts[:2] == ("runtime", "local"):
         return False
+    if path.parts[:2] == ("usage", "local"):
+        return False
     if path.parts[:2] == ("sync", "snapshots"):
         return False
     if "__pycache__" in parts:

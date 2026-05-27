@@ -12,6 +12,7 @@ discover repeated work and reusable lessons
   -> package reusable assets
   -> publish heterogeneous adapters
   -> record usage evidence
+  -> aggregate safe usage statistics
   -> review and improve
 ```
 
@@ -35,7 +36,8 @@ work history
   -> human approval
   -> active skill / subagent / automation
   -> agent adapters
-  -> usage evidence
+  -> local usage evidence
+  -> shared usage aggregate
   -> review and improvement
 ```
 
@@ -58,9 +60,19 @@ practices/     Canonical source of truth
 assets/        Registry of reusable skills, subagents, and automations
 imports/       Staging area for external skills and ideas
 adapters/      Downstream outputs for specific agent environments
-usage/         Usage evidence for assets
+usage/         Shared usage aggregates plus gitignored local raw evidence
 scripts/       Optional deterministic tooling
 ```
+
+## Usage Evidence Boundary
+
+Usage evidence is split by sensitivity and sync behavior.
+
+Raw evidence is local. Agents write concise raw entries to `usage/local/usage-log.yaml`, which is gitignored and excluded from portable snapshots. Raw entries may include project names, triggers, short notes, and local audit context.
+
+Aggregate evidence is shared. `usage/usage-aggregate.yaml` contains sanitized counts by subject type, subject ID, month, agent, hashed machine ID, outcome counts, and last-used date. Review workflows use the aggregate so multiple machines and agents can contribute statistics without syncing raw notes or session context.
+
+Legacy `usage/asset-usage-log.yaml` remains migration input. New recording should go through `scripts/record_asset_usage.py`, and aggregate rebuilds should use `scripts/aggregate_usage.py`.
 
 ## Practice Types
 

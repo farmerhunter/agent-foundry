@@ -38,4 +38,6 @@ Usage evidence:
 
 - Record ordinary non-sensitive usage automatically.
 - Prefer `scripts/record_asset_usage.py`.
+- Keep raw evidence local under `usage/local/`.
+- Use `usage/usage-aggregate.yaml` for shared review statistics.
 - Do not store raw transcripts or secrets.

@@ -137,6 +137,15 @@ practices:
     tags: [runtime, sync, state, git, safety, visibility]
     aliases: [report exact state after every sync, sync without ambiguity, unambiguous final report]
 
+  - id: RUNTIME-004
+    title: Sync aggregates, not raw evidence
+    path: practices/runtime/RUNTIME-004-sync-aggregates-not-raw-evidence.md
+    domain: runtime
+    type: principle
+    status: active
+    tags: [runtime, sync, evidence, privacy, review]
+    aliases: [keep raw usage local, sync usage aggregates, aggregate evidence across machines]
+
   - id: ARCH-001
     title: Boundaries before tools
     path: practices/architecture/ARCH-001-boundaries-before-tools.md

@@ -222,13 +222,16 @@ def check_no_deepseek_direct_adapter() -> list[str]:
     return []
 
 
-def check_asset_usage_log() -> list[str]:
-    path = ROOT / "usage" / "asset-usage-log.yaml"
+def check_usage_aggregate() -> list[str]:
+    path = ROOT / "usage" / "usage-aggregate.yaml"
     if not path.exists():
-        return ["Missing usage/asset-usage-log.yaml"]
+        return ["Missing usage/usage-aggregate.yaml"]
     text = read(path)
-    if "entries:" not in text:
-        return ["asset-usage-log.yaml missing entries"]
+    if "aggregates:" not in text:
+        return ["usage-aggregate.yaml missing aggregates"]
+    for line in text.splitlines():
+        if line.strip().startswith("machine_hash:") and "hostname" in line.lower():
+            return ["usage-aggregate.yaml appears to contain an unhashed machine name"]
     return []
 
 
@@ -454,7 +457,7 @@ def main() -> int:
     errors += check_no_inactive_leakage()
     errors += check_adapter_id_references()
     errors += check_no_deepseek_direct_adapter()
-    errors += check_asset_usage_log()
+    errors += check_usage_aggregate()
     errors += check_runtime_manifest()
     errors += check_claude_managed_block_integrity()
     errors += check_cross_references()
