@@ -77,7 +77,7 @@ For converted document deliverables, apply TEST-001: verify rendered output, fon
 
 ## Architecture Design
 
-Use canonical architecture practices ARCH-001 through ARCH-006:
+Use canonical architecture practices ARCH-001 through ARCH-007:
 
 - Boundaries before tools.
 - Separate independent axes of change.
@@ -85,3 +85,4 @@ Use canonical architecture practices ARCH-001 through ARCH-006:
 - Model inevitable failures as state.
 - Let UI consume domain summaries.
 - Scope MVP around the main path.
+- Maintain design docs as lightweight context contracts for boundaries, decisions, contracts, operations, and user-facing runtime flows.

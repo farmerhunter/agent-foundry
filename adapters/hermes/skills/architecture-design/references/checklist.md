@@ -10,5 +10,5 @@ Ask before proposing an architecture:
 - Should those failures be modeled as status?
 - What summary should UI consume?
 - What is the MVP's main path?
+- What design docs or user-facing runtime docs need to change so future agents understand the new boundary or flow?
 - If a chosen technology is replaced, does the architecture still make sense?
-

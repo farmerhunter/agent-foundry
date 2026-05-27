@@ -65,3 +65,4 @@ For architecture design, apply these principles:
 - Model inevitable failures as state.
 - Let UI consume domain summaries.
 - Scope MVP around the main path.
+- Maintain design docs as context contracts for boundaries, decisions, contracts, operations, and user-facing runtime flows.

@@ -11,7 +11,7 @@ Use this skill to guide architecture proposals and reviews.
 
 ## Asset vs Practice
 
-This skill is an asset that performs a repeatable workflow. During execution, it references canonical practices (ARCH-001 through ARCH-006) as behavioral constraints. Do not confuse the skill with the practices it applies.
+This skill is an asset that performs a repeatable workflow. During execution, it references canonical practices (ARCH-001 through ARCH-007) as behavioral constraints. Do not confuse the skill with the practices it applies.
 
 ## Default Process
 
@@ -22,6 +22,7 @@ This skill is an asset that performs a repeatable workflow. During execution, it
 5. Model inevitable failures as explicit state.
 6. Keep UI dependent on domain summaries, not raw integration data.
 7. Scope MVP around the main path and key boundaries.
-8. Choose technologies as boundary implementations.
+8. Maintain lightweight design docs as context contracts when boundaries, contracts, runtime behavior, or user experience change.
+9. Choose technologies as boundary implementations.
 
 Read `references/principles.md` for the compact rules and `references/checklist.md` before producing a design.

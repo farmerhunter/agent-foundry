@@ -33,6 +33,7 @@ canonical_practices:
   - ARCH-004
   - ARCH-005
   - ARCH-006
+  - ARCH-007
 published_to:
   - codex
   - claude-code

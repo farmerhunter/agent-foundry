@@ -200,6 +200,15 @@ practices:
     tags: [architecture, mvp, product]
     aliases: [do not validate all future imagination in MVP]
 
+  - id: ARCH-007
+    title: Maintain design docs as context contracts
+    path: practices/architecture/ARCH-007-maintain-design-docs-as-context-contracts.md
+    domain: architecture
+    type: principle
+    status: active
+    tags: [architecture, documentation, cross-agent, context, user-experience]
+    aliases: [design docs compress context, docs as cross-agent handoff, maintain minimal design docs, document runtime user experience]
+
   - id: COLLAB-001
     title: Issue code work uses PRs
     path: practices/agent-collaboration/COLLAB-001-issue-code-work-uses-prs.md

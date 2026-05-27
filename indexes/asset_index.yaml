@@ -28,7 +28,7 @@ assets:
     path: assets/skills/ASSET-ARCH-001-architecture-design.asset.yaml
     asset_type: skill
     status: active
-    canonical_practices: [ARCH-001, ARCH-002, ARCH-003, ARCH-004, ARCH-005, ARCH-006]
+    canonical_practices: [ARCH-001, ARCH-002, ARCH-003, ARCH-004, ARCH-005, ARCH-006, ARCH-007]
     published_to: [codex, claude-code, hermes, chatgpt]
     usage_triggers:
       - architecture design

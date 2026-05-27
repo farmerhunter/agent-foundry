@@ -7,7 +7,7 @@ aggregates:
     period: 2026-05
     agent: "codex"
     machine_hash: "a6bcad5212d8"
-    useful_count: 1
+    useful_count: 2
     neutral_count: 0
     not_useful_count: 0
     unknown_count: 0
@@ -17,7 +17,17 @@ aggregates:
     period: 2026-05
     agent: "codex"
     machine_hash: "a6bcad5212d8"
-    useful_count: 9
+    useful_count: 10
+    neutral_count: 0
+    not_useful_count: 0
+    unknown_count: 0
+    last_used: 2026-05-27
+  - subject_type: practice
+    subject_id: ARCH-007
+    period: 2026-05
+    agent: "codex"
+    machine_hash: "a6bcad5212d8"
+    useful_count: 1
     neutral_count: 0
     not_useful_count: 0
     unknown_count: 0

@@ -1,6 +1,6 @@
 # Architecture Principles
 
-Canonical IDs: ARCH-001, ARCH-002, ARCH-003, ARCH-004, ARCH-005, ARCH-006
+Canonical IDs: ARCH-001, ARCH-002, ARCH-003, ARCH-004, ARCH-005, ARCH-006, ARCH-007
 
 ## ARCH-001 Boundaries Before Tools
 
@@ -26,3 +26,6 @@ The domain layer should produce display-ready summaries. UI should handle layout
 
 The MVP should validate the main system path and key boundaries, not every plausible future capability.
 
+## ARCH-007 Maintain Design Docs As Context Contracts
+
+Maintain the smallest design docs that preserve engineering context and user-facing runtime experience for future agents. Update them when domain models, boundaries, contracts, operations, or user flows change; do not document every local implementation detail.
