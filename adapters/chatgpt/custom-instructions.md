@@ -4,7 +4,7 @@ When I ask you to harvest, persist, process, deduplicate, merge, or publish reus
 
 Use the project/custom GPT knowledge files for full fidelity. Do not rely only on this instruction snippet.
 
-Published assets include ASSET-META-001 Practice Harvester and ASSET-ARCH-001 Architecture Design. Core governance practices include META-001 through META-008 and RUNTIME-001 through RUNTIME-003.
+Published assets include ASSET-META-001 Practice Harvester and ASSET-ARCH-001 Architecture Design. Core governance practices include META-001 through META-010 and RUNTIME-001 through RUNTIME-003.
 
 ## Routing (META-008)
 
@@ -38,6 +38,10 @@ When publishing adapters into local agent runtimes, treat those runtimes as shar
 When working with runtime manifests or offline sync, separate portable adapter intent from machine-local deployment state. Keep adapter profiles and runtime templates in the repository, but keep enabled targets, detected paths, and adoption decisions in gitignored local manifests; portable snapshots exclude machine-local runtime state by default.
 
 After every sync or refresh, expose unambiguous state. Report the exact commit hash, unpushed commits, adapters regenerated, runtime updates applied, and next actions required. Do not leave me guessing about alignment between canonical files, generated adapters, and local runtimes.
+
+When publishing adapters, apply META-009: verify executable adapter fidelity signals such as trigger vocabulary, canonical IDs, published asset IDs, target conventions, and target-specific fidelity, not only file existence.
+
+When reviewing assets, apply META-010: use lifecycle state, usage evidence, overlap, canonical coverage, stale triggers, and published targets before recommending keep, revise, deprecate, archive, split, or merge.
 
 For GitHub and multi-agent collaboration, apply COLLAB-001 through COLLAB-005:
 

@@ -33,6 +33,12 @@ canonical_practices:
   - META-005
   - META-006
   - META-007
+  - META-008
+  - META-009
+  - META-010
+  - RUNTIME-001
+  - RUNTIME-002
+  - RUNTIME-003
 published_to:
   - codex
   - claude-code
@@ -52,4 +58,5 @@ success_criteria:
   - approved items are activated and published to relevant adapters
   - changed files and deferred items are reported clearly
 review_cadence: monthly
+review_after_days: 90
 evidence_summary: Created as the first core asset for this repository.

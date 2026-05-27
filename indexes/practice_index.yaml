@@ -92,6 +92,24 @@ practices:
     tags: [assets, practices, routing, dispatch, meta]
     aliases: [assets perform work, practices govern rules, skill vs practice boundary]
 
+  - id: META-009
+    title: Make adapter fidelity executable
+    path: practices/meta/META-009-make-adapter-fidelity-executable.md
+    domain: meta
+    type: principle
+    status: active
+    tags: [adapters, fidelity, verification, testing, publishing]
+    aliases: [test adapter meaning, executable adapter quality, adapter fidelity check]
+
+  - id: META-010
+    title: Review assets with lifecycle evidence
+    path: practices/meta/META-010-review-assets-with-lifecycle-evidence.md
+    domain: meta
+    type: principle
+    status: active
+    tags: [assets, lifecycle, evidence, review, skill-rot]
+    aliases: [asset lifecycle review needs evidence, review assets before skill rot, usage evidence drives asset lifecycle]
+
   - id: RUNTIME-001
     title: Treat agent runtimes as shared, user-owned environments
     path: practices/runtime/RUNTIME-001-treat-agent-runtimes-as-shared-environments.md

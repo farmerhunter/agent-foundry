@@ -51,4 +51,5 @@ success_criteria:
   - identifies UI/business logic leakage
   - identifies MVP scope risks
 review_cadence: monthly
+review_after_days: 90
 evidence_summary: Extracted from token-panic architecture redesign.

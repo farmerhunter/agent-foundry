@@ -7,6 +7,7 @@ No third-party dependencies. Intended to be callable by any local agent.
 from __future__ import annotations
 
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -14,7 +15,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 ACTIVE_STATUSES = {"active", "revised"}
 INACTIVE_PRACTICE_STATUSES = {"candidate", "proposed", "superseded", "archived"}
-INACTIVE_ASSET_STATUSES = {"candidate", "proposed", "deprecated", "retired"}
+INACTIVE_ASSET_STATUSES = {"candidate", "proposed", "deprecated", "retired", "archived"}
 
 
 def read(path: Path) -> str:
@@ -381,6 +382,69 @@ def check_supersede_bidirectional() -> list[str]:
     return errors
 
 
+def check_claude_managed_block_integrity() -> list[str]:
+    errors: list[str] = []
+    user_claude = Path.home() / ".claude" / "CLAUDE.md"
+    if not user_claude.exists():
+        return errors
+    text = read(user_claude)
+    start_count = text.count("<!-- AGENT-FOUNDRY-START -->")
+    end_count = text.count("<!-- AGENT-FOUNDRY-END -->")
+    if start_count == 0 and end_count == 0:
+        return errors
+    if start_count != 1:
+        errors.append(
+            f"Claude managed block integrity: expected 1 AGENT-FOUNDRY-START block, found {start_count} in ~/.claude/CLAUDE.md"
+        )
+    if end_count != 1:
+        errors.append(
+            f"Claude managed block integrity: expected 1 AGENT-FOUNDRY-END block, found {end_count} in ~/.claude/CLAUDE.md"
+        )
+    if start_count == 1 and end_count == 1:
+        start_idx = text.find("<!-- AGENT-FOUNDRY-START -->")
+        end_idx = text.find("<!-- AGENT-FOUNDRY-END -->")
+        if start_idx != -1 and end_idx != -1 and start_idx < end_idx:
+            block = text[start_idx:end_idx + len("<!-- AGENT-FOUNDRY-END -->")]
+            for line in block.splitlines():
+                stripped = line.strip()
+                if stripped.startswith("@"):
+                    import_path = Path(stripped[1:].strip()).expanduser()
+                    if not import_path.exists():
+                        errors.append(
+                            f"Claude managed block integrity: import target does not exist: {import_path}"
+                        )
+                    break
+            else:
+                errors.append(
+                    "Claude managed block integrity: managed block does not contain an @import path"
+                )
+        else:
+            errors.append(
+                "Claude managed block integrity: AGENT-FOUNDRY-START/END blocks are malformed or out of order"
+            )
+    return errors
+
+
+def check_adapter_quality_script() -> list[str]:
+    script = ROOT / "scripts" / "check_adapter_quality.py"
+    if not script.exists():
+        return ["Missing scripts/check_adapter_quality.py"]
+    result = subprocess.run(
+        ["python3", str(script)],
+        cwd=ROOT,
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if result.returncode == 0:
+        return []
+    output = (result.stdout + result.stderr).strip()
+    if not output:
+        return ["Adapter quality check failed without output"]
+    return output.splitlines()
+
+
 def main() -> int:
     errors: list[str] = []
     errors += check_index_paths(ROOT / "indexes" / "practice_index.yaml", "Practice")
@@ -392,8 +456,10 @@ def main() -> int:
     errors += check_no_deepseek_direct_adapter()
     errors += check_asset_usage_log()
     errors += check_runtime_manifest()
+    errors += check_claude_managed_block_integrity()
     errors += check_cross_references()
     errors += check_supersede_bidirectional()
+    errors += check_adapter_quality_script()
 
     if errors:
         print("Consistency check failed:")

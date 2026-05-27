@@ -5,6 +5,8 @@ description: Use when designing, reviewing, or refactoring software architecture
 
 # Architecture Design
 
+Asset ID: ASSET-ARCH-001.
+
 Use this skill to guide architecture proposals and reviews.
 
 ## Asset vs Practice
@@ -23,4 +25,3 @@ This skill is an asset that performs a repeatable workflow. During execution, it
 8. Choose technologies as boundary implementations.
 
 Read `references/principles.md` for the compact rules and `references/checklist.md` before producing a design.
-

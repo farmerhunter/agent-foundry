@@ -7,6 +7,7 @@ import argparse
 import datetime as dt
 import hashlib
 import json
+import subprocess
 import tempfile
 import tarfile
 from pathlib import Path
@@ -29,6 +30,7 @@ DEFAULT_INCLUDE = [
     "templates",
     "usage",
     "runtime",
+    "sync/templates",
     "scripts",
 ]
 
@@ -120,7 +122,21 @@ def main() -> int:
                 rel = path.relative_to(ROOT)
                 tar.add(path, arcname=str(Path(arc_prefix) / rel))
 
+    archive_hash = file_sha256(out_path)
+    result = subprocess.run(
+        ["python3", "scripts/sync_state.py", "record-exported", str(out_path)],
+        cwd=ROOT,
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if result.returncode == 0 and result.stdout.strip():
+        print(result.stdout.strip())
+    elif result.returncode != 0:
+        print(f"warning: unable to record sync state: {(result.stdout + result.stderr).strip()}")
     print(out_path)
+    print(f"archive_sha256: {archive_hash}")
     print(f"files: {len(files)}")
     return 0
 

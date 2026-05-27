@@ -43,23 +43,43 @@ def copytree_contents(src: Path, dest: Path, apply: bool) -> list[tuple[Action, 
     return copied
 
 
-def ensure_managed_dir(dest: Path, apply: bool, force: bool) -> None:
+def log_adoption(path: Path, action: str) -> None:
+    log_path = ROOT / "sync" / "local" / "adoption-log.yaml"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().isoformat(timespec="seconds")
+    entry = f"- timestamp: {timestamp}\n  path: {path}\n  action: {action}\n"
+    if log_path.exists():
+        existing = log_path.read_text(encoding="utf-8")
+        if "adoptions:" not in existing:
+            existing = "adoptions:\n" + existing
+        log_path.write_text(existing.rstrip("\n") + "\n" + entry, encoding="utf-8")
+    else:
+        log_path.write_text("adoptions:\n" + entry, encoding="utf-8")
+
+
+def ensure_managed_dir(dest: Path, apply: bool, adopt: bool) -> None:
     marker = dest / MANAGED_MARKER
-    if dest.exists() and not marker.exists() and not force:
+    existed = dest.exists()
+    was_unmanaged = existed and not marker.exists()
+    if dest.exists() and not marker.exists() and not adopt:
         raise SystemExit(
             f"Refusing to overwrite unmanaged directory: {dest}\n"
-            f"Use --force only after confirming this directory should be managed by Agent Foundry."
+            f"Use --adopt to manage this directory with Agent Foundry."
         )
     if apply:
         dest.mkdir(parents=True, exist_ok=True)
         marker.write_text("managed-by: agent-foundry\n", encoding="utf-8")
+        if was_unmanaged:
+            log_adoption(dest, "adopt")
+        elif not existed:
+            log_adoption(dest, "create")
 
 
-def copy_skill_dirs(src: Path, dest: Path, apply: bool, force: bool) -> list[tuple[Action, Path, Path]]:
+def copy_skill_dirs(src: Path, dest: Path, apply: bool, adopt: bool) -> list[tuple[Action, Path, Path]]:
     copied: list[tuple[Action, Path, Path]] = []
     for skill_dir in sorted(path for path in src.iterdir() if path.is_dir()):
         target_dir = dest / skill_dir.name
-        ensure_managed_dir(target_dir, apply, force)
+        ensure_managed_dir(target_dir, apply, adopt)
         copied.extend(copytree_contents(skill_dir, target_dir, apply))
     return copied
 
@@ -104,14 +124,14 @@ def upsert_managed_block(path: Path, block: str, apply: bool, backup: bool) -> l
     return copied
 
 
-def sync_codex(dest: Path, apply: bool, force: bool) -> list[tuple[Action, Path, Path]]:
+def sync_codex(dest: Path, apply: bool, adopt: bool) -> list[tuple[Action, Path, Path]]:
     src = ROOT / "adapters" / "codex" / "skills"
-    return copy_skill_dirs(src, dest, apply, force)
+    return copy_skill_dirs(src, dest, apply, adopt)
 
 
-def sync_hermes(dest: Path, apply: bool, force: bool) -> list[tuple[Action, Path, Path]]:
+def sync_hermes(dest: Path, apply: bool, adopt: bool) -> list[tuple[Action, Path, Path]]:
     src = ROOT / "adapters" / "hermes" / "skills"
-    return copy_skill_dirs(src, dest, apply, force)
+    return copy_skill_dirs(src, dest, apply, adopt)
 
 
 def sync_claude(dest: Path, apply: bool, backup: bool) -> list[tuple[Action, Path, Path]]:
@@ -154,7 +174,8 @@ def main() -> int:
     parser.add_argument("--dest", help="Override destination for a single target.")
     parser.add_argument("--apply", action="store_true", help="Actually copy files.")
     parser.add_argument("--dry-run", action="store_true", help="Show planned copies only.")
-    parser.add_argument("--force", action="store_true", help="Overwrite unmanaged skill directories.")
+    parser.add_argument("--adopt", action="store_true", help="Adopt unmanaged skill directories into Agent Foundry management.")
+    parser.add_argument("--force", action="store_true", dest="adopt", help=argparse.SUPPRESS)
     parser.add_argument("--no-backup", action="store_true", help="Do not back up CLAUDE.md before editing its managed block.")
     args = parser.parse_args()
 
@@ -170,11 +191,11 @@ def main() -> int:
     for target in targets:
         dest = Path(args.dest).expanduser() if args.dest else DEFAULT_DESTS.get(target)
         if target == "codex":
-            all_copied.extend(sync_codex(dest, apply, args.force))
+            all_copied.extend(sync_codex(dest, apply, args.adopt))
         elif target == "claude-code":
             all_copied.extend(sync_claude(dest, apply, not args.no_backup))
         elif target == "hermes":
-            all_copied.extend(sync_hermes(dest, apply, args.force))
+            all_copied.extend(sync_hermes(dest, apply, args.adopt))
         elif target == "chatgpt":
             all_copied.extend(sync_chatgpt(Path(args.dest).expanduser() if args.dest else None, apply))
 

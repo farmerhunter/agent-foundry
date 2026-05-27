@@ -12,12 +12,14 @@ aliases:
   - report exact state after every sync
   - sync without ambiguity
   - unambiguous final report
+  - status commands are read-only
 related: [RUNTIME-001, RUNTIME-002, COLLAB-004]
 applies_when:
   - syncing Agent Foundry with remote repositories
   - refreshing local runtimes after canonical changes
   - pushing or pulling across machines
   - reporting completion after multi-step sync workflows
+  - implementing sync status, review, compare, or report commands
 review_required: false
 provenance: "Harvested from the refresh workflow redesign on 2026-05-27, where git push failures and ambiguous local-vs-remote state led to uncertainty about whether adapters and runtimes were actually in sync."
 ---
@@ -44,11 +46,15 @@ Use a structured, human-readable format. Do not rely on the user reading verbose
 
 When network issues prevent push, report the failure explicitly and preserve the knowledge that unpushed commits exist. Do not silently defer or hide the issue.
 
+Status, report, check, review, and compare commands are read-only by default. If local state is missing, report that it has not been initialized and suggest the explicit initialization command. Do not create or mutate local state just to display status.
+
 ## Watch Out For
 
 Do not assume that because a command succeeded, the overall sync is complete. A refresh workflow may involve git pull, conditional adapter regeneration, installation to runtimes, and git commit+push. Each step can succeed independently while the overall system remains out of sync. The Final Report is the only source of truth for the aggregate state.
 
 Do not omit the commit hash. Relative terms like "latest" or "just now" lose meaning across interruptions, compaction, or multi-machine work.
+
+Do not let a supposedly read-only status operation write machine-local manifests, sync state, usage logs, or adoption records. Read-only reporting must be safe to run repeatedly before install, after install, and on an unfamiliar machine.
 
 ## Example
 

@@ -51,6 +51,8 @@ Each snapshot contains `sync/snapshot-manifest.json` with file paths, sizes, and
 
 Portable snapshots include `runtime/templates/` but exclude `runtime/local/`. Local runtime deployment state is machine-specific and should be initialized or reviewed on each machine.
 
+`scripts/export_snapshot.py` also records the archive SHA-256 in machine-local `sync/local/state.yaml`.
+
 ## Snapshot Import
 
 Import is staging-first and non-destructive:
@@ -67,6 +69,18 @@ sync/imported/
 
 Review staged files before merging into the working tree. Do not unpack a received snapshot directly over the live repository.
 
+Compare a staged snapshot with the current working tree:
+
+```bash
+python3 scripts/compare_snapshot.py sync/imported/<snapshot-name>
+```
+
+After intentionally merging a staged snapshot, record it as applied:
+
+```bash
+python3 scripts/sync_state.py mark-applied <snapshot.tar.gz>
+```
+
 ## Sync Status
 
 Check local remote/snapshot status:
@@ -76,6 +90,14 @@ python3 scripts/sync_status.py
 ```
 
 Use this before leaving a machine, before starting work on another machine, or after reconnecting to GitHub.
+
+`sync_status.py` reports:
+
+- git branch, remotes, and working tree status;
+- latest local snapshot and manifest summary;
+- machine-local sync state, including latest exported/imported/applied snapshot hashes;
+- runtime manifest status;
+- runtime adapter drift between repo adapters and installed managed runtime copies.
 
 ## Sync Queue
 
@@ -110,5 +132,9 @@ Preferred order:
 2. Export a snapshot before switching machines.
 3. Push to GitHub when the network is available.
 4. If GitHub is unavailable, move the snapshot by USB, LAN, or another reliable channel.
-5. On the receiving machine, stage with `scripts/import_snapshot.py`, review, merge, and run consistency checks.
-6. Initialize or review `runtime/local/runtime_manifest.yaml` before installing adapters on the receiving machine.
+5. On the receiving machine, stage with `scripts/import_snapshot.py`.
+6. Compare with `scripts/compare_snapshot.py`.
+7. Review and merge intentionally.
+8. Mark the snapshot as applied with `scripts/sync_state.py mark-applied <snapshot.tar.gz>`.
+9. Run consistency checks.
+10. Initialize or review `runtime/local/runtime_manifest.yaml` before installing adapters on the receiving machine.

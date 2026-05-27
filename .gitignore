@@ -4,8 +4,10 @@ __pycache__/
 
 sync/snapshots/*.tar.gz
 sync/imported/
+sync/local/
 sync/pending/
 sync/applied/
 sync/conflicts/
 
 runtime/local/
+usage/adoption-log.yaml

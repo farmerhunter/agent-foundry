@@ -236,7 +236,13 @@ Use snapshots when GitHub is unavailable or unreliable.
    python3 scripts/sync_status.py
    ```
 
-6. Initialize or review the receiving machine's local runtime manifest before installing:
+6. If the staged snapshot was merged, record it as applied:
+
+   ```bash
+   python3 scripts/sync_state.py mark-applied <snapshot.tar.gz>
+   ```
+
+7. Initialize or review the receiving machine's local runtime manifest before installing:
 
    ```bash
    python3 scripts/runtime_manifest.py init

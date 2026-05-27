@@ -1,0 +1,17 @@
+schema_version: 1
+updated:
+
+latest_exported_snapshot:
+  path:
+  archive_sha256:
+  created_at:
+
+latest_imported_snapshot:
+  path:
+  archive_sha256:
+  created_at:
+
+last_applied_snapshot:
+  path:
+  archive_sha256:
+  applied_at:

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import tarfile
 from pathlib import Path
 
@@ -56,7 +57,20 @@ def main() -> int:
     print(f"imported: {dest}")
     print(f"created_at: {manifest.get('created_at', '')}")
     print(f"files: {len(manifest.get('files', []))}")
+    result = subprocess.run(
+        ["python3", "scripts/sync_state.py", "record-imported", str(snapshot)],
+        cwd=ROOT,
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if result.returncode == 0 and result.stdout.strip():
+        print(result.stdout.strip())
+    elif result.returncode != 0:
+        print(f"warning: unable to record sync state: {(result.stdout + result.stderr).strip()}")
     print("next: compare staged files with the working tree, then merge intentionally.")
+    print(f"next: python3 scripts/compare_snapshot.py {dest}")
     return 0
 
 

@@ -16,4 +16,5 @@ published_to: []
 usage_triggers: []
 success_criteria: []
 review_cadence: monthly
+review_after_days: 90
 evidence_summary:

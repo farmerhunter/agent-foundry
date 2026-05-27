@@ -37,6 +37,18 @@ If changes arrive from another machine:
    ```
 
 2. Compare staged `practices/`, `assets/`, `indexes/`, `usage/`, and `adapters/`.
-3. Resolve conflicts.
-4. Run consistency check.
-5. Record unresolved issues under `sync/conflicts/`.
+3. Run:
+
+   ```bash
+   python3 scripts/compare_snapshot.py <staged-dir>
+   ```
+
+4. Resolve conflicts.
+5. Mark applied when the staged snapshot has been intentionally merged:
+
+   ```bash
+   python3 scripts/sync_state.py mark-applied <snapshot.tar.gz>
+   ```
+
+6. Run consistency check.
+7. Record unresolved issues under `sync/conflicts/`.

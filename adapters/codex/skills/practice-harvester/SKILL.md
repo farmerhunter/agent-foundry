@@ -7,7 +7,7 @@ description: Use when the user says "harvest practices", "做一次 harvest prac
 
 This skill maintains Agent Foundry, the user's canonical capability system.
 
-Asset ID: ASSET-META-001. Canonical constraints include META-001 through META-008 and RUNTIME-001 through RUNTIME-003.
+Asset ID: ASSET-META-001. Canonical constraints include META-001 through META-010 and RUNTIME-001 through RUNTIME-003.
 
 ## Asset vs Practice
 
@@ -48,3 +48,5 @@ This skill is an asset that performs a repeatable workflow. During execution, it
 - Treat agent runtime directories as shared user-owned environments. When publishing adapters, use managed blocks, namespaced files, ownership markers, backups, dry-runs, and explicit adoption for unmanaged runtime paths; never overwrite unmanaged runtime files by default.
 - Separate portable adapter intent from machine-local deployment state. Keep adapter profiles and runtime templates in the repo, but keep enabled targets, detected paths, and adoption decisions in gitignored local manifests; portable snapshots exclude machine-local runtime state by default.
 - After every sync or refresh, expose unambiguous state. Report the exact commit hash, unpushed commits, adapters regenerated, runtime updates applied, and next actions required. Do not leave the user guessing about alignment between canonical files, generated adapters, and local runtimes.
+- Make adapter fidelity executable. Adapter quality checks must verify meaning signals such as triggers, canonical IDs, published asset IDs, target conventions, and high-fidelity requirements, not just generated file existence.
+- Review assets with lifecycle evidence. Asset review should use lifecycle state, usage evidence, overlap, canonical coverage, stale triggers, and published targets before recommending keep, revise, deprecate, archive, split, or merge.

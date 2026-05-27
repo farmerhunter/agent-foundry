@@ -9,6 +9,11 @@ Canonical sources:
 - `schemas/asset-candidate.schema.yaml`
 - `indexes/asset_index.yaml`
 
+Published asset IDs:
+
+- ASSET-META-001 Practice Harvester
+- ASSET-ARCH-001 Architecture Design
+
 Assets are user-facing reusable tools discovered from repeated work:
 
 - `skill`: reusable workflow or operating guide.
