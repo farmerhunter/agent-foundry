@@ -110,6 +110,15 @@ practices:
     tags: [runtime, deployment, manifest, offline-sync, portability]
     aliases: [runtime manifest is machine-local, keep local deployment state out of git, portable snapshots exclude local runtime state]
 
+  - id: RUNTIME-003
+    title: Sync operations must expose unambiguous state
+    path: practices/runtime/RUNTIME-003-sync-operations-must-expose-unambiguous-state.md
+    domain: runtime
+    type: principle
+    status: active
+    tags: [runtime, sync, state, git, safety, visibility]
+    aliases: [report exact state after every sync, sync without ambiguity, unambiguous final report]
+
   - id: ARCH-001
     title: Boundaries before tools
     path: practices/architecture/ARCH-001-boundaries-before-tools.md

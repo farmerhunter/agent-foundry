@@ -7,6 +7,8 @@ description: Use when the user says "harvest practices", "做一次 harvest prac
 
 This skill maintains Agent Foundry, the user's canonical capability system.
 
+Asset ID: ASSET-META-001. Canonical constraints include META-001 through META-008 and RUNTIME-001 through RUNTIME-003.
+
 ## Asset vs Practice
 
 This skill is an asset that performs a repeatable workflow. During execution, it references canonical practices as behavioral constraints. Do not confuse the skill with the practices it applies.
@@ -43,3 +45,4 @@ This skill is an asset that performs a repeatable workflow. During execution, it
 - Do not disable Hermes native memory, autonomous skill creation, or local self-improvement. Treat native outputs as candidate inputs when they should become durable or cross-agent.
 - Treat agent runtime directories as shared user-owned environments. When publishing adapters, use managed blocks, namespaced files, ownership markers, backups, dry-runs, and explicit adoption for unmanaged runtime paths; never overwrite unmanaged runtime files by default.
 - Separate portable adapter intent from machine-local deployment state. Keep adapter profiles and runtime templates in the repo, but keep enabled targets, detected paths, and adoption decisions in gitignored local manifests; portable snapshots exclude machine-local runtime state by default.
+- After every sync or refresh, expose unambiguous state. Report the exact commit hash, unpushed commits, adapters regenerated, runtime updates applied, and next actions required. Do not leave the user guessing about alignment between canonical files, generated adapters, and local runtimes.

@@ -2,13 +2,15 @@
 
 This project contains Agent Foundry, the user's canonical agent capability system.
 
+Published assets include ASSET-META-001 Practice Harvester and ASSET-ARCH-001 Architecture Design.
+
 ## Request Routing (META-008)
 
 Before acting on a request, classify user intent:
 
 - If the user asks to **execute a repeatable workflow** (harvest, design architecture, collaborate on a PR), match the request to an asset trigger and invoke the asset. During execution, reference the canonical practices the asset lists.
 - If the user asks to **apply a constraint or change behavior** ("stop doing X", "always do Y"), match the request to a canonical practice and apply its Principle and Guidance. Do not invoke an asset for a one-off behavioral correction.
-- If the user asks to **update or govern agent knowledge**, invoke the Practice Harvester asset (META-001–META-007).
+- If the user asks to **update or govern agent knowledge**, invoke the Practice Harvester asset (ASSET-META-001, META-001 through META-008, RUNTIME-001 through RUNTIME-003).
 
 Assets perform work; practices govern rules. Do not conflate them.
 
@@ -46,6 +48,8 @@ Do not suppress native agent memory or self-improvement features when available.
 When publishing adapters into local runtimes, apply RUNTIME-001: treat agent runtime directories as shared user-owned environments. Use managed blocks, namespaced files, ownership markers, backups, dry-runs, and explicit adoption for unmanaged runtime paths. Never overwrite unmanaged runtime files by default.
 
 Apply RUNTIME-002 when working with deployment manifests or offline sync: adapter profiles and runtime templates are portable repository content, while enabled targets, detected runtime paths, and adoption decisions belong in gitignored local manifests. Portable snapshots exclude machine-local runtime state by default.
+
+Apply RUNTIME-003 after every sync or refresh operation: report the exact commit hash, unpushed commit count, adapters regenerated, runtime updates applied, and the exact next action required. Never report "done" when unpushed commits remain or runtime state is ambiguous.
 
 ## External Skills
 

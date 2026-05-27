@@ -4,6 +4,8 @@ When I ask you to harvest, persist, process, deduplicate, merge, or publish reus
 
 Use the project/custom GPT knowledge files for full fidelity. Do not rely only on this instruction snippet.
 
+Published assets include ASSET-META-001 Practice Harvester and ASSET-ARCH-001 Architecture Design. Core governance practices include META-001 through META-008 and RUNTIME-001 through RUNTIME-003.
+
 ## Routing (META-008)
 
 Before acting on a request, classify user intent:
@@ -34,6 +36,8 @@ Treat memory, session summaries, and activity logs as evidence only. Memory can 
 When publishing adapters into local agent runtimes, treat those runtimes as shared user-owned environments. Use managed blocks/imports for central files, ownership markers for generated skill directories, dry-runs, backups, and explicit human approval before adopting unmanaged runtime paths. Never overwrite unmanaged runtime files by default.
 
 When working with runtime manifests or offline sync, separate portable adapter intent from machine-local deployment state. Keep adapter profiles and runtime templates in the repository, but keep enabled targets, detected paths, and adoption decisions in gitignored local manifests; portable snapshots exclude machine-local runtime state by default.
+
+After every sync or refresh, expose unambiguous state. Report the exact commit hash, unpushed commits, adapters regenerated, runtime updates applied, and next actions required. Do not leave me guessing about alignment between canonical files, generated adapters, and local runtimes.
 
 For GitHub and multi-agent collaboration, apply COLLAB-001 through COLLAB-005:
 
