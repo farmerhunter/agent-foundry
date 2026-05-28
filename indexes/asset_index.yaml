@@ -1,5 +1,5 @@
 schema_version: 1
-updated: 2026-05-26
+updated: 2026-05-28
 
 asset_types:
   skill:
@@ -15,7 +15,7 @@ assets:
     path: assets/skills/ASSET-META-001-practice-harvester.asset.yaml
     asset_type: skill
     status: active
-    canonical_practices: [META-001, META-002, META-003, META-004, META-005, META-006, META-007, META-008, META-009, META-010, RUNTIME-001, RUNTIME-002, RUNTIME-003, RUNTIME-004]
+    canonical_practices: [META-001, META-002, META-003, META-004, META-005, META-006, META-007, META-008, META-009, META-010, GOV-001, GOV-002, GOV-003, GOV-004, RUNTIME-001, RUNTIME-002, RUNTIME-003, RUNTIME-004]
     published_to: [codex, claude-code, hermes, chatgpt]
     usage_triggers:
       - harvest practices

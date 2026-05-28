@@ -12,7 +12,7 @@ aliases:
   - skill is not the default
   - smallest suitable reusable asset
   - META-004
-related: [META-001, META-002, META-003, META-005]
+related: [GOV-002, META-001, META-002, META-003, META-005]
 applies_when:
   - discovering repeated workflows
   - deciding whether to create a skill
@@ -23,7 +23,7 @@ provenance: "Extracted from Agent Foundry asset lifecycle design."
 
 ## Principle
 
-Package repeated work into the smallest suitable asset. A skill is one possible form, not the default.
+Within Agent Foundry, package repeated work into the smallest suitable reusable asset. A skill is one possible form, not the default.
 
 ## Rationale
 
@@ -42,12 +42,15 @@ For each discovered workflow, compare:
 
 Prefer the smallest form that produces the intended value with clear triggers and success criteria.
 
+For the cross-project complexity-control rule, apply [[GOV-002]]. This practice only decides the smallest suitable Agent Foundry asset form.
+
 ## Watch Out For
 
 Do not create a skill when a checklist in an existing skill, a recurring automation, or a specialized subagent would be narrower and easier to maintain.
 
 ## Related Practices
 
+- [[GOV-002]]
 - [[META-001]]
 - [[META-002]]
 - [[META-003]]

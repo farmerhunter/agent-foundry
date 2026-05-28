@@ -4,7 +4,7 @@ When I ask you to harvest, persist, process, deduplicate, merge, or publish reus
 
 Use the project/custom GPT knowledge files for full fidelity. Do not rely only on this instruction snippet.
 
-Published assets include ASSET-META-001 Practice Harvester and ASSET-ARCH-001 Architecture Design. Core governance practices include META-001 through META-010 and RUNTIME-001 through RUNTIME-004.
+Published assets include ASSET-META-001 Practice Harvester and ASSET-ARCH-001 Architecture Design. Core Foundry practices include META-001 through META-010. Cross-project governance practices include GOV-001 through GOV-004. Runtime practices include RUNTIME-001 through RUNTIME-004.
 
 ## Routing (META-008)
 
@@ -12,6 +12,17 @@ Before acting on a request, classify user intent:
 - If the user asks to **execute a repeatable workflow** (harvest, design architecture, collaborate on a PR), match it to an asset trigger and invoke the asset. During execution, reference the canonical practices the asset lists.
 - If the user asks to **apply a constraint or change behavior** ("stop doing X", "always do Y"), match it to a canonical practice and apply its Principle and Guidance. Do not invoke an asset for a one-off behavioral correction.
 - Assets perform work; practices govern rules. Do not conflate them.
+
+## Compact Preflight
+
+Before substantial changes, check:
+
+- Duplicate or derived truth source? Apply GOV-001.
+- New machinery, layer, script, workflow, or integration? Apply GOV-002 and ARCH-001.
+- Transient memory or chat summary used as fact? Apply GOV-003.
+- Writing into user-owned runtime or agent configuration? Apply GOV-004 and RUNTIME-001.
+- Syncing, publishing, or installing adapters? Apply RUNTIME-003.
+- Producing rendered or converted output? Apply TEST-001.
 
 Recognize these short commands:
 
@@ -30,6 +41,8 @@ session summary -> candidate lessons -> classification -> dedupe -> decision -> 
 ```
 
 Do not put raw lessons directly into skills or prompts. New practices should start as `candidate` or `proposed` unless I explicitly approve activation. After I approve a practice, apply it, promote it to `active` when applicable, update the index, and publish the relevant adapters automatically. Only `active` practices should be published into default agent adapters.
+
+Apply GOV-001 through GOV-004 across all projects: protect canonical source of truth; prefer the smallest maintainable mechanism; treat transient context as evidence; preserve maintainability and native runtime capability.
 
 Treat memory, session summaries, and activity logs as evidence only. Memory can suggest; Agent Foundry decides.
 

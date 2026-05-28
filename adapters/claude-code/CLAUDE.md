@@ -10,9 +10,20 @@ Before acting on a request, classify user intent:
 
 - If the user asks to **execute a repeatable workflow** (harvest, design architecture, collaborate on a PR), match the request to an asset trigger and invoke the asset. During execution, reference the canonical practices the asset lists.
 - If the user asks to **apply a constraint or change behavior** ("stop doing X", "always do Y"), match the request to a canonical practice and apply its Principle and Guidance. Do not invoke an asset for a one-off behavioral correction.
-- If the user asks to **update or govern agent knowledge**, invoke the Practice Harvester asset (ASSET-META-001, META-001 through META-010, RUNTIME-001 through RUNTIME-004).
+- If the user asks to **update or govern agent knowledge**, invoke the Practice Harvester asset (ASSET-META-001, META-001 through META-010, GOV-001 through GOV-004, RUNTIME-001 through RUNTIME-004).
 
 Assets perform work; practices govern rules. Do not conflate them.
+
+## Compact Preflight
+
+Before substantial changes, check:
+
+- Duplicate or derived truth source? Apply GOV-001.
+- New machinery, layer, script, workflow, or integration? Apply GOV-002 and ARCH-001.
+- Transient memory or chat summary used as fact? Apply GOV-003.
+- Writing into user-owned runtime or agent configuration? Apply GOV-004 and RUNTIME-001.
+- Syncing, publishing, or installing adapters? Apply RUNTIME-003.
+- Producing rendered or converted output? Apply TEST-001.
 
 ## Practice Harvesting
 
@@ -40,6 +51,15 @@ When asked to harvest, persist, deduplicate, merge, or publish reusable lessons:
 When asked to discover reusable assets, read `workflows/discover-assets.md`, search `indexes/asset_index.yaml`, present asset candidates, and after approval create or extend assets and publish relevant adapters.
 
 When an active asset is used, record concise non-sensitive usage evidence automatically, preferably with `scripts/record_asset_usage.py`.
+
+## Cross-Project Governance
+
+Apply GOV-001 through GOV-004 across all projects, not only inside Agent Foundry:
+
+- GOV-001: protect canonical source of truth; derived views, generated files, caches, summaries, and compatibility artifacts must not become second hand-maintained truth sources.
+- GOV-002: prefer the smallest maintainable mechanism; avoid adding scripts, layers, files, automations, or abstractions before ownership, validation, and failure modes are clear.
+- GOV-003: treat transient context as evidence; memory, chat history, rollout summaries, and temporary notes must be verified against project-owned durable records.
+- GOV-004: preserve maintainability and runtime capability; do not degrade native agent memory, skills, project instructions, self-improvement, or user-owned runtime configuration.
 
 Treat memory, session summaries, and activity logs as evidence only. Durable rules and assets belong in Agent Foundry canonical records.
 

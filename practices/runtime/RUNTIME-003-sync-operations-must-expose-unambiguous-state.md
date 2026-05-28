@@ -81,6 +81,13 @@ Final Report
 - Next action: retry push with `git push origin main` when network recovers
 ```
 
+## Activation
+
+- Tier: always_preflight
+- Phases: after_sync, after_publish, after_install, final_report
+- Signals: git pull, git push, snapshot export/import, adapter publish, runtime install, sync status, refresh command, multi-machine handoff
+- Evidence: final report includes repo commit, unpushed commits, adapter changes, runtime updates, drift status, and exact next action
+
 ## Related Practices
 
 - [[RUNTIME-001]]

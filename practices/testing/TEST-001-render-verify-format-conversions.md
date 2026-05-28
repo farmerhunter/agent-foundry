@@ -47,3 +47,10 @@ After conversion, verify source-to-output structure and rendered appearance. Che
 ## Example
 
 When regenerating a technical document, compare Markdown counts for headings, images, lists, tables, and code blocks against the DOCX, then inspect rendered pages or image exports for Chinese text and layout quality.
+
+## Activation
+
+- Tier: always_preflight
+- Phases: verification, final_report
+- Signals: converting Markdown, SVG, DOCX, PDF, images, slides, spreadsheets, or other user-facing artifacts; producing rendered output with non-ASCII text
+- Evidence: final report names the rendered artifact inspected or the fallback verification used

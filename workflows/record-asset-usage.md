@@ -42,14 +42,30 @@ python3 scripts/record_asset_usage.py \
   --project agent-foundry \
   --trigger "usage evidence aggregation" \
   --outcome useful \
+  --evidence-type applied \
   --note "Applied local raw plus shared aggregate evidence boundary."
 ```
+
+For missed activation evidence:
+
+```bash
+python3 scripts/record_asset_usage.py \
+  --practice-id GOV-002 \
+  --agent codex \
+  --project agent-foundry \
+  --trigger "post-review identified overbuilt mechanism" \
+  --outcome unknown \
+  --evidence-type missed \
+  --note "Practice should likely have triggered before adding extra generated files."
+```
+
+Missed activation evidence is local raw evidence only by default. It does not update shared usage aggregates because it is a review signal, not successful usage.
 
 Use concise notes. Do not store raw session transcripts.
 
 ## Data Boundary
 
-`scripts/record_asset_usage.py` writes raw evidence to gitignored `usage/local/usage-log.yaml` and updates sanitized shared counts in `usage/usage-aggregate.yaml`.
+`scripts/record_asset_usage.py` writes raw evidence to gitignored `usage/local/usage-log.yaml` and updates sanitized shared counts in `usage/usage-aggregate.yaml` for `evidence_type: applied`.
 
 Raw local evidence may include project, trigger, and note fields for local audit. It is machine-local by default and should not be synced unless the user explicitly chooses to share it.
 

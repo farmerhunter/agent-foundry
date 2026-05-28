@@ -19,6 +19,8 @@ This checks:
 - inactive statuses do not leak into adapters;
 - no direct DeepSeek adapter exists;
 - shared usage aggregate exists.
+- adapter quality checks pass;
+- activation tier and compact preflight checks pass.
 
 ## Manual Fallback
 

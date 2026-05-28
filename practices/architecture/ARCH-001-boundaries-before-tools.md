@@ -47,6 +47,13 @@ Do not let an important tool become an accidental domain concept.
 
 In token-panic, Playwright was moved from the center of the architecture to one implementation of a `browser_scrape` provider adapter.
 
+## Activation
+
+- Tier: always_preflight
+- Phases: planning, before_new_layer, architecture_review
+- Signals: choosing a framework, tool, database, service, API, or automation before defining boundaries; implementation detail becoming the central abstraction
+- Evidence: final report names the boundary or ownership decision before naming the tool choice
+
 ## Related Practices
 
 - [[ARCH-002]]

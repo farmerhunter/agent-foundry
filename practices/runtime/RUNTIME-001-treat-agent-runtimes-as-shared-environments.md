@@ -51,6 +51,13 @@ Do not treat "adapter output exists" as permission to overwrite runtime state. A
 
 For Claude Code, write generated instructions to `~/.claude/agent-foundry/CLAUDE.md` and update only a bounded Agent Foundry import block in `~/.claude/CLAUDE.md`. For Codex or Hermes, update a skill directory only when it contains `.agent-foundry-managed`, unless the user explicitly approves adopting that directory.
 
+## Activation
+
+- Tier: always_preflight
+- Phases: before_runtime_write, before_adapter_publish, verification
+- Signals: writing into `~/.codex`, `~/.claude`, `~/.hermes`, ChatGPT project instructions, or any shared agent/runtime config; adopting an existing runtime path
+- Evidence: final report lists managed markers, backups, dry-run/apply behavior, or explicit adoption for touched runtime paths
+
 ## Related Practices
 
 - [[META-001]]

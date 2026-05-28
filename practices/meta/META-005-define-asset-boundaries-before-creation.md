@@ -12,7 +12,7 @@ aliases:
   - define skill scope before creating it
   - asset boundaries before asset creation
   - META-005
-related: [META-001, META-002, META-004]
+related: [GOV-002, META-001, META-002, META-004]
 applies_when:
   - creating or extending a reusable asset
   - deciding skill scope
@@ -23,7 +23,7 @@ provenance: "Extracted from Agent Foundry asset lifecycle design."
 
 ## Principle
 
-Before creating a reusable asset, define its trigger, responsibility, non-responsibility, inputs, process, outputs, and success criteria.
+Before creating a reusable Agent Foundry asset, define its trigger, responsibility, non-responsibility, inputs, process, outputs, and success criteria.
 
 ## Rationale
 
@@ -43,12 +43,15 @@ Every asset should answer:
 
 If these cannot be answered, defer the asset instead of creating it.
 
+For broader project mechanisms, layers, tools, or abstractions, apply [[GOV-002]] and [[ARCH-001]] before creating new machinery.
+
 ## Watch Out For
 
 Avoid assets with vague triggers such as "help with engineering" or "improve code". Narrow the asset or extend an existing one.
 
 ## Related Practices
 
+- [[GOV-002]]
 - [[META-001]]
 - [[META-002]]
 - [[META-004]]

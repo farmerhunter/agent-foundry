@@ -1,9 +1,11 @@
 schema_version: 1
-updated: 2026-05-26
+updated: 2026-05-28
 
 domains:
   meta:
-    description: Practices about maintaining Agent Foundry.
+    description: Practices about maintaining the Agent Foundry capability lifecycle itself.
+  governance:
+    description: Cross-project rules for source-of-truth, maintainability, durable records, and runtime capability preservation.
   architecture:
     description: System design, boundaries, domain modeling, and change management.
   implementation:
@@ -21,7 +23,7 @@ domains:
 
 practices:
   - id: META-001
-    title: Canonical practices are the source of truth
+    title: Canonical practices are the source of truth for adapters
     path: practices/meta/META-001-canonical-practices-source-of-truth.md
     domain: meta
     type: principle
@@ -109,6 +111,42 @@ practices:
     status: active
     tags: [assets, lifecycle, evidence, review, skill-rot]
     aliases: [asset lifecycle review needs evidence, review assets before skill rot, usage evidence drives asset lifecycle]
+
+  - id: GOV-001
+    title: Protect canonical source of truth
+    path: practices/governance/GOV-001-protect-canonical-source-of-truth.md
+    domain: governance
+    type: principle
+    status: active
+    tags: [governance, source-of-truth, derived-data, maintainability]
+    aliases: [do not create a second source of truth, derived views must stay derived]
+
+  - id: GOV-002
+    title: Prefer the smallest maintainable mechanism
+    path: practices/governance/GOV-002-prefer-smallest-maintainable-mechanism.md
+    domain: governance
+    type: principle
+    status: active
+    tags: [governance, maintainability, complexity, scope]
+    aliases: [smallest maintainable mechanism, do not add machinery before boundaries are clear]
+
+  - id: GOV-003
+    title: Treat transient context as evidence
+    path: practices/governance/GOV-003-treat-transient-context-as-evidence.md
+    domain: governance
+    type: principle
+    status: active
+    tags: [governance, memory, evidence, durable-records]
+    aliases: [session context is evidence, memory is not project truth]
+
+  - id: GOV-004
+    title: Preserve maintainability and runtime capability
+    path: practices/governance/GOV-004-preserve-runtime-capability.md
+    domain: governance
+    type: principle
+    status: active
+    tags: [governance, maintainability, runtime, degradation, safety]
+    aliases: [do not degrade native agent capability, preserve long-term runtime capability]
 
   - id: RUNTIME-001
     title: Treat agent runtimes as shared, user-owned environments

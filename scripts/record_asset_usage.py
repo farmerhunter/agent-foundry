@@ -19,6 +19,7 @@ AGGREGATE_PATH = ROOT / "usage" / "usage-aggregate.yaml"
 
 
 OUTCOMES = ["useful", "neutral", "not_useful", "unknown"]
+EVIDENCE_TYPES = ["applied", "missed"]
 
 
 def yaml_quote(value: str) -> str:
@@ -50,6 +51,7 @@ def append_local_entry(args: argparse.Namespace, subject_type: str, subject_id: 
         f"    machine_hash: {yaml_quote(machine_hash())}",
         f"    project: {yaml_quote(args.project)}",
         f"    trigger: {yaml_quote(args.trigger)}",
+        f"    evidence_type: {args.evidence_type}",
         f"    outcome: {args.outcome}",
         f"    note: {yaml_quote(args.note)}",
     ]
@@ -146,6 +148,7 @@ def main() -> int:
     parser.add_argument("--project", default="")
     parser.add_argument("--trigger", default="")
     parser.add_argument("--outcome", default="unknown", choices=OUTCOMES)
+    parser.add_argument("--evidence-type", default="applied", choices=EVIDENCE_TYPES)
     parser.add_argument("--note", default="")
     parser.add_argument("--date", default=dt.date.today().isoformat())
     parser.add_argument("--no-aggregate", action="store_true", help="Record raw local evidence only.")
@@ -161,7 +164,7 @@ def main() -> int:
 
     for subject_type, subject_id in subjects:
         append_local_entry(args, subject_type, subject_id)
-        if not args.no_aggregate:
+        if not args.no_aggregate and args.evidence_type == "applied":
             update_aggregate(args, subject_type, subject_id)
         print(f"Recorded usage for {subject_type} {subject_id}.")
     return 0

@@ -1,6 +1,6 @@
 ---
 id: META-001
-title: Canonical practices are the source of truth
+title: Canonical practices are the source of truth for adapters
 domain: meta
 type: principle
 status: active
@@ -12,7 +12,7 @@ aliases:
   - skills are downstream
   - adapters are not source of truth
   - META-001
-related: [META-002, META-003]
+related: [GOV-001, META-002, META-003]
 applies_when:
   - maintaining reusable agent practices
   - updating agent skills or prompts
@@ -23,7 +23,7 @@ provenance: "Initial Agent Foundry system design."
 
 ## Principle
 
-Canonical practice entries are the source of truth. Agent-specific skills, prompts, instructions, and commands are downstream adapters.
+Within Agent Foundry, canonical practice entries are the source of truth for agent adapters. Agent-specific skills, prompts, instructions, and commands are downstream outputs.
 
 ## Rationale
 
@@ -32,6 +32,8 @@ Different agent environments use different packaging formats. If practices are e
 ## Guidance
 
 When adding or changing a reusable practice, update the canonical entry under `practices/` first. Update Codex skills, Claude Code instructions, ChatGPT custom instructions, DeepSeek prompt packs, or Hermes prompt packs only after the canonical entry is settled.
+
+For the cross-project source-of-truth rule, apply [[GOV-001]]. This practice is the Agent Foundry-specific application of that broader governance principle.
 
 ## Watch Out For
 
@@ -43,5 +45,6 @@ An architecture principle should live under `practices/architecture/ARCH-*.md`. 
 
 ## Related Practices
 
+- [[GOV-001]]
 - [[META-002]]
 - [[META-003]]

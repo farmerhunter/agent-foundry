@@ -16,6 +16,8 @@ discover repeated work and reusable lessons
   -> review and improve
 ```
 
+See docs/lifecycle-compatibility.md for how this loop adapts across Codex, Claude Code, Hermes, and ChatGPT from harvest through activation, evidence, and review.
+
 ## Core Principle
 
 Canonical practices are the source of truth. Agent-specific skills, prompts, commands, and instructions are adapters.
@@ -48,6 +50,14 @@ Assets are not canonical practices. They are tools governed by canonical practic
 Memory, session summaries, and activity logs are evidence sources. They can suggest candidates, but they are not the source of truth for durable practices, assets, workflows, or adapters.
 
 Native agent learning should remain useful. For agents such as Hermes that can remember, create skills, or improve local skills, Agent Foundry should not disable those native capabilities. Native outputs are upstream candidate inputs when they should become durable or cross-agent.
+
+## Practice Domains
+
+`meta` is reserved for Agent Foundry capability governance: how practices, assets, adapters, imports, harvesting, routing, publishing, and review work inside this system.
+
+`governance` is for cross-project operating constraints that agents should apply in any repository or task. These include protecting source of truth, avoiding unnecessary machinery, treating transient context as evidence, and preserving long-term runtime capability.
+
+Do not put a practice under `meta` only because it is abstract or broadly useful. A practice belongs in `meta` only when it governs the Agent Foundry capability lifecycle itself. If it constrains general project work, durable records, maintainability, or runtime capability across projects, use `governance` or another domain that matches the work surface.
 
 ## Repository Layers
 
@@ -161,3 +171,4 @@ This repository avoids skill rot through:
 - adapter outputs generated from active practices only;
 - periodic reviews of stale, conflicting, or too-generic entries;
 - separation between long-form docs and compact agent instructions.
+- cross-project governance rules that keep derived views, transient context, and runtime integrations from becoming hidden maintenance burdens.

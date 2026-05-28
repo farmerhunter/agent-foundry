@@ -4,7 +4,7 @@ asset_type: skill
 status: active
 version: 1
 created: 2026-05-26
-updated: 2026-05-26
+updated: 2026-05-28
 purpose: Maintain reusable practices by harvesting lessons, importing external skills, publishing adapters, and reviewing skill rot.
 responsibility: Maintain the Agent Foundry lifecycle of practices, assets, indexes, adapters, usage evidence, and related review reports.
 non_responsibility: Does not perform domain-specific engineering work except to harvest or package reusable lessons from it.
@@ -36,6 +36,10 @@ canonical_practices:
   - META-008
   - META-009
   - META-010
+  - GOV-001
+  - GOV-002
+  - GOV-003
+  - GOV-004
   - RUNTIME-001
   - RUNTIME-002
   - RUNTIME-003

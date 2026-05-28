@@ -1,5 +1,5 @@
 schema_version: 1
-updated: 2026-05-27
+updated: 2026-05-28
 
 aggregates:
   - subject_type: asset
@@ -7,21 +7,21 @@ aggregates:
     period: 2026-05
     agent: "codex"
     machine_hash: "a6bcad5212d8"
-    useful_count: 2
+    useful_count: 3
     neutral_count: 0
     not_useful_count: 0
     unknown_count: 0
-    last_used: 2026-05-27
+    last_used: 2026-05-28
   - subject_type: asset
     subject_id: ASSET-META-001
     period: 2026-05
     agent: "codex"
     machine_hash: "a6bcad5212d8"
-    useful_count: 10
+    useful_count: 12
     neutral_count: 0
     not_useful_count: 0
     unknown_count: 0
-    last_used: 2026-05-27
+    last_used: 2026-05-28
   - subject_type: practice
     subject_id: ARCH-007
     period: 2026-05
@@ -32,6 +32,16 @@ aggregates:
     not_useful_count: 0
     unknown_count: 0
     last_used: 2026-05-27
+  - subject_type: practice
+    subject_id: GOV-004
+    period: 2026-05
+    agent: "codex"
+    machine_hash: "a6bcad5212d8"
+    useful_count: 1
+    neutral_count: 0
+    not_useful_count: 0
+    unknown_count: 0
+    last_used: 2026-05-28
   - subject_type: practice
     subject_id: RUNTIME-004
     period: 2026-05

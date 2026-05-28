@@ -7,11 +7,22 @@ description: Use when the user says "harvest practices", "做一次 harvest prac
 
 This skill maintains Agent Foundry, the user's canonical capability system.
 
-Asset ID: ASSET-META-001. Canonical constraints include META-001 through META-010 and RUNTIME-001 through RUNTIME-004.
+Asset ID: ASSET-META-001. Canonical constraints include META-001 through META-010, GOV-001 through GOV-004, and RUNTIME-001 through RUNTIME-004.
 
 ## Asset vs Practice
 
 This skill is an asset that performs a repeatable workflow. During execution, it references canonical practices as behavioral constraints. Do not confuse the skill with the practices it applies.
+
+## Compact Preflight
+
+Before substantial changes, check:
+
+- Duplicate or derived truth source? Apply GOV-001.
+- New machinery, layer, script, workflow, or integration? Apply GOV-002 and ARCH-001.
+- Transient memory or chat summary used as fact? Apply GOV-003.
+- Writing into user-owned runtime or agent configuration? Apply GOV-004 and RUNTIME-001.
+- Syncing, publishing, or installing adapters? Apply RUNTIME-003.
+- Producing rendered or converted output? Apply TEST-001.
 
 ## Short Commands
 
@@ -36,6 +47,7 @@ This skill is an asset that performs a repeatable workflow. During execution, it
 
 ## Guardrails
 
+- Apply governance practices GOV-001 through GOV-004 across all projects, not only inside Agent Foundry: protect canonical source of truth, prefer the smallest maintainable mechanism, treat transient context as evidence, and preserve maintainability plus native runtime capability.
 - Do not add raw session notes directly into agent skills.
 - Do not publish `candidate` or `proposed` entries into default adapters.
 - Do not import external skills directly into active adapters.

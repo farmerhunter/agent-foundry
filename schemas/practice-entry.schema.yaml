@@ -4,7 +4,7 @@
 required_frontmatter:
   id: "Stable ID such as ARCH-001 or META-003"
   title: "Short human-readable title"
-  domain: "architecture | implementation | testing | debugging | product | agent-collaboration | meta"
+  domain: "architecture | implementation | testing | debugging | product | agent-collaboration | meta | governance | runtime"
   type: "principle | pattern | heuristic | playbook | checklist | example | anti-pattern"
   status: "candidate | proposed | active | revised | superseded | archived"
   version: "Integer"
@@ -29,10 +29,24 @@ required_sections:
 
 recommended_sections:
   Use This When: "Triggering situations"
+  Activation: "Activation tier, phases, signals, and evidence expectations"
   Watch Out For: "Failure modes and caveats"
   Example: "Concrete grounding"
   Review Notes: "Human review status or open questions"
   Related Practices: "Wikilink list of related practice IDs for Obsidian graph connectivity"
+
+activation_tiers:
+  always_preflight: "Very small cross-project kernel, always visible in direct programming adapters."
+  task_router: "Activated by explicit task type, such as architecture design or GitHub issue work."
+  workflow_embedded: "Activated inside a specific workflow, such as publish adapters or review assets."
+  review_only: "Activated during review/check workflows."
+  reference_only: "Available for search or manual lookup."
+
+activation_section_format:
+  - "Use a '## Activation' section when a practice needs explicit triggering behavior."
+  - "Use bullet fields: Tier, Phases, Signals, Evidence."
+  - "Only a small number of active practices should use Tier: always_preflight."
+  - "Every always_preflight practice must be present in compact direct-agent adapter preflight text."
 
 obsidian_compatibility:
   - "aliases frontmatter must include the stable id as the first entry"
@@ -44,4 +58,4 @@ lifecycle_rules:
   - "Candidate and proposed entries require human approval before activation."
   - "Superseded entries remain searchable for traceability."
   - "Prefer updating an existing practice over creating a duplicate."
-
+  - "Activation tier changes require human review when they affect always_preflight adapter injection."

@@ -494,6 +494,26 @@ def check_adapter_quality_script() -> list[str]:
     return output.splitlines()
 
 
+def check_activation_script() -> list[str]:
+    script = ROOT / "scripts" / "check_activation.py"
+    if not script.exists():
+        return ["Missing scripts/check_activation.py"]
+    result = subprocess.run(
+        ["python3", str(script)],
+        cwd=ROOT,
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if result.returncode == 0:
+        return []
+    output = (result.stdout + result.stderr).strip()
+    if not output:
+        return ["Activation check failed without output"]
+    return output.splitlines()
+
+
 def main() -> int:
     errors: list[str] = []
     errors += check_index_paths(ROOT / "indexes" / "practice_index.yaml", "Practice")
@@ -510,6 +530,7 @@ def main() -> int:
     errors += check_supersede_bidirectional()
     errors += check_obsidian_compatibility()
     errors += check_adapter_quality_script()
+    errors += check_activation_script()
 
     if errors:
         print("Consistency check failed:")
