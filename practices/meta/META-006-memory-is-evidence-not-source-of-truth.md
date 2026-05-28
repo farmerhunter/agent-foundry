@@ -11,6 +11,7 @@ tags: [memory, evidence, source-of-truth, governance]
 aliases:
   - memory can suggest but foundry decides
   - memory is not canonical
+  - META-006
 related: [META-001, META-002, META-004]
 applies_when:
   - using agent memory for discovery
@@ -49,3 +50,9 @@ If a memory contains a durable rule, harvest it into `practices/`. If it indicat
 ## Watch Out For
 
 Do not let automatically written memory silently override approved practices or active assets.
+
+## Related Practices
+
+- [[META-001]]
+- [[META-002]]
+- [[META-004]]

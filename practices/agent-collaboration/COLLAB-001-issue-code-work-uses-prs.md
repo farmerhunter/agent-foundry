@@ -11,6 +11,7 @@ tags: [github, issues, pull-requests, traceability]
 aliases:
   - issue code changes go through pull requests
   - bind issue work to PRs
+  - COLLAB-001
 related: [COLLAB-002, COLLAB-003, COLLAB-004]
 applies_when:
   - implementing code for a GitHub issue
@@ -46,3 +47,9 @@ Before coding for an issue, create a branch named for the issue or task. Open a 
 ## Example
 
 For an issue that adds a static demo adapter, create a branch such as `issue-71-static-demo-job`, open a PR that references `#71`, run validation, merge the PR, and comment on `#71` with the PR, commit, and verification results.
+
+## Related Practices
+
+- [[COLLAB-002]]
+- [[COLLAB-003]]
+- [[COLLAB-004]]

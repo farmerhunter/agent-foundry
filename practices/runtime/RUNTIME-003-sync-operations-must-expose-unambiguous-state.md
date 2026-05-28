@@ -13,6 +13,7 @@ aliases:
   - sync without ambiguity
   - unambiguous final report
   - status commands are read-only
+  - RUNTIME-003
 related: [RUNTIME-001, RUNTIME-002, COLLAB-004]
 applies_when:
   - syncing Agent Foundry with remote repositories
@@ -79,3 +80,9 @@ Final Report
 - Runtime updates: claude-code managed block updated; codex skills copied; hermes skills copied
 - Next action: retry push with `git push origin main` when network recovers
 ```
+
+## Related Practices
+
+- [[RUNTIME-001]]
+- [[RUNTIME-002]]
+- [[COLLAB-004]]

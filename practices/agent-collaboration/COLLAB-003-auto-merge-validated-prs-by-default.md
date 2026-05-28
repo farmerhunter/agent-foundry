@@ -11,6 +11,7 @@ tags: [github, pull-requests, merge, validation]
 aliases:
   - merge after validation unless review requested
   - default auto merge PR flow
+  - COLLAB-003
 related: [COLLAB-001, COLLAB-002]
 applies_when:
   - a user has authorized auto-merge for PRs
@@ -46,3 +47,8 @@ After opening a PR, run the relevant checks, inspect failures, and fix issues be
 ## Example
 
 For a data fixture PR with passing `validate:data` and `build`, merge it and comment on the issue with the PR number, merge commit, and validation output.
+
+## Related Practices
+
+- [[COLLAB-001]]
+- [[COLLAB-002]]

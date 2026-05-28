@@ -12,6 +12,7 @@ aliases:
   - assets perform work, practices govern rules
   - skill vs practice boundary
   - invoke asset, apply practice
+  - META-008
 related: [META-001, META-004, META-005, META-006]
 applies_when:
   - interpreting user intent at session start
@@ -66,3 +67,10 @@ User: `"harvest practices from this session"`
 User: `"I noticed you keep choosing tools before defining boundaries. Stop doing that."`
 - Classification: behavioral correction → apply practice `ARCH-001`
 - No asset is invoked. The agent adjusts its behavior according to the principle.
+
+## Related Practices
+
+- [[META-001]]
+- [[META-004]]
+- [[META-005]]
+- [[META-006]]

@@ -10,6 +10,7 @@ updated: 2026-05-26
 tags: [architecture, errors, external-dependencies]
 aliases:
   - failures are domain state
+  - ARCH-004
 related: [ARCH-001, ARCH-005]
 applies_when:
   - integrating with external systems
@@ -39,3 +40,7 @@ For token-panic provider snapshots:
 status: "ok" | "stale" | "error" | "auth_required" | "disabled";
 ```
 
+## Related Practices
+
+- [[ARCH-001]]
+- [[ARCH-005]]

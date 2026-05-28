@@ -11,6 +11,7 @@ tags: [architecture, frontend, domain]
 aliases:
   - renderer displays state
   - domain derives state
+  - ARCH-005
 related: [ARCH-003, ARCH-004]
 applies_when:
   - designing frontend/backend boundaries
@@ -36,3 +37,7 @@ Let the domain layer produce display-ready summaries such as primary metric, sta
 
 In token-panic, `ProviderSummary` is produced by Core Domain from snapshots and history. The renderer does not calculate burn rate or remaining time directly.
 
+## Related Practices
+
+- [[ARCH-003]]
+- [[ARCH-004]]

@@ -11,6 +11,7 @@ tags: [native-learning, memory, skills, hermes, governance]
 aliases:
   - native skills can suggest but foundry canonizes
   - do not disable native self-growth
+  - META-007
 related: [META-001, META-003, META-006]
 applies_when:
   - using Hermes native memory or self-improvement
@@ -54,3 +55,8 @@ Avoid two failure modes:
 - bypass: native generated skills become cross-agent assets without review;
 - suppression: Agent Foundry instructions prevent a capable agent from using its native memory and self-improvement tools.
 
+## Related Practices
+
+- [[META-001]]
+- [[META-003]]
+- [[META-006]]

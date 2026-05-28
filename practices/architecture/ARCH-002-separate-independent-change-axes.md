@@ -10,6 +10,7 @@ updated: 2026-05-26
 tags: [architecture, modeling, change-management]
 aliases:
   - do not merge independent dimensions
+  - ARCH-002
 related: [ARCH-001, ARCH-003]
 applies_when:
   - modeling heterogeneous integrations
@@ -40,3 +41,7 @@ source: "official_api" | "browser_scrape" | "custom_parser" | "manual";
 quota_model: "balance" | "limit" | "usage" | "cost";
 ```
 
+## Related Practices
+
+- [[ARCH-001]]
+- [[ARCH-003]]

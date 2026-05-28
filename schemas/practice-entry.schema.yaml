@@ -11,6 +11,7 @@ required_frontmatter:
   created: "YYYY-MM-DD"
   updated: "YYYY-MM-DD"
   tags: "List of search tags"
+  aliases: "Must include the stable id as the first alias for Obsidian wikilink compatibility"
 
 recommended_frontmatter:
   aliases: "Alternative names for dedupe and search"
@@ -31,6 +32,12 @@ recommended_sections:
   Watch Out For: "Failure modes and caveats"
   Example: "Concrete grounding"
   Review Notes: "Human review status or open questions"
+  Related Practices: "Wikilink list of related practice IDs for Obsidian graph connectivity"
+
+obsidian_compatibility:
+  - "aliases frontmatter must include the stable id as the first entry"
+  - "body must contain a '## Related Practices' section with [[ID]] wikilinks matching the related frontmatter list"
+  - "do not create duplicate Markdown index files; YAML indexes remain the canonical source of truth"
 
 lifecycle_rules:
   - "Only active and revised practices are published into default adapters."

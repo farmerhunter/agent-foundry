@@ -428,6 +428,52 @@ def check_claude_managed_block_integrity() -> list[str]:
     return errors
 
 
+def check_obsidian_compatibility() -> list[str]:
+    errors: list[str] = []
+    for path in sorted((ROOT / "practices").glob("*/*.md")):
+        text = read(path)
+        fm = frontmatter(path)
+        pid = fm.get("id")
+        if not pid:
+            continue
+
+        # Check that id is in aliases
+        aliases = extract_yaml_list(text, "aliases", limit_to_frontmatter=True)
+        if pid not in aliases:
+            errors.append(f"Practice {pid} missing id in aliases (Obsidian wikilink): {path.relative_to(ROOT)}")
+
+        # Check that related IDs have a Related Practices section with wikilinks
+        related = extract_yaml_list(text, "related", limit_to_frontmatter=True)
+        if related:
+            if "## Related Practices" not in text:
+                errors.append(
+                    f"Practice {pid} has related entries but no '## Related Practices' section: {path.relative_to(ROOT)}"
+                )
+            else:
+                # Extract wikilinks from Related Practices section
+                section_match = re.search(
+                    r"## Related Practices\n+(.*?)(?=\n## |\Z)", text, re.DOTALL
+                )
+                if section_match:
+                    section_text = section_match.group(1)
+                    wikilinks = re.findall(r"\[\[([A-Z]{2,}-\d{3,})\]\]", section_text)
+                    missing = [r for r in related if r not in wikilinks]
+                    extra = [w for w in wikilinks if w not in related]
+                    if missing:
+                        errors.append(
+                            f"Practice {pid} Related Practices missing wikilinks: {missing} in {path.relative_to(ROOT)}"
+                        )
+                    if extra:
+                        errors.append(
+                            f"Practice {pid} Related Practices has extra wikilinks: {extra} in {path.relative_to(ROOT)}"
+                        )
+                else:
+                    errors.append(
+                        f"Practice {pid} '## Related Practices' section malformed: {path.relative_to(ROOT)}"
+                    )
+    return errors
+
+
 def check_adapter_quality_script() -> list[str]:
     script = ROOT / "scripts" / "check_adapter_quality.py"
     if not script.exists():
@@ -462,6 +508,7 @@ def main() -> int:
     errors += check_claude_managed_block_integrity()
     errors += check_cross_references()
     errors += check_supersede_bidirectional()
+    errors += check_obsidian_compatibility()
     errors += check_adapter_quality_script()
 
     if errors:

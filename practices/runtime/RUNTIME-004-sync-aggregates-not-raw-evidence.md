@@ -12,6 +12,7 @@ aliases:
   - keep raw usage local
   - sync usage aggregates
   - aggregate evidence across machines
+  - RUNTIME-004
 related: [RUNTIME-002, RUNTIME-003, META-006, META-010]
 applies_when:
   - recording asset or practice usage evidence
@@ -56,3 +57,10 @@ Do not treat aggregate counts as final truth about quality. They are review sign
 Do not store unhashed machine names or raw session notes in shared aggregate files.
 
 Do not remove legacy logs until their useful information has been migrated or summarized.
+
+## Related Practices
+
+- [[RUNTIME-002]]
+- [[RUNTIME-003]]
+- [[META-006]]
+- [[META-010]]

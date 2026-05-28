@@ -12,6 +12,7 @@ aliases:
   - asset lifecycle review needs evidence
   - review assets before skill rot
   - usage evidence drives asset lifecycle
+  - META-010
 related: [META-004, META-005, META-008, META-009]
 applies_when:
   - reviewing existing skills, subagents, automations, or other reusable assets
@@ -56,3 +57,9 @@ Do not require the user to approve routine evidence logging. Evidence should be 
 
 Do not promote or remove an asset only because it has low usage. Low usage is a review signal, not an automatic lifecycle decision.
 
+## Related Practices
+
+- [[META-004]]
+- [[META-005]]
+- [[META-008]]
+- [[META-009]]

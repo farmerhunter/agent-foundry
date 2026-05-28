@@ -11,6 +11,7 @@ tags: [git, multi-agent, synchronization, github]
 aliases:
   - pull before issue work
   - verify remote sync before coding
+  - COLLAB-004
 related: [COLLAB-001, COLLAB-002]
 applies_when:
   - multiple agents work on the same repository
@@ -46,3 +47,8 @@ Fetch or pull before issue work, inspect branch status, and compare the relevant
 ## Example
 
 If a VPS agent cannot see issue `#71` code, fetch remote, inspect current `origin/main`, identify whether the code is present in a squash merge, and comment on `#71` with the file paths and sync command.
+
+## Related Practices
+
+- [[COLLAB-001]]
+- [[COLLAB-002]]

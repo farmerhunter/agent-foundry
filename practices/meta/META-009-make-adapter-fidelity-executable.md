@@ -12,6 +12,7 @@ aliases:
   - test adapter meaning, not only adapter existence
   - executable adapter quality
   - adapter fidelity check
+  - META-009
 related: [META-001, META-002, META-008, RUNTIME-003]
 applies_when:
   - publishing canonical practices into agent-specific adapters
@@ -53,3 +54,9 @@ Do not let the check become a brittle text snapshot. It should verify durable me
 
 Do not assume all agents need identical output. Fidelity means preserving the canonical behavior in the form the target agent can actually use.
 
+## Related Practices
+
+- [[META-001]]
+- [[META-002]]
+- [[META-008]]
+- [[RUNTIME-003]]

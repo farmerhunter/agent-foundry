@@ -11,6 +11,7 @@ tags: [architecture, boundaries, technical-choice]
 aliases:
   - architecture is not a tech stack
   - tools serve boundaries
+  - ARCH-001
 related: [ARCH-002, ARCH-006]
 applies_when:
   - designing a new system
@@ -46,3 +47,7 @@ Do not let an important tool become an accidental domain concept.
 
 In token-panic, Playwright was moved from the center of the architecture to one implementation of a `browser_scrape` provider adapter.
 
+## Related Practices
+
+- [[ARCH-002]]
+- [[ARCH-006]]

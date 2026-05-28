@@ -11,6 +11,7 @@ tags: [github, issues, review, verification]
 aliases:
   - issue completion comment standard
   - review-ready issue comment
+  - COLLAB-002
 related: [COLLAB-001, COLLAB-003]
 applies_when:
   - preparing a GitHub issue for review
@@ -52,3 +53,8 @@ Before marking an issue ready for review or closed, add a comment with:
 ## Example
 
 After validating a release checklist, comment with `npm run validate:data`, `npm run build`, browser checks, pass/fail results, and remaining non-blocking findings.
+
+## Related Practices
+
+- [[COLLAB-001]]
+- [[COLLAB-003]]

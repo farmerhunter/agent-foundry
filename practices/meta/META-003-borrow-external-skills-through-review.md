@@ -11,6 +11,7 @@ tags: [external-skills, imports, security, provenance]
 aliases:
   - external skill import path
   - borrow skills safely
+  - META-003
 related: [META-001, META-002]
 applies_when:
   - evaluating public skill repositories
@@ -39,3 +40,8 @@ Never execute external scripts, install dependencies, or copy large prompt packs
 ## Example
 
 A public Codex skill may have a good trigger description and workflow. Borrow the structure by creating a canonical candidate, not by copying its entire `SKILL.md` into your active skill directory.
+
+## Related Practices
+
+- [[META-001]]
+- [[META-002]]

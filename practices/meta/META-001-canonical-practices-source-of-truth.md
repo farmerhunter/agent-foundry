@@ -11,6 +11,7 @@ tags: [canonical, source-of-truth, adapters]
 aliases:
   - skills are downstream
   - adapters are not source of truth
+  - META-001
 related: [META-002, META-003]
 applies_when:
   - maintaining reusable agent practices
@@ -39,3 +40,8 @@ Do not treat a polished `SKILL.md` as the canonical source. It is optimized for 
 ## Example
 
 An architecture principle should live under `practices/architecture/ARCH-*.md`. The Codex `architecture-design` skill should contain only the compact version needed during work.
+
+## Related Practices
+
+- [[META-002]]
+- [[META-003]]

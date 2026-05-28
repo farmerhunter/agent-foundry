@@ -10,6 +10,7 @@ updated: 2026-05-26
 tags: [architecture, domain-modeling, normalization]
 aliases:
   - do not erase business differences
+  - ARCH-003
 related: [ARCH-002, ARCH-005]
 applies_when:
   - normalizing heterogeneous data
@@ -35,3 +36,7 @@ Use a common envelope for identity, source, status, timestamps, and lifecycle. U
 
 Provider snapshots share fields such as `provider_id`, `source`, `quota_model`, `status`, and `captured_at`, while `BalancePayload`, `LimitPayload`, `UsagePayload`, and `CostPayload` remain distinct.
 
+## Related Practices
+
+- [[ARCH-002]]
+- [[ARCH-005]]

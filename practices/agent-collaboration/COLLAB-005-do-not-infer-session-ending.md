@@ -11,6 +11,7 @@ tags: [conversation, continuity, interruption, compaction]
 aliases:
   - do not assume work is done
   - no premature wrap-up
+  - COLLAB-005
 related: [META-006, COLLAB-002]
 applies_when:
   - a conversation is interrupted or compacted
@@ -46,3 +47,8 @@ After interruptions, context compaction, or completing a subtask, re-check the l
 ## Example
 
 If a session resumes after compaction and the latest request is to inspect an issue, read the issue and continue rather than summarizing the session as complete.
+
+## Related Practices
+
+- [[META-006]]
+- [[COLLAB-002]]

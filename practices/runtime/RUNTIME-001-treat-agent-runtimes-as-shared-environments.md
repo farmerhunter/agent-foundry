@@ -12,6 +12,7 @@ aliases:
   - do not overwrite unmanaged runtime files
   - runtime directories are shared environments
   - publish through managed blocks and markers
+  - RUNTIME-001
 related: [META-001, META-002, META-006]
 applies_when:
   - publishing Agent Foundry adapters into local agent runtimes
@@ -49,3 +50,9 @@ Do not treat "adapter output exists" as permission to overwrite runtime state. A
 ## Example
 
 For Claude Code, write generated instructions to `~/.claude/agent-foundry/CLAUDE.md` and update only a bounded Agent Foundry import block in `~/.claude/CLAUDE.md`. For Codex or Hermes, update a skill directory only when it contains `.agent-foundry-managed`, unless the user explicitly approves adopting that directory.
+
+## Related Practices
+
+- [[META-001]]
+- [[META-002]]
+- [[META-006]]

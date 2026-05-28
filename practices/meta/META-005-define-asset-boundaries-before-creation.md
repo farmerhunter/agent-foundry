@@ -11,6 +11,7 @@ tags: [assets, scope, boundaries, discovery]
 aliases:
   - define skill scope before creating it
   - asset boundaries before asset creation
+  - META-005
 related: [META-001, META-002, META-004]
 applies_when:
   - creating or extending a reusable asset
@@ -45,3 +46,9 @@ If these cannot be answered, defer the asset instead of creating it.
 ## Watch Out For
 
 Avoid assets with vague triggers such as "help with engineering" or "improve code". Narrow the asset or extend an existing one.
+
+## Related Practices
+
+- [[META-001]]
+- [[META-002]]
+- [[META-004]]

@@ -11,6 +11,7 @@ tags: [harvesting, review, skill-rot]
 aliases:
   - do not add raw notes to skills
   - review gate
+  - META-002
 related: [META-001, META-003]
 applies_when:
   - extracting lessons from a project session
@@ -39,3 +40,8 @@ Avoid creating a new practice for every interesting observation. Prefer strength
 ## Example
 
 If a session shows that UI should consume a domain summary, first search for existing frontend/domain separation practices. If one exists, merge the new case as an example rather than creating a near-duplicate.
+
+## Related Practices
+
+- [[META-001]]
+- [[META-003]]

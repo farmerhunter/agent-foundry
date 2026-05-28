@@ -10,6 +10,7 @@ updated: 2026-05-26
 tags: [architecture, mvp, product]
 aliases:
   - do not validate all future imagination in MVP
+  - ARCH-006
 related: [ARCH-001]
 applies_when:
   - scoping an MVP
@@ -35,3 +36,6 @@ Define the smallest end-to-end path that exercises the important boundaries. Def
 
 In token-panic, LLM-assisted custom parser generation was deferred. The MVP focuses on one provider fetch, normalized snapshot, storage, dashboard display, and simple derived metrics.
 
+## Related Practices
+
+- [[ARCH-001]]

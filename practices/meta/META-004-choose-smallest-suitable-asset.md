@@ -11,6 +11,7 @@ tags: [assets, discovery, skill-rot, scope]
 aliases:
   - skill is not the default
   - smallest suitable reusable asset
+  - META-004
 related: [META-001, META-002, META-003, META-005]
 applies_when:
   - discovering repeated workflows
@@ -44,3 +45,10 @@ Prefer the smallest form that produces the intended value with clear triggers an
 ## Watch Out For
 
 Do not create a skill when a checklist in an existing skill, a recurring automation, or a specialized subagent would be narrower and easier to maintain.
+
+## Related Practices
+
+- [[META-001]]
+- [[META-002]]
+- [[META-003]]
+- [[META-005]]

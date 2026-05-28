@@ -13,6 +13,7 @@ aliases:
   - docs as cross-agent handoff
   - maintain minimal design docs
   - document runtime user experience
+  - ARCH-007
 related: [ARCH-001, ARCH-006, COLLAB-004, META-006]
 applies_when:
   - starting a project that will span multiple sessions or agents
@@ -83,3 +84,10 @@ In 2026AgentApp, design docs captured the `evidence -> finding -> insight -> mem
 The same project also showed the risk of over-documentation. Many detailed docs were useful for competition delivery and external review, but they should not become the default template for every vibe coding project. The reusable pattern is layered documentation with pruning, not maximum documentation volume.
 
 In Agent Foundry, `docs/system-design.md`, `docs/usage.md`, workflows, schemas, and runtime docs act as context contracts. They are useful because they define boundaries, user-facing workflows, and operating rules, not because they describe every implementation detail.
+
+## Related Practices
+
+- [[ARCH-001]]
+- [[ARCH-006]]
+- [[COLLAB-004]]
+- [[META-006]]

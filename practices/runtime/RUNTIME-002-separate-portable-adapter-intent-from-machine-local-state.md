@@ -12,6 +12,7 @@ aliases:
   - runtime manifest is machine-local
   - keep local deployment state out of git
   - portable snapshots exclude local runtime state
+  - RUNTIME-002
 related: [RUNTIME-001, META-001]
 applies_when:
   - designing runtime manifests
@@ -54,3 +55,8 @@ Do not confuse a conservative template with a detected local state. Templates sh
 ## Example
 
 Track `runtime/templates/runtime_manifest.template.yaml` in git with local targets disabled by default. Keep `runtime/local/runtime_manifest.yaml` ignored by git, and exclude it from portable snapshots. On a new machine, run `runtime_manifest.py init`, then detect, enable, configure, review, and install.
+
+## Related Practices
+
+- [[RUNTIME-001]]
+- [[META-001]]

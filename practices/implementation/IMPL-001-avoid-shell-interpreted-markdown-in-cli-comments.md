@@ -11,6 +11,7 @@ tags: [cli, github, markdown, shell-quoting]
 aliases:
   - use body-file for gh comments
   - avoid backticks in double-quoted shell bodies
+  - IMPL-001
 related: [COLLAB-002]
 applies_when:
   - posting GitHub comments through gh
@@ -46,3 +47,7 @@ For `gh issue comment`, `gh pr comment`, or similar commands, write complex Mark
 ## Example
 
 Instead of `gh issue comment 21 --body "Ran \`python script.py\`"`, create a body file and run `gh issue comment 21 --body-file /tmp/comment.md`.
+
+## Related Practices
+
+- [[COLLAB-002]]
