@@ -9,9 +9,9 @@ created: 2026-05-26
 updated: 2026-05-26
 tags: [architecture, frontend, domain]
 aliases:
+  - ARCH-005
   - renderer displays state
   - domain derives state
-  - ARCH-005
 related: [ARCH-003, ARCH-004]
 applies_when:
   - designing frontend/backend boundaries

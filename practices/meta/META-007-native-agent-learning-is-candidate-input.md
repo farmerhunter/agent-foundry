@@ -9,9 +9,9 @@ created: 2026-05-26
 updated: 2026-05-26
 tags: [native-learning, memory, skills, hermes, governance]
 aliases:
+  - META-007
   - native skills can suggest but foundry canonizes
   - do not disable native self-growth
-  - META-007
 related: [META-001, META-003, META-006]
 applies_when:
   - using Hermes native memory or self-improvement

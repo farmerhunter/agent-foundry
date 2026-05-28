@@ -9,8 +9,8 @@ created: 2026-05-26
 updated: 2026-05-26
 tags: [architecture, domain-modeling, normalization]
 aliases:
-  - do not erase business differences
   - ARCH-003
+  - do not erase business differences
 related: [ARCH-002, ARCH-005]
 applies_when:
   - normalizing heterogeneous data

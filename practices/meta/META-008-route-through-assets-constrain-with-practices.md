@@ -9,10 +9,10 @@ created: 2026-05-26
 updated: 2026-05-26
 tags: [assets, practices, routing, dispatch, meta]
 aliases:
+  - META-008
   - assets perform work, practices govern rules
   - skill vs practice boundary
   - invoke asset, apply practice
-  - META-008
 related: [META-001, META-004, META-005, META-006]
 applies_when:
   - interpreting user intent at session start

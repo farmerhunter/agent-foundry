@@ -71,11 +71,11 @@ Apply RUNTIME-002 when working with deployment manifests or offline sync: adapte
 
 Apply RUNTIME-003 after every sync or refresh operation: report the exact commit hash, unpushed commit count, adapters regenerated, runtime updates applied, and the exact next action required. Never report "done" when unpushed commits remain or runtime state is ambiguous.
 
-Apply META-009 when publishing adapters: adapter quality must be executable and must verify trigger vocabulary, canonical IDs, published asset IDs, target conventions, and target-specific fidelity, not only generated file existence.
+Apply META-009 when publishing adapters: adapter quality must be executable and must verify the exact contract surface it claims to protect, including trigger vocabulary, Compact Preflight sections, canonical IDs, published asset IDs, target conventions, and target-specific fidelity, not only generated file existence or broad text matches.
 
 Apply META-010 when reviewing assets: use lifecycle state, usage evidence, overlap, canonical coverage, stale triggers, and published targets before recommending keep, revise, deprecate, archive, split, or merge.
 
-Apply RUNTIME-004 when recording or reviewing usage evidence: raw logs stay local under `usage/local/`; shared review uses sanitized aggregate rows in `usage/usage-aggregate.yaml`.
+Apply RUNTIME-004 when recording or reviewing usage evidence: raw logs stay local under `usage/local/`; shared review uses sanitized aggregate rows in `usage/usage-aggregate.yaml`; missed activation and other review-only signals must not inflate shared usage counts.
 
 ## External Skills
 
@@ -83,7 +83,7 @@ When asked to borrow or evaluate external skills, read `workflows/import-externa
 
 ## GitHub And Multi-Agent Collaboration
 
-Use canonical collaboration practices COLLAB-001 through COLLAB-005:
+Use the Agent Collaboration asset ASSET-COLLAB-001 for GitHub issue, PR, multi-agent sync, CLI comment, document conversion, and resume workflows. It applies canonical collaboration practices COLLAB-001 through COLLAB-005:
 
 - For code work tied to a GitHub issue, use a feature branch and PR unless the user explicitly approves skipping the PR.
 - Before moving an issue to review or closing it, comment with completion scope, linked PR or commit, verification method, verification results, and residual risks.
@@ -105,4 +105,4 @@ Use canonical architecture practices ARCH-001 through ARCH-007:
 - Model inevitable failures as state.
 - Let UI consume domain summaries.
 - Scope MVP around the main path.
-- Maintain design docs as lightweight context contracts for boundaries, decisions, contracts, operations, and user-facing runtime flows.
+- Maintain design docs as lightweight context contracts for boundaries, decisions, contracts, operations, and user-facing runtime flows; mark rollout phases as implemented baseline, future work, rejected, or non-goal when state changes.

@@ -187,25 +187,38 @@ Do not claim runtime enforcement uniformly across all agents.
 
 ### Phase 1: Design And Pilot
 
-- Write this lifecycle design.
-- Define activation tiers.
-- Add `## Activation` to a small pilot set: GOV-001, GOV-002, GOV-003, GOV-004, ARCH-001, RUNTIME-001, RUNTIME-003, TEST-001.
-- Add compact preflight kernel to adapters.
-- Add `check_activation.py` for `always_preflight` only.
+Status: implemented baseline.
+
+Implemented:
+
+- lifecycle design;
+- activation tiers;
+- `## Activation` pilot set: GOV-001, GOV-002, GOV-003, GOV-004, ARCH-001, RUNTIME-001, RUNTIME-003, TEST-001;
+- compact preflight kernel in direct-agent adapters;
+- `check_activation.py` for `always_preflight`.
 
 ### Phase 2: Evidence Loop
 
-- Record practice usage evidence for material applications.
-- Add missed-activation evidence format.
-- Include activation findings in `review practices`.
+Status: implemented baseline.
+
+Implemented:
+
+- practice usage evidence for material applications;
+- `--evidence-type applied|missed`;
+- missed activation evidence as local raw evidence only;
+- activation findings in `review practices`.
 
 ### Phase 3: Broader Coverage
+
+Status: future work.
 
 - Add Activation sections to more practices only when they need better triggering.
 - Move practices between tiers based on evidence.
 - Keep preflight small; do not add every practice to always-visible adapters.
 
 ### Phase 4: Optional Runtime Enforcement
+
+Status: future work.
 
 - Explore Claude Code hooks only for narrow, high-confidence checks.
 - Keep hooks reversible and disabled by default unless the user explicitly installs them.

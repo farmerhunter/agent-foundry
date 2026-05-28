@@ -9,9 +9,9 @@ created: 2026-05-26
 updated: 2026-05-26
 tags: [harvesting, review, skill-rot]
 aliases:
+  - META-002
   - do not add raw notes to skills
   - review gate
-  - META-002
 related: [META-001, META-003]
 applies_when:
   - extracting lessons from a project session

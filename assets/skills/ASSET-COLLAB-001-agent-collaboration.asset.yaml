@@ -1,0 +1,61 @@
+id: ASSET-COLLAB-001
+title: Agent Collaboration
+asset_type: skill
+status: active
+version: 1
+created: 2026-05-28
+updated: 2026-05-28
+purpose: Guide GitHub issue, pull request, multi-agent synchronization, CLI comment, document conversion, and interruption-resume workflows.
+responsibility: Apply collaboration and delivery practices that preserve traceability, verification, safe synchronization, and continuity across humans and agents.
+non_responsibility: Does not maintain Agent Foundry lifecycle records, import external skills, or make architecture decisions except when collaboration workflow boundaries require escalation.
+inputs:
+  - GitHub issue or pull request context
+  - repository sync state
+  - user approval or merge policy
+  - completion and verification evidence
+  - CLI comment body or generated document deliverable
+process:
+  - identify whether the task touches issues, PRs, multi-agent sync, CLI comments, document conversion, or resumed work
+  - apply the matching collaboration, implementation, or testing practice
+  - preserve durable traceability in issues, PRs, comments, or verification records
+  - validate with artifact-specific checks
+  - continue from the newest user request after interruption or compaction
+outputs:
+  - issue or PR workflow recommendations
+  - completion and verification comments
+  - safe merge or hold decisions
+  - synchronization guidance
+  - safe CLI comment handling
+  - render-verified document conversion results
+canonical_practices:
+  - COLLAB-001
+  - COLLAB-002
+  - COLLAB-003
+  - COLLAB-004
+  - COLLAB-005
+  - IMPL-001
+  - TEST-001
+published_to:
+  - codex
+  - claude-code
+  - hermes
+  - chatgpt
+usage_triggers:
+  - GitHub issue work
+  - pull request workflow
+  - multi-agent repository synchronization
+  - issue completion comment
+  - CLI Markdown comment
+  - converted document deliverable
+  - resume after interruption or compaction
+success_criteria:
+  - issue work has branch, PR, or explicit direct-change approval
+  - completion comments include scope, linked artifacts, verification, and residual risks
+  - merge decisions respect validation state and user hold/review requests
+  - repository sync is checked before multi-agent issue work
+  - Markdown comments avoid shell interpretation hazards
+  - converted documents are render-verified when applicable
+  - resumed work follows the newest user request
+review_cadence: monthly
+review_after_days: 90
+evidence_summary: Canonical asset record added after review found the existing agent-collaboration adapter skill had no asset record coverage.

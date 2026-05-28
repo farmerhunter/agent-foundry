@@ -10,7 +10,7 @@ Trigger phrases:
 Steps:
 
 1. Read `workflows/review-practices.md`.
-2. Check for duplicates, stale entries, weak generic rules, unresolved proposed items, and adapter drift.
-3. Present recommended actions.
-4. Do not archive, supersede, or publish without approval.
-
+2. Run `python3 scripts/review_practices.py`.
+3. Check for duplicates, stale entries, weak or missed activation, unresolved proposed items, and adapter drift.
+4. Present a concise approval list from the recommendations.
+5. Do not archive, supersede, change activation tiers, or publish without approval.

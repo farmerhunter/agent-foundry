@@ -9,9 +9,9 @@ created: 2026-05-26
 updated: 2026-05-26
 tags: [documents, conversion, rendering, verification]
 aliases:
+  - TEST-001
   - verify generated documents visually
   - conversion requires render checks
-  - TEST-001
 related: []
 applies_when:
   - converting Markdown, SVG, DOCX, PDF, images, or presentations

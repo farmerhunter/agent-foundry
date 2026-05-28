@@ -9,8 +9,8 @@ created: 2026-05-26
 updated: 2026-05-26
 tags: [architecture, errors, external-dependencies]
 aliases:
-  - failures are domain state
   - ARCH-004
+  - failures are domain state
 related: [ARCH-001, ARCH-005]
 applies_when:
   - integrating with external systems

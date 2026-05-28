@@ -9,9 +9,9 @@ created: 2026-05-26
 updated: 2026-05-26
 tags: [github, issues, pull-requests, traceability]
 aliases:
+  - COLLAB-001
   - issue code changes go through pull requests
   - bind issue work to PRs
-  - COLLAB-001
 related: [COLLAB-002, COLLAB-003, COLLAB-004]
 applies_when:
   - implementing code for a GitHub issue

@@ -95,6 +95,11 @@ def activation_section(text: str) -> str:
     return match.group(1).strip() if match else ""
 
 
+def compact_preflight_section(text: str) -> str:
+    match = re.search(r"^## Compact Preflight\n+(.*?)(?=\n## |\Z)", text, re.MULTILINE | re.DOTALL)
+    return match.group(1).strip() if match else ""
+
+
 def activation_field(section: str, name: str) -> str:
     pattern = re.compile(rf"^- {re.escape(name)}:\s*(.+)$", re.MULTILINE)
     match = pattern.search(section)
@@ -145,11 +150,12 @@ def main() -> int:
         if not profile.get("direct_programming_agent"):
             continue
         text = adapter_text(list(profile["outputs"]))
-        if "Before substantial changes" not in text:
+        preflight = compact_preflight_section(text)
+        if not preflight:
             errors.append(f"{name}: missing compact preflight kernel")
         for pid in always_preflight:
-            if pid not in text:
-                errors.append(f"{name}: always_preflight practice missing from adapter outputs: {pid}")
+            if pid not in preflight:
+                errors.append(f"{name}: always_preflight practice missing from compact preflight: {pid}")
 
     if errors:
         print("Activation check failed:")

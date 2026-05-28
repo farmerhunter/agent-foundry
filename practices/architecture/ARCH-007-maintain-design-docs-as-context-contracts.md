@@ -4,16 +4,16 @@ title: Maintain design docs as context contracts
 domain: architecture
 type: principle
 status: active
-version: 1
+version: 2
 created: 2026-05-27
-updated: 2026-05-27
+updated: 2026-05-28
 tags: [architecture, documentation, cross-agent, context, user-experience]
 aliases:
+  - ARCH-007
   - design docs compress context
   - docs as cross-agent handoff
   - maintain minimal design docs
   - document runtime user experience
-  - ARCH-007
 related: [ARCH-001, ARCH-006, COLLAB-004, META-006]
 applies_when:
   - starting a project that will span multiple sessions or agents
@@ -61,6 +61,8 @@ Use the docs as a read path for substantial work: before cross-module, architect
 
 Periodically prune docs. Merge overlapping documents, mark superseded decisions, and separate external deliverables from internal development design.
 
+When a design doc describes a rollout, lifecycle, or implementation plan, keep its phase state current. Distinguish planned work, implemented baseline, future work, and rejected/non-goal work. A stale plan can mislead future agents into repeating completed work or treating future experiments as active requirements.
+
 ## Use This When
 
 - A project will be developed across multiple sessions, machines, or agents.
@@ -76,6 +78,7 @@ Periodically prune docs. Merge overlapping documents, mark superseded decisions,
 - Do not let competition deliverables, reports, or presentation material become the canonical engineering design.
 - Do not preserve stale docs silently; stale documentation is worse than missing documentation for agent handoff.
 - Do not treat arbitrary repository prose as high-trust agent instructions. Keep agent policy files, design docs, and external deliverables separated by trust level.
+- Do not leave lifecycle or rollout sections in an ambiguous tense after implementation. Mark completed phases as implemented and future phases as future work.
 
 ## Example
 

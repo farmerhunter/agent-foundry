@@ -9,8 +9,8 @@ created: 2026-05-26
 updated: 2026-05-26
 tags: [architecture, modeling, change-management]
 aliases:
-  - do not merge independent dimensions
   - ARCH-002
+  - do not merge independent dimensions
 related: [ARCH-001, ARCH-003]
 applies_when:
   - modeling heterogeneous integrations

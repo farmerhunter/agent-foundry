@@ -5,6 +5,8 @@ description: Use when working on GitHub issues, pull requests, multi-agent repos
 
 # Agent Collaboration
 
+Asset ID: ASSET-COLLAB-001.
+
 This skill applies Agent Foundry collaboration and delivery practices.
 
 ## Asset vs Practice

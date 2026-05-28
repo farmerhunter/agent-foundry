@@ -35,3 +35,18 @@ assets:
       - architecture review
       - 架构设计
       - 架构 review
+
+  - id: ASSET-COLLAB-001
+    title: Agent Collaboration
+    path: assets/skills/ASSET-COLLAB-001-agent-collaboration.asset.yaml
+    asset_type: skill
+    status: active
+    canonical_practices: [COLLAB-001, COLLAB-002, COLLAB-003, COLLAB-004, COLLAB-005, IMPL-001, TEST-001]
+    published_to: [codex, claude-code, hermes, chatgpt]
+    usage_triggers:
+      - GitHub issue work
+      - pull request workflow
+      - multi-agent repository synchronization
+      - issue completion comment
+      - CLI Markdown comment
+      - converted document deliverable

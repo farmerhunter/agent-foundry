@@ -9,9 +9,9 @@ created: 2026-05-26
 updated: 2026-05-26
 tags: [assets, scope, boundaries, discovery]
 aliases:
+  - META-005
   - define skill scope before creating it
   - asset boundaries before asset creation
-  - META-005
 related: [GOV-002, META-001, META-002, META-004]
 applies_when:
   - creating or extending a reusable asset

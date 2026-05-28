@@ -28,4 +28,4 @@ The MVP should validate the main system path and key boundaries, not every plaus
 
 ## ARCH-007 Maintain Design Docs As Context Contracts
 
-Maintain the smallest design docs that preserve engineering context and user-facing runtime experience for future agents. Update them when domain models, boundaries, contracts, operations, or user flows change; do not document every local implementation detail.
+Maintain the smallest design docs that preserve engineering context and user-facing runtime experience for future agents. Update them when domain models, boundaries, contracts, operations, rollout phase state, or user flows change; do not document every local implementation detail.

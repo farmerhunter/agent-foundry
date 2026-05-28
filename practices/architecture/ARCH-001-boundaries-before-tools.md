@@ -9,9 +9,9 @@ created: 2026-05-26
 updated: 2026-05-26
 tags: [architecture, boundaries, technical-choice]
 aliases:
+  - ARCH-001
   - architecture is not a tech stack
   - tools serve boundaries
-  - ARCH-001
 related: [ARCH-002, ARCH-006]
 applies_when:
   - designing a new system

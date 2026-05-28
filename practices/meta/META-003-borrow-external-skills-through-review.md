@@ -9,9 +9,9 @@ created: 2026-05-26
 updated: 2026-05-26
 tags: [external-skills, imports, security, provenance]
 aliases:
+  - META-003
   - external skill import path
   - borrow skills safely
-  - META-003
 related: [META-001, META-002]
 applies_when:
   - evaluating public skill repositories

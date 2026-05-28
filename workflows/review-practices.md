@@ -27,6 +27,7 @@ For each reviewed entry choose:
 
 ## Checks
 
+- Run `python3 scripts/review_practices.py` and use the report as review input.
 - Is the practice still actionable?
 - Is it specific enough?
 - Does it duplicate another practice?
@@ -36,6 +37,28 @@ For each reviewed entry choose:
 - Is its activation tier correct?
 - Has it been missed often enough to strengthen signals or promote tier?
 - Is an `always_preflight` entry noisy enough to demote?
+
+## Approval Route
+
+The review report should produce recommendations, not automatic mutations. Present a compact approval list:
+
+```text
+1. GOV-002
+   Action: revise_activation
+   Why: missed activation evidence count is 2
+   After approval: update GOV-002 Activation, publish adapters, run checks, install supported runtimes
+```
+
+When the user approves selected items:
+
+1. apply only the approved canonical changes;
+2. update indexes or asset records when needed;
+3. publish relevant adapters;
+4. run `check_consistency.py`, `check_activation.py`, and `check_adapter_quality.py`;
+5. run `install_foundry.py --apply` for supported local runtimes unless the user asks to stage only;
+6. report changed files, checks, and any manual ChatGPT import needed.
+
+Do not change lifecycle state, activation tier, or `always_preflight` coverage without explicit approval.
 
 ## Activation Review
 
@@ -52,4 +75,4 @@ Human approval is required before changing activation tier or adapter preflight 
 
 ## Report
 
-Report every proposed status change and wait for human approval before applying destructive or broad changes.
+Report every recommendation and wait for human approval before applying lifecycle, activation, adapter, or broad canonical changes.

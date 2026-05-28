@@ -4,15 +4,15 @@ title: Sync aggregates, not raw evidence
 domain: runtime
 type: principle
 status: active
-version: 1
+version: 2
 created: 2026-05-27
-updated: 2026-05-27
+updated: 2026-05-28
 tags: [runtime, sync, evidence, privacy, review]
 aliases:
+  - RUNTIME-004
   - keep raw usage local
   - sync usage aggregates
   - aggregate evidence across machines
-  - RUNTIME-004
 related: [RUNTIME-002, RUNTIME-003, META-006, META-010]
 applies_when:
   - recording asset or practice usage evidence
@@ -50,6 +50,8 @@ Review scripts should use aggregates as their primary input. Raw logs are eviden
 
 When recording usage, update local raw evidence first, then update or rebuild the aggregate. When exporting portable snapshots, include aggregates and exclude raw local evidence.
 
+Only material applied usage belongs in shared usage aggregates. Review signals such as missed activation, suspected overbuild, noisy preflight, or "should have applied" evidence should stay in local raw evidence or a separate review channel unless explicitly summarized through an approved aggregate format. Do not let review signals inflate usage counts.
+
 ## Watch Out For
 
 Do not treat aggregate counts as final truth about quality. They are review signals. Low usage means investigate, not automatically deprecate.
@@ -57,6 +59,8 @@ Do not treat aggregate counts as final truth about quality. They are review sign
 Do not store unhashed machine names or raw session notes in shared aggregate files.
 
 Do not remove legacy logs until their useful information has been migrated or summarized.
+
+Do not rebuild aggregates from local logs without respecting evidence type. A rebuild must preserve the boundary between successful/material usage and review-only signals.
 
 ## Related Practices
 

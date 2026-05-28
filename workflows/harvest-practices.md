@@ -146,7 +146,21 @@ After an item is approved and canonical updates are applied:
 3. Keep adapters compact.
 4. Do not duplicate long-form rationale into adapters.
 
-## 9. Final Report Format
+## 9. Missed Activation Self-Check
+
+Before the final report, do a lightweight missed-activation check. Record missed evidence only when there is a concrete missed moment and a specific practice ID.
+
+Record `--evidence-type missed` when one of these is true:
+
+- the user explicitly says the agent violated or failed to apply a practice;
+- the harvest/review identifies a specific step where a practice should have triggered but did not;
+- the agent can name the practice ID, the missed trigger, and the resulting risk without relying on vague self-criticism.
+
+Do not record missed evidence for general uncertainty, low confidence, or every ordinary correction. Missed evidence is a review signal, not successful usage, and must stay local unless summarized through an approved aggregate format.
+
+Use `workflows/record-asset-usage.md` for the command format.
+
+## 10. Final Report Format
 
 Report:
 

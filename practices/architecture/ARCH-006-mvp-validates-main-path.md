@@ -9,8 +9,8 @@ created: 2026-05-26
 updated: 2026-05-26
 tags: [architecture, mvp, product]
 aliases:
-  - do not validate all future imagination in MVP
   - ARCH-006
+  - do not validate all future imagination in MVP
 related: [ARCH-001]
 applies_when:
   - scoping an MVP

@@ -9,9 +9,9 @@ created: 2026-05-26
 updated: 2026-05-26
 tags: [assets, discovery, skill-rot, scope]
 aliases:
+  - META-004
   - skill is not the default
   - smallest suitable reusable asset
-  - META-004
 related: [GOV-002, META-001, META-002, META-003, META-005]
 applies_when:
   - discovering repeated workflows

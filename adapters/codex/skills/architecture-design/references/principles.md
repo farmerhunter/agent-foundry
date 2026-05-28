@@ -8,4 +8,4 @@ Canonical IDs: ARCH-001, ARCH-002, ARCH-003, ARCH-004, ARCH-005, ARCH-006, ARCH-
 4. **Model inevitable failures as state**: Expected external failures should become explicit domain status.
 5. **UI consumes domain summaries**: Domain derives meaning; UI presents it.
 6. **MVP validates the main path**: First version proves the core loop and key boundaries, not every future capability.
-7. **Design docs are context contracts**: Maintain the smallest docs that preserve boundaries, decisions, contracts, operations, and user-facing runtime flows for future agents.
+7. **Design docs are context contracts**: Maintain the smallest docs that preserve boundaries, decisions, contracts, operations, and user-facing runtime flows for future agents; keep rollout phase state current.

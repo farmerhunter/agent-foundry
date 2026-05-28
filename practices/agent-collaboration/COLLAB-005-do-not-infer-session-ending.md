@@ -9,9 +9,9 @@ created: 2026-05-26
 updated: 2026-05-26
 tags: [conversation, continuity, interruption, compaction]
 aliases:
+  - COLLAB-005
   - do not assume work is done
   - no premature wrap-up
-  - COLLAB-005
 related: [META-006, COLLAB-002]
 applies_when:
   - a conversation is interrupted or compacted

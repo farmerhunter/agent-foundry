@@ -437,10 +437,14 @@ def check_obsidian_compatibility() -> list[str]:
         if not pid:
             continue
 
-        # Check that id is in aliases
+        # Check that id is the first alias for stable Obsidian wikilinks.
         aliases = extract_yaml_list(text, "aliases", limit_to_frontmatter=True)
-        if pid not in aliases:
-            errors.append(f"Practice {pid} missing id in aliases (Obsidian wikilink): {path.relative_to(ROOT)}")
+        if not aliases:
+            errors.append(f"Practice {pid} missing aliases (Obsidian wikilink): {path.relative_to(ROOT)}")
+        elif aliases[0] != pid:
+            errors.append(
+                f"Practice {pid} must have id as first alias (Obsidian wikilink): {path.relative_to(ROOT)}"
+            )
 
         # Check that related IDs have a Related Practices section with wikilinks
         related = extract_yaml_list(text, "related", limit_to_frontmatter=True)

@@ -61,6 +61,7 @@ def parse_entries(path: Path, legacy_asset: bool = False) -> list[dict[str, str]
                 "agent": entry.get("agent", "unknown"),
                 "machine_hash": entry.get("machine_hash", machine_hash()),
                 "outcome": entry.get("outcome", "unknown"),
+                "evidence_type": entry.get("evidence_type", "applied"),
             }
         )
     return normalized
@@ -69,6 +70,8 @@ def parse_entries(path: Path, legacy_asset: bool = False) -> list[dict[str, str]
 def aggregate(entries: list[dict[str, str]]) -> dict[tuple[str, str, str, str, str], dict[str, str | int]]:
     rows: dict[tuple[str, str, str, str, str], dict[str, str | int]] = {}
     for entry in entries:
+        if entry.get("evidence_type", "applied") != "applied":
+            continue
         date = entry["date"]
         if len(date) < 7:
             continue

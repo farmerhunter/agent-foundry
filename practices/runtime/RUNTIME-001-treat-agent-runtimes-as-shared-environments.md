@@ -9,10 +9,10 @@ created: 2026-05-26
 updated: 2026-05-26
 tags: [runtime, adapters, deployment, ownership, safety]
 aliases:
+  - RUNTIME-001
   - do not overwrite unmanaged runtime files
   - runtime directories are shared environments
   - publish through managed blocks and markers
-  - RUNTIME-001
 related: [META-001, META-002, META-006]
 applies_when:
   - publishing Agent Foundry adapters into local agent runtimes

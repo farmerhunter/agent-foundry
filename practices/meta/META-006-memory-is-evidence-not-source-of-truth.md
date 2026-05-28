@@ -9,9 +9,9 @@ created: 2026-05-26
 updated: 2026-05-26
 tags: [memory, evidence, source-of-truth, governance]
 aliases:
+  - META-006
   - memory can suggest but foundry decides
   - memory is not canonical
-  - META-006
 related: [GOV-003, META-001, META-002, META-004]
 applies_when:
   - using agent memory for discovery

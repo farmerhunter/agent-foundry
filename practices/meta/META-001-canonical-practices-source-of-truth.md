@@ -9,9 +9,9 @@ created: 2026-05-26
 updated: 2026-05-26
 tags: [canonical, source-of-truth, adapters]
 aliases:
+  - META-001
   - skills are downstream
   - adapters are not source of truth
-  - META-001
 related: [GOV-001, META-002, META-003]
 applies_when:
   - maintaining reusable agent practices

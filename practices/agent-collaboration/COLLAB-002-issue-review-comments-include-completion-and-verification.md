@@ -9,9 +9,9 @@ created: 2026-05-26
 updated: 2026-05-26
 tags: [github, issues, review, verification]
 aliases:
+  - COLLAB-002
   - issue completion comment standard
   - review-ready issue comment
-  - COLLAB-002
 related: [COLLAB-001, COLLAB-003]
 applies_when:
   - preparing a GitHub issue for review

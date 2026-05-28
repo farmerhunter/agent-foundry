@@ -32,6 +32,8 @@ merge/create/supersede
   -> report changed files
 ```
 
+Before the final report, do a lightweight missed-activation self-check. Record or ask a local agent to record missed evidence only when there is a concrete missed moment and a specific practice ID: the user identified a violation, review found a specific missed trigger, or the agent can name the practice ID, trigger, and risk clearly. Do not record vague self-scoring.
+
 Runtime publishing safety:
 
 - Treat agent runtimes as shared user-owned environments.

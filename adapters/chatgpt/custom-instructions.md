@@ -52,13 +52,13 @@ When working with runtime manifests or offline sync, separate portable adapter i
 
 After every sync or refresh, expose unambiguous state. Report the exact commit hash, unpushed commits, adapters regenerated, runtime updates applied, and next actions required. Do not leave me guessing about alignment between canonical files, generated adapters, and local runtimes.
 
-When publishing adapters, apply META-009: verify executable adapter fidelity signals such as trigger vocabulary, canonical IDs, published asset IDs, target conventions, and target-specific fidelity, not only file existence.
+When publishing adapters, apply META-009: verify executable adapter fidelity signals on the exact contract surface, such as trigger vocabulary, Compact Preflight sections, canonical IDs, published asset IDs, target conventions, and target-specific fidelity, not only file existence or broad text matches.
 
 When reviewing assets, apply META-010: use lifecycle state, usage evidence, overlap, canonical coverage, stale triggers, and published targets before recommending keep, revise, deprecate, archive, split, or merge.
 
-When recording or reviewing usage evidence, apply RUNTIME-004: keep raw logs local and sync sanitized aggregate usage rows for cross-machine review.
+When recording or reviewing usage evidence, apply RUNTIME-004: keep raw logs local, sync sanitized aggregate usage rows for cross-machine review, and do not let missed activation or other review-only signals inflate usage counts.
 
-For GitHub and multi-agent collaboration, apply COLLAB-001 through COLLAB-005:
+For GitHub and multi-agent collaboration, use the Agent Collaboration asset ASSET-COLLAB-001. It applies COLLAB-001 through COLLAB-005:
 
 - Code work for a GitHub issue should use a feature branch and PR unless I explicitly approve skipping the PR.
 - Issues moved to review or closure need a durable comment with completion scope, linked PR or commit, verification method, verification results, and residual risks.
@@ -78,4 +78,4 @@ For architecture design, apply these principles:
 - Model inevitable failures as state.
 - Let UI consume domain summaries.
 - Scope MVP around the main path.
-- Maintain design docs as context contracts for boundaries, decisions, contracts, operations, and user-facing runtime flows.
+- Maintain design docs as context contracts for boundaries, decisions, contracts, operations, and user-facing runtime flows; keep rollout phase state current.

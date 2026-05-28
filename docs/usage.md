@@ -254,13 +254,13 @@ Recommended timing:
 ### English Prompt
 
 ```text
-Review Agent Foundry for skill rot. Look for duplicates, stale entries, weak generic rules, adapter drift, and proposed items that need decisions. Give me a concise review list with recommended actions. Do not archive, supersede, or publish anything without my approval.
+Review Agent Foundry for skill rot. Run the practice review workflow, summarize the recommendations, and give me an approval list. Look for duplicates, stale entries, weak or missed activation, adapter drift, and proposed items that need decisions. Do not archive, supersede, change activation tiers, or publish anything without my approval.
 ```
 
 ### 中文 Prompt
 
 ```text
-请 review Agent Foundry，检查 skill rot。重点看重复规则、过期 entries、太泛的规则、adapter drift，以及需要决策的 proposed items。给我一个简洁的 review list 和建议动作。未经我批准，不要 archive、supersede 或 publish。
+请 review Agent Foundry，检查 skill rot。执行 practice review workflow，总结 recommendations，并给我一个可批准的清单。重点看重复规则、过期 entries、弱 activation 或 missed activation、adapter drift，以及需要决策的 proposed items。未经我批准，不要 archive、supersede、修改 activation tier 或 publish。
 ```
 
 ---
@@ -329,10 +329,10 @@ For harvest/import/review, the agent should show a compact list like:
    Why: strengthens the existing rule with a new heuristic
    After approval: update ARCH-001, update index, publish architecture-design adapter
 
-2. Avoid direct external skill import
-   Action: create META-004
-   Why: new safety rule for imported skills
-   After approval: create META-004, promote active, update index, publish practice-harvester adapter
+2. Keep derived indexes generated
+   Action: merge into GOV-001
+   Why: reinforces the source-of-truth boundary for generated views
+   After approval: update GOV-001, update index, publish relevant adapters
 ```
 
 It should not force you to read the full internal workflow unless you ask.

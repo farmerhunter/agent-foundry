@@ -9,9 +9,9 @@ created: 2026-05-26
 updated: 2026-05-26
 tags: [github, pull-requests, merge, validation]
 aliases:
+  - COLLAB-003
   - merge after validation unless review requested
   - default auto merge PR flow
-  - COLLAB-003
 related: [COLLAB-001, COLLAB-002]
 applies_when:
   - a user has authorized auto-merge for PRs

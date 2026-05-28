@@ -9,10 +9,10 @@ created: 2026-05-26
 updated: 2026-05-26
 tags: [runtime, deployment, manifest, offline-sync, portability]
 aliases:
+  - RUNTIME-002
   - runtime manifest is machine-local
   - keep local deployment state out of git
   - portable snapshots exclude local runtime state
-  - RUNTIME-002
 related: [RUNTIME-001, META-001]
 applies_when:
   - designing runtime manifests

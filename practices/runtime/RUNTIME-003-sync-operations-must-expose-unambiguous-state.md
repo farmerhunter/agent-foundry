@@ -9,11 +9,11 @@ created: 2026-05-27
 updated: 2026-05-27
 tags: [runtime, sync, state, git, safety, visibility]
 aliases:
+  - RUNTIME-003
   - report exact state after every sync
   - sync without ambiguity
   - unambiguous final report
   - status commands are read-only
-  - RUNTIME-003
 related: [RUNTIME-001, RUNTIME-002, COLLAB-004]
 applies_when:
   - syncing Agent Foundry with remote repositories

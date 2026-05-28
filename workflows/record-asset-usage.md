@@ -61,6 +61,14 @@ python3 scripts/record_asset_usage.py \
 
 Missed activation evidence is local raw evidence only by default. It does not update shared usage aggregates because it is a review signal, not successful usage.
 
+Record missed evidence only when there is a concrete missed moment:
+
+- the user explicitly identifies a violated or missed practice;
+- a review or harvest step identifies a specific practice that should have triggered;
+- the agent can name the practice ID, trigger, and risk clearly.
+
+Do not record missed evidence for vague regret, speculative self-scoring, or routine iteration. Missed records are used by `review practices` to recommend trigger, adapter, or activation changes; they do not change lifecycle state by themselves.
+
 Use concise notes. Do not store raw session transcripts.
 
 ## Data Boundary

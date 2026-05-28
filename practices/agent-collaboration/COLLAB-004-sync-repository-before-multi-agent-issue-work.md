@@ -9,9 +9,9 @@ created: 2026-05-26
 updated: 2026-05-26
 tags: [git, multi-agent, synchronization, github]
 aliases:
+  - COLLAB-004
   - pull before issue work
   - verify remote sync before coding
-  - COLLAB-004
 related: [COLLAB-001, COLLAB-002]
 applies_when:
   - multiple agents work on the same repository

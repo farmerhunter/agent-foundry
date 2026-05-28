@@ -9,10 +9,10 @@ created: 2026-05-27
 updated: 2026-05-27
 tags: [assets, lifecycle, evidence, review, skill-rot]
 aliases:
+  - META-010
   - asset lifecycle review needs evidence
   - review assets before skill rot
   - usage evidence drives asset lifecycle
-  - META-010
 related: [META-004, META-005, META-008, META-009]
 applies_when:
   - reviewing existing skills, subagents, automations, or other reusable assets

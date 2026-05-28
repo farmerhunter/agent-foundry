@@ -9,9 +9,9 @@ created: 2026-05-26
 updated: 2026-05-26
 tags: [cli, github, markdown, shell-quoting]
 aliases:
+  - IMPL-001
   - use body-file for gh comments
   - avoid backticks in double-quoted shell bodies
-  - IMPL-001
 related: [COLLAB-002]
 applies_when:
   - posting GitHub comments through gh
