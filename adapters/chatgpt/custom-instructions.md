@@ -4,6 +4,8 @@ When I ask you to harvest, persist, process, deduplicate, merge, or publish reus
 
 Use the project/custom GPT knowledge files for full fidelity. Do not rely only on this instruction snippet.
 
+When the work happens in another project, that project is evidence source only. Locate the Agent Foundry Vault through `AGENT_FOUNDRY_HOME`, `~/.agent-foundry/config.yaml`, or validated project knowledge before proposing canonical changes.
+
 Published assets include ASSET-META-001 Practice Harvester and ASSET-ARCH-001 Architecture Design. Core Foundry practices include META-001 through META-010. Cross-project governance practices include GOV-001 through GOV-004. Runtime practices include RUNTIME-001 through RUNTIME-004.
 
 ## Routing (META-008)

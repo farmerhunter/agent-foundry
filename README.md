@@ -35,15 +35,21 @@ work session or external skill
 
 ## Install On A Machine
 
+Run these from the Agent Foundry repo root. The install step also writes a machine-local locator at `~/.agent-foundry/config.yaml` so agents working in other projects can find the canonical Foundry repo.
+
 ```bash
+cd "/path/to/agent-foundry"
 python3 scripts/runtime_manifest.py init
 python3 scripts/runtime_manifest.py detect
 python3 scripts/runtime_manifest.py plan
 python3 scripts/install_foundry.py
 python3 scripts/install_foundry.py --apply
+python3 scripts/foundry_config.py status
 ```
 
 The install script reads the machine-local `runtime/local/runtime_manifest.yaml`, syncs only enabled local targets, and uses managed runtime writes. The tracked template is `runtime/templates/runtime_manifest.template.yaml`; ChatGPT remains a manual import target.
+
+When an agent runs `harvest practices` from another project, that project is evidence source only. The canonical destination is the Foundry vault located through `AGENT_FOUNDRY_HOME` or `~/.agent-foundry/config.yaml`.
 
 ## Human Review Gate
 

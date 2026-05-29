@@ -41,12 +41,13 @@ When asked to refresh, read `workflows/refresh.md` and follow the steps: git pul
 
 When asked to harvest, persist, deduplicate, merge, or publish reusable lessons:
 
-1. Read `workflows/harvest-practices.md`.
-2. Read `schemas/practice-entry.schema.yaml`.
-3. Search `indexes/practice_index.yaml`.
-4. Update canonical practice entries under `practices/` first.
-5. Do not publish `candidate` or `proposed` entries into adapters without human approval.
-6. After the user approves a practice, apply it, promote it to `active` when applicable, update the index, and publish relevant adapters automatically.
+1. Locate Agent Foundry Core and Vault. Use `AGENT_FOUNDRY_HOME`, then `~/.agent-foundry/config.yaml`, then the current directory only if canonical markers exist. The current project is evidence source, not canonical destination.
+2. Read `workflows/harvest-practices.md`.
+3. Read `schemas/practice-entry.schema.yaml`.
+4. Search `indexes/practice_index.yaml`.
+5. Update canonical practice entries under `practices/` first.
+6. Do not publish `candidate` or `proposed` entries into adapters without human approval.
+7. After the user approves a practice, apply it, promote it to `active` when applicable, update the index, and publish relevant adapters automatically.
 
 When asked to discover reusable assets, read `workflows/discover-assets.md`, search `indexes/asset_index.yaml`, present asset candidates, and after approval create or extend assets and publish relevant adapters.
 

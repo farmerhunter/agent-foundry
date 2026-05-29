@@ -62,17 +62,34 @@ Do not put a practice under `meta` only because it is abstract or broadly useful
 ## Repository Layers
 
 ```text
-docs/          Long-form explanations for humans and future agents
-workflows/     Strict procedures agents should follow
-schemas/       Canonical entry shape and lifecycle rules
-indexes/       Searchable registry for dedupe and routing
-practices/     Canonical source of truth
-assets/        Registry of reusable skills, subagents, and automations
-imports/       Staging area for external skills and ideas
-adapters/      Downstream outputs for specific agent environments
-usage/         Shared usage aggregates plus gitignored local raw evidence
-scripts/       Optional deterministic tooling
+Foundry Core:
+  workflows/     Strict procedures agents should follow
+  schemas/       Canonical entry shape and lifecycle rules
+  scripts/       Deterministic tooling
+  templates/     Record templates
+
+Foundry Vault:
+  practices/     Canonical practice source of truth
+  assets/        Registry of reusable skills, subagents, and automations
+  indexes/       Searchable registry for dedupe and routing
+  usage/         Shared usage aggregates plus gitignored local raw evidence
+  docs/          Long-form explanations for humans and future agents
+  imports/       Staging area for external skills and ideas
+
+Downstream:
+  adapters/      Outputs for specific agent environments
+  runtime/       Machine-local deployment manifests and portable templates
 ```
+
+Core and Vault currently live in one repository for maintainability. They are separate logical units so agents can distinguish the canonical destination from the current project they are harvesting from.
+
+Machine-local locator:
+
+```text
+~/.agent-foundry/config.yaml
+```
+
+This file records `repo_root`, `core_root`, `vault_root`, and canonical markers. It is written during install and is not canonical knowledge. Agents working in another repository should locate Agent Foundry through this config or `AGENT_FOUNDRY_HOME`, then validate the markers before writing canonical records.
 
 ## Usage Evidence Boundary
 

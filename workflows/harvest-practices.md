@@ -6,6 +6,26 @@ Use this workflow when the user asks to extract, harvest, persist, process, summ
 
 Do not publish raw session notes directly into agent adapters. Canonical practices must be updated first. Each new or materially changed practice requires human approval before becoming `active`; after approval, publish relevant adapters automatically.
 
+## 0. Locate Agent Foundry
+
+The current project is usually the evidence source, not the canonical destination. Locate the Agent Foundry Vault before reading or writing canonical records.
+
+Use this order:
+
+1. `AGENT_FOUNDRY_HOME`, if set.
+2. `~/.agent-foundry/config.yaml`, using `vault_root` and `core_root`.
+3. The current directory, only if it contains canonical markers.
+4. Known fallback paths.
+5. Ask the user for the Agent Foundry path.
+
+Validate the location before proceeding. Required markers:
+
+- `indexes/practice_index.yaml`
+- `indexes/asset_index.yaml`
+- `workflows/harvest-practices.md`
+
+If the Vault is locked, dirty in a conflicting way, or unavailable, produce candidate recommendations only and do not write files.
+
 ## 1. Reconstruct the Session
 
 Summarize:

@@ -5,6 +5,8 @@ Canonical sources:
 - `workflows/harvest-practices.md`
 - META-001, META-002, META-003
 
+Locate Agent Foundry before writing canonical records. Use `AGENT_FOUNDRY_HOME`, then `~/.agent-foundry/config.yaml`, then the current directory only if it contains canonical markers. The current project is evidence source, not canonical destination.
+
 Route:
 
 ```text

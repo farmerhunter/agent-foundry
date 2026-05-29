@@ -40,6 +40,11 @@ def main() -> int:
         if code != 0:
             return code
 
+    if args.apply:
+        code = run(["python3", "scripts/foundry_config.py", "write"], apply=True)
+        if code != 0:
+            return code
+
     targets = parse_targets(read_manifest())
     selected = [args.target] if args.target else list(targets)
     for target in selected:

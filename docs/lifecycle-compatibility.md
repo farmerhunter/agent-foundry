@@ -49,6 +49,16 @@ This loop must work across heterogeneous agents without pretending they have ide
 
 Purpose: identify reusable practices, assets, or external material.
 
+When the command is run from another project, that project is the evidence source. The canonical destination is the Agent Foundry Vault. Locate it in this order:
+
+1. `AGENT_FOUNDRY_HOME`;
+2. `~/.agent-foundry/config.yaml`;
+3. current directory, only if canonical markers exist;
+4. known fallback paths;
+5. ask the user.
+
+After locating the Vault, validate markers such as `indexes/practice_index.yaml`, `indexes/asset_index.yaml`, and `workflows/harvest-practices.md` before writing.
+
 | Agent | Adaptation |
 |---|---|
 | Codex | Use `practice-harvester` skill with references. Can edit canonical repo and run scripts. |

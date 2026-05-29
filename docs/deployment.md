@@ -21,7 +21,14 @@ Agent Foundry repo
 - `adapters/`: generated or maintained adapter outputs.
 - `runtime/templates/runtime_manifest.template.yaml`: portable deployment template, tracked in git.
 - `runtime/local/runtime_manifest.yaml`: this machine's private deployment state, ignored by git and portable snapshots.
+- `~/.agent-foundry/config.yaml`: this machine's private Foundry locator for agents working outside the repo.
 - Installed runtime locations such as `~/.codex`, `~/.claude`, and `~/.hermes`: downstream copies, not source of truth.
+
+Run repo scripts from the Agent Foundry repo root unless a workflow explicitly says otherwise:
+
+```bash
+cd "/path/to/agent-foundry"
+```
 
 ## Fresh Install
 
@@ -75,7 +82,10 @@ Use this on a new machine after cloning or unpacking Agent Foundry.
 
    ```bash
    python3 scripts/sync_status.py
+   python3 scripts/foundry_config.py status
    ```
+
+The apply step writes `~/.agent-foundry/config.yaml`. Agents in other repositories use that locator to find the canonical Foundry Core and Vault.
 
 ## Daily Update
 
@@ -100,6 +110,12 @@ Use this after practices, assets, or adapters change.
    ```
 
 4. For ChatGPT, manually update project/custom GPT instructions and knowledge files from `adapters/chatgpt/`.
+
+5. Verify the locator still points at this repo:
+
+   ```bash
+   python3 scripts/foundry_config.py status
+   ```
 
 ## Add An Agent
 

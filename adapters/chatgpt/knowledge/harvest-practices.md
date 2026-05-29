@@ -4,6 +4,8 @@ Canonical source: `workflows/harvest-practices.md`
 
 Use when the user says `harvest practices` or `做一次 harvest practice`.
 
+When harvesting from another project, that project is evidence source only. Locate Agent Foundry before proposing canonical changes. Use `AGENT_FOUNDRY_HOME`, then `~/.agent-foundry/config.yaml`, then the current directory only if it contains canonical markers such as `indexes/practice_index.yaml`, `indexes/asset_index.yaml`, and `workflows/harvest-practices.md`.
+
 Route:
 
 ```text
