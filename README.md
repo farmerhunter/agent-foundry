@@ -1,81 +1,111 @@
 # Agent Foundry
 
-Agent Capability Foundry: a personal system for turning real work experience into reusable, deployable agent capabilities across Codex, ChatGPT, Claude Code, Hermes, and similar environments.
+Agent Foundry is a local-first system for turning real work experience into reusable, reviewable, deployable agent capabilities across Codex, ChatGPT, Claude Code, Hermes, and similar environments.
 
-## Core Idea
+## Why This Exists
 
-Agent Foundry discovers repeated work, distills reusable knowledge into canonical practices, packages reusable assets, publishes them through agent-specific adapters, and improves them with usage evidence.
+AI agents can generate useful insights while working, but insight is not the same as durable capability. A good lesson from one session can disappear into chat history, stay trapped in one agent's memory, or become a vague rule that future agents do not actually follow.
 
-Canonical practices live in `practices/`. Reusable assets live in `assets/`. Agent-specific skills and prompts under `adapters/` are downstream outputs.
+Agent Foundry exists to govern that transformation:
 
 ```text
-work session or external skill
-  -> candidate lesson
-  -> dedupe and review
-  -> canonical practice
+work session
+  -> insight
+  -> canonical practice or reusable asset
   -> human approval
-  -> agent adapter
+  -> agent-specific adapter
+  -> runtime use
   -> usage evidence
   -> review and improvement
 ```
 
-## Main Workflows
+The goal is not to maintain a pile of prompts. The goal is to make hard-won working judgment portable across sessions, agents, machines, and projects without losing human review or source-of-truth discipline.
 
-- Short commands: `docs/commands.md`
-- End-user usage guide: `docs/usage.md`
-- Harvest lessons from a session: `workflows/harvest-practices.md`
-- Borrow external skills safely: `workflows/import-external-skills.md`
-- Discover reusable assets: `workflows/discover-assets.md`
-- Create or extend assets: `workflows/create-asset.md`
-- Publish adapters: `workflows/publish-adapters.md`
-- Install adapters: `workflows/install-adapters.md`
-- Offline sync: `workflows/sync-offline.md`
-- Periodic cleanup: `workflows/review-practices.md`
-- Asset cleanup: `workflows/review-assets.md`
+For the longer motivation, see [docs/philosophy.md](docs/philosophy.md).
 
-## Install On A Machine
+## What It Does
 
-Run these from the Agent Foundry repo root. The install step also writes a machine-local locator at `~/.agent-foundry/config.yaml` so agents working in other projects can find the canonical Foundry repo.
+Agent Foundry keeps durable knowledge and runtime delivery separate.
+
+- `practices/`: canonical rules, principles, patterns, playbooks, and checks.
+- `assets/`: reusable skills, subagents, automations, and other user-facing capability packages.
+- `adapters/`: downstream outputs for specific agent environments.
+- `usage/`: evidence that practices and assets were used, missed, or need review.
+
+Agent memory, session summaries, and external skills are treated as evidence sources. They can suggest candidates, but they do not become durable rules until reviewed.
+
+## Repository Map
+
+| Path | Purpose |
+| --- | --- |
+| `practices/` | Canonical practice vault. |
+| `assets/` | Reusable capability assets governed by practices. |
+| `indexes/` | Search, dedupe, routing, and registry metadata. |
+| `workflows/` | Procedures agents should follow for harvest, import, review, publish, and sync. |
+| `schemas/` | Canonical record shapes and validation rules. |
+| `scripts/` | Deterministic tooling for checks, install, sync, evidence, and review. |
+| `adapters/` | Agent-specific skills, prompts, instructions, and knowledge files. |
+| `runtime/` | Machine-local deployment manifests and portable runtime templates. |
+| `docs/` | Human-readable philosophy, usage, design, deployment, and compatibility notes. |
+
+## Quick Start
+
+Run these from the Agent Foundry repo root on a new machine:
 
 ```bash
 cd "/path/to/agent-foundry"
 python3 scripts/runtime_manifest.py init
 python3 scripts/runtime_manifest.py detect
 python3 scripts/runtime_manifest.py plan
-python3 scripts/install_foundry.py
 python3 scripts/install_foundry.py --apply
 python3 scripts/foundry_config.py status
 ```
 
-The install script reads the machine-local `runtime/local/runtime_manifest.yaml`, syncs only enabled local targets, and uses managed runtime writes. The tracked template is `runtime/templates/runtime_manifest.template.yaml`; ChatGPT remains a manual import target.
+The install step writes a machine-local locator at `~/.agent-foundry/config.yaml`. Agents working in other repositories use that locator to find the canonical Foundry repo.
 
-When an agent runs `harvest practices` from another project, that project is evidence source only. The canonical destination is the Foundry vault located through `AGENT_FOUNDRY_HOME` or `~/.agent-foundry/config.yaml`.
+For full install, adding or removing agents, and offline/online sync, see [docs/deployment.md](docs/deployment.md).
 
-## Human Review Gate
+## Daily Use
 
-New/imported practices and discovered assets should be reviewed per item. After human approval, the agent should apply the approved item, promote it to `active`, update the relevant index, and publish relevant adapters automatically.
+Use short commands instead of remembering internal workflows:
 
-## Standards Followed
+| Command | Purpose |
+| --- | --- |
+| `refresh practices and assets` | Pull updates, regenerate adapters if needed, and install to enabled local runtimes. |
+| `harvest practices` | Extract reusable lessons from a work session. |
+| `discover assets` | Find repeated workflows worth packaging as a skill, subagent, automation, or extension. |
+| `review practices` | Check for stale rules, duplicates, weak activation, adapter drift, and skill rot. |
 
-- `SKILL.md` skill folders for Codex-style adapters.
-- `AGENTS.md` as repository-level agent instructions.
-- `CLAUDE.md` and command files for Claude Code adapters.
-- Full-fidelity `SKILL.md` folders for Codex and Hermes.
-- ChatGPT instructions plus knowledge files.
-- DeepSeek and similar model providers are not direct programming-agent adapters.
+Detailed prompts and Chinese equivalents are in [docs/usage.md](docs/usage.md) and [docs/commands.md](docs/commands.md).
 
-See `docs/standards-and-sources.md`.
+## Design Principles
 
-## Initial Domains
+- The repository is the canonical source of truth.
+- Runtime files under `~/.codex`, `~/.claude`, `~/.hermes`, and similar locations are downstream copies.
+- Agent memory is evidence, not authority.
+- Human approval gates durable practices and assets.
+- Adapters should preserve meaning while respecting each agent's native instruction mechanics.
+- The smallest maintainable mechanism is preferred over heavier machinery.
 
-- `meta`: maintaining Agent Foundry itself.
-- `architecture`: boundaries, domain models, failure states, MVP scope.
-- `implementation`: coding and refactoring rules.
-- `testing`: validation and test design.
-- `debugging`: diagnosis workflows.
-- `product`: UX and product judgment.
-- `agent-collaboration`: human-agent working patterns.
+See [docs/system-design.md](docs/system-design.md) and [docs/lifecycle-compatibility.md](docs/lifecycle-compatibility.md).
 
-## Asset Registry
+## Supported Targets
 
-Reusable user-facing assets live under `assets/` and are indexed in `indexes/asset_index.yaml`. Assets include skills, subagents, and automations. They are governed by canonical practices but are not themselves canonical practices.
+| Target | Status |
+| --- | --- |
+| Codex | Local `SKILL.md` adapter. |
+| Claude Code | `CLAUDE.md` and related adapter files. |
+| Hermes | Local `SKILL.md` adapter. |
+| ChatGPT | Manual import through custom/project instructions and knowledge files. |
+
+DeepSeek, MiniMax, and similar model providers are treated as underlying models used through programming agents, not direct Agent Foundry adapters.
+
+## Documentation
+
+- [Philosophy](docs/philosophy.md): why this project exists.
+- [Usage](docs/usage.md): day-to-day commands and prompts.
+- [Deployment](docs/deployment.md): fresh install, runtime changes, sync, and offline operation.
+- [System Design](docs/system-design.md): architecture, boundaries, lifecycle, and governance model.
+- [Lifecycle Compatibility](docs/lifecycle-compatibility.md): how the full loop maps across agent systems.
+- [Offline Sync](docs/offline-sync.md): snapshot and remote sync strategy.
+- [Standards and Sources](docs/standards-and-sources.md): external conventions and adapter standards.
