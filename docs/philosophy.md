@@ -1,5 +1,7 @@
 # Agent Foundry 的哲学：从记忆到能力治理
 
+这篇文章是围绕我的一个开源实验项目 [Agent Foundry](https://github.com/farmerhunter/agent-foundry) 写下的思考。
+
 Agent Foundry 源于我对 agent 系统的学习、试用和一点点不放心。
 
 最初的触发点并不宏大，我也是刚刚开始尝试vibe coding。严格说，我每天用光的那点 token 限额根本够不上tokenmaxxing，只是token all-in。但这段时间我确实开始用起来甚至沉迷于AI编程：试用不同 agent，写 pet project，用 vibe coding 快速堆出文档和代码，也不断测试它们在真实项目中的边界。
