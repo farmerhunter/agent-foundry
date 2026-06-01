@@ -1,10 +1,10 @@
 # Architecture Principles
 
-Canonical IDs: ARCH-001, ARCH-002, ARCH-003, ARCH-004, ARCH-005, ARCH-006, ARCH-007
+Canonical IDs: ARCH-001, ARCH-002, ARCH-003, ARCH-004, ARCH-005, ARCH-006, ARCH-007, ARCH-008
 
 ## ARCH-001 Boundaries Before Tools
 
-Define system boundaries and change ownership before choosing or centering tools. Tools implement boundaries; they should not become accidental domain concepts.
+Define durable state or outcomes, stable responsibilities, change points, and ownership boundaries before choosing or centering tools. Tools implement boundaries; they should not become accidental domain concepts. If the design is mostly a current tool pipeline, run a boundary rewrite and substitution test: separate stable responsibilities from mechanisms, replace plausible tools or workflows, and keep the architecture shape only if core responsibilities remain stable.
 
 ## ARCH-002 Separate Independent Axes Of Change
 
@@ -29,3 +29,7 @@ The MVP should validate the main system path and key boundaries, not every plaus
 ## ARCH-007 Maintain Design Docs As Context Contracts
 
 Maintain the smallest design docs that preserve engineering context and user-facing runtime experience for future agents. Update them when domain models, boundaries, contracts, operations, rollout phase state, or user flows change; do not document every local implementation detail.
+
+## ARCH-008 Bridge Architecture To Code With A Reviewed Implementation Plan
+
+Between architecture docs and code, insert a concrete implementation plan with a detail gradient: current phase gets file structure, data flow with error branches, IPC contracts, and acceptance criteria; future phases get directional goals only. Review the plan adversarially to catch boundary violations, missing files, and protocol gaps before implementation.

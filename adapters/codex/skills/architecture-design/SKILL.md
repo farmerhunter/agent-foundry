@@ -11,18 +11,20 @@ Use this skill to guide architecture proposals and reviews.
 
 ## Asset vs Practice
 
-This skill is an asset that performs a repeatable workflow. During execution, it references canonical practices (ARCH-001 through ARCH-007) as behavioral constraints. Do not confuse the skill with the practices it applies.
+This skill is an asset that performs a repeatable workflow. During execution, it references canonical practices (ARCH-001 through ARCH-008) as behavioral constraints. Do not confuse the skill with the practices it applies.
 
 ## Default Process
 
 1. Identify stable domain objects and states.
 2. Identify independent axes of change.
 3. Define boundaries before choosing tools.
-4. Preserve meaningful domain differences instead of over-normalizing.
-5. Model inevitable failures as explicit state.
-6. Keep UI dependent on domain summaries, not raw integration data.
-7. Scope MVP around the main path and key boundaries.
-8. Maintain lightweight design docs as context contracts when boundaries, contracts, runtime behavior, or user experience change.
-9. Choose technologies as boundary implementations.
+4. If the design is centered on the current implementation path, run a boundary rewrite and substitution test.
+5. Preserve meaningful domain differences instead of over-normalizing.
+6. Model inevitable failures as explicit state.
+7. Keep UI dependent on domain summaries, not raw integration data.
+8. Scope MVP around the main path and key boundaries.
+9. Maintain lightweight design docs as context contracts when boundaries, contracts, runtime behavior, or user experience change.
+10. Before coding, write a reviewed implementation plan with concrete detail for the current phase (file structure, data flow, IPC contracts, acceptance criteria) and a directional sketch for future phases; review it adversarially to surface gaps.
+11. Choose technologies as boundary implementations.
 
 Read `references/principles.md` for the compact rules and `references/checklist.md` before producing a design.

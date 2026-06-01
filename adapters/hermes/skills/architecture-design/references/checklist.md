@@ -4,6 +4,8 @@ Ask before proposing an architecture:
 
 - What domain state does the user actually care about?
 - Which concepts are stable and which are implementation details?
+- Is the proposed architecture mostly a sequence of current tools or implementation steps?
+- What remains stable if the current tool, API, storage, UI, workflow, or automation is replaced?
 - Which dimensions can vary independently?
 - Are we forcing different business meanings into one field or model?
 - What external failures are inevitable?
@@ -12,3 +14,4 @@ Ask before proposing an architecture:
 - What is the MVP's main path?
 - What design docs or user-facing runtime docs need to change so future agents understand the new boundary or flow?
 - If a chosen technology is replaced, does the architecture still make sense?
+- Before coding, has an implementation plan been written and reviewed to surface file-structure, boundary, contract, or protocol gaps?

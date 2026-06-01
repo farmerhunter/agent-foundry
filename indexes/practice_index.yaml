@@ -1,5 +1,5 @@
 schema_version: 1
-updated: 2026-05-28
+updated: 2026-06-01
 
 domains:
   meta:
@@ -191,7 +191,7 @@ practices:
     type: principle
     status: active
     tags: [architecture, boundaries, technical-choice]
-    aliases: [architecture is not a tech stack, tools serve boundaries]
+    aliases: [architecture is not a tech stack, tools serve boundaries, boundary rewrite, substitution test]
 
   - id: ARCH-002
     title: Separate independent axes of change
@@ -246,6 +246,15 @@ practices:
     status: active
     tags: [architecture, documentation, cross-agent, context, user-experience]
     aliases: [design docs compress context, docs as cross-agent handoff, maintain minimal design docs, document runtime user experience]
+
+  - id: ARCH-008
+    title: Bridge architecture to code with a reviewed implementation plan
+    path: practices/architecture/ARCH-008-bridge-architecture-to-code-with-reviewed-implementation-plan.md
+    domain: architecture
+    type: playbook
+    status: active
+    tags: [architecture, implementation, planning, review, cross-agent]
+    aliases: [implementation plan as bridge, review plan before code]
 
   - id: COLLAB-001
     title: Issue code work uses PRs

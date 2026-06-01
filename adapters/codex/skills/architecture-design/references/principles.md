@@ -2,7 +2,7 @@
 
 Canonical IDs: ARCH-001, ARCH-002, ARCH-003, ARCH-004, ARCH-005, ARCH-006, ARCH-007
 
-1. **Boundaries before tools**: Define system boundaries and change ownership before centering technical choices.
+1. **Boundaries before tools**: Define durable state or outcomes, stable responsibilities, change points, and ownership boundaries before centering technical choices. If the design is mostly a current tool pipeline, run a boundary rewrite and substitution test.
 2. **Separate independent axes of change**: If two concepts vary independently, model them independently.
 3. **Unify protocol, preserve semantics**: Share envelope and lifecycle, but keep meaningful payload differences.
 4. **Model inevitable failures as state**: Expected external failures should become explicit domain status.

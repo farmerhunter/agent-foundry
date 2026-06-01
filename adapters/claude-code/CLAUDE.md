@@ -98,12 +98,13 @@ For converted document deliverables, apply TEST-001: verify rendered output, fon
 
 ## Architecture Design
 
-Use canonical architecture practices ARCH-001 through ARCH-007:
+Use canonical architecture practices ARCH-001 through ARCH-008:
 
-- Boundaries before tools.
+- Boundaries before tools; if a design is mostly a current tool pipeline, run a boundary rewrite and substitution test.
 - Separate independent axes of change.
 - Unify protocol while preserving semantics.
 - Model inevitable failures as state.
 - Let UI consume domain summaries.
 - Scope MVP around the main path.
 - Maintain design docs as lightweight context contracts for boundaries, decisions, contracts, operations, and user-facing runtime flows; mark rollout phases as implemented baseline, future work, rejected, or non-goal when state changes.
+- Bridge architecture to code with a reviewed implementation plan: insert a concrete plan (file structure, data flow, IPC contracts, acceptance criteria) between architecture docs and code, review it adversarially, and fix gaps before implementation.
