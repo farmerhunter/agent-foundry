@@ -53,7 +53,7 @@ Local canonical/adapter changes detected:
 - <file>
 
 Choose:
-- Commit and push: git add <files>, git commit, git push, then continue refresh.
+- Commit and push: git add <files>, git commit, ./sync.sh push, then continue refresh.
 - Abort: stop. You commit and push manually, then re-run refresh.
 ```
 
@@ -63,9 +63,9 @@ If the user chooses **Commit and push**:
 1. Stage the files: `git add -A` (or specific files).
 2. Generate a concise commit message describing the changes. If the message is unclear, ask the user to edit it.
 3. Commit.
-4. Push.
+4. Run `./sync.sh push`.
    - If push succeeds: continue to Step 3 (Pull).
-   - If push fails (network, auth): report clearly and go to Step 8 (Final Report) with state `unpushed commits`.
+   - If push fails: the script reports the failure and next action. Go to Step 8 (Final Report) with state `unpushed commits`.
 
 If the user chooses **Abort**: stop immediately. Do not proceed to pull, publish, or install.
 
@@ -94,20 +94,23 @@ Proceed to Step 2.
 
 ---
 
-## Step 2: Check For Unpushed Commits
+## Step 2: Push Unpushed Commits
 
 Run:
 
 ```bash
-git log @{upstream}..HEAD --oneline
+./sync.sh push
 ```
 
-If there are unpushed commits (e.g., from a previous session where push failed):
+This handles pre-flight checks (consistency, named branch, remote configured), retries network failures with exponential backoff, and prints a RUNTIME-003 status block.
 
-1. Report the commits.
-2. Attempt to push.
-3. If push succeeds: continue.
-4. If push fails: go to Step 8 with state `unpushed commits`. Do not pull; pulling with unpushed commits can create divergent history.
+If push succeeds: continue to Step 3.
+
+If push fails (auth, rejected, network exhausted):
+- The script reports the exact failure and next action.
+- Go to Step 8 with state `unpushed commits`. Do not pull; pulling with unpushed commits can create divergent history.
+
+If there are no unpushed commits, the script reports "already up to date" and exits cleanly. Continue to Step 3.
 
 ---
 
@@ -116,15 +119,17 @@ If there are unpushed commits (e.g., from a previous session where push failed):
 Run:
 
 ```bash
-git pull
+./sync.sh pull
 ```
 
+This checks preconditions (no unpushed commits, clean working tree, named branch, upstream tracking), then runs `git pull --ff-only` with network retry, and prints a RUNTIME-003 status block listing what changed.
+
 If pull fails (network error, auth failure, merge conflict, etc.):
-- Report the exact error.
+- The script reports the exact error and next action.
 - Go to Step 8 with state `pull failed`.
 - Do not continue to publish or install.
 
-If the repo has no remote configured, report "no remote configured for agent-foundry repo — nothing to pull" and continue to Step 6 (Install only).
+If the repo has no remote configured, the script reports it and exits. Continue to Step 6 (Install only).
 
 ---
 
@@ -156,7 +161,7 @@ After publishing, if new adapter files were written:
 1. Run `python3 scripts/check_consistency.py`.
 2. If it fails, stop. Do not install inconsistent adapters.
 3. If it passes, stage and commit the adapter changes with a message like `refresh: regenerate adapters`.
-4. Attempt to push the commit.
+4. Run `./sync.sh push --skip-check` to push the commit (consistency was already verified in step 1).
    - If push fails: go to Step 8 with state `unpushed adapter commit`.
 
 ---

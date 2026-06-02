@@ -210,13 +210,13 @@ Use GitHub when available. GitHub is an async remote backup and distribution cha
 2. Pull before work on another machine:
 
    ```bash
-   git pull --ff-only
+   ./sync.sh pull
    ```
 
 3. Push committed changes when network is available:
 
    ```bash
-   git push
+   ./sync.sh push
    ```
 
 4. After pulling on a machine, review local deployment status and sync enabled runtimes:

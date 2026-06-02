@@ -78,7 +78,7 @@ Final Report
 - Push: FAILED (network timeout). 1 commit remains unpushed.
 - Adapters regenerated: claude-code, codex, hermes
 - Runtime updates: claude-code managed block updated; codex skills copied; hermes skills copied
-- Next action: retry push with `git push origin main` when network recovers
+- Next action: retry push with `./sync.sh push` when network recovers
 ```
 
 ## Activation
