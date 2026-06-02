@@ -217,7 +217,7 @@ practices:
     domain: architecture
     type: principle
     status: active
-    tags: [architecture, errors, external-dependencies]
+    tags: [architecture, errors, external-dependencies, diagnostics, failure-taxonomy]
     aliases: [failures are domain state]
 
   - id: ARCH-005
@@ -253,8 +253,17 @@ practices:
     domain: architecture
     type: playbook
     status: active
-    tags: [architecture, implementation, planning, review, cross-agent]
+    tags: [architecture, implementation, planning, review, cross-agent, serviceability]
     aliases: [implementation plan as bridge, review plan before code]
+
+  - id: DEBUG-001
+    title: Design diagnostics as agent-actionable reproduction artifacts
+    path: practices/debugging/DEBUG-001-agent-actionable-diagnostics-artifacts.md
+    domain: debugging
+    type: pattern
+    status: active
+    tags: [debugging, diagnostics, serviceability, traces, fixtures, agent-handoff, privacy]
+    aliases: [agent-actionable diagnostics, debug bundles for coding agents, serviceability artifacts should support reproduction]
 
   - id: COLLAB-001
     title: Issue code work uses PRs
@@ -318,3 +327,21 @@ practices:
     status: active
     tags: [cli, github, markdown, shell-quoting]
     aliases: [use body-file for gh comments, avoid backticks in double-quoted shell bodies]
+
+  - id: IMPL-002
+    title: Verify external behavior before committing to an integration approach
+    path: practices/implementation/IMPL-002-verify-external-behavior-before-committing-to-integration.md
+    domain: implementation
+    type: playbook
+    status: active
+    tags: [implementation, integration, external-services, experimentation, feasibility]
+    aliases: [experiment before building integration, verify third-party behavior first, probe before coding]
+
+  - id: IMPL-003
+    title: Never run stealth or anti-detection experiments without explicit user command and approval
+    path: practices/implementation/IMPL-003-never-run-stealth-experiments-against-production-services.md
+    domain: implementation
+    type: anti-pattern
+    status: active
+    tags: [implementation, automation, security, anti-pattern, experimentation, risk, user-authorization]
+    aliases: [don't experiment with stealth without approval, anti-bot experiments require user authorization, never bypass protection without permission]

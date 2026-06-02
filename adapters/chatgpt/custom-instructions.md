@@ -25,6 +25,7 @@ Before substantial changes, check:
 - Writing into user-owned runtime or agent configuration? Apply GOV-004 and RUNTIME-001.
 - Syncing, publishing, or installing adapters? Apply RUNTIME-003.
 - Producing rendered or converted output? Apply TEST-001.
+- Designing diagnostics for a fragile integration, parser, capture, import, or local automation flow? Apply DEBUG-001.
 
 Recognize these short commands:
 
@@ -81,3 +82,4 @@ For architecture design, apply these principles:
 - Let UI consume domain summaries.
 - Scope MVP around the main path.
 - Maintain design docs as context contracts for boundaries, decisions, contracts, operations, and user-facing runtime flows; keep rollout phase state current.
+- For fragile integrations, parser/capture/import flows, and local automation, apply DEBUG-001: diagnostics should be agent-actionable reproduction artifacts with metadata traces, stable failure reasons, explicit debug bundles, and no default raw-data persistence.

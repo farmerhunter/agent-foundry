@@ -21,7 +21,7 @@ adapters:
       - adapters/codex/skills/practice-harvester/
       - adapters/codex/skills/architecture-design/
       - adapters/codex/skills/agent-collaboration/
-    included_domains: [meta, governance, runtime, architecture, agent-collaboration, implementation, testing]
+    included_domains: [meta, governance, runtime, architecture, agent-collaboration, implementation, testing, debugging]
     command_vocabulary:
       harvest: ["harvest practices", "做一次 harvest practice", "提炼实践", "沉淀经验"]
       discover_assets: ["discover assets", "发现可打包资产"]
@@ -47,7 +47,7 @@ adapters:
     outputs:
       - adapters/claude-code/CLAUDE.md
       - adapters/claude-code/commands/
-    included_domains: [meta, governance, runtime, architecture, agent-collaboration, implementation, testing]
+    included_domains: [meta, governance, runtime, architecture, agent-collaboration, implementation, testing, debugging]
     command_vocabulary:
       harvest: ["harvest practices", "做一次 harvest practice"]
       discover_assets: ["discover assets", "发现可打包资产"]
@@ -74,7 +74,7 @@ adapters:
       - adapters/hermes/skills/practice-harvester/
       - adapters/hermes/skills/architecture-design/
       - adapters/hermes/skills/agent-collaboration/
-    included_domains: [meta, governance, runtime, architecture, agent-collaboration, implementation, testing]
+    included_domains: [meta, governance, runtime, architecture, agent-collaboration, implementation, testing, debugging]
     command_vocabulary:
       harvest: ["harvest practices", "做一次 harvest practice", "提炼实践", "沉淀经验"]
       discover_assets: ["discover assets", "发现可打包资产"]
@@ -99,7 +99,7 @@ adapters:
     outputs:
       - adapters/chatgpt/custom-instructions.md
       - adapters/chatgpt/knowledge/
-    included_domains: [meta, governance, runtime, architecture, agent-collaboration, implementation, testing]
+    included_domains: [meta, governance, runtime, architecture, agent-collaboration, implementation, testing, debugging]
     command_vocabulary:
       harvest: ["harvest practices", "做一次 harvest practice"]
       discover_assets: ["discover assets", "发现可打包资产"]

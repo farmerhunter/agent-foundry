@@ -4,15 +4,15 @@ title: Bridge architecture to code with a reviewed implementation plan
 domain: architecture
 type: playbook
 status: active
-version: 1
+version: 2
 created: 2026-06-01
-updated: 2026-06-01
-tags: [architecture, implementation, planning, review, cross-agent]
+updated: 2026-06-02
+tags: [architecture, implementation, planning, review, cross-agent, serviceability]
 aliases:
   - ARCH-008
   - implementation plan as bridge
   - review plan before code
-related: [ARCH-001, ARCH-006, ARCH-007]
+related: [ARCH-001, ARCH-006, ARCH-007, DEBUG-001]
 applies_when:
   - transitioning from architecture/design docs to writing code
   - handing off design intent to another agent or future self
@@ -47,12 +47,22 @@ The plan also serves as a reviewable artifact. Another agent or human can read i
 5. Merge accepted changes into the plan before starting implementation.
 6. Treat the plan as a living document during the phase — update it if implementation reveals a necessary deviation.
 
+For fragile integrations, parser-heavy flows, local automation, cross-process IPC, or user-assisted capture, add serviceability acceptance criteria to the current phase:
+
+- what trace id or correlation mechanism ties the flow together;
+- which expected failures become stable reasons or statuses;
+- what diagnostic metadata is recorded by default;
+- what raw data is excluded by default;
+- what explicit debug artifact can be exported;
+- how an agent can turn the artifact into a fixture or failing test.
+
 ## Use This When
 
 - Architecture docs are written and the team is about to start coding.
 - The system has multiple processes, layers, or IPC boundaries where contracts must align.
 - Multiple agents will implement from the same design.
 - The architect and implementer are different people (or different agents).
+- A fragile integration may fail in ways that future agents need to reproduce from diagnostics rather than user description.
 
 ## Watch Out For
 
@@ -60,6 +70,7 @@ The plan also serves as a reviewable artifact. Another agent or human can read i
 - Do not let the plan become a waterfall specification. It is a bridge document, not a contract — update it when implementation reveals necessary changes.
 - Do not skip the review step. The plan's primary value is surfacing gaps before code; unreviewed, those gaps survive into implementation.
 - Do not duplicate architecture rationale in the plan. The plan references architecture docs; it does not re-argue them.
+- Do not leave serviceability as an afterthought for flows where the only reproduction path depends on a user's local browser, account state, or pasted raw input.
 
 ## Example
 
@@ -74,8 +85,11 @@ Codex review of this plan found 5 issues: data path inconsistency with architect
 
 The detail gradient meant Phase 1 was implementable immediately, while Phases 2-7 were described in 3-5 lines each — enough to ensure Phase 1 design didn't block them, but not so much that re-planning would be wasted work.
 
+Later in token-panic, the implementation plan added a dedicated serviceability phase for Safari assisted capture and parser failures. The acceptance criteria covered `trace_id`, metadata-only logs, failure taxonomy, debug bundle export, raw data policy, and whether bundle contents could become parser fixture tests. That prevented troubleshooting from devolving into "show me whatever the page said" and made the agent handoff path explicit.
+
 ## Related Practices
 
 - [[ARCH-001]] — boundaries before tools; the plan verifies boundaries survive translation to code
 - [[ARCH-006]] — MVP validates main path; the plan's Phase 1 detail enforces this
 - [[ARCH-007]] — design docs as context contracts; the implementation plan is a specific type of context contract for the architecture→code transition
+- [[DEBUG-001]] — serviceability artifacts should support agent reproduction and test creation

@@ -24,6 +24,7 @@ Before substantial changes, check:
 - Writing into user-owned runtime or agent configuration? Apply GOV-004 and RUNTIME-001.
 - Syncing, publishing, or installing adapters? Apply RUNTIME-003.
 - Producing rendered or converted output? Apply TEST-001.
+- Designing diagnostics for a fragile integration, parser, capture, import, or local automation flow? Apply DEBUG-001.
 
 ## Practice Harvesting
 
@@ -98,7 +99,7 @@ For converted document deliverables, apply TEST-001: verify rendered output, fon
 
 ## Architecture Design
 
-Use canonical architecture practices ARCH-001 through ARCH-008:
+Use canonical architecture practices ARCH-001 through ARCH-008, and DEBUG-001 when architecture work includes serviceability/debug artifact design:
 
 - Boundaries before tools; if a design is mostly a current tool pipeline, run a boundary rewrite and substitution test.
 - Separate independent axes of change.
@@ -108,3 +109,20 @@ Use canonical architecture practices ARCH-001 through ARCH-008:
 - Scope MVP around the main path.
 - Maintain design docs as lightweight context contracts for boundaries, decisions, contracts, operations, and user-facing runtime flows; mark rollout phases as implemented baseline, future work, rejected, or non-goal when state changes.
 - Bridge architecture to code with a reviewed implementation plan: insert a concrete plan (file structure, data flow, IPC contracts, acceptance criteria) between architecture docs and code, review it adversarially, and fix gaps before implementation.
+- For fragile integrations, parser/capture/import flows, and local automation, design diagnostics as agent-actionable reproduction artifacts: trace the flow, define stable failure reasons, avoid default raw-data persistence, and provide a debug bundle path to fixtures/tests.
+
+## Implementation
+
+Apply IMPL-002 and IMPL-003:
+
+- Before building any integration that depends on third-party behavior (APIs, web scraping, browser automation, file formats, SDKs), run a minimal disposable experiment to verify the external system actually behaves as assumed. Do not build adapter code on unverified premises.
+- Never run stealth, anti-detection, or automation-bypass experiments against production services without the user's explicit command and approval. The user must specify the exact experiment, understand and accept the risks, and set a clear stop condition. If a probe fails, stop — do not iterate through different evasion techniques unless the user issues a new explicit command.
+
+## Debugging And Serviceability
+
+Apply DEBUG-001 when a user-facing tool needs diagnostics for failures that may return to an agent for repair:
+
+- Prefer metadata-first traces with `trace_id`, component, action, status, stable reason, and bounded metadata.
+- Keep raw text, screenshots, DOM, credentials, cookies, localStorage, and sessionStorage out of default logs.
+- Provide explicit debug bundles with environment, trace, parser/importer diagnostics, and raw input only by explicit user choice.
+- For parser/importer failures, preserve the normal business API and add a diagnostics side-channel that can become fixture tests.
