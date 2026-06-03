@@ -108,7 +108,8 @@ If push succeeds: continue to Step 3.
 
 If push fails (auth, rejected, network exhausted):
 - The script reports the exact failure and next action.
-- Go to Step 8 with state `unpushed commits`. Do not pull; pulling with unpushed commits can create divergent history.
+- If the failure is a non-fast-forward rejection because remote has new commits, go to Step 3A (Assisted Divergent Resolution).
+- Otherwise go to Step 8 with state `unpushed commits`. Do not pull; pulling with unpushed commits can create divergent history.
 
 If there are no unpushed commits, the script reports "already up to date" and exits cleanly. Continue to Step 3.
 
@@ -124,12 +125,97 @@ Run:
 
 This checks preconditions (no unpushed commits, clean working tree, named branch, upstream tracking), then runs `git pull --ff-only` with network retry, and prints a RUNTIME-003 status block listing what changed.
 
-If pull fails (network error, auth failure, merge conflict, etc.):
+If pull fails (network error, auth failure, merge conflict, non-fast-forward divergence, etc.):
 - The script reports the exact error and next action.
-- Go to Step 8 with state `pull failed`.
+- If the failure is non-fast-forward divergence, go to Step 3A (Assisted Divergent Resolution).
+- Otherwise go to Step 8 with state `pull failed`.
 - Do not continue to publish or install.
 
 If the repo has no remote configured, the script reports it and exits. Continue to Step 6 (Install only).
+
+---
+
+## Step 3A: Assisted Divergent Resolution
+
+This step is used only when push or pull reports a non-fast-forward/divergent history. The refresh workflow must not auto-merge silently, but the agent should be able to help the user resolve the divergence end-to-end as an explicit synchronization task.
+
+First report the situation and ask whether to proceed:
+
+```text
+Divergent history detected. Automatic refresh is paused.
+
+Choose:
+- Resolve with agent assistance: inspect both histories, rebase or merge intentionally, run checks, regenerate adapters if needed, push, then resume install.
+- Abort: stop. You resolve manually, then re-run refresh.
+```
+
+If the user chooses **Resolve with agent assistance**:
+
+1. Fetch and inspect both sides:
+
+```bash
+git fetch origin
+git status --short --branch
+git log --oneline --graph --decorate --left-right HEAD...@{upstream}
+git diff --name-only HEAD...@{upstream}
+```
+
+2. Classify the divergence:
+   - Local-only commits under `practices/`, `assets/`, `indexes/`, `adapters/`, `workflows/`, `schemas/`, `scripts/`, `usage/`, or `docs` are canonical/adapter work and must be preserved unless the user explicitly rejects them.
+   - Remote-only commits must be inspected for overlapping canonical IDs, indexes, adapter outputs, workflow changes, or usage aggregate changes.
+   - If either side contains destructive or unclear changes, stop and ask for user direction.
+
+3. Prefer rebase for ordinary canonical/adapters divergence:
+
+```bash
+git rebase @{upstream}
+```
+
+Use merge only when the user explicitly wants a merge commit or when rebase is inappropriate for the current collaboration context.
+
+4. If conflicts occur, resolve intentionally:
+   - Practice conflicts: merge semantic guidance, version, `updated`, `related`, and activation metadata deliberately. Do not choose ours/theirs blindly.
+   - Index conflicts: preserve all valid entries, unique IDs, correct paths, statuses, aliases, and ordering.
+   - Asset conflicts: preserve canonical practice links, published targets, lifecycle state, and version/update metadata.
+   - Adapter conflicts: resolve canonical files first, then regenerate adapters instead of hand-merging generated drift.
+   - `usage/usage-aggregate.yaml`: preserve aggregate evidence from both sides when possible; do not drop usage rows just to make the conflict disappear.
+
+5. After resolving conflict files:
+
+```bash
+git add -A
+git rebase --continue
+```
+
+If the chosen operation was merge instead of rebase, complete the merge normally after staging resolved files.
+
+6. After rebase or merge completes, run checks:
+
+```bash
+python3 scripts/check_consistency.py
+python3 scripts/check_adapter_quality.py
+python3 scripts/check_activation.py
+```
+
+If changed files include `practices/`, `assets/`, `indexes/`, or `workflows/`, regenerate adapters by following Step 5 before installing. Commit any regenerated adapter changes.
+
+7. Push:
+
+```bash
+./sync.sh push
+```
+
+If rebase rewrote commits that were already pushed, ask the user before using:
+
+```bash
+git push --force-with-lease
+```
+
+Never use plain `git push --force`.
+
+8. Resume:
+   - If push succeeds and checks pass, continue to Step 6 (Install).
+   - If push fails or checks fail, go to Step 8 with a report naming the exact failing step, current commit, and unresolved files.
 
 ---
 
@@ -232,7 +318,8 @@ If any step failed, the report must clearly state:
 - Never install adapters that fail the consistency check.
 - If publish fails, stop. Do not install stale adapters.
 - If the repo was clean before refresh and something fails mid-way, report the current state clearly so the user knows what happened and what did not.
-- Do not invent options. The choices are: commit+push, stash (for unrelated changes only), retry, or abort.
+- Do not invent options. The choices are: commit+push, stash (for unrelated changes only), assisted divergent resolution (only after non-fast-forward/divergence), retry, or abort.
+- Do not silently merge canonical/adapters divergence. Assisted divergent resolution is explicit work with user approval, history inspection, semantic conflict handling, checks, publish, and final sync reporting.
 
 ---
 
