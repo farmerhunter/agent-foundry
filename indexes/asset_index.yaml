@@ -56,7 +56,7 @@ assets:
     path: assets/skills/ASSET-IMPL-001-provider-integration-playbook.asset.yaml
     asset_type: skill
     status: active
-    canonical_practices: [GOV-002, ARCH-001, ARCH-002, ARCH-003, ARCH-004, ARCH-005, ARCH-007, ARCH-008, ARCH-009, IMPL-002, TEST-002, COLLAB-006, DEBUG-001]
+    canonical_practices: [GOV-002, ARCH-001, ARCH-002, ARCH-003, ARCH-004, ARCH-005, ARCH-007, ARCH-008, ARCH-009, IMPL-002, TEST-002, COLLAB-006, DEBUG-001, DEBUG-002]
     published_to: [codex, claude-code, hermes, chatgpt]
     usage_triggers:
       - add provider

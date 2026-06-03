@@ -11,7 +11,7 @@ Use this skill to add or review provider integrations end to end. It is for offi
 
 ## Asset vs Practice
 
-This skill is an asset that performs a repeatable workflow. During execution, it applies canonical practices GOV-002, ARCH-001 through ARCH-005, ARCH-007 through ARCH-009, IMPL-002, TEST-002, COLLAB-006, and DEBUG-001. Do not confuse the skill with the practices it applies.
+This skill is an asset that performs a repeatable workflow. During execution, it applies canonical practices GOV-002, ARCH-001 through ARCH-005, ARCH-007 through ARCH-009, IMPL-002, TEST-002, COLLAB-006, DEBUG-001, and DEBUG-002. Do not confuse the skill with the practices it applies.
 
 ## Default Process
 
@@ -23,7 +23,8 @@ This skill is an asset that performs a repeatable workflow. During execution, it
 6. Route configuration through a config ViewModel or equivalent contract. Do not add provider-specific JSX branches when a provider list/action contract should own the behavior.
 7. Route dashboard action availability through the dashboard interaction ViewModel. Preserve existing provider actions, especially ChatGPT/Codex manual/Safari actions.
 8. Add pipeline tests for the glue between adapter output and renderer-visible summary: provider_id preservation, error status propagation, null-safety, and multi-provider isolation.
-9. Update implementation plan, design decisions, and interaction contracts to match the final implementation.
-10. Before final report, re-read the original task list and verify each item, including documentation and design-review items that tests do not cover.
+9. When debugging provider failures involving endpoint, auth, region, credential, quota model, external behavior, or user-facing text, first write Symptom, Failed assumption, Scope search, Affected surfaces, Fix plan, and Verification. Do not patch one line and stop at green tests.
+10. Update implementation plan, design decisions, and interaction contracts to match the final implementation.
+11. Before final report, re-read the original task list and verify each item, including documentation and design-review items that tests do not cover.
 
 Read `references/checklist.md` before implementing or reviewing a provider.

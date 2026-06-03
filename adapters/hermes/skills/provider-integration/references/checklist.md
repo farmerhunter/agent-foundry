@@ -1,6 +1,6 @@
 # Provider Integration Checklist
 
-Canonical IDs: ASSET-IMPL-001, GOV-002, ARCH-001, ARCH-002, ARCH-003, ARCH-004, ARCH-005, ARCH-007, ARCH-008, ARCH-009, IMPL-002, TEST-002, COLLAB-006, DEBUG-001
+Canonical IDs: ASSET-IMPL-001, GOV-002, ARCH-001, ARCH-002, ARCH-003, ARCH-004, ARCH-005, ARCH-007, ARCH-008, ARCH-009, IMPL-002, TEST-002, COLLAB-006, DEBUG-001, DEBUG-002
 
 Use this checklist before declaring a provider integration done.
 
@@ -34,6 +34,13 @@ Use this checklist before declaring a provider integration done.
 - Does error status propagate through adapter callback, summary generation, IPC push, and renderer subscription boundary?
 - Does provider A failure leave provider B state untouched?
 - Are null or empty snapshots handled without falling back to `provider_id = unknown`?
+
+## Provider Debugging
+
+- If a provider bug involves endpoint, auth, region, credential, quota model, external behavior, or user-facing text, has the failed assumption been named before patching?
+- Were adjacent strings searched across the repo, including provider aliases, old hosts, console URLs, docs URLs, status text, and UI hints?
+- Were affected surfaces checked: adapter, domain, storage, IPC, ViewModel, UI, docs, tests, diagnostics, and live-probe scripts where applicable?
+- Does verification include grep or equivalent evidence that stale assumptions are gone, not only green unit tests?
 
 ## Docs And Handoff
 

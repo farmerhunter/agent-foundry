@@ -23,6 +23,7 @@ process:
   - route configuration through a config ViewModel or equivalent contract instead of provider-specific JSX branches
   - route dashboard action availability through an interaction ViewModel and tests
   - add pipeline tests for provider_id preservation and error status propagation across adapter-to-renderer glue code
+  - when debugging provider failures, name the failed assumption, search its blast radius, and verify affected surfaces before patching
   - update implementation plan, design decisions, and interaction contracts after implementation
   - verify against the original task list item by item before declaring completion
 outputs:
@@ -47,6 +48,7 @@ canonical_practices:
   - TEST-002
   - COLLAB-006
   - DEBUG-001
+  - DEBUG-002
 published_to:
   - codex
   - claude-code
@@ -62,6 +64,7 @@ usage_triggers:
 success_criteria:
   - provider feasibility is verified or explicitly deferred before implementation
   - provider source, quota_model, refresh semantics, credential shape, and failure states are documented
+  - provider bugs caused by external facts are traced to a named failed assumption and checked across code, UI, tests, and docs
   - adapter tests cover success and failure paths before implementation is declared done
   - dashboard and configuration behavior flow through explicit contracts or ViewModels
   - existing provider actions and summaries remain isolated

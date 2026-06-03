@@ -1,5 +1,5 @@
 schema_version: 1
-updated: 2026-06-01
+updated: 2026-06-03
 
 domains:
   meta:
@@ -273,6 +273,15 @@ practices:
     status: active
     tags: [debugging, diagnostics, serviceability, traces, fixtures, agent-handoff, privacy]
     aliases: [agent-actionable diagnostics, debug bundles for coding agents, serviceability artifacts should support reproduction]
+
+  - id: DEBUG-002
+    title: Treat bugs as failed assumptions before patching
+    path: practices/debugging/DEBUG-002-treat-bugs-as-failed-assumptions-before-patching.md
+    domain: debugging
+    type: playbook
+    status: active
+    tags: [debugging, assumptions, blast-radius, external-services, verification, agent-collaboration]
+    aliases: [failed assumption before patch, search the blast radius before fixing a bug, current error gone is not completion]
 
   - id: COLLAB-001
     title: Issue code work uses PRs

@@ -76,13 +76,14 @@ Apply TEST-001 for converted document deliverables: verify rendered output, font
 
 Apply TEST-002 for systems connecting independently-tested modules through glue code: test the connecting pipeline, especially error paths. Adapter tests + ViewModel tests passing does not prove the pipeline works. Verify that error paths preserve provider identity and status propagation.
 
-For adding or reviewing provider/API adapters, use the Provider Integration Playbook asset ASSET-IMPL-001. It applies GOV-002, ARCH-001 through ARCH-005, ARCH-007 through ARCH-009, IMPL-002, TEST-002, COLLAB-006, and DEBUG-001:
+For adding or reviewing provider/API adapters, use the Provider Integration Playbook asset ASSET-IMPL-001. It applies GOV-002, ARCH-001 through ARCH-005, ARCH-007 through ARCH-009, IMPL-002, TEST-002, COLLAB-006, DEBUG-001, and DEBUG-002:
 
 - Verify official API or user-mediated source behavior before building adapter code; defer unverified providers.
 - Write a structured provider candidate review covering provider_id, source, quota_model, refresh semantics, credentials, payload, failure states, UI actions, diagnostics, risks, and decision.
 - Write adapter tests first for success and failure paths.
 - Route config and dashboard behavior through ViewModels or explicit contracts, not scattered JSX provider branches.
 - Add pipeline tests for provider_id preservation, error status propagation, null-safety, and provider isolation.
+- When debugging endpoint, auth, region, credential, quota model, external behavior, or user-facing text failures, first name the failed assumption and search its blast radius across code, UI, tests, and docs.
 - Update implementation plan, design decisions, and interaction contracts, then verify completion against the original task list.
 
 For architecture design, apply these principles:

@@ -1,6 +1,6 @@
 # Debugging Practices
 
-Canonical IDs: DEBUG-001
+Canonical IDs: DEBUG-001, DEBUG-002
 
 ## DEBUG-001 Design Diagnostics As Agent-Actionable Reproduction Artifacts
 
@@ -33,3 +33,16 @@ inspect diagnostics
   -> run tests/build
   -> ask the user to re-run the original action
 ```
+
+## DEBUG-002 Treat Bugs As Failed Assumptions Before Patching
+
+When a bug involves API endpoints, auth, region, credentials, quota models, third-party behavior, or user-facing provider text, do not patch the first failing line and stop at green tests. First write:
+
+1. Symptom: what the user saw and what commands or logs reported.
+2. Failed assumption: the wrong belief in one precise sentence.
+3. Scope search: exact keywords, provider aliases, hosts, docs URLs, status text, and UI terms to search.
+4. Affected surfaces: adapter, domain, storage, IPC, ViewModel, UI, docs, tests, diagnostics, and live-probe scripts as applicable.
+5. Fix plan: the smallest complete set of changes.
+6. Verification: tests, safe live probes when appropriate, grep evidence that stale assumptions are gone, and design-doc checks.
+
+Completion is not "the current error disappeared" or "unit tests pass." Completion is that the failed assumption's blast radius has been checked and stale assumptions have been cleared from code, UI, tests, and docs.
