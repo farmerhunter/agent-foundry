@@ -256,6 +256,15 @@ practices:
     tags: [architecture, implementation, planning, review, cross-agent, serviceability]
     aliases: [implementation plan as bridge, review plan before code]
 
+  - id: ARCH-009
+    title: Introduce interaction ViewModels for cross-state UI contracts
+    path: practices/architecture/ARCH-009-introduce-interaction-viewmodels-for-cross-state-ui-contracts.md
+    domain: architecture
+    type: pattern
+    status: active
+    tags: [architecture, frontend, ui, viewmodel, interaction-contracts, testing]
+    aliases: [ARCH-009, interaction ViewModel, UI action availability contract, testable frontend interaction model]
+
   - id: DEBUG-001
     title: Design diagnostics as agent-actionable reproduction artifacts
     path: practices/debugging/DEBUG-001-agent-actionable-diagnostics-artifacts.md

@@ -2,10 +2,10 @@ id: ASSET-ARCH-001
 title: Architecture Design
 asset_type: skill
 status: active
-version: 1
+version: 2
 created: 2026-05-26
-updated: 2026-05-26
-purpose: Guide architecture design and review around boundaries, domain models, failure states, UI/domain separation, and MVP scope.
+updated: 2026-06-02
+purpose: Guide architecture design and review around boundaries, domain models, failure states, UI/domain separation, interaction contracts, and MVP scope.
 responsibility: Help design or review software architecture decisions using canonical architecture principles.
 non_responsibility: Does not maintain Agent Foundry, import external skills, publish adapters, or perform broad product strategy work.
 inputs:
@@ -20,6 +20,7 @@ process:
   - check semantic preservation
   - check failure state modeling
   - check UI/domain separation
+  - check interaction contract boundaries when UI actions span states
   - check MVP main path
 outputs:
   - architecture recommendations
@@ -34,6 +35,9 @@ canonical_practices:
   - ARCH-005
   - ARCH-006
   - ARCH-007
+  - ARCH-008
+  - ARCH-009
+  - DEBUG-001
 published_to:
   - codex
   - claude-code
@@ -50,6 +54,7 @@ success_criteria:
   - identifies over-normalized domain models
   - identifies missing failure states
   - identifies UI/business logic leakage
+  - identifies implicit UI interaction contracts that need a ViewModel or contract doc
   - identifies MVP scope risks
 review_cadence: monthly
 review_after_days: 90

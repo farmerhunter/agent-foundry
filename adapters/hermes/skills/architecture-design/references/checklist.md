@@ -11,6 +11,7 @@ Ask before proposing an architecture:
 - What external failures are inevitable?
 - Should those failures be modeled as status?
 - What summary should UI consume?
+- Are UI actions, entry points, and card variants a cross-state contract that should be represented by a ViewModel instead of scattered JSX conditions?
 - What is the MVP's main path?
 - What design docs or user-facing runtime docs need to change so future agents understand the new boundary or flow?
 - If a chosen technology is replaced, does the architecture still make sense?

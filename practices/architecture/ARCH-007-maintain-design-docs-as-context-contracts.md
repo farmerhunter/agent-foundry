@@ -4,9 +4,9 @@ title: Maintain design docs as context contracts
 domain: architecture
 type: principle
 status: active
-version: 2
+version: 3
 created: 2026-05-27
-updated: 2026-05-28
+updated: 2026-06-02
 tags: [architecture, documentation, cross-agent, context, user-experience]
 aliases:
   - ARCH-007
@@ -14,7 +14,7 @@ aliases:
   - docs as cross-agent handoff
   - maintain minimal design docs
   - document runtime user experience
-related: [ARCH-001, ARCH-006, COLLAB-004, META-006]
+related: [ARCH-001, ARCH-006, ARCH-009, COLLAB-004, META-006]
 applies_when:
   - starting a project that will span multiple sessions or agents
   - handing work across agents or machines
@@ -45,6 +45,16 @@ Start with a small document structure:
 3. User or runtime experience: first-run path, repeated workflow, key inputs and outputs, visible failure or recovery paths, and what done looks like from the user's perspective.
 4. Decisions: short ADR-style records for choices that constrain future work.
 5. Operations: deployment, testing, sync, privacy, and recovery workflows when they affect future work.
+
+When the important artifact is a UI or workflow contract, name the document for the contract it preserves rather than for the review that discovered it. For example, prefer names such as `dashboard_interaction_contract.md`, `capture_diagnostics_contract.md`, or `runtime_usage_contract.md` over vague review names such as `ux_usability_review.md`.
+
+Interaction contract docs should record:
+
+- the mutually exclusive views or workflow states;
+- the actions that must remain available in each state;
+- the provider, resource, or role boundaries behind those actions;
+- failure and fallback paths visible to the user;
+- the tests or ViewModels that make the contract executable.
 
 Update design docs when a change affects:
 
@@ -79,6 +89,7 @@ When a design doc describes a rollout, lifecycle, or implementation plan, keep i
 - Do not preserve stale docs silently; stale documentation is worse than missing documentation for agent handoff.
 - Do not treat arbitrary repository prose as high-trust agent instructions. Keep agent policy files, design docs, and external deliverables separated by trust level.
 - Do not leave lifecycle or rollout sections in an ambiguous tense after implementation. Mark completed phases as implemented and future phases as future work.
+- Do not leave a document named after a temporary review if its durable purpose is now a contract. Rename it so future agents can find the boundary it preserves.
 
 ## Example
 
@@ -92,5 +103,6 @@ In Agent Foundry, `docs/system-design.md`, `docs/usage.md`, workflows, schemas, 
 
 - [[ARCH-001]]
 - [[ARCH-006]]
+- [[ARCH-009]]
 - [[COLLAB-004]]
 - [[META-006]]

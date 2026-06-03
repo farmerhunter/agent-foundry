@@ -99,7 +99,7 @@ For converted document deliverables, apply TEST-001: verify rendered output, fon
 
 ## Architecture Design
 
-Use canonical architecture practices ARCH-001 through ARCH-008, and DEBUG-001 when architecture work includes serviceability/debug artifact design:
+Use canonical architecture practices ARCH-001 through ARCH-009, and DEBUG-001 when architecture work includes serviceability/debug artifact design:
 
 - Boundaries before tools; if a design is mostly a current tool pipeline, run a boundary rewrite and substitution test.
 - Separate independent axes of change.
@@ -107,8 +107,9 @@ Use canonical architecture practices ARCH-001 through ARCH-008, and DEBUG-001 wh
 - Model inevitable failures as state.
 - Let UI consume domain summaries.
 - Scope MVP around the main path.
-- Maintain design docs as lightweight context contracts for boundaries, decisions, contracts, operations, and user-facing runtime flows; mark rollout phases as implemented baseline, future work, rejected, or non-goal when state changes.
+- Maintain design docs as lightweight context contracts for boundaries, decisions, contracts, operations, and user-facing runtime flows; mark rollout phases as implemented baseline, future work, rejected, or non-goal when state changes; name durable interaction contract docs after the contract they preserve, not the temporary review that discovered it.
 - Bridge architecture to code with a reviewed implementation plan: insert a concrete plan (file structure, data flow, IPC contracts, acceptance criteria) between architecture docs and code, review it adversarially, and fix gaps before implementation.
+- Introduce interaction ViewModels for cross-state UI contracts: when UI action availability depends on multiple domain or workflow states, make actions and card variants explicit in a small testable ViewModel before escalating to larger frontend frameworks.
 - For fragile integrations, parser/capture/import flows, and local automation, design diagnostics as agent-actionable reproduction artifacts: trace the flow, define stable failure reasons, avoid default raw-data persistence, and provide a debug bundle path to fixtures/tests.
 
 ## Implementation

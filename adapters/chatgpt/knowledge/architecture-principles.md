@@ -1,6 +1,6 @@
 # Architecture Principles
 
-Canonical IDs: ARCH-001, ARCH-002, ARCH-003, ARCH-004, ARCH-005, ARCH-006, ARCH-007, ARCH-008, DEBUG-001
+Canonical IDs: ARCH-001, ARCH-002, ARCH-003, ARCH-004, ARCH-005, ARCH-006, ARCH-007, ARCH-008, ARCH-009, DEBUG-001
 
 ## ARCH-001 Boundaries Before Tools
 
@@ -28,13 +28,17 @@ The MVP should validate the main system path and key boundaries, not every plaus
 
 ## ARCH-007 Maintain Design Docs As Context Contracts
 
-Maintain the smallest design docs that preserve engineering context and user-facing runtime experience for future agents. Update them when domain models, boundaries, contracts, operations, rollout phase state, or user flows change; do not document every local implementation detail.
+Maintain the smallest design docs that preserve engineering context and user-facing runtime experience for future agents. Update them when domain models, boundaries, contracts, operations, rollout phase state, or user flows change; do not document every local implementation detail. When a UI or workflow contract becomes durable, name the document after the contract it preserves rather than the review that discovered it.
 
 ## ARCH-008 Bridge Architecture To Code With A Reviewed Implementation Plan
 
 Between architecture docs and code, insert a concrete implementation plan with a detail gradient: current phase gets file structure, data flow with error branches, IPC contracts, and acceptance criteria; future phases get directional goals only. Review the plan adversarially to catch boundary violations, missing files, and protocol gaps before implementation.
 
 For fragile integrations, parser-heavy flows, local automation, or user-assisted capture, add serviceability acceptance criteria: trace id, stable failure reasons, default diagnostic metadata, raw data exclusions, explicit debug artifact, and how an agent can turn the artifact into a fixture or failing test.
+
+## ARCH-009 Introduce Interaction ViewModels For Cross-State UI Contracts
+
+When UI actions become cross-state contracts, introduce a small interaction ViewModel before reaching for a larger frontend framework. Use it to make action availability, card variants, and high-level interaction state explicit and testable. Do not let JSX branches duplicate workflow rules such as which actions must remain available across empty, loaded, error, or manual-required states.
 
 ## DEBUG-001 Design Diagnostics As Agent-Actionable Reproduction Artifacts
 
