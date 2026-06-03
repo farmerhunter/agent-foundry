@@ -11,7 +11,7 @@ This skill applies Agent Foundry collaboration and delivery practices.
 
 ## Asset vs Practice
 
-This skill is an asset that performs a repeatable workflow. During execution, it references canonical practices (COLLAB-001 through COLLAB-005, TEST-001, IMPL-001) as behavioral constraints. Do not confuse the skill with the practices it applies.
+This skill is an asset that performs a repeatable workflow. During execution, it references canonical practices (COLLAB-001 through COLLAB-006, TEST-001, IMPL-001) as behavioral constraints. Do not confuse the skill with the practices it applies.
 
 ## Core Rules
 
@@ -20,6 +20,7 @@ This skill is an asset that performs a repeatable workflow. During execution, it
 - COLLAB-003: If the user has authorized auto-merge, merge validated PRs by default unless review, hold, failed checks, or high-risk changes require confirmation.
 - COLLAB-004: In multi-agent repositories, fetch or pull before issue work and verify remote sync when another machine may have pushed.
 - COLLAB-005: Do not infer that the session is ending after compaction, interruption, or finishing one subtask; continue from the latest user request.
+- COLLAB-006: When completing a task list from another agent, verify each item against the original list — not against implementation signals like tests passing or build succeeding.
 - TEST-001: For converted document deliverables, verify rendered output, fonts, encoding, images, and source-to-output structure rather than relying only on command success.
 - IMPL-001: When posting Markdown through CLI comments, avoid shell-interpreted inline bodies for text with backticks, dollar signs, or command examples; prefer `--body-file` or safe quoting.
 

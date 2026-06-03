@@ -6,7 +6,7 @@ Use the project/custom GPT knowledge files for full fidelity. Do not rely only o
 
 When the work happens in another project, that project is evidence source only. Locate the Agent Foundry Vault through `AGENT_FOUNDRY_HOME`, `~/.agent-foundry/config.yaml`, or validated project knowledge before proposing canonical changes.
 
-Published assets include ASSET-META-001 Practice Harvester and ASSET-ARCH-001 Architecture Design. Core Foundry practices include META-001 through META-010. Cross-project governance practices include GOV-001 through GOV-004. Runtime practices include RUNTIME-001 through RUNTIME-004.
+Published assets include ASSET-META-001 Practice Harvester, ASSET-ARCH-001 Architecture Design, ASSET-COLLAB-001 Agent Collaboration, and ASSET-IMPL-001 Provider Integration Playbook. Core Foundry practices include META-001 through META-010. Cross-project governance practices include GOV-001 through GOV-004. Runtime practices include RUNTIME-001 through RUNTIME-004.
 
 ## Routing (META-008)
 
@@ -61,17 +61,29 @@ When reviewing assets, apply META-010: use lifecycle state, usage evidence, over
 
 When recording or reviewing usage evidence, apply RUNTIME-004: keep raw logs local, sync sanitized aggregate usage rows for cross-machine review, and do not let missed activation or other review-only signals inflate usage counts.
 
-For GitHub and multi-agent collaboration, use the Agent Collaboration asset ASSET-COLLAB-001. It applies COLLAB-001 through COLLAB-005:
+For GitHub and multi-agent collaboration, use the Agent Collaboration asset ASSET-COLLAB-001. It applies COLLAB-001 through COLLAB-006:
 
 - Code work for a GitHub issue should use a feature branch and PR unless I explicitly approve skipping the PR.
 - Issues moved to review or closure need a durable comment with completion scope, linked PR or commit, verification method, verification results, and residual risks.
 - If I have authorized auto-merge, merge validated PRs by default unless I ask for review or a hold.
 - Before issue work in a multi-agent repo, fetch or pull and verify local/remote sync when another machine may have pushed.
 - Do not infer that a session is ending after compaction, interruption, or completing one subtask; continue from my latest request.
+- When completing a task list from another agent, verify each item against the original list — not against implementation signals like tests passing or build succeeding.
 
 Apply IMPL-001 when posting Markdown through CLI comments: avoid shell-interpreted inline bodies for text with backticks, dollar signs, or command examples; prefer `--body-file` or safe quoting.
 
 Apply TEST-001 for converted document deliverables: verify rendered output, fonts, encoding, images, and source-to-output structure, not only command success.
+
+Apply TEST-002 for systems connecting independently-tested modules through glue code: test the connecting pipeline, especially error paths. Adapter tests + ViewModel tests passing does not prove the pipeline works. Verify that error paths preserve provider identity and status propagation.
+
+For adding or reviewing provider/API adapters, use the Provider Integration Playbook asset ASSET-IMPL-001. It applies GOV-002, ARCH-001 through ARCH-005, ARCH-007 through ARCH-009, IMPL-002, TEST-002, COLLAB-006, and DEBUG-001:
+
+- Verify official API or user-mediated source behavior before building adapter code; defer unverified providers.
+- Write a structured provider candidate review covering provider_id, source, quota_model, refresh semantics, credentials, payload, failure states, UI actions, diagnostics, risks, and decision.
+- Write adapter tests first for success and failure paths.
+- Route config and dashboard behavior through ViewModels or explicit contracts, not scattered JSX provider branches.
+- Add pipeline tests for provider_id preservation, error status propagation, null-safety, and provider isolation.
+- Update implementation plan, design decisions, and interaction contracts, then verify completion against the original task list.
 
 For architecture design, apply these principles:
 

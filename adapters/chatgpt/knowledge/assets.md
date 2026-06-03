@@ -13,6 +13,8 @@ Published asset IDs:
 
 - ASSET-META-001 Practice Harvester
 - ASSET-ARCH-001 Architecture Design
+- ASSET-COLLAB-001 Agent Collaboration
+- ASSET-IMPL-001 Provider Integration Playbook
 
 Assets are user-facing reusable tools discovered from repeated work:
 

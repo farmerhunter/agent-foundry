@@ -319,6 +319,15 @@ practices:
     tags: [conversation, continuity, interruption, compaction]
     aliases: [do not assume work is done, no premature wrap-up]
 
+  - id: COLLAB-006
+    title: Verify task completion against the original task list, not implementation side effects
+    path: practices/agent-collaboration/COLLAB-006-verify-task-completion-against-original-spec.md
+    domain: agent-collaboration
+    type: anti-pattern
+    status: active
+    tags: [agent-collaboration, task-management, verification, completion, cross-agent]
+    aliases: [check original task list before declaring done, implementation momentum doesn't equal completion]
+
   - id: TEST-001
     title: Render-verify format conversions
     path: practices/testing/TEST-001-render-verify-format-conversions.md
@@ -327,6 +336,15 @@ practices:
     status: active
     tags: [documents, conversion, rendering, verification]
     aliases: [verify generated documents visually, conversion requires render checks]
+
+  - id: TEST-002
+    title: Test the connecting pipeline, not only the endpoints
+    path: practices/testing/TEST-002-test-the-glue-not-just-the-endpoints.md
+    domain: testing
+    type: anti-pattern
+    status: active
+    tags: [testing, integration, pipeline, glue-code, error-paths]
+    aliases: [test the glue not just the endpoints, adapter and ViewModel tests don't prove the pipeline works]
 
   - id: IMPL-001
     title: Avoid shell-interpreted Markdown in CLI comments

@@ -21,6 +21,7 @@ adapters:
       - adapters/codex/skills/practice-harvester/
       - adapters/codex/skills/architecture-design/
       - adapters/codex/skills/agent-collaboration/
+      - adapters/codex/skills/provider-integration/
     included_domains: [meta, governance, runtime, architecture, agent-collaboration, implementation, testing, debugging]
     command_vocabulary:
       harvest: ["harvest practices", "做一次 harvest practice", "提炼实践", "沉淀经验"]
@@ -74,6 +75,7 @@ adapters:
       - adapters/hermes/skills/practice-harvester/
       - adapters/hermes/skills/architecture-design/
       - adapters/hermes/skills/agent-collaboration/
+      - adapters/hermes/skills/provider-integration/
     included_domains: [meta, governance, runtime, architecture, agent-collaboration, implementation, testing, debugging]
     command_vocabulary:
       harvest: ["harvest practices", "做一次 harvest practice", "提炼实践", "沉淀经验"]

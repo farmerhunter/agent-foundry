@@ -1,0 +1,72 @@
+id: ASSET-IMPL-001
+title: Provider Integration Playbook
+asset_type: skill
+status: active
+version: 1
+created: 2026-06-03
+updated: 2026-06-03
+purpose: Guide implementation of new provider integrations from API feasibility through adapter, domain, UI contract, tests, docs, and verification.
+responsibility: Help agents add official API or user-mediated providers without breaking existing provider isolation, dashboard actions, configuration contracts, diagnostics, or documentation.
+non_responsibility: Does not approve unsafe scraping or stealth automation, does not replace architecture review for new quota models, and does not assert third-party API facts without fresh verification.
+inputs:
+  - provider name and intended provider_id
+  - official API documentation or user-provided endpoint details
+  - quota model and source assumptions
+  - credential requirements
+  - existing adapter, config, dashboard, and diagnostics structure
+process:
+  - verify external API behavior with a minimal disposable probe before building adapter code
+  - write a structured provider candidate review covering source, quota_model, refresh semantics, credential shape, payload, failure states, UI actions, diagnostics, and risks
+  - update design decisions before committing to the integration path
+  - write adapter tests first for metadata, success payload, auth failures, network failures, malformed responses, and schema drift
+  - implement the smallest adapter and normalize/summary changes needed for the provider
+  - route configuration through a config ViewModel or equivalent contract instead of provider-specific JSX branches
+  - route dashboard action availability through an interaction ViewModel and tests
+  - add pipeline tests for provider_id preservation and error status propagation across adapter-to-renderer glue code
+  - update implementation plan, design decisions, and interaction contracts after implementation
+  - verify against the original task list item by item before declaring completion
+outputs:
+  - provider candidate review
+  - design decision update
+  - adapter implementation and tests
+  - config and dashboard ViewModel updates with tests
+  - pipeline or integration tests for provider isolation and error propagation
+  - updated implementation plan or interaction contract
+  - verification report with commands and residual risks
+canonical_practices:
+  - GOV-002
+  - ARCH-001
+  - ARCH-002
+  - ARCH-003
+  - ARCH-004
+  - ARCH-005
+  - ARCH-007
+  - ARCH-008
+  - ARCH-009
+  - IMPL-002
+  - TEST-002
+  - COLLAB-006
+  - DEBUG-001
+published_to:
+  - codex
+  - claude-code
+  - hermes
+  - chatgpt
+usage_triggers:
+  - add provider
+  - provider integration
+  - API adapter
+  - 接入 provider
+  - 新增 provider
+  - 接入新模型平台
+success_criteria:
+  - provider feasibility is verified or explicitly deferred before implementation
+  - provider source, quota_model, refresh semantics, credential shape, and failure states are documented
+  - adapter tests cover success and failure paths before implementation is declared done
+  - dashboard and configuration behavior flow through explicit contracts or ViewModels
+  - existing provider actions and summaries remain isolated
+  - pipeline tests cover error-path identity and status propagation
+  - implementation plan and design decisions reflect the final state
+review_cadence: monthly
+review_after_days: 90
+evidence_summary: Created from repeated token-panic provider integrations across DeepSeek, OpenAI Platform, ChatGPT/Codex, and Kimi/Moonshot planning, where missing API verification, config contracts, dashboard action contracts, and glue-code tests caused avoidable cross-agent rework.

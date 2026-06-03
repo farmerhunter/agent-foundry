@@ -19,3 +19,4 @@ Ask before proposing an architecture:
 - For fragile integrations, parser/capture/import flows, or local automation, what trace, stable failure reasons, metadata-only diagnostics, explicit debug artifact, and raw-data policy will let a future agent reproduce and fix failures? (DEBUG-001)
 - For any integration depending on third-party behavior (API, scraping, browser automation, SDK): has a minimal disposable experiment verified that the external system actually behaves as assumed? (IMPL-002)
 - If the integration involves stealth, anti-detection, or bypass techniques: has the user explicitly commanded and approved each specific experiment? (IMPL-003)
+- For systems connecting independently-tested modules through glue code (adapter callbacks, IPC pushes, provider_id propagation): are the error paths tested through the full connecting pipeline, not just at the endpoints? (TEST-002)

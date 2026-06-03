@@ -1,5 +1,5 @@
 schema_version: 1
-updated: 2026-05-28
+updated: 2026-06-03
 
 asset_types:
   skill:
@@ -28,7 +28,7 @@ assets:
     path: assets/skills/ASSET-ARCH-001-architecture-design.asset.yaml
     asset_type: skill
     status: active
-    canonical_practices: [ARCH-001, ARCH-002, ARCH-003, ARCH-004, ARCH-005, ARCH-006, ARCH-007]
+    canonical_practices: [ARCH-001, ARCH-002, ARCH-003, ARCH-004, ARCH-005, ARCH-006, ARCH-007, ARCH-008, ARCH-009, DEBUG-001]
     published_to: [codex, claude-code, hermes, chatgpt]
     usage_triggers:
       - architecture design
@@ -41,7 +41,7 @@ assets:
     path: assets/skills/ASSET-COLLAB-001-agent-collaboration.asset.yaml
     asset_type: skill
     status: active
-    canonical_practices: [COLLAB-001, COLLAB-002, COLLAB-003, COLLAB-004, COLLAB-005, IMPL-001, TEST-001]
+    canonical_practices: [COLLAB-001, COLLAB-002, COLLAB-003, COLLAB-004, COLLAB-005, COLLAB-006, IMPL-001, TEST-001]
     published_to: [codex, claude-code, hermes, chatgpt]
     usage_triggers:
       - GitHub issue work
@@ -50,3 +50,18 @@ assets:
       - issue completion comment
       - CLI Markdown comment
       - converted document deliverable
+
+  - id: ASSET-IMPL-001
+    title: Provider Integration Playbook
+    path: assets/skills/ASSET-IMPL-001-provider-integration-playbook.asset.yaml
+    asset_type: skill
+    status: active
+    canonical_practices: [GOV-002, ARCH-001, ARCH-002, ARCH-003, ARCH-004, ARCH-005, ARCH-007, ARCH-008, ARCH-009, IMPL-002, TEST-002, COLLAB-006, DEBUG-001]
+    published_to: [codex, claude-code, hermes, chatgpt]
+    usage_triggers:
+      - add provider
+      - provider integration
+      - API adapter
+      - 接入 provider
+      - 新增 provider
+      - 接入新模型平台

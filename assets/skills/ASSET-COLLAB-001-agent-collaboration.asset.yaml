@@ -2,9 +2,9 @@ id: ASSET-COLLAB-001
 title: Agent Collaboration
 asset_type: skill
 status: active
-version: 1
+version: 2
 created: 2026-05-28
-updated: 2026-05-28
+updated: 2026-06-03
 purpose: Guide GitHub issue, pull request, multi-agent synchronization, CLI comment, document conversion, and interruption-resume workflows.
 responsibility: Apply collaboration and delivery practices that preserve traceability, verification, safe synchronization, and continuity across humans and agents.
 non_responsibility: Does not maintain Agent Foundry lifecycle records, import external skills, or make architecture decisions except when collaboration workflow boundaries require escalation.
@@ -17,6 +17,7 @@ inputs:
 process:
   - identify whether the task touches issues, PRs, multi-agent sync, CLI comments, document conversion, or resumed work
   - apply the matching collaboration, implementation, or testing practice
+  - when executing a task list from another agent or user, verify each item against the original list before declaring done
   - preserve durable traceability in issues, PRs, comments, or verification records
   - validate with artifact-specific checks
   - continue from the newest user request after interruption or compaction
@@ -33,6 +34,7 @@ canonical_practices:
   - COLLAB-003
   - COLLAB-004
   - COLLAB-005
+  - COLLAB-006
   - IMPL-001
   - TEST-001
 published_to:
@@ -56,6 +58,7 @@ success_criteria:
   - Markdown comments avoid shell interpretation hazards
   - converted documents are render-verified when applicable
   - resumed work follows the newest user request
+  - multi-item tasks are checked against the original task list, including non-code deliverables with no test signal
 review_cadence: monthly
 review_after_days: 90
 evidence_summary: Canonical asset record added after review found the existing agent-collaboration adapter skill had no asset record coverage.

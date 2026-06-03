@@ -2,7 +2,7 @@
 
 This project contains Agent Foundry, the user's canonical agent capability system.
 
-Published assets include ASSET-META-001 Practice Harvester and ASSET-ARCH-001 Architecture Design.
+Published assets include ASSET-META-001 Practice Harvester, ASSET-ARCH-001 Architecture Design, ASSET-COLLAB-001 Agent Collaboration, and ASSET-IMPL-001 Provider Integration Playbook.
 
 ## Request Routing (META-008)
 
@@ -85,17 +85,31 @@ When asked to borrow or evaluate external skills, read `workflows/import-externa
 
 ## GitHub And Multi-Agent Collaboration
 
-Use the Agent Collaboration asset ASSET-COLLAB-001 for GitHub issue, PR, multi-agent sync, CLI comment, document conversion, and resume workflows. It applies canonical collaboration practices COLLAB-001 through COLLAB-005:
+Use the Agent Collaboration asset ASSET-COLLAB-001 for GitHub issue, PR, multi-agent sync, CLI comment, document conversion, and resume workflows. It applies canonical collaboration practices COLLAB-001 through COLLAB-006:
 
 - For code work tied to a GitHub issue, use a feature branch and PR unless the user explicitly approves skipping the PR.
 - Before moving an issue to review or closing it, comment with completion scope, linked PR or commit, verification method, verification results, and residual risks.
 - If the user has authorized auto-merge, merge validated PRs by default unless review, hold, or risk conditions require confirmation.
 - In multi-agent repositories, fetch or pull before issue work and verify remote sync when another machine may have pushed.
 - Do not infer that the session is ending after compaction, interruption, or finishing one subtask; continue from the latest user request.
+- When completing a task list from another agent, verify each item against the original list — not against implementation signals like tests passing or build succeeding.
 
 For GitHub comments containing Markdown with backticks, dollar signs, or command examples, apply IMPL-001: use `--body-file` or another safely quoted path instead of shell-interpreted inline strings.
 
 For converted document deliverables, apply TEST-001: verify rendered output, font/encoding behavior, images, and source-to-output structure rather than relying only on command success.
+
+Apply TEST-002 when a system connects independently-tested modules through glue code: test the connecting pipeline — especially error paths — not only the endpoints. Adapter tests + ViewModel tests passing does not prove the full pipeline works. Verify that error paths preserve provider identity and status propagation through the connecting transformation.
+
+## Provider Integration
+
+Use the Provider Integration Playbook asset ASSET-IMPL-001 when adding or reviewing provider/API adapters. It applies GOV-002, ARCH-001 through ARCH-005, ARCH-007 through ARCH-009, IMPL-002, TEST-002, COLLAB-006, and DEBUG-001:
+
+- Verify official API or user-mediated source behavior before building adapter code; defer unverified providers.
+- Write a structured provider candidate review covering provider_id, source, quota_model, refresh semantics, credentials, payload, failure states, UI actions, diagnostics, risks, and decision.
+- Write adapter tests first for success and failure paths.
+- Route config and dashboard behavior through ViewModels or explicit contracts, not scattered JSX provider branches.
+- Add pipeline tests for provider_id preservation, error status propagation, null-safety, and provider isolation.
+- Update implementation plan, design decisions, and interaction contracts, then verify completion against the original task list.
 
 ## Architecture Design
 
