@@ -1,5 +1,5 @@
 schema_version: 1
-updated: 2026-06-03
+updated: 2026-06-04
 
 domains:
   meta:
@@ -253,8 +253,8 @@ practices:
     domain: architecture
     type: playbook
     status: active
-    tags: [architecture, implementation, planning, review, cross-agent, serviceability]
-    aliases: [implementation plan as bridge, review plan before code]
+    tags: [architecture, implementation, planning, review, cross-agent, serviceability, integrations]
+    aliases: [implementation plan as bridge, review plan before code, provider intake contract]
 
   - id: ARCH-009
     title: Introduce interaction ViewModels for cross-state UI contracts
@@ -354,6 +354,24 @@ practices:
     status: active
     tags: [testing, integration, pipeline, glue-code, error-paths]
     aliases: [test the glue not just the endpoints, adapter and ViewModel tests don't prove the pipeline works]
+
+  - id: TEST-003
+    title: Verify packaged runtime artifacts in the target shell
+    path: practices/testing/TEST-003-verify-packaged-runtime-artifacts-in-target-shell.md
+    domain: testing
+    type: checklist
+    status: active
+    tags: [testing, packaging, runtime, smoke-test, desktop-apps, verification]
+    aliases: [verify packaged runtime artifacts, package success is not runtime success, test installers in the target shell]
+
+  - id: PROD-001
+    title: Expose lifecycle affordances for background apps
+    path: practices/product/PROD-001-expose-lifecycle-affordances-for-background-apps.md
+    domain: product
+    type: checklist
+    status: active
+    tags: [product, ux, desktop-apps, menu-bar, background-apps, lifecycle]
+    aliases: [background apps need lifecycle affordances, menu bar apps need quit and settings, ambient apps need explicit exit]
 
   - id: IMPL-001
     title: Avoid shell-interpreted Markdown in CLI comments

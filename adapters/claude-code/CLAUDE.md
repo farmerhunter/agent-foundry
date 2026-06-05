@@ -24,6 +24,8 @@ Before substantial changes, check:
 - Writing into user-owned runtime or agent configuration? Apply GOV-004 and RUNTIME-001.
 - Syncing, publishing, or installing adapters? Apply RUNTIME-003.
 - Producing rendered or converted output? Apply TEST-001.
+- Producing packaged desktop/runtime artifacts? Apply TEST-003.
+- Building a background, tray, menu bar, or ambient app? Apply PROD-001.
 - Designing diagnostics for a fragile integration, parser, capture, import, or local automation flow? Apply DEBUG-001.
 
 ## Practice Harvesting
@@ -99,6 +101,10 @@ For GitHub comments containing Markdown with backticks, dollar signs, or command
 For converted document deliverables, apply TEST-001: verify rendered output, font/encoding behavior, images, and source-to-output structure rather than relying only on command success.
 
 Apply TEST-002 when a system connects independently-tested modules through glue code: test the connecting pipeline — especially error paths — not only the endpoints. Adapter tests + ViewModel tests passing does not prove the full pipeline works. Verify that error paths preserve provider identity and status propagation through the connecting transformation.
+
+Apply TEST-003 when producing packaged runtime artifacts: open the generated artifact in the target shell and verify user-visible installer contents, app/file icons, tray or menu behavior, startup/login item behavior, permissions, and quit path. Build success is not runtime success.
+
+Apply PROD-001 for background, tray, menu bar, daemon-like, or ambient apps: expose install, open, settings, startup, identity, and explicit quit affordances where users already interact with the app. Do not rely on Activity Monitor, terminal commands, or hidden OS knowledge for lifecycle control.
 
 ## Provider Integration
 

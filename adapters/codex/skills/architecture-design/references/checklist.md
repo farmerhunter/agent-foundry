@@ -20,3 +20,5 @@ Ask before proposing an architecture:
 - For any integration depending on third-party behavior (API, scraping, browser automation, SDK): has a minimal disposable experiment verified that the external system actually behaves as assumed? (IMPL-002)
 - If the integration involves stealth, anti-detection, or bypass techniques: has the user explicitly commanded and approved each specific experiment? (IMPL-003)
 - For systems connecting independently-tested modules through glue code (adapter callbacks, IPC pushes, provider_id propagation): are the error paths tested through the full connecting pipeline, not just at the endpoints? (TEST-002)
+- For packaged desktop/runtime artifacts, has the generated artifact been opened and smoke-tested in the target shell, including installer contents, icons, tray/menu behavior, startup, permissions, and quit path? (TEST-003)
+- For background, tray, menu bar, daemon-like, or ambient apps, are install, open, settings, startup, identity, and explicit quit affordances discoverable from the product surface? (PROD-001)

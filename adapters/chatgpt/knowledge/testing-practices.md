@@ -1,6 +1,6 @@
 # Testing Practices
 
-Canonical IDs: TEST-001, TEST-002
+Canonical IDs: TEST-001, TEST-002, TEST-003
 
 ## TEST-001 Render-Verify Format Conversions
 
@@ -13,3 +13,7 @@ When a system connects independently-tested modules through glue code (callbacks
 The minimum viable pipeline test: construct the error input at the adapter boundary, run it through the connecting code, and assert the output reaches the consumer boundary with the correct identifier.
 
 Common failure: an adapter returns `null` on error, the connecting code calls `generateSummary(null)`, which returns `provider_id = 'unknown'`, and the renderer's provider_id filter never matches — permanent loading deadlock. Test error paths through the full pipeline.
+
+## TEST-003 Verify Packaged Runtime Artifacts In The Target Shell
+
+When producing app bundles, installers, DMGs, tray apps, menu bar apps, browser extensions, or other packaged runtime artifacts, verify the generated artifact inside the shell where users will run it. Open or mount the artifact, inspect user-visible contents, launch from the package, and smoke-test icons, tray/menu behavior, startup entries, permission prompts, and quit paths. Command success only proves the artifact was produced.

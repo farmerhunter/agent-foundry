@@ -25,6 +25,8 @@ Before substantial changes, check:
 - Writing into user-owned runtime or agent configuration? Apply GOV-004 and RUNTIME-001.
 - Syncing, publishing, or installing adapters? Apply RUNTIME-003.
 - Producing rendered or converted output? Apply TEST-001.
+- Producing packaged desktop/runtime artifacts? Apply TEST-003.
+- Building a background, tray, menu bar, or ambient app? Apply PROD-001.
 - Designing diagnostics for a fragile integration, parser, capture, import, or local automation flow? Apply DEBUG-001.
 
 Recognize these short commands:
@@ -75,6 +77,10 @@ Apply IMPL-001 when posting Markdown through CLI comments: avoid shell-interpret
 Apply TEST-001 for converted document deliverables: verify rendered output, fonts, encoding, images, and source-to-output structure, not only command success.
 
 Apply TEST-002 for systems connecting independently-tested modules through glue code: test the connecting pipeline, especially error paths. Adapter tests + ViewModel tests passing does not prove the pipeline works. Verify that error paths preserve provider identity and status propagation.
+
+Apply TEST-003 for packaged runtime artifacts: open the generated artifact in the target shell and verify installer contents, app/file icons, tray/menu behavior, startup behavior, permissions, and quit path. Build success is not runtime success.
+
+Apply PROD-001 for background, tray, menu bar, daemon-like, or ambient apps: expose install, open, settings, startup, identity, and explicit quit affordances directly in the product surface.
 
 For adding or reviewing provider/API adapters, use the Provider Integration Playbook asset ASSET-IMPL-001. It applies GOV-002, ARCH-001 through ARCH-005, ARCH-007 through ARCH-009, IMPL-002, TEST-002, COLLAB-006, DEBUG-001, and DEBUG-002:
 

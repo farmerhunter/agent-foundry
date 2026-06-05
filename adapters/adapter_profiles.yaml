@@ -1,5 +1,5 @@
 schema_version: 1
-updated: 2026-05-26
+updated: 2026-06-04
 
 global_policy:
   default_fidelity_for_direct_programming_agents: full
@@ -22,7 +22,7 @@ adapters:
       - adapters/codex/skills/architecture-design/
       - adapters/codex/skills/agent-collaboration/
       - adapters/codex/skills/provider-integration/
-    included_domains: [meta, governance, runtime, architecture, agent-collaboration, implementation, testing, debugging]
+    included_domains: [meta, governance, runtime, architecture, agent-collaboration, implementation, testing, debugging, product]
     command_vocabulary:
       harvest: ["harvest practices", "做一次 harvest practice", "提炼实践", "沉淀经验"]
       discover_assets: ["discover assets", "发现可打包资产"]
@@ -48,7 +48,7 @@ adapters:
     outputs:
       - adapters/claude-code/CLAUDE.md
       - adapters/claude-code/commands/
-    included_domains: [meta, governance, runtime, architecture, agent-collaboration, implementation, testing, debugging]
+    included_domains: [meta, governance, runtime, architecture, agent-collaboration, implementation, testing, debugging, product]
     command_vocabulary:
       harvest: ["harvest practices", "做一次 harvest practice"]
       discover_assets: ["discover assets", "发现可打包资产"]
@@ -76,7 +76,7 @@ adapters:
       - adapters/hermes/skills/architecture-design/
       - adapters/hermes/skills/agent-collaboration/
       - adapters/hermes/skills/provider-integration/
-    included_domains: [meta, governance, runtime, architecture, agent-collaboration, implementation, testing, debugging]
+    included_domains: [meta, governance, runtime, architecture, agent-collaboration, implementation, testing, debugging, product]
     command_vocabulary:
       harvest: ["harvest practices", "做一次 harvest practice", "提炼实践", "沉淀经验"]
       discover_assets: ["discover assets", "发现可打包资产"]
@@ -101,7 +101,7 @@ adapters:
     outputs:
       - adapters/chatgpt/custom-instructions.md
       - adapters/chatgpt/knowledge/
-    included_domains: [meta, governance, runtime, architecture, agent-collaboration, implementation, testing, debugging]
+    included_domains: [meta, governance, runtime, architecture, agent-collaboration, implementation, testing, debugging, product]
     command_vocabulary:
       harvest: ["harvest practices", "做一次 harvest practice"]
       discover_assets: ["discover assets", "发现可打包资产"]
