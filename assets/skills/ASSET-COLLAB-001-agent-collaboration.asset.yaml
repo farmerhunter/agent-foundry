@@ -2,28 +2,36 @@ id: ASSET-COLLAB-001
 title: Agent Collaboration
 asset_type: skill
 status: active
-version: 2
+version: 3
 created: 2026-05-28
-updated: 2026-06-03
-purpose: Guide GitHub issue, pull request, multi-agent synchronization, CLI comment, document conversion, and interruption-resume workflows.
-responsibility: Apply collaboration and delivery practices that preserve traceability, verification, safe synchronization, and continuity across humans and agents.
+updated: 2026-06-07
+purpose: Guide GitHub issue, pull request, Project/Epic scheduling, multi-agent synchronization, CLI comment, document conversion, and interruption-resume workflows.
+responsibility: Apply collaboration and delivery practices that preserve traceability, repo-local workflow contracts, verification, safe synchronization, and continuity across humans and agents.
 non_responsibility: Does not maintain Agent Foundry lifecycle records, import external skills, or make architecture decisions except when collaboration workflow boundaries require escalation.
 inputs:
   - GitHub issue or pull request context
+  - GitHub Project, Epic, label, or issue queue context
   - repository sync state
   - user approval or merge policy
+  - repo-local workflow contract or issue execution contract
   - completion and verification evidence
   - CLI comment body or generated document deliverable
 process:
   - identify whether the task touches issues, PRs, multi-agent sync, CLI comments, document conversion, or resumed work
+  - when bootstrapping multi-agent work, create or locate the repo-local workflow contract before handing issues to Implementers
   - apply the matching collaboration, implementation, or testing practice
+  - for Implementer pickup, read Project/label state plus issue execution contracts before creating branches or PRs
   - when executing a task list from another agent or user, verify each item against the original list before declaring done
   - preserve durable traceability in issues, PRs, comments, or verification records
   - validate with artifact-specific checks
   - continue from the newest user request after interruption or compaction
 outputs:
   - issue or PR workflow recommendations
+  - repo-local workflow contract recommendations
+  - Project/Epic/label queue guidance
+  - Execution Contract and pickup confirmation guidance
   - completion and verification comments
+  - dual-surface review handoff comments
   - safe merge or hold decisions
   - synchronization guidance
   - safe CLI comment handling
@@ -35,6 +43,12 @@ canonical_practices:
   - COLLAB-004
   - COLLAB-005
   - COLLAB-006
+  - COLLAB-007
+  - COLLAB-008
+  - COLLAB-009
+  - COLLAB-010
+  - COLLAB-011
+  - COLLAB-012
   - IMPL-001
   - TEST-001
 published_to:
@@ -46,12 +60,23 @@ usage_triggers:
   - GitHub issue work
   - pull request workflow
   - multi-agent repository synchronization
+  - GitHub Project workflow
+  - Epic workflow
+  - Execution Contract
+  - needs label inbox
   - issue completion comment
+  - PR review handoff
   - CLI Markdown comment
   - converted document deliverable
   - resume after interruption or compaction
 success_criteria:
   - issue work has branch, PR, or explicit direct-change approval
+  - multi-agent repositories have a discovered or bootstrapped repo-local workflow contract
+  - Project status, labels, issue comments, and PRs have clear roles in the handoff
+  - Ready queues are sorted by explicit dependency gates before Implementers start coding
+  - issue execution contracts define branch strategy, base branch, PR target, dependencies, merge rule, and verification
+  - multi-agent feature work prefers Epic integration branches unless a direct-to-main or stacked PR exception is justified
+  - review handoff appears on both issue and PR surfaces when changes are requested
   - completion comments include scope, linked artifacts, verification, and residual risks
   - merge decisions respect validation state and user hold/review requests
   - repository sync is checked before multi-agent issue work

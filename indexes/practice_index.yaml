@@ -337,6 +337,69 @@ practices:
     tags: [agent-collaboration, task-management, verification, completion, cross-agent]
     aliases: [check original task list before declaring done, implementation momentum doesn't equal completion]
 
+  - id: COLLAB-007
+    title: Bootstrap repo-local agent workflow contracts
+    path: practices/agent-collaboration/COLLAB-007-bootstrap-repo-local-agent-workflow-contract.md
+    domain: agent-collaboration
+    type: playbook
+    status: active
+    tags: [agent-collaboration, workflow, bootstrap, github, multi-agent]
+    aliases: [bootstrap repo-local workflow contract, project-level agent workflow contract]
+
+  - id: COLLAB-008
+    title: Use GitHub Project as a lightweight agent scheduler
+    path: practices/agent-collaboration/COLLAB-008-use-github-project-as-lightweight-agent-scheduler.md
+    domain: agent-collaboration
+    type: pattern
+    status: active
+    tags: [agent-collaboration, github-project, scheduler, labels, epics]
+    aliases: [GitHub Project as agent scheduler, labels as agent inbox]
+
+  - id: COLLAB-009
+    title: Execution contracts gate Implementer work
+    path: practices/agent-collaboration/COLLAB-009-execution-contract-gates-implementer-work.md
+    domain: agent-collaboration
+    type: checklist
+    status: active
+    tags: [agent-collaboration, issue-contracts, handoff, branches, verification]
+    aliases: [Execution Contract, issue execution contract]
+
+  - id: COLLAB-010
+    title: Ready queues use dependency gates
+    path: practices/agent-collaboration/COLLAB-010-ready-queue-uses-dependency-gates.md
+    domain: agent-collaboration
+    type: playbook
+    status: active
+    tags: [agent-collaboration, queue, dependencies, github-project, handoff]
+    aliases: [Ready queue dependency gates, Ready does not mean immediately codable]
+
+  - id: COLLAB-011
+    title: Prefer Epic integration branches for multi-agent feature work
+    path: practices/agent-collaboration/COLLAB-011-prefer-epic-integration-branches-for-multi-agent-feature-work.md
+    domain: agent-collaboration
+    type: heuristic
+    status: active
+    tags: [agent-collaboration, git, branches, pull-requests, epics]
+    aliases: [Epic integration branch default, stacked PRs are an exception]
+
+  - id: COLLAB-012
+    title: Review handoff needs both issue and PR surfaces
+    path: practices/agent-collaboration/COLLAB-012-dual-surface-review-handoff.md
+    domain: agent-collaboration
+    type: checklist
+    status: active
+    tags: [agent-collaboration, review, handoff, github, pull-requests]
+    aliases: [dual-surface review handoff, issue and PR review handoff]
+
+  - id: COLLAB-013
+    title: Manual edit safety protocol
+    path: practices/agent-collaboration/COLLAB-013-manual-edit-safety-protocol.md
+    domain: agent-collaboration
+    type: playbook
+    status: proposed
+    tags: [agent-collaboration, manual-edit, git, vscode, safety]
+    aliases: [safe edit, manual edit safety]
+
   - id: TEST-001
     title: Render-verify format conversions
     path: practices/testing/TEST-001-render-verify-format-conversions.md

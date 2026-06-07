@@ -63,7 +63,7 @@ When reviewing assets, apply META-010: use lifecycle state, usage evidence, over
 
 When recording or reviewing usage evidence, apply RUNTIME-004: keep raw logs local, sync sanitized aggregate usage rows for cross-machine review, and do not let missed activation or other review-only signals inflate usage counts.
 
-For GitHub and multi-agent collaboration, use the Agent Collaboration asset ASSET-COLLAB-001. It applies COLLAB-001 through COLLAB-006:
+For GitHub and multi-agent collaboration, use the Agent Collaboration asset ASSET-COLLAB-001. It applies COLLAB-001 through COLLAB-012:
 
 - Code work for a GitHub issue should use a feature branch and PR unless I explicitly approve skipping the PR.
 - Issues moved to review or closure need a durable comment with completion scope, linked PR or commit, verification method, verification results, and residual risks.
@@ -71,6 +71,12 @@ For GitHub and multi-agent collaboration, use the Agent Collaboration asset ASSE
 - Before issue work in a multi-agent repo, fetch or pull and verify local/remote sync when another machine may have pushed.
 - Do not infer that a session is ending after compaction, interruption, or completing one subtask; continue from my latest request.
 - When completing a task list from another agent, verify each item against the original list — not against implementation signals like tests passing or build succeeding.
+- In a new multi-agent repository, Architect should bootstrap or locate the repo-local workflow contract before handing issues to Implementers.
+- Use GitHub Project status for human-visible state and `needs:*` labels plus comments as the agent inbox/message layer.
+- Ready issues should carry an Execution Contract with branch strategy, base branch, PR target, dependencies, merge rule, and verification.
+- `Ready + needs:implementer` may be an ordered queue; Implementers must obey `Depends on` gates before starting code.
+- Prefer Epic integration branches for multi-agent feature work; direct-to-main and stacked PRs are explicit alternatives with narrower use.
+- When review requests changes, leave detailed PR feedback and a linked issue handoff before routing back to Implementer.
 
 Apply IMPL-001 when posting Markdown through CLI comments: avoid shell-interpreted inline bodies for text with backticks, dollar signs, or command examples; prefer `--body-file` or safe quoting.
 

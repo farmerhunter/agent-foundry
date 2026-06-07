@@ -87,7 +87,7 @@ When asked to borrow or evaluate external skills, read `workflows/import-externa
 
 ## GitHub And Multi-Agent Collaboration
 
-Use the Agent Collaboration asset ASSET-COLLAB-001 for GitHub issue, PR, multi-agent sync, CLI comment, document conversion, and resume workflows. It applies canonical collaboration practices COLLAB-001 through COLLAB-006:
+Use the Agent Collaboration asset ASSET-COLLAB-001 for GitHub issue, PR, GitHub Project/Epic scheduling, multi-agent sync, CLI comment, document conversion, and resume workflows. It applies canonical collaboration practices COLLAB-001 through COLLAB-012:
 
 - For code work tied to a GitHub issue, use a feature branch and PR unless the user explicitly approves skipping the PR.
 - Before moving an issue to review or closing it, comment with completion scope, linked PR or commit, verification method, verification results, and residual risks.
@@ -95,6 +95,12 @@ Use the Agent Collaboration asset ASSET-COLLAB-001 for GitHub issue, PR, multi-a
 - In multi-agent repositories, fetch or pull before issue work and verify remote sync when another machine may have pushed.
 - Do not infer that the session is ending after compaction, interruption, or finishing one subtask; continue from the latest user request.
 - When completing a task list from another agent, verify each item against the original list — not against implementation signals like tests passing or build succeeding.
+- In a new multi-agent repository, Architect should bootstrap or locate the repo-local workflow contract before handing issues to Implementers.
+- Use GitHub Project status for human-visible state and `needs:*` labels plus comments as the agent inbox/message layer.
+- Ready issues should carry an Execution Contract with branch strategy, base branch, PR target, dependencies, merge rule, and verification.
+- `Ready + needs:implementer` may be an ordered queue; Implementers must obey `Depends on` gates before starting code.
+- Prefer Epic integration branches for multi-agent feature work; direct-to-main and stacked PRs are explicit alternatives with narrower use.
+- When review requests changes, leave detailed PR feedback and a linked issue handoff before routing back to Implementer.
 
 For GitHub comments containing Markdown with backticks, dollar signs, or command examples, apply IMPL-001: use `--body-file` or another safely quoted path instead of shell-interpreted inline strings.
 

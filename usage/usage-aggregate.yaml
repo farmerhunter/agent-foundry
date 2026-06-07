@@ -1,5 +1,5 @@
 schema_version: 1
-updated: 2026-06-03
+updated: 2026-06-07
 
 aggregates:
   - subject_type: asset
@@ -42,6 +42,16 @@ aggregates:
     not_useful_count: 0
     unknown_count: 0
     last_used: 2026-06-03
+  - subject_type: asset
+    subject_id: ASSET-META-001
+    period: 2026-06
+    agent: "codex"
+    machine_hash: "f244fd14fabb"
+    useful_count: 1
+    neutral_count: 0
+    not_useful_count: 0
+    unknown_count: 0
+    last_used: 2026-06-07
   - subject_type: practice
     subject_id: ARCH-007
     period: 2026-05
