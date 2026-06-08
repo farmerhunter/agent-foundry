@@ -2,7 +2,7 @@ id: ASSET-COLLAB-001
 title: Agent Collaboration
 asset_type: skill
 status: active
-version: 6
+version: 7
 created: 2026-05-28
 updated: 2026-06-08
 purpose: Guide GitHub issue, pull request, Project/Epic scheduling, multi-agent synchronization, CLI comment, document conversion, and interruption-resume workflows.
@@ -26,6 +26,8 @@ process:
   - require completion handoff state in execution contracts before releasing another agent to work
   - prefer dependency-gated batch handoff when related child issues can be released safely under one Epic checkpoint
   - prefer batch or Epic-level review checkpoints when related low-risk issues can be verified together
+  - before reviewing an individual child PR, check whether its completion handoff points to a batch checkpoint and whether a high-risk trigger exists
+  - do not treat an open child PR as an automatic Architect review request when batch checkpoint mode applies
   - keep Project status, Roadmap Status, issue state, labels, and durable comments semantically coherent
   - when executing a task list from another agent or user, verify each item against the original list before declaring done
   - preserve durable traceability in issues, PRs, comments, or verification records
@@ -40,6 +42,7 @@ outputs:
   - dependency-gated batch handoff guidance
   - completion and verification comments
   - dual-surface review handoff and batch review guidance
+  - child PR review trigger decisions
   - safe merge or hold decisions
   - synchronization guidance
   - safe CLI comment handling
@@ -85,6 +88,8 @@ success_criteria:
   - Ready queues are sorted by explicit dependency gates before Implementers start coding
   - related child issues are batched for handoff when dependency gates make the batch safe and detectable
   - issue execution contracts define branch strategy, base branch, PR target, dependencies, role fit, Architect-owned decisions, Implementer boundary, completion handoff, merge rule, and verification
+  - low-risk child issues in the same Epic integration branch default to batch execution/review when their completion handoff is `batch checkpoint`
+  - open child PRs do not automatically become Architect inbox work unless completion handoff, high-risk trigger, failed verification, or batch checkpoint requires review
   - Implementer issues explicitly separate evidence, implementation, and verification from Architect-owned taxonomy, architecture, policy, harvest, privacy, or security decisions
   - evidence-only or preliminary-classification issues move to Review rather than Done when Architect-owned decisions remain
   - Project built-in status, Roadmap Status, issue state, labels, and durable comments do not contradict each other

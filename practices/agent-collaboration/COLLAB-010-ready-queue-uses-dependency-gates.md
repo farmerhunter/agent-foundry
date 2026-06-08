@@ -4,7 +4,7 @@ title: Ready queues use dependency gates
 domain: agent-collaboration
 type: playbook
 status: active
-version: 2
+version: 3
 created: 2026-06-07
 updated: 2026-06-08
 tags: [agent-collaboration, queue, dependencies, github-project, handoff]
@@ -40,7 +40,17 @@ Architects may move a dependent issue sequence to `Ready` and label it `needs:im
 - the Implementer can continue the queue without another Architect handoff;
 - the batch has a natural checkpoint where Architect or Reviewer can review the combined output.
 
-Prefer an Epic or sub-Epic batch handoff when the work is low-risk, tightly related, and the dependencies are clear. Do not split handoff into one Architect interaction per child issue merely because the work is represented as multiple issues.
+For related low-risk child issues in the same Epic integration branch, batch execution is the default. Do not split handoff into one Architect interaction per child issue merely because the work is represented as multiple issues.
+
+Batch execution preserves child issue and PR traceability, but changes the default review timing:
+
+- child issues still carry execution contracts, branches, PRs, completion evidence, and verification;
+- the Implementer proceeds through the queue as each `Depends on` gate becomes true;
+- open child PRs are not automatically blocking Architect review requests;
+- Architect or Reviewer review happens at the named Epic, sub-Epic, or batch checkpoint;
+- if a child issue contract says `Completion handoff: return to Architect`, that issue is an explicit exception to the batch default.
+
+Use immediate per-issue review only for a high-risk trigger: failing CI or test evidence, unclear dependencies, schema or data migration, destructive behavior, auth/security/privacy risk, production deployment/runtime boundary, new external dependency or provider/cost, shared contract change, or an Architect-owned taxonomy, policy, architecture, harvest, privacy, or security decision.
 
 Implementers should:
 
@@ -50,6 +60,7 @@ Implementers should:
 4. Start only issues whose dependencies are satisfied.
 5. Leave waiting issues in `Ready`.
 6. Use `Pickup confirmed` only when actually starting work.
+7. When a low-risk child issue completes under `batch checkpoint`, post completion evidence and continue to the next satisfied dependency instead of waiting for a separate Architect release.
 
 For a waiting issue, optionally comment:
 
@@ -73,6 +84,7 @@ Waiting for #... to merge into `epic/...`.
 - Do not use Ready queues when dependencies are vague, circular, or need a user decision.
 - Do not assume GitHub Project order is the dependency graph. The execution contract is the gate.
 - Do not force a handoff or review checkpoint after every child issue when the Epic can be reviewed as a coherent batch.
+- Do not convert every opened child PR into `needs:architect`. In batch mode, `needs:architect` belongs on the batch/Epic checkpoint or on a child issue with an explicit immediate-review trigger.
 
 ## Example
 

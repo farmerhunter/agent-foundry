@@ -23,10 +23,10 @@ This skill is an asset that performs a repeatable workflow. During execution, it
 - COLLAB-006: When completing a task list from another agent, verify each item against the original list — not against implementation signals like tests passing or build succeeding.
 - COLLAB-007: In a new multi-agent repository, the Architect should bootstrap or locate the repo-local workflow contract and apply an issue role-fit gate before handing issues to Implementers.
 - COLLAB-008: Use GitHub Project, issues, labels, comments, PRs, and CI as a lightweight agent scheduler; keep issue type and status fields semantically coherent.
-- COLLAB-009: Ready issues should carry an Execution Contract that defines branch strategy, base branch, PR target, dependencies, role fit, Architect-owned decisions, Implementer boundary, completion handoff, merge rule, and verification.
-- COLLAB-010: `Ready + needs:implementer` may be an ordered queue; prefer dependency-gated batch handoff over per-issue churn, and obey `Depends on` gates before starting code.
+- COLLAB-009: Ready issues should carry an Execution Contract that defines branch strategy, base branch, PR target, dependencies, role fit, Architect-owned decisions, Implementer boundary, completion handoff, merge rule, and verification; completion handoff controls when Architect review is requested.
+- COLLAB-010: `Ready + needs:implementer` may be an ordered queue; related low-risk child issues in the same Epic integration branch default to dependency-gated batch execution/review, and obey `Depends on` gates before starting code.
 - COLLAB-011: Prefer Epic integration branches for multi-agent feature work; direct-to-main and stacked PRs are explicit alternatives with narrower use.
-- COLLAB-012: Review handoff needs both surfaces: detailed PR feedback plus an issue handoff that routes the next agent; evidence-only or preliminary-classification work moves to Review when Architect-owned decisions remain.
+- COLLAB-012: Review handoff needs both surfaces when changes are requested; an open child PR is not automatically an Architect review request, and related low-risk work should use Epic/sub-Epic/batch checkpoints unless a high-risk trigger appears.
 - COLLAB-014: For complex handoffs, preserve knowledge state before action planning, including research output, rationale, rejected options, user corrections, capability boundaries, unresolved questions, and next actions.
 - TEST-001: For converted document deliverables, verify rendered output, fonts, encoding, images, and source-to-output structure rather than relying only on command success.
 - IMPL-001: When posting Markdown through CLI comments, avoid shell-interpreted inline bodies for text with backticks, dollar signs, or command examples; prefer `--body-file` or safe quoting.
@@ -37,11 +37,12 @@ This skill is an asset that performs a repeatable workflow. During execution, it
 2. Apply the matching canonical rule above.
 3. For multi-agent projects, locate the repo-local workflow contract and active issue Execution Contracts before choosing branch or PR behavior.
 4. Check issue role fit before pickup or release; split mixed work or constrain Implementers to evidence, preliminary classification, implementation, or verification when final decisions remain Architect-owned.
-5. Check completion handoff before work starts; if Architect-owned decisions remain, the producing agent should move the issue to Review instead of closing it.
+5. Check completion handoff before work starts; if it says `batch checkpoint`, do not turn each child PR into a blocking Architect review unless a high-risk trigger or failed verification appears.
 6. When a set of related issues has clear dependency gates, treat it as a batch queue instead of forcing one handoff per child issue.
-7. Preserve durable traceability in GitHub issues, PRs, labels, Project state, and comments.
-8. Validate with the checks appropriate to the artifact or code path, using batch or Epic review checkpoints when appropriate.
-9. Continue from the newest user request after interruptions or context transitions.
+7. Before reviewing an individual child PR, check whether the issue belongs to an Epic batch queue, whether its completion handoff is `batch checkpoint`, and whether a high-risk trigger exists.
+8. Preserve durable traceability in GitHub issues, PRs, labels, Project state, and comments.
+9. Validate with the checks appropriate to the artifact or code path, using batch or Epic review checkpoints when appropriate.
+10. Continue from the newest user request after interruptions or context transitions.
 
 ## Guardrails
 
@@ -53,6 +54,7 @@ This skill is an asset that performs a repeatable workflow. During execution, it
 - Do not let Implementers infer missing repo workflow, branch base, PR target, or dependency gates; route unclear issues back to Architect.
 - Do not let Implementers make final taxonomy, architecture boundary, policy, harvest, privacy, or security decisions unless the Execution Contract explicitly assigns that authority.
 - Do not let status surfaces contradict each other; `Ready` is pickup state, `Review` is validation state, and `Done` requires acceptance or closure.
+- Do not treat an open child PR as automatic `needs:architect`; review ownership follows completion handoff, high-risk triggers, failed verification, or the batch/Epic checkpoint.
 - Do not leave a single-deliverable task labeled as an Epic just because it came from roadmap planning.
 - Do not treat Project status alone as an agent inbox; use labels plus durable comments.
 - Do not publish proposed practices such as COLLAB-013 into default adapters until approved active.

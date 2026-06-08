@@ -104,13 +104,13 @@ Use the Agent Collaboration asset ASSET-COLLAB-001 for GitHub issue, PR, GitHub 
 - When completing a task list from another agent, verify each item against the original list — not against implementation signals like tests passing or build succeeding.
 - In a new multi-agent repository, Architect should bootstrap or locate the repo-local workflow contract and apply an issue role-fit gate before handing issues to Implementers.
 - Use GitHub Project status for human-visible state and `needs:*` labels plus comments as the agent inbox/message layer; keep built-in Status, Roadmap Status, issue state, labels, and comments semantically coherent.
-- Ready issues should carry an Execution Contract with branch strategy, base branch, PR target, dependencies, role fit, Architect-owned decisions, Implementer boundary, completion handoff, merge rule, and verification.
+- Ready issues should carry an Execution Contract with branch strategy, base branch, PR target, dependencies, role fit, Architect-owned decisions, Implementer boundary, completion handoff, merge rule, and verification; completion handoff controls when Architect review is requested.
 - Before moving work into an Implementer inbox, classify role fit; split mixed work or constrain Implementers to evidence, preliminary classification, implementation, or verification when final taxonomy, architecture, policy, harvest, privacy, or security decisions remain Architect-owned.
 - If Architect-owned decisions remain after evidence or preliminary classification, the producing agent moves the issue to Review and keeps it open rather than closing it.
-- `Ready + needs:implementer` may be an ordered queue; prefer dependency-gated batch handoff over per-issue churn, and obey `Depends on` gates before starting code.
+- `Ready + needs:implementer` may be an ordered queue; related low-risk child issues in the same Epic integration branch default to dependency-gated batch execution/review, and obey `Depends on` gates before starting code.
 - `Ready` is pickup state, `Review` is validation state, and `Done` requires acceptance or closure; do not leave one status surface saying `Ready` while another says `Done`.
 - Prefer Epic integration branches for multi-agent feature work; direct-to-main and stacked PRs are explicit alternatives with narrower use.
-- When review requests changes, leave detailed PR feedback and a linked issue handoff before routing back to Implementer; prefer batch or Epic checkpoint review for related low-risk issues.
+- When review requests changes, leave detailed PR feedback and a linked issue handoff before routing back to Implementer; an open child PR is not automatically an Architect review request, so prefer batch or Epic checkpoint review for related low-risk issues unless completion handoff, high-risk trigger, failed verification, or the checkpoint itself requires review.
 - For complex handoffs, preserve knowledge state before action planning: context, research output, frameworks, decisions, rejected options, user corrections, current capability boundary, unresolved questions, and next actions.
 
 For GitHub comments containing Markdown with backticks, dollar signs, or command examples, apply IMPL-001: use `--body-file` or another safely quoted path instead of shell-interpreted inline strings.

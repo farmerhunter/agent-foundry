@@ -4,7 +4,7 @@ title: Review handoff needs both issue and PR surfaces
 domain: agent-collaboration
 type: checklist
 status: active
-version: 3
+version: 4
 created: 2026-06-07
 updated: 2026-06-08
 tags: [agent-collaboration, review, handoff, github, pull-requests]
@@ -22,13 +22,13 @@ provenance: "Harvested from tiny-ipa M2 review cycle on 2026-06-07, where Implem
 
 ## Principle
 
-When review sends work back to an Implementer, put the handoff on both the PR and the child issue. Prefer review at a meaningful Epic, sub-Epic, or batch checkpoint instead of forcing review after every small child issue.
+When review sends work back to an Implementer, put the handoff on both the PR and the child issue. Prefer review at a meaningful Epic, sub-Epic, or batch checkpoint instead of forcing review after every small child issue. An open child PR is not automatically an Architect review request.
 
 ## Rationale
 
 Agents do not always enter work through the same surface. One may query issues by label; another may inspect PR comments. If detailed feedback exists only on the PR, the issue inbox lacks context. If the issue contains only a summary and the PR has no pointer, the Implementer may miss file-level review. Dual-surface handoff makes the routing signal and the actionable feedback meet.
 
-Review itself is also a coordination cost. For small related issues inside one Epic, repeated per-issue review can turn the human or Architect into a message broker. When the work is low-risk and dependency-gated, let the Implementer complete the planned batch and review the combined evidence at the natural checkpoint.
+Review itself is also a coordination cost. For small related issues inside one Epic, repeated per-issue review can turn the human or Architect into a message broker. When the work is low-risk and dependency-gated, let the Implementer complete the planned batch and review the combined evidence at the natural checkpoint. Child PRs remain useful traceability and integration units, but they are not by themselves blocking review gates.
 
 ## Guidance
 
@@ -43,7 +43,9 @@ When Architect requests changes:
 When planning review granularity:
 
 - Prefer Epic, sub-Epic, or batch review for related low-risk child issues.
-- Review individual issues immediately when they introduce blockers, high-risk changes, unclear dependencies, privacy/security risk, schema/runtime boundary changes, or a failed verification signal.
+- Before reviewing an individual child PR, check the issue's `Completion handoff`, the parent Epic queue, and whether a high-risk trigger is present.
+- Review individual issues immediately when they introduce blockers, high-risk changes, unclear dependencies, privacy/security risk, schema/runtime boundary changes, external dependency/provider/cost changes, shared contract changes, or a failed verification signal.
+- If the issue says `Completion handoff: batch checkpoint` and no high-risk trigger exists, do not create a blocking per-issue Architect review. Let the batch continue to its checkpoint.
 - If a batch review sends work back, include both the batch-level summary and the specific issue or PR links that need action.
 - Keep child issues traceable, but do not require a separate Architect interaction for every child issue when the review question is really batch-level.
 - When an Implementer finishes evidence-only work, preliminary classification, or any task with Architect-owned decisions, the issue should move to `Review`, not `Done`. Remove `needs:implementer`, add `needs:architect` or `needs:reviewer`, keep the issue open, and post completion evidence plus residual risks.
@@ -80,6 +82,7 @@ Next action:
 - Do not rely only on PR comments when agents discover work through issue labels.
 - Do not ask the Implementer to create a replacement branch unless the existing fix branch is truly unusable.
 - Do not create needless per-issue review churn when a batch checkpoint would catch the same risks with less handoff overhead.
+- Do not treat an open child PR as sufficient reason to add `needs:architect`; review ownership follows the completion handoff, high-risk triggers, failed verification, or the batch/Epic checkpoint.
 - Do not let an Implementer close an issue that still requires Architect-owned taxonomy, policy, privacy, security, harvest, generated-artifact, or Core/Vault decisions.
 - Do not leave batch child issues in `Ready` after the producing agent has posted completion evidence; move them to `Review` until the batch is accepted.
 

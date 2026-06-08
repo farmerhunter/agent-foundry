@@ -4,7 +4,7 @@ title: Execution contracts gate Implementer work
 domain: agent-collaboration
 type: checklist
 status: active
-version: 3
+version: 4
 created: 2026-06-07
 updated: 2026-06-08
 tags: [agent-collaboration, issue-contracts, handoff, branches, verification]
@@ -50,7 +50,17 @@ Verification required: ...
 
 Role fit is required when the issue includes classification, taxonomy, architecture boundary, policy, harvest, privacy, security, or future-system work. If the role fit is mixed, split the issue or state which decisions remain Architect-owned. Implementer evidence may include preliminary classification, but final taxonomy, policy, and architecture decisions need Architect review unless the contract explicitly delegates that authority.
 
-Completion handoff is required when the work will be executed by another agent. If `Architect-owned decisions` is not `none`, the default handoff is `move to Review`: the Implementer posts completion evidence, removes `needs:implementer`, adds the next owner label, keeps the issue open, and sets Project/Roadmap status to `Review`. An Implementer may close the issue directly only when the contract explicitly says `close after evidence` and no downstream review or decision remains.
+Completion handoff is required when the work will be executed by another agent. It controls when Architect review is actually requested; an opened child PR alone is not enough to create a blocking Architect inbox item.
+
+Use these meanings:
+
+- `batch checkpoint`: the child issue belongs to a planned Epic or sub-Epic batch. The Implementer posts completion evidence and PR/commit links, then continues the queue according to dependency gates. Architect review happens at the batch/Epic checkpoint unless a high-risk trigger or failed verification appears.
+- `move to Review`: the producing agent posts completion evidence, removes `needs:implementer`, adds the next owner label, keeps the issue open, and sets Project/Roadmap status to `Review`.
+- `return to Architect`: the issue requires immediate Architect decision or review after this deliverable.
+- `close after evidence`: the Implementer may close the issue directly only when the contract explicitly delegates closure and no downstream review or decision remains.
+- `open PR`: the issue should produce a PR, but this does not by itself decide whether review is per-issue or batch-level; combine it with the review or checkpoint rule.
+
+For related low-risk child issues in the same Epic integration branch, prefer `batch checkpoint` as the completion handoff. If `Architect-owned decisions` is not `none`, the default handoff is `move to Review` unless the contract explicitly names a batch checkpoint that preserves the Architect-owned decision for that checkpoint.
 
 When the Implementer actually starts work, it should confirm:
 
@@ -82,6 +92,7 @@ Use pickup confirmation only when dependencies are satisfied and implementation 
 - Do not let an Implementer make final taxonomy, architecture boundary, policy, harvest, privacy, or security decisions unless the Architect explicitly assigned that decision in the contract.
 - Do not hand off a mixed issue as if it were pure implementation; split it or constrain the Implementer to evidence, preliminary classification, code edits, or verification.
 - Do not write a closure rule that contradicts the review boundary. Evidence-only and preliminary-classification tasks should move to Review unless direct closure is explicitly delegated.
+- Do not treat an open child PR as an automatic request for immediate Architect review. The `Completion handoff`, high-risk triggers, failed verification, or the batch/Epic checkpoint determine review timing.
 
 ## Example
 
