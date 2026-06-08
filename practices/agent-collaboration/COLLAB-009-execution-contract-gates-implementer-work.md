@@ -4,9 +4,9 @@ title: Execution contracts gate Implementer work
 domain: agent-collaboration
 type: checklist
 status: active
-version: 1
+version: 2
 created: 2026-06-07
-updated: 2026-06-07
+updated: 2026-06-08
 tags: [agent-collaboration, issue-contracts, handoff, branches, verification]
 aliases:
   - COLLAB-009
@@ -39,10 +39,15 @@ Branch strategy: epic integration branch | issue branch to main | stacked PR
 Base branch: `...`
 Target PR base: `...`
 Depends on: #... / none
+Role fit: evidence gathering | implementation | verification/review | taxonomy/architecture decision | policy decision | mixed
+Architect-owned decisions: ...
+Implementer boundary: ...
 Expected PR shape: one PR for this issue
 Merge rule: ...
 Verification required: ...
 ```
+
+Role fit is required when the issue includes classification, taxonomy, architecture boundary, policy, harvest, privacy, security, or future-system work. If the role fit is mixed, split the issue or state which decisions remain Architect-owned. Implementer evidence may include preliminary classification, but final taxonomy, policy, and architecture decisions need Architect review unless the contract explicitly delegates that authority.
 
 When the Implementer actually starts work, it should confirm:
 
@@ -63,12 +68,15 @@ Use pickup confirmation only when dependencies are satisfied and implementation 
 - The branch strategy is not a trivial direct PR to `main`.
 - The issue belongs to an Epic, queue, or dependency chain.
 - Review feedback returned an issue to Implementer and the fix branch must be reused.
+- The issue includes classification, taxonomy, architecture boundary, policy, harvest, privacy, security, or future-system judgment that could exceed a pure implementation role.
 
 ## Watch Out For
 
 - Do not treat an issue body with broad scope as a substitute for the execution contract.
 - Do not let an Implementer create a new branch when the contract says to update an existing fix branch.
 - Do not move an issue into an Implementer inbox until the contract includes enough information to start or queue safely.
+- Do not let an Implementer make final taxonomy, architecture boundary, policy, harvest, privacy, or security decisions unless the Architect explicitly assigned that decision in the contract.
+- Do not hand off a mixed issue as if it were pure implementation; split it or constrain the Implementer to evidence, preliminary classification, code edits, or verification.
 
 ## Example
 

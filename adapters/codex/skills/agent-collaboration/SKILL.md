@@ -21,9 +21,9 @@ This skill is an asset that performs a repeatable workflow. During execution, it
 - COLLAB-004: In multi-agent repositories, fetch or pull before issue work and verify remote sync when another machine may have pushed.
 - COLLAB-005: Do not infer that the session is ending after compaction, interruption, or finishing one subtask; continue from the latest user request.
 - COLLAB-006: When completing a task list from another agent, verify each item against the original list — not against implementation signals like tests passing or build succeeding.
-- COLLAB-007: In a new multi-agent repository, the Architect should bootstrap or locate the repo-local workflow contract before handing issues to Implementers.
+- COLLAB-007: In a new multi-agent repository, the Architect should bootstrap or locate the repo-local workflow contract and apply an issue role-fit gate before handing issues to Implementers.
 - COLLAB-008: Use GitHub Project, issues, labels, comments, PRs, and CI as a lightweight agent scheduler when they are available.
-- COLLAB-009: Ready issues should carry an Execution Contract that defines branch strategy, base branch, PR target, dependencies, merge rule, and verification.
+- COLLAB-009: Ready issues should carry an Execution Contract that defines branch strategy, base branch, PR target, dependencies, role fit, Architect-owned decisions, Implementer boundary, merge rule, and verification.
 - COLLAB-010: `Ready + needs:implementer` may be an ordered queue; prefer dependency-gated batch handoff over per-issue churn, and obey `Depends on` gates before starting code.
 - COLLAB-011: Prefer Epic integration branches for multi-agent feature work; direct-to-main and stacked PRs are explicit alternatives with narrower use.
 - COLLAB-012: Review handoff needs both surfaces: detailed PR feedback plus an issue handoff that routes the next agent; prefer batch or Epic checkpoint review for related low-risk issues.
@@ -36,10 +36,11 @@ This skill is an asset that performs a repeatable workflow. During execution, it
 1. Identify whether the task touches an issue, PR, GitHub Project/Epic workflow, multi-agent sync, document conversion, or CLI comment publishing.
 2. Apply the matching canonical rule above.
 3. For multi-agent projects, locate the repo-local workflow contract and active issue Execution Contracts before choosing branch or PR behavior.
-4. When a set of related issues has clear dependency gates, treat it as a batch queue instead of forcing one handoff per child issue.
-5. Preserve durable traceability in GitHub issues, PRs, labels, Project state, and comments.
-6. Validate with the checks appropriate to the artifact or code path, using batch or Epic review checkpoints when appropriate.
-7. Continue from the newest user request after interruptions or context transitions.
+4. Check issue role fit before pickup or release; split mixed work or constrain Implementers to evidence, preliminary classification, implementation, or verification when final decisions remain Architect-owned.
+5. When a set of related issues has clear dependency gates, treat it as a batch queue instead of forcing one handoff per child issue.
+6. Preserve durable traceability in GitHub issues, PRs, labels, Project state, and comments.
+7. Validate with the checks appropriate to the artifact or code path, using batch or Epic review checkpoints when appropriate.
+8. Continue from the newest user request after interruptions or context transitions.
 
 ## Guardrails
 
@@ -49,5 +50,6 @@ This skill is an asset that performs a repeatable workflow. During execution, it
 - Do not run destructive sync commands without user confirmation.
 - Do not pass complex Markdown to shell commands in double-quoted inline bodies.
 - Do not let Implementers infer missing repo workflow, branch base, PR target, or dependency gates; route unclear issues back to Architect.
+- Do not let Implementers make final taxonomy, architecture boundary, policy, harvest, privacy, or security decisions unless the Execution Contract explicitly assigns that authority.
 - Do not treat Project status alone as an agent inbox; use labels plus durable comments.
 - Do not publish proposed practices such as COLLAB-013 into default adapters until approved active.

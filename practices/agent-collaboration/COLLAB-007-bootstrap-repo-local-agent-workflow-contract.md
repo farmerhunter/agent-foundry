@@ -4,9 +4,9 @@ title: Bootstrap repo-local agent workflow contracts
 domain: agent-collaboration
 type: playbook
 status: active
-version: 1
+version: 2
 created: 2026-06-07
-updated: 2026-06-07
+updated: 2026-06-08
 tags: [agent-collaboration, workflow, bootstrap, github, multi-agent]
 aliases:
   - COLLAB-007
@@ -42,18 +42,20 @@ When acting as Architect in a multi-agent repository:
    - Level 3: scheduler-like multi-agent coordination with agent queues, dependency graphs, integration QA tasks, and stricter role routing.
 2. Create or update repo-local workflow docs such as `docs/development.md`, `docs/agent-workflow.md`, or a similarly discoverable file.
 3. Define roles, at minimum Architect and Implementer, and clarify that roles are responsibilities, not identities.
-4. Define durable collaboration surfaces:
+4. Add an issue role-fit gate before handing work to another agent. Classify each issue as evidence gathering, implementation, verification/review, taxonomy or architecture boundary decision, policy decision, harvest/practice decision, privacy/security decision, or mixed.
+5. Split mixed issues or constrain the Implementer contract to evidence gathering, preliminary classification, implementation, or verification while reserving final taxonomy, architecture, policy, harvest, privacy, or security decisions for Architect review.
+6. Define durable collaboration surfaces:
    - planning and coordination surface;
    - executable issue surface;
    - PR/review surface;
    - machine-readable routing labels;
    - human-visible board status.
-5. Define labels and state transitions, including who is responsible for moving work between states.
-6. Define branch and PR strategy, including when direct-to-main, Epic integration branches, or stacked PRs are allowed.
-7. Define issue comment templates for execution contracts, pickup confirmation, completion evidence, and review handoff.
-8. Define merge and closure rules for child issues and parent coordination issues.
+7. Define labels and state transitions, including who is responsible for moving work between states.
+8. Define branch and PR strategy, including when direct-to-main, Epic integration branches, or stacked PRs are allowed.
+9. Define issue comment templates for execution contracts, pickup confirmation, completion evidence, and review handoff.
+10. Define merge and closure rules for child issues and parent coordination issues.
 
-Implementers should not invent missing workflow. If a ready issue lacks the expected contract, route it back to Architect.
+Implementers should not invent missing workflow. If a ready issue lacks the expected contract, or asks the Implementer to decide taxonomy, architecture, policy, harvest, privacy, or security boundaries without explicit delegation, route it back to Architect.
 
 ## Use This When
 
@@ -67,6 +69,7 @@ Implementers should not invent missing workflow. If a ready issue lacks the expe
 - Do not put project-specific facts into global practices. Store concrete Project IDs, labels, branch names, Epic numbers, and dependencies in repo-local docs and issue comments.
 - Do not force Level 2 or Level 3 process onto a one-off project that only needs simple issue/PR traceability.
 - Do not make Implementers responsible for designing the collaboration system while they are executing tasks.
+- Do not treat an issue as Implementer-ready merely because it has a `needs:implementer` label; the issue type and decision authority must fit the role.
 
 ## Example
 

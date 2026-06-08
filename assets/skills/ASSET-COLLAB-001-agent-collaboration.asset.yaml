@@ -2,7 +2,7 @@ id: ASSET-COLLAB-001
 title: Agent Collaboration
 asset_type: skill
 status: active
-version: 4
+version: 5
 created: 2026-05-28
 updated: 2026-06-08
 purpose: Guide GitHub issue, pull request, Project/Epic scheduling, multi-agent synchronization, CLI comment, document conversion, and interruption-resume workflows.
@@ -19,6 +19,8 @@ inputs:
 process:
   - identify whether the task touches issues, PRs, multi-agent sync, CLI comments, document conversion, or resumed work
   - when bootstrapping multi-agent work, create or locate the repo-local workflow contract before handing issues to Implementers
+  - apply an issue role-fit gate before moving work into an Implementer inbox
+  - split mixed issues or constrain Implementers to evidence, preliminary classification, implementation, or verification when final decisions remain Architect-owned
   - apply the matching collaboration, implementation, or testing practice
   - for Implementer pickup, read Project/label state plus issue execution contracts before creating branches or PRs
   - prefer dependency-gated batch handoff when related child issues can be released safely under one Epic checkpoint
@@ -31,7 +33,8 @@ outputs:
   - issue or PR workflow recommendations
   - repo-local workflow contract recommendations
   - Project/Epic/label queue guidance
-  - Execution Contract and pickup confirmation guidance
+  - issue role-fit recommendations
+  - Execution Contract role-boundary and pickup confirmation guidance
   - dependency-gated batch handoff guidance
   - completion and verification comments
   - dual-surface review handoff and batch review guidance
@@ -79,7 +82,8 @@ success_criteria:
   - Project status, labels, issue comments, and PRs have clear roles in the handoff
   - Ready queues are sorted by explicit dependency gates before Implementers start coding
   - related child issues are batched for handoff when dependency gates make the batch safe and detectable
-  - issue execution contracts define branch strategy, base branch, PR target, dependencies, merge rule, and verification
+  - issue execution contracts define branch strategy, base branch, PR target, dependencies, role fit, Architect-owned decisions, Implementer boundary, merge rule, and verification
+  - Implementer issues explicitly separate evidence, implementation, and verification from Architect-owned taxonomy, architecture, policy, harvest, privacy, or security decisions
   - multi-agent feature work prefers Epic integration branches unless a direct-to-main or stacked PR exception is justified
   - review handoff appears on both issue and PR surfaces when changes are requested
   - related low-risk issues are reviewed at meaningful batch or Epic checkpoints rather than through unnecessary per-issue churn

@@ -73,9 +73,10 @@ For GitHub and multi-agent collaboration, use the Agent Collaboration asset ASSE
 - Before issue work in a multi-agent repo, fetch or pull and verify local/remote sync when another machine may have pushed.
 - Do not infer that a session is ending after compaction, interruption, or completing one subtask; continue from my latest request.
 - When completing a task list from another agent, verify each item against the original list — not against implementation signals like tests passing or build succeeding.
-- In a new multi-agent repository, Architect should bootstrap or locate the repo-local workflow contract before handing issues to Implementers.
+- In a new multi-agent repository, Architect should bootstrap or locate the repo-local workflow contract and apply an issue role-fit gate before handing issues to Implementers.
 - Use GitHub Project status for human-visible state and `needs:*` labels plus comments as the agent inbox/message layer.
-- Ready issues should carry an Execution Contract with branch strategy, base branch, PR target, dependencies, merge rule, and verification.
+- Ready issues should carry an Execution Contract with branch strategy, base branch, PR target, dependencies, role fit, Architect-owned decisions, Implementer boundary, merge rule, and verification.
+- Before moving work into an Implementer inbox, classify role fit; split mixed work or constrain Implementers to evidence, preliminary classification, implementation, or verification when final taxonomy, architecture, policy, harvest, privacy, or security decisions remain Architect-owned.
 - `Ready + needs:implementer` may be an ordered queue; prefer dependency-gated batch handoff over per-issue churn, and obey `Depends on` gates before starting code.
 - Prefer Epic integration branches for multi-agent feature work; direct-to-main and stacked PRs are explicit alternatives with narrower use.
 - When review requests changes, leave detailed PR feedback and a linked issue handoff before routing back to Implementer; prefer batch or Epic checkpoint review for related low-risk issues.
