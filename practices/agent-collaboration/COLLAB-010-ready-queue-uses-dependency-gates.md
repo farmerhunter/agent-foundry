@@ -4,9 +4,9 @@ title: Ready queues use dependency gates
 domain: agent-collaboration
 type: playbook
 status: active
-version: 1
+version: 2
 created: 2026-06-07
-updated: 2026-06-07
+updated: 2026-06-08
 tags: [agent-collaboration, queue, dependencies, github-project, handoff]
 aliases:
   - COLLAB-010
@@ -26,7 +26,9 @@ provenance: "Harvested from tiny-ipa M3 queue design on 2026-06-07, where #14-#1
 
 ## Rationale
 
-If the Architect only releases one issue at a time, the user remains a message broker between agents. If the Architect releases every issue without dependency gates, the Implementer may start work too early. The scalable middle ground is to make the whole queue visible while using explicit `Depends on` conditions as the start gate.
+If the Architect only releases one issue at a time, the user remains a message broker between agents. If the Architect releases every issue without dependency gates, the Implementer may start work too early. The scalable middle ground is to make a coherent batch visible while using explicit `Depends on` conditions as the start gate.
+
+Small issues should not automatically create small handoffs. When a set of issues belongs to the same Epic-level objective and has clear dependency gates, batching the handoff reduces coordination overhead and lets the Implementer proceed without returning to the Architect after every child issue.
 
 ## Guidance
 
@@ -35,7 +37,10 @@ Architects may move a dependent issue sequence to `Ready` and label it `needs:im
 - every issue has an execution contract;
 - dependencies are explicit and checkable;
 - dependent issues share the same integration branch unless an exception is documented;
-- the Implementer can continue the queue without another Architect handoff.
+- the Implementer can continue the queue without another Architect handoff;
+- the batch has a natural checkpoint where Architect or Reviewer can review the combined output.
+
+Prefer an Epic or sub-Epic batch handoff when the work is low-risk, tightly related, and the dependencies are clear. Do not split handoff into one Architect interaction per child issue merely because the work is represented as multiple issues.
 
 Implementers should:
 
@@ -60,12 +65,14 @@ Waiting for #... to merge into `epic/...`.
 - A sequence of issues is already planned and should not require repeated Architect release.
 - Dependencies are linear or otherwise easy to check from issue/PR state.
 - The Implementer can continue after prior PRs merge into the agreed base branch.
+- A batch of small related issues should be executed before a meaningful Architect or Reviewer checkpoint.
 
 ## Watch Out For
 
 - Do not create a working branch or PR for a dependent issue before its `Depends on` condition is true.
 - Do not use Ready queues when dependencies are vague, circular, or need a user decision.
 - Do not assume GitHub Project order is the dependency graph. The execution contract is the gate.
+- Do not force a handoff or review checkpoint after every child issue when the Epic can be reviewed as a coherent batch.
 
 ## Example
 

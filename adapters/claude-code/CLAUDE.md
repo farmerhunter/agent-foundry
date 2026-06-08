@@ -105,9 +105,9 @@ Use the Agent Collaboration asset ASSET-COLLAB-001 for GitHub issue, PR, GitHub 
 - In a new multi-agent repository, Architect should bootstrap or locate the repo-local workflow contract before handing issues to Implementers.
 - Use GitHub Project status for human-visible state and `needs:*` labels plus comments as the agent inbox/message layer.
 - Ready issues should carry an Execution Contract with branch strategy, base branch, PR target, dependencies, merge rule, and verification.
-- `Ready + needs:implementer` may be an ordered queue; Implementers must obey `Depends on` gates before starting code.
+- `Ready + needs:implementer` may be an ordered queue; prefer dependency-gated batch handoff over per-issue churn, and obey `Depends on` gates before starting code.
 - Prefer Epic integration branches for multi-agent feature work; direct-to-main and stacked PRs are explicit alternatives with narrower use.
-- When review requests changes, leave detailed PR feedback and a linked issue handoff before routing back to Implementer.
+- When review requests changes, leave detailed PR feedback and a linked issue handoff before routing back to Implementer; prefer batch or Epic checkpoint review for related low-risk issues.
 - For complex handoffs, preserve knowledge state before action planning: context, research output, frameworks, decisions, rejected options, user corrections, current capability boundary, unresolved questions, and next actions.
 
 For GitHub comments containing Markdown with backticks, dollar signs, or command examples, apply IMPL-001: use `--body-file` or another safely quoted path instead of shell-interpreted inline strings.

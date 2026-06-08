@@ -41,13 +41,18 @@ assets:
     path: assets/skills/ASSET-COLLAB-001-agent-collaboration.asset.yaml
     asset_type: skill
     status: active
-    canonical_practices: [COLLAB-001, COLLAB-002, COLLAB-003, COLLAB-004, COLLAB-005, COLLAB-006, IMPL-001, TEST-001]
+    canonical_practices: [COLLAB-001, COLLAB-002, COLLAB-003, COLLAB-004, COLLAB-005, COLLAB-006, COLLAB-007, COLLAB-008, COLLAB-009, COLLAB-010, COLLAB-011, COLLAB-012, COLLAB-014, IMPL-001, TEST-001]
     published_to: [codex, claude-code, hermes, chatgpt]
     usage_triggers:
       - GitHub issue work
       - pull request workflow
       - multi-agent repository synchronization
+      - GitHub Project workflow
+      - Epic workflow
+      - Execution Contract
+      - needs label inbox
       - issue completion comment
+      - PR review handoff
       - CLI Markdown comment
       - converted document deliverable
 
