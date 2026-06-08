@@ -30,7 +30,7 @@ Memory, session summaries, and activity logs are evidence sources only. Memory c
 
 Agent-native generated skills or self-improvement artifacts are also candidate inputs. Do not disable a capable agent's native learning just because Agent Foundry exists; route durable or cross-agent outputs through Agent Foundry review.
 
-Cross-project governance practices GOV-001 through GOV-004 apply in any project: protect canonical source of truth, prefer the smallest maintainable mechanism, treat transient context as evidence, and preserve native runtime capability. `meta` practices govern the Agent Foundry capability lifecycle itself.
+Cross-project governance practices GOV-001 through GOV-006 apply in any project: protect canonical source of truth, prefer the smallest maintainable mechanism, treat transient context as evidence, preserve native runtime capability, avoid treating future architecture as current substrate, and mark current versus proposed capability. `meta` practices govern the Agent Foundry capability lifecycle itself.
 
 After approval:
 

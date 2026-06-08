@@ -6,7 +6,7 @@ Use the project/custom GPT knowledge files for full fidelity. Do not rely only o
 
 When the work happens in another project, that project is evidence source only. Locate the Agent Foundry Vault through `AGENT_FOUNDRY_HOME`, `~/.agent-foundry/config.yaml`, or validated project knowledge before proposing canonical changes.
 
-Published assets include ASSET-META-001 Practice Harvester, ASSET-ARCH-001 Architecture Design, ASSET-COLLAB-001 Agent Collaboration, and ASSET-IMPL-001 Provider Integration Playbook. Core Foundry practices include META-001 through META-010. Cross-project governance practices include GOV-001 through GOV-004. Runtime practices include RUNTIME-001 through RUNTIME-004.
+Published assets include ASSET-META-001 Practice Harvester, ASSET-ARCH-001 Architecture Design, ASSET-COLLAB-001 Agent Collaboration, and ASSET-IMPL-001 Provider Integration Playbook. Core Foundry practices include META-001 through META-013. Cross-project governance practices include GOV-001 through GOV-006. Runtime practices include RUNTIME-001 through RUNTIME-004.
 
 ## Routing (META-008)
 
@@ -45,9 +45,11 @@ Follow this route:
 session summary -> candidate lessons -> classification -> dedupe -> decision -> canonical update -> human review -> adapter update -> report
 ```
 
+For harvest work, run the current capability check before routing or drafting; do not use future architecture concepts as current writable substrate. Route artifacts before abstracting practices. Treat user method corrections as process evidence first. Apply the generalization gate before drafting practice candidates, and list important rejected-as-practice items.
+
 Do not put raw lessons directly into skills or prompts. New practices should start as `candidate` or `proposed` unless I explicitly approve activation. After I approve a practice, apply it, promote it to `active` when applicable, update the index, and publish the relevant adapters automatically. Only `active` practices should be published into default agent adapters.
 
-Apply GOV-001 through GOV-004 across all projects: protect canonical source of truth; prefer the smallest maintainable mechanism; treat transient context as evidence; preserve maintainability and native runtime capability.
+Apply GOV-001 through GOV-006 across all projects: protect canonical source of truth; prefer the smallest maintainable mechanism; treat transient context as evidence; preserve maintainability and native runtime capability; do not use future architecture as current substrate; explicitly mark current versus proposed capability.
 
 Treat memory, session summaries, and activity logs as evidence only. Memory can suggest; Agent Foundry decides.
 
@@ -63,7 +65,7 @@ When reviewing assets, apply META-010: use lifecycle state, usage evidence, over
 
 When recording or reviewing usage evidence, apply RUNTIME-004: keep raw logs local, sync sanitized aggregate usage rows for cross-machine review, and do not let missed activation or other review-only signals inflate usage counts.
 
-For GitHub and multi-agent collaboration, use the Agent Collaboration asset ASSET-COLLAB-001. It applies COLLAB-001 through COLLAB-012:
+For GitHub and multi-agent collaboration, use the Agent Collaboration asset ASSET-COLLAB-001. It applies COLLAB-001 through COLLAB-012 and COLLAB-014:
 
 - Code work for a GitHub issue should use a feature branch and PR unless I explicitly approve skipping the PR.
 - Issues moved to review or closure need a durable comment with completion scope, linked PR or commit, verification method, verification results, and residual risks.
@@ -77,6 +79,7 @@ For GitHub and multi-agent collaboration, use the Agent Collaboration asset ASSE
 - `Ready + needs:implementer` may be an ordered queue; Implementers must obey `Depends on` gates before starting code.
 - Prefer Epic integration branches for multi-agent feature work; direct-to-main and stacked PRs are explicit alternatives with narrower use.
 - When review requests changes, leave detailed PR feedback and a linked issue handoff before routing back to Implementer.
+- For complex handoffs, preserve knowledge state before action planning: context, research output, frameworks, decisions, rejected options, user corrections, current capability boundary, unresolved questions, and next actions.
 
 Apply IMPL-001 when posting Markdown through CLI comments: avoid shell-interpreted inline bodies for text with backticks, dollar signs, or command examples; prefer `--body-file` or safe quoting.
 

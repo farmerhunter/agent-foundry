@@ -112,6 +112,33 @@ practices:
     tags: [assets, lifecycle, evidence, review, skill-rot]
     aliases: [asset lifecycle review needs evidence, review assets before skill rot, usage evidence drives asset lifecycle]
 
+  - id: META-011
+    title: Route artifacts before abstracting practices
+    path: practices/meta/META-011-route-artifacts-before-abstracting-practices.md
+    domain: meta
+    type: heuristic
+    status: active
+    tags: [harvesting, artifact-routing, practice-governance, review]
+    aliases: [route artifacts before practices, do not convert every insight into a practice]
+
+  - id: META-012
+    title: Treat user corrections as process evidence before content evidence
+    path: practices/meta/META-012-treat-user-corrections-as-process-evidence-before-content-evidence.md
+    domain: meta
+    type: heuristic
+    status: active
+    tags: [feedback-learning, corrections, harvesting, process-evidence]
+    aliases: [user corrections are process evidence first, corrections reveal workflow failures]
+
+  - id: META-013
+    title: Apply a generalization gate before promoting insights into practices
+    path: practices/meta/META-013-apply-generalization-gate-before-promoting-insights-into-practices.md
+    domain: meta
+    type: checklist
+    status: active
+    tags: [harvesting, generalization, practice-governance, dedupe]
+    aliases: [generalization gate, practice candidates must generalize]
+
   - id: GOV-001
     title: Protect canonical source of truth
     path: practices/governance/GOV-001-protect-canonical-source-of-truth.md
@@ -147,6 +174,24 @@ practices:
     status: active
     tags: [governance, maintainability, runtime, degradation, safety]
     aliases: [do not degrade native agent capability, preserve long-term runtime capability]
+
+  - id: GOV-005
+    title: Do not use future architecture as current operating substrate
+    path: practices/governance/GOV-005-do-not-use-future-architecture-as-current-operating-substrate.md
+    domain: governance
+    type: anti-pattern
+    status: active
+    tags: [governance, capability-boundary, architecture, source-of-truth]
+    aliases: [future architecture is not current substrate, do not write to proposed systems]
+
+  - id: GOV-006
+    title: Explicitly mark current capability versus proposed capability
+    path: practices/governance/GOV-006-explicitly-mark-current-capability-versus-proposed-capability.md
+    domain: governance
+    type: principle
+    status: active
+    tags: [governance, capability-boundary, architecture-discussion, handoff]
+    aliases: [mark current versus proposed capability, distinguish current proposed future deprecated unknown]
 
   - id: RUNTIME-001
     title: Treat agent runtimes as shared, user-owned environments
@@ -399,6 +444,15 @@ practices:
     status: proposed
     tags: [agent-collaboration, manual-edit, git, vscode, safety]
     aliases: [safe edit, manual edit safety]
+
+  - id: COLLAB-014
+    title: Preserve knowledge state before action planning in handoff
+    path: practices/agent-collaboration/COLLAB-014-preserve-knowledge-state-before-action-planning-in-handoff.md
+    domain: agent-collaboration
+    type: checklist
+    status: active
+    tags: [agent-collaboration, handoff, continuity, knowledge-preservation]
+    aliases: [preserve knowledge before plan, handoff keeps research state]
 
   - id: TEST-001
     title: Render-verify format conversions

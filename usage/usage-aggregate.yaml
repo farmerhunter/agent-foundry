@@ -1,5 +1,5 @@
 schema_version: 1
-updated: 2026-06-07
+updated: 2026-06-08
 
 aggregates:
   - subject_type: asset
@@ -37,11 +37,11 @@ aggregates:
     period: 2026-06
     agent: "codex"
     machine_hash: "a6bcad5212d8"
-    useful_count: 5
+    useful_count: 6
     neutral_count: 0
     not_useful_count: 0
     unknown_count: 0
-    last_used: 2026-06-03
+    last_used: 2026-06-08
   - subject_type: asset
     subject_id: ASSET-META-001
     period: 2026-06

@@ -11,7 +11,7 @@ This skill applies Agent Foundry collaboration and delivery practices.
 
 ## Asset vs Practice
 
-This skill is an asset that performs a repeatable workflow. During execution, it references canonical practices (COLLAB-001 through COLLAB-012, TEST-001, IMPL-001) as behavioral constraints. Do not confuse the skill with the practices it applies.
+This skill is an asset that performs a repeatable workflow. During execution, it references canonical practices (COLLAB-001 through COLLAB-012, COLLAB-014, TEST-001, IMPL-001) as behavioral constraints. Do not confuse the skill with the practices it applies.
 
 ## Core Rules
 
@@ -27,6 +27,7 @@ This skill is an asset that performs a repeatable workflow. During execution, it
 - COLLAB-010: `Ready + needs:implementer` may be an ordered queue; Implementers must obey `Depends on` gates before starting code.
 - COLLAB-011: Prefer Epic integration branches for multi-agent feature work; direct-to-main and stacked PRs are explicit alternatives with narrower use.
 - COLLAB-012: Review handoff needs both surfaces: detailed PR feedback plus an issue handoff that routes the next agent.
+- COLLAB-014: For complex handoffs, preserve knowledge state before action planning, including research output, rationale, rejected options, user corrections, capability boundaries, unresolved questions, and next actions.
 - TEST-001: For converted document deliverables, verify rendered output, fonts, encoding, images, and source-to-output structure rather than relying only on command success.
 - IMPL-001: When posting Markdown through CLI comments, avoid shell-interpreted inline bodies for text with backticks, dollar signs, or command examples; prefer `--body-file` or safe quoting.
 

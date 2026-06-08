@@ -7,7 +7,7 @@ description: Use when the user says "harvest practices", "做一次 harvest prac
 
 This skill maintains Agent Foundry, the user's canonical capability system.
 
-Asset ID: ASSET-META-001. Canonical constraints include META-001 through META-010, GOV-001 through GOV-004, and RUNTIME-001 through RUNTIME-004.
+Asset ID: ASSET-META-001. Canonical constraints include META-001 through META-013, GOV-001 through GOV-006, and RUNTIME-001 through RUNTIME-004.
 
 ## Asset vs Practice
 
@@ -40,20 +40,24 @@ Before substantial changes, check:
 2. Select the workflow from the short command or user intent.
 3. Read `references/harvest-workflow.md` for harvesting, `references/import-policy.md` for imports, `references/asset-policy.md` for assets, or the repository workflow file for publish/review.
 4. Read `references/schema.md`.
-5. Search the practice index before creating anything new.
-6. Present a concise review list.
-7. After the user approves a practice, apply the canonical change and publish relevant adapters automatically.
-8. Report candidates, decisions, changed files, and review needs.
+5. Run the current capability check before routing or drafting; do not use future architecture concepts as current writable substrate.
+6. Route artifacts before abstracting practices: evidence only, design note, research/reference material, project-local decision, workflow update, practice candidate, skill/asset candidate, adapter update, or discard.
+7. Apply the generalization gate before drafting practice candidates.
+8. Search the practice index before creating anything new.
+9. Present a concise review list including rejected-as-practice items when important.
+10. After the user approves a practice, apply the canonical change and publish relevant adapters automatically.
+11. Report candidates, decisions, changed files, and review needs.
 
 ## Guardrails
 
-- Apply governance practices GOV-001 through GOV-004 across all projects, not only inside Agent Foundry: protect canonical source of truth, prefer the smallest maintainable mechanism, treat transient context as evidence, and preserve maintainability plus native runtime capability.
+- Apply governance practices GOV-001 through GOV-006 across all projects, not only inside Agent Foundry: protect canonical source of truth, prefer the smallest maintainable mechanism, treat transient context as evidence, preserve maintainability plus native runtime capability, do not use future architecture as current substrate, and mark current versus proposed capability.
 - Do not add raw session notes directly into agent skills.
 - Do not publish `candidate` or `proposed` entries into default adapters.
 - Do not import external skills directly into active adapters.
 - Ask for human approval before promoting a practice to `active`; after approval, publish relevant adapters unless the user asks to stage only.
 - Record concise, non-sensitive asset usage evidence automatically when an active asset is invoked.
 - Treat memory as evidence, not source of truth.
+- During harvest, route artifacts before abstraction, treat user method corrections as process evidence first, and require insights to pass a generalization gate before they become practice candidates.
 - Do not disable Hermes native memory, autonomous skill creation, or local self-improvement. Treat native outputs as candidate inputs when they should become durable or cross-agent.
 - Treat agent runtime directories as shared user-owned environments. When publishing adapters, use managed blocks, namespaced files, ownership markers, backups, dry-runs, and explicit adoption for unmanaged runtime paths; never overwrite unmanaged runtime files by default.
 - Separate portable adapter intent from machine-local deployment state. Keep adapter profiles and runtime templates in the repo, but keep enabled targets, detected paths, and adoption decisions in gitignored local manifests; portable snapshots exclude machine-local runtime state by default.

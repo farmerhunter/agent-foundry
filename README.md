@@ -109,3 +109,4 @@ DeepSeek, MiniMax, and similar model providers are treated as underlying models 
 - [Lifecycle Compatibility](docs/lifecycle-compatibility.md): how the full loop maps across agent systems.
 - [Offline Sync](docs/offline-sync.md): snapshot and remote sync strategy.
 - [Standards and Sources](docs/standards-and-sources.md): external conventions and adapter standards.
+- [Memory System Handoff Dump](docs/memory-system-handoff-dump.md): preserved discussion evidence for a proposed future memory/knowledge subsystem; not current implemented architecture.

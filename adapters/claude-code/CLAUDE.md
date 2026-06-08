@@ -10,7 +10,7 @@ Before acting on a request, classify user intent:
 
 - If the user asks to **execute a repeatable workflow** (harvest, design architecture, collaborate on a PR), match the request to an asset trigger and invoke the asset. During execution, reference the canonical practices the asset lists.
 - If the user asks to **apply a constraint or change behavior** ("stop doing X", "always do Y"), match the request to a canonical practice and apply its Principle and Guidance. Do not invoke an asset for a one-off behavioral correction.
-- If the user asks to **update or govern agent knowledge**, invoke the Practice Harvester asset (ASSET-META-001, META-001 through META-010, GOV-001 through GOV-004, RUNTIME-001 through RUNTIME-004).
+- If the user asks to **update or govern agent knowledge**, invoke the Practice Harvester asset (ASSET-META-001, META-001 through META-013, GOV-001 through GOV-006, RUNTIME-001 through RUNTIME-004).
 
 Assets perform work; practices govern rules. Do not conflate them.
 
@@ -47,10 +47,13 @@ When asked to harvest, persist, deduplicate, merge, or publish reusable lessons:
 1. Locate Agent Foundry Core and Vault. Use `AGENT_FOUNDRY_HOME`, then `~/.agent-foundry/config.yaml`, then the current directory only if canonical markers exist. The current project is evidence source, not canonical destination.
 2. Read `workflows/harvest-practices.md`.
 3. Read `schemas/practice-entry.schema.yaml`.
-4. Search `indexes/practice_index.yaml`.
-5. Update canonical practice entries under `practices/` first.
-6. Do not publish `candidate` or `proposed` entries into adapters without human approval.
-7. After the user approves a practice, apply it, promote it to `active` when applicable, update the index, and publish relevant adapters automatically.
+4. Run the current capability check; do not use future architecture concepts as current writable substrate.
+5. Route artifacts before abstracting practices.
+6. Apply the generalization gate before drafting practice candidates.
+7. Search `indexes/practice_index.yaml`.
+8. Update canonical practice entries under `practices/` first.
+9. Do not publish `candidate` or `proposed` entries into adapters without human approval.
+10. After the user approves a practice, apply it, promote it to `active` when applicable, update the index, and publish relevant adapters automatically.
 
 When asked to discover reusable assets, read `workflows/discover-assets.md`, search `indexes/asset_index.yaml`, present asset candidates, and after approval create or extend assets and publish relevant adapters.
 
@@ -58,12 +61,14 @@ When an active asset is used, record concise non-sensitive usage evidence automa
 
 ## Cross-Project Governance
 
-Apply GOV-001 through GOV-004 across all projects, not only inside Agent Foundry:
+Apply GOV-001 through GOV-006 across all projects, not only inside Agent Foundry:
 
 - GOV-001: protect canonical source of truth; derived views, generated files, caches, summaries, and compatibility artifacts must not become second hand-maintained truth sources.
 - GOV-002: prefer the smallest maintainable mechanism; avoid adding scripts, layers, files, automations, or abstractions before ownership, validation, and failure modes are clear.
 - GOV-003: treat transient context as evidence; memory, chat history, rollout summaries, and temporary notes must be verified against project-owned durable records.
 - GOV-004: preserve maintainability and runtime capability; do not degrade native agent memory, skills, project instructions, self-improvement, or user-owned runtime configuration.
+- GOV-005: do not use future architecture concepts, directories, schemas, categories, or workflows as if they already exist.
+- GOV-006: explicitly mark current, candidate, proposed, future, deprecated, or unknown capability state when it affects action.
 
 Treat memory, session summaries, and activity logs as evidence only. Durable rules and assets belong in Agent Foundry canonical records.
 
@@ -79,6 +84,8 @@ Apply META-009 when publishing adapters: adapter quality must be executable and 
 
 Apply META-010 when reviewing assets: use lifecycle state, usage evidence, overlap, canonical coverage, stale triggers, and published targets before recommending keep, revise, deprecate, archive, split, or merge.
 
+Apply META-011 through META-013 during harvest: route artifacts before abstracting practices, treat user method corrections as process evidence before domain content, and require insights to pass a generalization gate before they become practice candidates.
+
 Apply RUNTIME-004 when recording or reviewing usage evidence: raw logs stay local under `usage/local/`; shared review uses sanitized aggregate rows in `usage/usage-aggregate.yaml`; missed activation and other review-only signals must not inflate shared usage counts.
 
 ## External Skills
@@ -87,7 +94,7 @@ When asked to borrow or evaluate external skills, read `workflows/import-externa
 
 ## GitHub And Multi-Agent Collaboration
 
-Use the Agent Collaboration asset ASSET-COLLAB-001 for GitHub issue, PR, GitHub Project/Epic scheduling, multi-agent sync, CLI comment, document conversion, and resume workflows. It applies canonical collaboration practices COLLAB-001 through COLLAB-012:
+Use the Agent Collaboration asset ASSET-COLLAB-001 for GitHub issue, PR, GitHub Project/Epic scheduling, multi-agent sync, CLI comment, document conversion, and resume workflows. It applies canonical collaboration practices COLLAB-001 through COLLAB-012 and COLLAB-014:
 
 - For code work tied to a GitHub issue, use a feature branch and PR unless the user explicitly approves skipping the PR.
 - Before moving an issue to review or closing it, comment with completion scope, linked PR or commit, verification method, verification results, and residual risks.
@@ -101,6 +108,7 @@ Use the Agent Collaboration asset ASSET-COLLAB-001 for GitHub issue, PR, GitHub 
 - `Ready + needs:implementer` may be an ordered queue; Implementers must obey `Depends on` gates before starting code.
 - Prefer Epic integration branches for multi-agent feature work; direct-to-main and stacked PRs are explicit alternatives with narrower use.
 - When review requests changes, leave detailed PR feedback and a linked issue handoff before routing back to Implementer.
+- For complex handoffs, preserve knowledge state before action planning: context, research output, frameworks, decisions, rejected options, user corrections, current capability boundary, unresolved questions, and next actions.
 
 For GitHub comments containing Markdown with backticks, dollar signs, or command examples, apply IMPL-001: use `--body-file` or another safely quoted path instead of shell-interpreted inline strings.
 

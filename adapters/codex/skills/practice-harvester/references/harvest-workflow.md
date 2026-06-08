@@ -8,6 +8,9 @@ Follow this route:
 
 ```text
 session reconstruction
+  -> current capability check
+  -> artifact routing
+  -> generalization gate
   -> candidate extraction
   -> classification
   -> dedupe against index
@@ -19,6 +22,10 @@ session reconstruction
 ```
 
 Keep only candidates that are reusable, actionable, specific, evidence-backed, and likely to change future agent behavior.
+
+Before drafting candidates, route important artifacts as evidence only, design note, research/reference material, project-local decision, workflow update, practice candidate, skill/asset candidate, adapter update, or discard. Treat user method corrections as process evidence first. Do not use future architecture concepts, directories, schemas, or workflow categories as current writable substrate.
+
+Rejected-as-practice items should be named when important, especially when they are domain research, project-local decisions, or future architecture rather than generalized Agent Foundry practices.
 
 Decisions:
 
