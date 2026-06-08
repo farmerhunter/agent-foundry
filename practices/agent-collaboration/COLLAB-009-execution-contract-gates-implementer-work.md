@@ -4,7 +4,7 @@ title: Execution contracts gate Implementer work
 domain: agent-collaboration
 type: checklist
 status: active
-version: 4
+version: 5
 created: 2026-06-07
 updated: 2026-06-08
 tags: [agent-collaboration, issue-contracts, handoff, branches, verification]
@@ -62,6 +62,8 @@ Use these meanings:
 
 For related low-risk child issues in the same Epic integration branch, prefer `batch checkpoint` as the completion handoff. If `Architect-owned decisions` is not `none`, the default handoff is `move to Review` unless the contract explicitly names a batch checkpoint that preserves the Architect-owned decision for that checkpoint.
 
+**`batch checkpoint` is a contract-level opt-in, not an Implementer inference.** An Implementer must not apply batch checkpoint behavior (skipping `needs:architect` after completion) unless the issue's Execution Contract contains an explicit `Completion handoff: batch checkpoint` field. When the contract is silent or uses an older format without a `Completion handoff` field, default to the traditional per-issue handoff: remove `needs:implementer`, add `needs:architect`, and set Project status to `In Review`. New practice versions do not retroactively change the handoff contract of existing issues.
+
 When the Implementer actually starts work, it should confirm:
 
 ```markdown
@@ -93,6 +95,7 @@ Use pickup confirmation only when dependencies are satisfied and implementation 
 - Do not hand off a mixed issue as if it were pure implementation; split it or constrain the Implementer to evidence, preliminary classification, code edits, or verification.
 - Do not write a closure rule that contradicts the review boundary. Evidence-only and preliminary-classification tasks should move to Review unless direct closure is explicitly delegated.
 - Do not treat an open child PR as an automatic request for immediate Architect review. The `Completion handoff`, high-risk triggers, failed verification, or the batch/Epic checkpoint determine review timing.
+- Do not apply new practice versions to old-format Execution Contracts without checking whether the contract supports the new behavior. When a practice update introduces new contract fields (e.g. `Completion handoff`), issues written before that update do not automatically gain the new behavior. Default to the traditional handoff unless the contract explicitly opts in.
 
 ## Example
 
