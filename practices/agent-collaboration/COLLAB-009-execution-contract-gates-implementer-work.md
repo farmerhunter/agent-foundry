@@ -4,7 +4,7 @@ title: Execution contracts gate Implementer work
 domain: agent-collaboration
 type: checklist
 status: active
-version: 2
+version: 3
 created: 2026-06-07
 updated: 2026-06-08
 tags: [agent-collaboration, issue-contracts, handoff, branches, verification]
@@ -43,11 +43,14 @@ Role fit: evidence gathering | implementation | verification/review | taxonomy/a
 Architect-owned decisions: ...
 Implementer boundary: ...
 Expected PR shape: one PR for this issue
+Completion handoff: close after evidence | move to Review | open PR | return to Architect | batch checkpoint
 Merge rule: ...
 Verification required: ...
 ```
 
 Role fit is required when the issue includes classification, taxonomy, architecture boundary, policy, harvest, privacy, security, or future-system work. If the role fit is mixed, split the issue or state which decisions remain Architect-owned. Implementer evidence may include preliminary classification, but final taxonomy, policy, and architecture decisions need Architect review unless the contract explicitly delegates that authority.
+
+Completion handoff is required when the work will be executed by another agent. If `Architect-owned decisions` is not `none`, the default handoff is `move to Review`: the Implementer posts completion evidence, removes `needs:implementer`, adds the next owner label, keeps the issue open, and sets Project/Roadmap status to `Review`. An Implementer may close the issue directly only when the contract explicitly says `close after evidence` and no downstream review or decision remains.
 
 When the Implementer actually starts work, it should confirm:
 
@@ -69,6 +72,7 @@ Use pickup confirmation only when dependencies are satisfied and implementation 
 - The issue belongs to an Epic, queue, or dependency chain.
 - Review feedback returned an issue to Implementer and the fix branch must be reused.
 - The issue includes classification, taxonomy, architecture boundary, policy, harvest, privacy, security, or future-system judgment that could exceed a pure implementation role.
+- The issue produces evidence or preliminary classification that another role must accept before downstream work can proceed.
 
 ## Watch Out For
 
@@ -77,6 +81,7 @@ Use pickup confirmation only when dependencies are satisfied and implementation 
 - Do not move an issue into an Implementer inbox until the contract includes enough information to start or queue safely.
 - Do not let an Implementer make final taxonomy, architecture boundary, policy, harvest, privacy, or security decisions unless the Architect explicitly assigned that decision in the contract.
 - Do not hand off a mixed issue as if it were pure implementation; split it or constrain the Implementer to evidence, preliminary classification, code edits, or verification.
+- Do not write a closure rule that contradicts the review boundary. Evidence-only and preliminary-classification tasks should move to Review unless direct closure is explicitly delegated.
 
 ## Example
 

@@ -93,6 +93,7 @@ Suggested mapping:
 | AF-3 | `v0.3.0`: external-user-ready vault/core setup. |
 | AF-4 | `v0.4.0`: memory-system-ready design baseline. |
 | AF-5 MVP | `v0.5.0` or later: memory-system MVP, not automatically `v1.0`. |
+| Post-AF-5 | Future: capability pack discovery/export after the core lifecycle and memory decisions are stable. |
 
 `v1.0` should wait until the reusable core, user vault story, generated artifact policy, and runtime adapter behavior are stable enough that external users can rely on them without understanding this repository's personal history.
 
@@ -180,6 +181,7 @@ Epics:
   - Define which generated files are tracked, regenerated, ignored, or published elsewhere.
   - Define drift checks for tracked generated outputs.
   - Define cleanup rules for generated artifacts.
+  - Current policy location: `docs/system-design.md` section "Generated Artifact Policy".
 
 - **Local/private data policy**
   - Extend the raw-local vs shared-aggregate rule beyond usage evidence.
@@ -336,6 +338,41 @@ Acceptance criteria:
 - Decision record names the chosen option and rejected alternatives.
 - Future implementation plan has file boundaries, data flow, validation, privacy policy, and rollback path.
 
+### M6: Capability Pack Discovery and Lifecycle
+
+Goal: define whether Agent Foundry can recognize, maintain, and export higher-level capability packs that emerge from repeated work.
+
+This is intentionally later than repository hygiene, productization, lifecycle completion, memory readiness, and the fork-vs-extension decision. Do not use this milestone to delay AF-1 through AF-5.
+
+Capability packs are not the same as individual assets. A future capability pack may bundle practices, assets, workflows, templates, adapter snippets, examples, configuration profiles, dependency metadata, and export/install behavior around a recurring user goal such as multi-agent collaboration or technical documentation writing.
+
+Epics:
+
+- **Capability candidate detection**
+  - Define when repeated practice/asset/workflow co-activation suggests an emergent capability.
+  - Let agents propose capability candidates during harvest, asset discovery, or lifecycle review.
+  - Avoid requiring humans to predefine all future capability categories.
+
+- **Capability pack schema**
+  - Define relationships among practices, assets, workflows, templates, adapters, examples, dependencies, versions, and target runtimes.
+  - Keep the schema separate from current asset records unless review proves they should converge.
+
+- **Review and activation lifecycle**
+  - Define states such as detected, candidate, proposed, active, deprecated, split, and merged.
+  - Preserve human review before an emergent capability becomes active or exportable.
+  - Define how capability boundaries are revised when usage evidence shows a pack is too broad, too narrow, or overlapping.
+
+- **Export and install model**
+  - Define how an approved capability pack can be exported, installed, or reused without carrying this user's private vault content.
+  - Reuse Core/Vault split, generated artifact policy, adapter publishing, and runtime install safeguards.
+
+Acceptance criteria:
+
+- Capability packs are modeled as emergent, reviewable bundles rather than human-predeclared categories.
+- Agents can propose capability candidates from evidence, but cannot activate or publish them without review.
+- Exportable packs do not include local-private evidence, personal vault content, or future architecture concepts as current substrate.
+- The design proves at least one existing capability cluster could be packaged without weakening Core/Vault boundaries.
+
 ## Work Not To Do Yet
 
 - Do not create `memory/`, `knowledge/`, `research_memos/`, or `project_memory` directories.
@@ -343,6 +380,7 @@ Acceptance criteria:
 - Do not add semantic/vector/graph indexes.
 - Do not add MCP write tools.
 - Do not import raw ChatGPT exports.
+- Do not implement capability pack discovery, packaging, export, or install before the earlier repository, lifecycle, and memory-readiness decisions are stable.
 - Do not refactor adapters or runtime install behavior until repository hygiene policy exists.
 
 ## Immediate Next Planning Tasks

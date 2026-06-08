@@ -4,9 +4,9 @@ title: Use GitHub Project as a lightweight agent scheduler
 domain: agent-collaboration
 type: pattern
 status: active
-version: 1
+version: 2
 created: 2026-06-07
-updated: 2026-06-07
+updated: 2026-06-08
 tags: [agent-collaboration, github-project, scheduler, labels, epics]
 aliases:
   - COLLAB-008
@@ -47,6 +47,8 @@ CI = automated validation gate
 
 Keep Epics as coordination containers. Do not put `needs:implementer` on an Epic merely because its child issues are ready. If an Epic-level concern requires code, tests, manual QA, data migration, or completion evidence from an Implementer, create a child issue for that executable work.
 
+Keep issue type semantically honest. Use an Epic for coordination across child issues, dependencies, or exit criteria. If the remaining work has collapsed into one concrete deliverable, classify it as a Task even when the Architect performs it directly.
+
 Use exactly one primary next-action label on an active issue unless the work is genuinely blocked:
 
 ```text
@@ -60,6 +62,15 @@ blocked
 
 When changing handoff ownership, change both the label and the durable comment. The label routes the next agent; the comment explains what to do.
 
+Keep scheduler state coherent across surfaces:
+
+- `Ready` means available for pickup, not completed.
+- `In Progress` means an agent is actively executing or holding the work.
+- `Review` means the producing agent has posted completion evidence and the next owner must validate or decide.
+- `Done` means the work has been accepted and closed, or the Epic exit criteria are satisfied.
+
+Do not leave one status surface saying `Ready` while another says `Done`. If a repository uses both GitHub's built-in Project `Status` and a custom roadmap status field, update both to represent the same lifecycle phase.
+
 ## Use This When
 
 - Agents ask "what should I pick up next?"
@@ -71,6 +82,8 @@ When changing handoff ownership, change both the label and the durable comment. 
 - Do not rely on Project status alone for agent pickup. Labels are easier for agents to query.
 - Do not rely on labels alone for context. The latest durable comment must explain the next action.
 - Do not let Epic coordination issues become fake implementation work. Split executable concerns into child issues.
+- Do not keep a completed or closed issue in `Ready`; move it to `Review` for validation or `Done` after acceptance.
+- Do not keep a single-deliverable policy or implementation issue labeled as an Epic merely because it came from roadmap planning.
 
 ## Example
 

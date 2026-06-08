@@ -16,7 +16,7 @@ Published asset IDs:
 - ASSET-COLLAB-001 Agent Collaboration
 - ASSET-IMPL-001 Provider Integration Playbook
 
-ASSET-COLLAB-001 currently maps to COLLAB-001 through COLLAB-012, COLLAB-014, IMPL-001, and TEST-001. It covers GitHub issue/PR traceability, repository sync, repo-local multi-agent workflow contracts, issue role-fit gates, GitHub Project/Epic scheduling, issue Execution Contracts with Architect-owned decision boundaries, Ready queues with dependency gates and batch handoff, Epic integration branch defaults, dual-surface review handoff, batch/Epic checkpoint review, safe CLI Markdown comments, complex handoff continuity, and render-verified document conversion. Proposed practices such as COLLAB-013 are not published into default adapters until approved active.
+ASSET-COLLAB-001 currently maps to COLLAB-001 through COLLAB-012, COLLAB-014, IMPL-001, and TEST-001. It covers GitHub issue/PR traceability, repository sync, repo-local multi-agent workflow contracts, issue role-fit gates, GitHub Project/Epic scheduling, issue Execution Contracts with Architect-owned decision boundaries and completion handoff state, coherent Project/status/label routing, Ready queues with dependency gates and batch handoff, Epic integration branch defaults, dual-surface review handoff, batch/Epic checkpoint review, safe CLI Markdown comments, complex handoff continuity, and render-verified document conversion. Proposed practices such as COLLAB-013 are not published into default adapters until approved active.
 
 Assets are user-facing reusable tools discovered from repeated work:
 

@@ -4,7 +4,7 @@ title: Review handoff needs both issue and PR surfaces
 domain: agent-collaboration
 type: checklist
 status: active
-version: 2
+version: 3
 created: 2026-06-07
 updated: 2026-06-08
 tags: [agent-collaboration, review, handoff, github, pull-requests]
@@ -46,6 +46,8 @@ When planning review granularity:
 - Review individual issues immediately when they introduce blockers, high-risk changes, unclear dependencies, privacy/security risk, schema/runtime boundary changes, or a failed verification signal.
 - If a batch review sends work back, include both the batch-level summary and the specific issue or PR links that need action.
 - Keep child issues traceable, but do not require a separate Architect interaction for every child issue when the review question is really batch-level.
+- When an Implementer finishes evidence-only work, preliminary classification, or any task with Architect-owned decisions, the issue should move to `Review`, not `Done`. Remove `needs:implementer`, add `needs:architect` or `needs:reviewer`, keep the issue open, and post completion evidence plus residual risks.
+- For a batch checkpoint, every completed child issue may move to `Review` while the Architect waits for the full batch before reviewing. Batch review reduces interactions; it does not mean child issues skip the review state.
 
 The child issue handoff should include:
 
@@ -78,6 +80,8 @@ Next action:
 - Do not rely only on PR comments when agents discover work through issue labels.
 - Do not ask the Implementer to create a replacement branch unless the existing fix branch is truly unusable.
 - Do not create needless per-issue review churn when a batch checkpoint would catch the same risks with less handoff overhead.
+- Do not let an Implementer close an issue that still requires Architect-owned taxonomy, policy, privacy, security, harvest, generated-artifact, or Core/Vault decisions.
+- Do not leave batch child issues in `Ready` after the producing agent has posted completion evidence; move them to `Review` until the batch is accepted.
 
 ## Example
 
