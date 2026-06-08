@@ -106,6 +106,7 @@ DeepSeek, MiniMax, and similar model providers are treated as underlying models 
 - [Usage](docs/usage.md): day-to-day commands and prompts.
 - [Deployment](docs/deployment.md): fresh install, runtime changes, sync, and offline operation.
 - [System Design](docs/system-design.md): architecture, boundaries, lifecycle, and governance model.
+- [Roadmap](docs/roadmap.md): productization, repository hygiene, and memory-system readiness plan.
 - [Lifecycle Compatibility](docs/lifecycle-compatibility.md): how the full loop maps across agent systems.
 - [Offline Sync](docs/offline-sync.md): snapshot and remote sync strategy.
 - [Standards and Sources](docs/standards-and-sources.md): external conventions and adapter standards.
