@@ -30,6 +30,8 @@ Action = Literal["copy", "upsert-managed-block"]
 
 
 def copytree_contents(src: Path, dest: Path, apply: bool) -> list[tuple[Action, Path, Path]]:
+    if not src.exists():
+        raise SystemExit(f"Adapter source missing: {src}")
     copied: list[tuple[Action, Path, Path]] = []
     for path in sorted(src.rglob("*")):
         if path.is_dir():
@@ -76,6 +78,8 @@ def ensure_managed_dir(dest: Path, apply: bool, adopt: bool) -> None:
 
 
 def copy_skill_dirs(src: Path, dest: Path, apply: bool, adopt: bool) -> list[tuple[Action, Path, Path]]:
+    if not src.exists():
+        raise SystemExit(f"Adapter source missing: {src}")
     copied: list[tuple[Action, Path, Path]] = []
     for skill_dir in sorted(path for path in src.iterdir() if path.is_dir()):
         target_dir = dest / skill_dir.name
@@ -139,6 +143,8 @@ def sync_claude(adapter_root: Path, dest: Path, apply: bool, backup: bool) -> li
     src_root = adapter_root / "claude-code"
 
     claude_md = src_root / "CLAUDE.md"
+    if not claude_md.exists():
+        raise SystemExit(f"Adapter source missing: {claude_md}")
     managed_claude = dest / "agent-foundry" / "CLAUDE.md"
     copied.append(("copy", claude_md, managed_claude))
     if apply:
@@ -156,6 +162,8 @@ def sync_claude(adapter_root: Path, dest: Path, apply: bool, backup: bool) -> li
 
 def sync_chatgpt(adapter_root: Path, dest: Path | None, apply: bool) -> list[tuple[Action, Path, Path]]:
     src = adapter_root / "chatgpt"
+    if not src.exists():
+        raise SystemExit(f"Adapter source missing: {src}")
     if dest is None:
         print("ChatGPT has no default local runtime. Use these files manually:")
         print(f"- {src / 'custom-instructions.md'}")

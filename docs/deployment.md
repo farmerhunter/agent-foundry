@@ -190,7 +190,7 @@ The public Core cannot fetch, clone, or repair a private Vault automatically. Cl
    python3 scripts/foundry_config.py status
    ```
 
-ChatGPT remains a manual runtime. Refresh it from `adapters/chatgpt/` after adapter publishing has been reviewed.
+ChatGPT remains a manual runtime. Refresh it from `/tmp/agent-foundry-adapters/chatgpt/` after selected-Vault adapter publishing has been reviewed.
 
 Fail closed if the private Vault is absent, its `.agent-foundry-vault.yaml` marker is missing or incompatible with the Core marker, the Core marker is missing, runtime targets are ambiguous, or stale combined-root paths remain in local deployment state. Do not let a public Core checkout infer or fetch private Vault content.
 

@@ -14,9 +14,9 @@ from runtime_manifest import parse_targets, read_manifest
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def run(command: list[str], apply: bool) -> int:
+def run(command: list[str], execute: bool) -> int:
     print("$ " + " ".join(command), flush=True)
-    if not apply:
+    if not execute:
         return 0
     return subprocess.run(command, cwd=ROOT, check=False).returncode
 
@@ -55,7 +55,7 @@ def main() -> int:
     adapter_root = Path(args.adapter_root).expanduser().resolve() if args.adapter_root else core_root / "adapters"
 
     if not args.skip_check:
-        code = run(["python3", "scripts/check_consistency.py"], apply=True)
+        code = run(["python3", "scripts/check_consistency.py"], execute=True)
         if code != 0:
             return code
     code = run(
@@ -67,7 +67,7 @@ def main() -> int:
             "--vault-root",
             str(vault_root),
         ],
-        apply=True,
+        execute=True,
     )
     if code != 0:
         return code
@@ -84,13 +84,13 @@ def main() -> int:
         status = config.get("status", "")
         if status == "manual":
             print(f"\n## {target}: manual import required", flush=True)
-            print("Use adapter files under adapters/chatgpt/ or the target's documented import path.")
+            print(f"Use adapter files under {adapter_root / 'chatgpt'} or the target's documented import path.")
             continue
         if status != "enabled":
             print(f"\n## {target}: skipped status={status}", flush=True)
             continue
         print(f"\n## {target}: {'apply' if args.apply else 'dry-run'}", flush=True)
-        code = run(sync_command(target, config.get("install_path", ""), adapter_root, args.apply), apply=args.apply)
+        code = run(sync_command(target, config.get("install_path", ""), adapter_root, args.apply), execute=True)
         if code != 0:
             return code
     return 0
