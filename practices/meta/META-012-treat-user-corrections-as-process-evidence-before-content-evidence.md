@@ -44,7 +44,7 @@ Analyze corrections for:
 
 After that process analysis, decide whether the correction also contains domain content worth routing elsewhere.
 
-When the correction says the agent skipped or compressed the required workflow, do not treat a later `continue`, `approved`, or `do the whole chain` response as retroactive permission to skip the missing step. First name the process failure, restore the missing review checkpoint, and wait for approval of the listed items before mutating canonical records or publishing runtime adapters.
+When the correction says the agent skipped or compressed the required workflow, do not treat a later `continue`, `approved`, or `do the whole chain` response as retroactive permission to skip the missing step. First name the process failure and restore the missing review checkpoint. Once the user approves the listed items and post-approval chain, continue through canonical mutation, checks, PR/traceability, merge/apply, and adapter/runtime publish automatically unless the implementation departs from the approved list, checks fail, risk increases, or a new unlisted runtime/global target appears.
 
 ## Use This When
 
@@ -59,6 +59,7 @@ When the correction says the agent skipped or compressed the required workflow, 
 - Do not treat every correction as a new practice; route it first, then apply the generalization gate.
 - Do not convert the user's approval of a direction into approval to bypass unshown workflow steps.
 - Do not publish adapters or runtime instructions first and then use an explanation as a substitute for the missing harvest report.
+- Do not turn the restored review checkpoint into unnecessary repeated approval when the user has already approved a complete listed chain and no escalation condition appears.
 - Do not record missed activation evidence unless a specific existing practice should have triggered.
 
 ## Activation
