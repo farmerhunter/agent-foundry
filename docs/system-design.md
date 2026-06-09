@@ -87,13 +87,136 @@ Downstream:
 
 Core and Vault currently live in one repository for maintainability. They are separate logical units so agents can distinguish the canonical destination from the current project they are harvesting from.
 
+## Core And User Vault Split
+
+The target product direction is a reusable public Core with user-owned Vaults. A user's Vault is private by default unless that user explicitly chooses to publish it. In the current repository, the maintainer's User Vault belongs to the maintainer, Jinghu, and should not remain bundled into a public Core distribution before Agent Foundry claims external-user readiness.
+
+AF-2 documents and validates the boundary before moving files. This is a staging step, not a final architecture. Physical Core/Vault separation should happen during the AF-3 migration work, after blank-vault initialization and configuration boundaries are designed well enough to avoid breaking existing local runtimes.
+
+Core contains reusable system capability:
+
+- workflow definitions and command procedures;
+- schemas and templates for canonical records;
+- deterministic scripts for validation, generation, sync, install, and review;
+- adapter profiles and adapter quality rules;
+- runtime templates;
+- product documentation that describes how Agent Foundry works for any user.
+
+User Vault contains a user's governed capability records and review evidence:
+
+- canonical practices;
+- reusable assets;
+- practice and asset indexes;
+- sanitized usage aggregate evidence;
+- user-specific long-form docs, hubs, and planning evidence;
+- reviewed imports or staged external material that belongs to that user's capability base.
+
+Generated outputs are neither Core nor Vault. They are projections from Core tooling plus Vault records. Runtime copies are installed downstream and are never canonical.
+
+Current repository mapping:
+
+| Path or content | Split classification | Notes |
+| --- | --- | --- |
+| `workflows/` | Core | Agent-operable procedures. |
+| `schemas/` | Core | Canonical shape definitions. |
+| `scripts/` | Core | Deterministic tooling; must avoid personal defaults. |
+| `templates/` | Core | Starter record shapes, not personal content. |
+| `runtime/templates/` | Core | Portable runtime manifest template. |
+| `adapters/adapter_profiles.yaml` | Core | Describes target adapter behavior. |
+| `adapters/quality/` | Core | Adapter fidelity rules. |
+| `README.md`, `docs/usage.md`, `docs/deployment.md`, `docs/system-design.md`, `docs/lifecycle-compatibility.md`, `docs/offline-sync.md`, `docs/standards-and-sources.md` | Core-oriented docs with some current-repo context | External-user wording should be reviewed during AF-3. |
+| `docs/roadmap.md` | Mixed planning doc | Current maintainer roadmap; useful evidence, not required for a blank vault. |
+| `docs/memory-system-handoff-dump.md` | Proposed Design Evidence | Not Core runtime capability and not current memory architecture. |
+| `docs/obsidian.md` | User Vault / local workflow docs | Obsidian-oriented usage is not required Core behavior. |
+| `practices/` | User Vault | The maintainer's active governed practice base. |
+| `assets/` | User Vault | The maintainer's approved reusable assets. |
+| `indexes/` | User Vault | Registry for the current vault's records. |
+| `usage/usage-aggregate.yaml` | User Vault shared aggregate | Sanitized, but still specific to this vault. |
+| `imports/` | User Vault staging machinery plus tracked instructions | Directory convention may become Core; staged content is Vault/evidence. |
+| `adapters/codex/`, `adapters/claude-code/`, `adapters/hermes/`, `adapters/chatgpt/` | Generated distribution outputs | Tracked for install/manual import; regenerate from Core plus target Vault. |
+| `runtime/local/`, `sync/local/`, `usage/local/` | Local Private | Gitignored machine-local state. |
+| `Agent Foundry.md` | User Vault navigation | Maintainer hub, not required for external users. |
+| `.claude/settings.json` | Maintainer/runtime-specific setting | Boundary-sensitive; should not be product setup guidance without review. |
+
+Staged split decision:
+
+1. Keep Core and User Vault in one repository only until the AF-2 design gates are reviewed.
+2. Treat the current split as a documented boundary enforced by policy, checks, and initialization design.
+3. Plan the physical split as AF-3 migration work, not as distant memory-system work.
+4. Design scripts so `core_root` and `vault_root` can point to different repositories or directories.
+5. Do not claim external-user readiness while the maintainer's Vault remains required inside the public Core repository.
+
+Future split options:
+
+| Option | Use when | Tradeoff |
+| --- | --- | --- |
+| Single repo with logical split | AF-2 design staging only | Simple and low migration cost, but personal Vault remains physically adjacent to Core and cannot be the external-user-ready endpoint. |
+| Monorepo with `core/` and `vault/` packages | Core and Vault need separate installs but shared development | More structure and migration work; still one remote. |
+| Core repo plus user vault repo | External-user distribution needs clean separation | Best product boundary, but requires install/init tooling and version compatibility. |
+| Template repository / starter vault | Blank-vault setup becomes the main adoption path | Easier onboarding, but template drift must be managed. |
+
+Migration risks:
+
+- scripts may assume repo-relative paths that currently point to both Core and Vault;
+- consistency checks may assume one combined index/practice/asset tree;
+- adapters may encode the maintainer's current Vault content as if it were default product content;
+- docs may mix product instructions with maintainer planning evidence;
+- tracked workspace affordances such as `Agent Foundry.md` and `.claude/settings.json` may confuse external users;
+- usage aggregates are sanitized but still belong to the current user's Vault;
+- future memory-system evidence could accidentally be promoted into Core if capability state is not marked.
+
+AF-2 follow-up implications:
+
+- #7 should define a blank vault that starts with empty indexes, templates, and no personal practices/assets.
+- #8 should define portable Core config separately from machine-local runtime and adoption state.
+- #9 should describe external-user setup without requiring the maintainer's Vault records.
+- AF-3 should execute the physical split and migration: public Core, maintainer private Vault, updated locators, runtime migration, and compatibility checks.
+
+## Operating Context Separation
+
+Agent Foundry must remain safe when it is used inside another software project. Users and agents regularly operate in nested contexts:
+
+1. **Product project context**: the user's actual software project, such as `token-panic`. This project is the evidence source and work target.
+2. **Foundry Vault context**: harvest, refresh, review, asset discovery, and adapter publishing for the user's Agent Foundry capability records.
+3. **Foundry Core maintenance context**: changing Agent Foundry's workflows, schemas, scripts, templates, adapter generation, install behavior, or roadmap.
+
+These contexts must not be inferred only from the current working directory or from a recent chat message. Before writing files, installing adapters, recording evidence, or updating GitHub issues, an agent should identify:
+
+```text
+work context: product project | foundry vault operation | foundry core maintenance
+evidence source: <project/session/import path>
+canonical vault root: <path>
+core root: <path>
+write target: <repo/path/runtime>
+review target: current session | user | separate reviewer | batch checkpoint
+```
+
+Context rules:
+
+1. Product project work may generate evidence for Agent Foundry, but the product project is not the canonical Foundry Vault unless it validates as one.
+2. Foundry Vault operations may read product project evidence, but canonical practice/asset/index writes go to the active Vault.
+3. Foundry Core maintenance changes reusable machinery and should go through Core review, even when prompted by a product project session.
+4. Runtime adapter install writes to user-owned runtime directories and must be derived from Core plus the selected Vault.
+5. `refresh practices and assets` is a Vault/Core synchronization command, not a product project dependency install.
+6. `harvest practices` must route artifacts before writing: product facts stay with the product project, reusable practices/assets go to the Vault, and Core workflow defects become Core maintenance.
+7. After the physical split, agents must validate both `core_root` and `vault_root` before canonical writes. If either is missing or ambiguous, stop and ask instead of guessing.
+
+Failure modes this prevents:
+
+- writing product project notes into the Foundry Core repo;
+- harvesting a project-local decision as a general Foundry practice;
+- modifying Core scripts when the user intended only to refresh a Vault;
+- installing stale adapters from the wrong Vault;
+- treating the maintainer's Vault as a default public starter pack;
+- using future memory-system paths as current writable destinations.
+
 Machine-local locator:
 
 ```text
 ~/.agent-foundry/config.yaml
 ```
 
-This file records `repo_root`, `core_root`, `vault_root`, and canonical markers. It is written during install and is not canonical knowledge. Agents working in another repository should locate Agent Foundry through this config or `AGENT_FOUNDRY_HOME`, then validate the markers before writing canonical records.
+This file records `repo_root`, `core_root`, `vault_root`, and canonical markers. It is written during install and is not canonical knowledge. Agents working in another repository should locate Agent Foundry through this config or `AGENT_FOUNDRY_HOME`, then validate the markers before writing canonical records. After the physical split, `core_root` and `vault_root` may intentionally point to different repositories or directories; agents must validate both instead of assuming one repo root.
 
 ## Generated Artifact Policy
 
