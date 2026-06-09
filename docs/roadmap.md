@@ -387,6 +387,9 @@ AF-3 epics and task breakdown:
 - **External-user readiness gate**
   - This parent issue is a post-window readiness gate and closes AF-3 only after split migration is validated.
   - Track reviews #48, #49, and #50 to cover clean public Core and runtime/Vault operating modes.
+  - Treat #48 as blocked until current-user Vault records are physically split out of public Core through #54.
+  - Treat #50 as blocked until canonical write/review scripts are Vault-root aware through #55 and nested product-project fixtures exist through #56.
+  - Treat #49 as complete: blank/custom/current-user Vault operation passed review.
   - Test a clean setup using public Core plus a blank or new user Vault.
   - Confirm setup does not require maintainer-specific paths, private records, or personal adapters.
   - Confirm a user can choose a suitable Vault location: private Git repo, local-only repo, or other explicitly supported storage.
@@ -414,10 +417,14 @@ Planned GitHub issue sequence:
 | 8.5 | #51 Runtime apply from selected User Vault | Task | Architect | High | #44 complete; planner reports `mode: split` and `safe_apply_candidate: yes`; explicit user approval for runtime writes | Structured review handoff |
 | 8.6 | #45 Runtime stale-reference and rollback verification | Review | Reviewer | High | #51 and #33 complete | Structured review handoff |
 | 8.7 | #47 Migration window close verification | Review | Reviewer | High | #44, #51, #45, and #46 complete | Batch checkpoint |
-| 9 | #34 External-user readiness validation | Epic / Review batch coordination | Reviewer / Architect | High | #28, #31 through #33, #42-#47 complete | User acceptance before AF-3 close |
-| 9.1 | #48 Clean public Core readiness | Review | Reviewer | High | #34 approved; #47 confirms split chain works; no maintainer dependence in clean Core | Structured review handoff |
-| 9.2 | #49 Split Vault operation readiness | Review | Reviewer | High | #34 approved; #47 confirms split runtime path and runtime migration checks | Structured review handoff |
-| 9.3 | #50 Nested product-project context readiness | Review | Reviewer | High | #34 approved; #47 confirms path/context detection for nested work | Structured review handoff |
+| 8.8 | #52 Make sync_status drift selected-Vault aware | Follow-up task | Implementer | Medium | #51 complete; selected-Vault runtime apply creates intentional adapter drift relative to tracked Core adapters | Batch checkpoint unless drift semantics block AF-3 close |
+| 9 | #34 External-user readiness validation | Epic / Review batch coordination | Reviewer / Architect | High | #28, #31 through #33, #42-#47 complete; #54-#56 complete | User acceptance before AF-3 close |
+| 9.1 | #54 Split active User Vault records out of public Core | Task / boundary cleanup | Architect | High | #47 complete; selected User Vault has preserved active records | Structured review handoff before #48 re-review |
+| 9.2 | #55 Make canonical write and review scripts Vault-root aware | Task | Implementer with Architect review | High | #47 complete; split locator/config contract stable | Structured review handoff before #50 re-review |
+| 9.3 | #56 Add nested product-project context fixture | Task | Implementer | Medium | #55 complete | Batch checkpoint with #55 before #50 re-review |
+| 9.4 | #48 Clean public Core readiness | Review | Reviewer | High | #34 approved; #54 removes current-user Vault records from public Core defaults | Structured review handoff |
+| 9.5 | #49 Split Vault operation readiness | Review | Reviewer | High | #34 approved; #47 confirms split runtime path and runtime migration checks | Structured review handoff |
+| 9.6 | #50 Nested product-project context readiness | Review | Reviewer | High | #34 approved; #55 and #56 prove split-aware canonical write/review paths from nested contexts | Structured review handoff |
 
 Execution order:
 
@@ -430,7 +437,8 @@ Execution order:
 7. Apply #44 only after user approval for Vault init/copy and local locator write; runtime apply is split into #51.
 8. Apply #51 only after explicit user approval for runtime writes.
 9. Close the migration window only via #47 after split runtime behavior and rollback evidence are confirmed.
-10. Close AF-3 only through Issue 9 after #47 and #48-#50 pass, covering clean Core, active User Vault, blank Vault, runtime, and nested product-project checks.
+10. Complete the external-user readiness fixes in this order: #54, then #55, then #56. Re-run #48 after #54, and re-run #50 after #55 and #56.
+11. Close AF-3 only through Issue 9 after #47 and #48-#50 pass, covering clean Core, active User Vault, blank Vault, runtime, and nested product-project checks.
 
 Role-fit constraints:
 
@@ -458,6 +466,7 @@ Minimum verification matrix:
 | Blank Vault operation | Empty indexes and aggregate validate; adapter publishing reports empty/minimal output without copying current-user content. |
 | Pack deployment substrate | The design preserves the sequence blank Vault -> pack canonical data deployment -> refresh, without treating packs as runtime-only helpers or a second source of truth. |
 | Product project harvest context | Agent locates Core and Vault from outside both roots; product project is evidence source only. |
+| Canonical write/review paths | Practice review, asset review, usage evidence, and aggregate updates resolve selected `vault_root` for Vault-owned records and never write to product project or public Core by accident. |
 | Runtime migration | Codex, Claude Code, Hermes managed outputs are inventoried and dry-run before apply; ChatGPT manual import state is reported. |
 | Privacy check | Public Core contains no required current-user Vault records, raw evidence, machine-local paths, secrets, or private adoption decisions. |
 
@@ -466,7 +475,7 @@ Migration close conditions:
 | Window-close artifact | Required checks |
 | --- | --- |
 | #47 Migration window close verification | Split Core/private Vault runtime chain validated, stale references surfaced, migration logs archived, and rollback boundary published |
-| #9 AF-3 completion | #48, #49, #50 complete, external-user readiness criteria satisfied, and AF-3 issue-chain state consistent with dependency gates |
+| #9 AF-3 completion | #48, #49, #50 complete after #54-#56, external-user readiness criteria satisfied, and AF-3 issue-chain state consistent with dependency gates |
 
 Acceptance criteria:
 
