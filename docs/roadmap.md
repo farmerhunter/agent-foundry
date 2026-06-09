@@ -236,6 +236,7 @@ Epics:
   - Document what remains private.
   - Document how adapters are installed and updated.
   - Identify which parts cannot be completed until AF-3 split migration and AF-4 onboarding.
+  - Current design location: `docs/system-design.md` section "External-User Setup Boundary".
 
 Acceptance criteria:
 
