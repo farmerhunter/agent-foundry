@@ -2,6 +2,8 @@
 
 Agent Foundry is local-first. The repository is the canonical workspace; installed agent runtime files are downstream copies.
 
+Current scope: this document describes the current single-repo maintainer setup, where Foundry Core and the maintainer's User Vault share one repository root. It is not a complete external-user quickstart. External-user setup requires the AF-3 physical Core/Vault split and AF-4 onboarding work described in `docs/roadmap.md`.
+
 ```text
 Agent Foundry repo
   -> generated adapters
@@ -32,7 +34,9 @@ cd "/path/to/agent-foundry"
 
 ## Fresh Install
 
-Use this on a new machine after cloning or unpacking Agent Foundry.
+Use this on a new maintainer machine after cloning or unpacking the current combined Agent Foundry repository.
+
+Do not use this flow to claim a clean external-user installation: it installs adapters from the currently selected Vault, which is still the maintainer Vault in the AF-2 staging repository.
 
 1. Initialize the machine-local runtime manifest:
 
@@ -85,7 +89,23 @@ Use this on a new machine after cloning or unpacking Agent Foundry.
    python3 scripts/foundry_config.py status
    ```
 
-The apply step writes `~/.agent-foundry/config.yaml`. Agents in other repositories use that locator to find the canonical Foundry Core and Vault.
+The apply step writes `~/.agent-foundry/config.yaml`. In the current AF-2 repository, `core_root`, `vault_root`, and `repo_root` still point to the same combined checkout. After AF-3, those fields must support a public Core path and a separate user-owned Vault path.
+
+## External-User Boundary
+
+AF-2 defines the setup boundary but does not implement the public setup path.
+
+A future external-user setup needs:
+
+- public Core that does not require maintainer Vault content;
+- a user-owned Vault location, private by default;
+- an implemented blank Vault initializer and validation checks;
+- locator support for distinct `core_root` and `vault_root`;
+- adapter generation from the selected user's Vault, not the maintainer Vault;
+- runtime install that can verify split Core/Vault state before writing managed runtime files;
+- onboarding choices for empty Vault, starter capability packs, runtime-asset imports, or mixed setup.
+
+Until that work is complete, deployment commands in this file are safe for the maintainer workflow and useful as implementation evidence, but they are not a tested new-user onboarding path.
 
 ## Daily Update
 

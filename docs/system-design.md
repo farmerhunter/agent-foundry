@@ -227,6 +227,54 @@ Rejected as #7 scope:
 - moving the maintainer's Vault into a private repo;
 - implementing `init-vault` scripts before the design is reviewed.
 
+## External-User Setup Boundary
+
+External-user setup is not a current complete quickstart. AF-2 defines the boundary and prerequisites; AF-3 must physically split public Core from the maintainer's private Vault, and AF-4 must define onboarding modes before Agent Foundry can claim a tested external-user start path.
+
+Current capability:
+
+- single-repo operation where Core and the maintainer Vault share one repository root;
+- machine-local runtime manifest setup for the current user;
+- adapter install into enabled local Codex, Claude Code, and Hermes runtimes;
+- manual ChatGPT import from generated adapter files;
+- logical Core/Vault separation documented in this file;
+- blank Vault initialization design, but no implemented `init-vault` command;
+- locator config that currently writes `core_root`, `vault_root`, and `repo_root` to the same path.
+
+Target setup narrative after AF-3/AF-4:
+
+1. The user obtains the public Core.
+2. The user creates or selects a User Vault location.
+3. The user initializes an empty Vault or chooses an approved onboarding mode.
+4. The local locator records separate `core_root` and `vault_root`.
+5. Core tooling validates both roots before any canonical write.
+6. The user reviews runtime targets and applies adapter install only to selected local runtimes.
+7. ChatGPT remains manual unless a future supported import path exists.
+
+Pre-split boundary for #9:
+
+| Setup concern | Current AF-2 answer | Blocked by |
+| --- | --- | --- |
+| What to clone | Current repo contains both Core and maintainer Vault; this is a maintainer setup, not public Core distribution. | AF-3 public Core split. |
+| Where Vault lives | Designed as user-owned and private by default; current repo still contains maintainer Vault. | AF-3 maintainer Vault extraction. |
+| How blank Vault starts | Defined as empty indexes, empty aggregate, no personal practices/assets. | AF-3 `init-vault` implementation and validation. |
+| How Core/Vault are located | `~/.agent-foundry/config.yaml` exists, but current scripts assume one root. | AF-3 separate root support. |
+| How adapters are generated | Current adapters are generated from the maintainer Vault. | AF-3 arbitrary-vault adapter generation. |
+| How runtimes are installed | Current machine-local manifest installs into selected local runtimes. | AF-3 migration checks for split Core/Vault; AF-4 first-run UX. |
+| How starter content appears | Starter packs and runtime imports are not blank defaults. | AF-4 onboarding mode selector. |
+| How existing runtime assets are imported | Existing runtime assets are evidence/candidates first. | AF-4 import workflow. |
+| What remains private | Raw evidence, local manifests, adoption state, secrets, maintainer Vault, personal records. | Current policy plus AF-3 migration. |
+
+Docs implications:
+
+- `docs/deployment.md` currently documents maintainer/single-repo deployment and local runtime install.
+- `docs/usage.md` currently documents day-to-day use after Agent Foundry is already installed.
+- Neither file should be read as a tested external-user quickstart until AF-3 and AF-4 are complete.
+- AF-3 should rewrite deployment docs around public Core plus selected Vault.
+- AF-4 should add first-run onboarding choices: empty Vault, starter capability packs, runtime-asset import, or mixed setup.
+
+Do not promise future memory-system behavior in external-user setup. Memory-system records, `knowledge/`, `research_memos/`, project memory, and MCP memory access remain proposed/future until reviewed architecture implements them.
+
 ## Operating Context Separation
 
 Agent Foundry must remain safe when it is used inside another software project. Users and agents regularly operate in nested contexts:
