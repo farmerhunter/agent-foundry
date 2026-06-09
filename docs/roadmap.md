@@ -187,10 +187,12 @@ Epics:
   - Extend the raw-local vs shared-aggregate rule beyond usage evidence.
   - Decide what happens to raw ChatGPT exports, transcripts, sensitive notes, and machine paths.
   - Add or update `.gitignore` only after policy review.
+  - Current policy location: `docs/system-design.md` section "Local And Private Data Policy".
 
 - **Example vs user content separation**
   - Decide how examples/templates should differ from the user's personal vault.
   - Identify any current content that would block external-user reuse.
+  - Current policy location: `docs/system-design.md` section "Example Versus User Content Separation".
 
 Acceptance criteria:
 
@@ -198,6 +200,8 @@ Acceptance criteria:
 - Every top-level directory has an assigned layer.
 - Generated and local-private files have explicit Git behavior.
 - External users can tell what is product core versus the user's vault content.
+
+Status: policy baseline implemented for AF-1; file movement and blank-vault initialization are deferred to AF-2.
 
 ### M2: Productization and Vault Separation
 
