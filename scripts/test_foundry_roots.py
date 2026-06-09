@@ -81,6 +81,56 @@ def make_maintainer_like_vault(path: Path) -> None:
             shutil.copytree(source, target)
 
 
+def make_custom_vault(path: Path) -> None:
+    make_blank_vault(path)
+    write(
+        path / "practices" / "custom" / "CUST-001-custom-practice.md",
+        "\n".join(
+            [
+                "---",
+                "id: CUST-001",
+                "title: Custom practice",
+                "domain: meta",
+                "type: principle",
+                "status: active",
+                "version: 1",
+                "created: 2026-06-09",
+                "updated: 2026-06-09",
+                "tags: [custom]",
+                "aliases: [CUST-001]",
+                "---",
+                "",
+                "## Principle",
+                "",
+                "Use only the selected Vault records.",
+                "",
+            ]
+        ),
+    )
+    write(
+        path / "indexes" / "practice_index.yaml",
+        "\n".join(
+            [
+                "schema_version: 1",
+                "updated: 2026-06-09",
+                "",
+                "domains:",
+                "  meta:",
+                "    description: Custom test domain.",
+                "",
+                "practices:",
+                "  - id: CUST-001",
+                "    title: Custom practice",
+                "    path: practices/custom/CUST-001-custom-practice.md",
+                "    domain: meta",
+                "    type: principle",
+                "    status: active",
+                "",
+            ]
+        ),
+    )
+
+
 def expect(name: str, result: subprocess.CompletedProcess[str], should_pass: bool, expected_text: str = "") -> list[str]:
     passed = result.returncode == 0
     if passed == should_pass and (not expected_text or expected_text in (result.stdout + result.stderr)):
@@ -126,6 +176,17 @@ def main() -> int:
         errors.extend(expect("maintainer-like-publish", maintainer_publish, True, "Adapter publish wrote"))
         if not (base / "maintainer-adapters" / "adapter-publish-manifest.yaml").exists():
             errors.append("maintainer-like-publish: manifest was not written")
+
+        custom = base / "custom-vault"
+        custom_output = base / "custom-adapters"
+        make_custom_vault(custom)
+        custom_publish = run_publish(ROOT, custom, custom_output)
+        errors.extend(expect("custom-vault-publish", custom_publish, True, "Adapter publish wrote"))
+        output_text = "\n".join(path.read_text(encoding="utf-8") for path in custom_output.rglob("*") if path.is_file())
+        if "CUST-001" not in output_text:
+            errors.append("custom-vault-publish: selected custom practice ID missing from output")
+        if "META-001" in output_text:
+            errors.append("custom-vault-publish: maintainer practice ID leaked into output")
 
     if errors:
         print("Split-root fixture tests failed:")

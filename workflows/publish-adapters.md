@@ -13,7 +13,7 @@ Current AF-3 capability:
 - use `scripts/publish_adapters.py` for selected Core/Vault root validation and deterministic publishing;
 - pass `--core-root` and `--vault-root` when Core and Vault are split;
 - blank Vault publishing is valid and reports `nothing to publish`;
-- nonblank Vault publishing currently uses Core adapter templates plus selected active/revised Vault records as a transitional generator;
+- nonblank Vault publishing currently generates minimal transitional adapter files from Core adapter profiles plus selected active/revised Vault records;
 - full semantic regeneration of every adapter file from canonical sections remains future generator work.
 
 Example:
