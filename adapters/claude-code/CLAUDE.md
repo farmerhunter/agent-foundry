@@ -33,7 +33,7 @@ Before substantial changes, check:
 Short commands:
 
 - `harvest practices` / `做一次 harvest practice`
-- `discover assets` / `发现可打包资产`
+- `discover assets` / `harvest skills` / `harvest assets` / `发现可打包资产`
 - `import skill <source>` / `导入这个 skill <source>`
 - `publish practices` / `发布 practices`
 - `review practices` / `检查 skill rot`
@@ -57,7 +57,7 @@ When asked to harvest, persist, deduplicate, merge, or publish reusable lessons:
 11. Update canonical practice entries under `practices/` first.
 12. Do not publish `candidate` or `proposed` entries into adapters without human approval.
 
-When asked to discover reusable assets, read `workflows/discover-assets.md`, search `indexes/asset_index.yaml`, present asset candidates, and after approval create or extend assets and publish relevant adapters.
+When asked to discover reusable assets or harvest skills, read `workflows/discover-assets.md`, search `indexes/asset_index.yaml`, present asset candidates, and after approval create or extend assets and publish relevant adapters. For whole-session or phase-level skill harvests, set an explicit evidence window that includes earlier phases, linked issues, PRs, and commits rather than only the latest discussion topic.
 
 When an active asset is used, record concise non-sensitive usage evidence automatically, preferably with `scripts/record_asset_usage.py`.
 
@@ -98,6 +98,8 @@ When asked to borrow or evaluate external skills, read `workflows/import-externa
 
 Use the Agent Collaboration asset ASSET-COLLAB-001 for GitHub issue, PR, GitHub Project/Epic scheduling, multi-agent sync, CLI comment, document conversion, and resume workflows. It applies canonical collaboration practices COLLAB-001 through COLLAB-012 and COLLAB-014:
 
+- When turning a roadmap stage or milestone into GitHub work, create or update issues with Stage, Epic, Owner Role, Risk, Depends On, Roadmap Status, labels, and durable issue bodies before releasing tasks.
+- Distinguish GitHub built-in `Status` from custom `Roadmap Status`; use labels and durable comments as the agent inbox surface.
 - For work already authorized through an issue, branch, and PR workflow, create verified task commits, push the task branch, and open or update the PR without a separate commit-permission round trip.
 - Direct commits to `main`, PR merges, issue closure, force pushes, resets, deletions, data migrations, and privacy/security boundary changes still require explicit authorization.
 - Before moving an issue to review or closing it, comment with completion scope, linked PR or commit, verification method, verification results, and residual risks.
@@ -109,6 +111,7 @@ Use the Agent Collaboration asset ASSET-COLLAB-001 for GitHub issue, PR, GitHub 
 - Use GitHub Project status for human-visible state and `needs:*` labels plus comments as the agent inbox/message layer; keep built-in Status, Roadmap Status, issue state, labels, comments, and session-role-task binding semantically coherent.
 - Ready issues should carry an Execution Contract with branch strategy, base branch, PR target, dependencies, role fit, current owner role, Architect-owned decisions, Implementer boundary, completion handoff, reviewer target, merge rule, and verification; completion handoff controls when Architect review is requested.
 - Before moving work into an Implementer inbox, classify role fit; split mixed work or constrain Implementers to evidence, preliminary classification, implementation, or verification when final taxonomy, architecture, policy, harvest, privacy, or security decisions remain Architect-owned.
+- If an Implementer evidence pass exposes taxonomy, architecture, privacy, or policy questions, route to Architect review before releasing downstream batches.
 - If Architect-owned decisions remain after evidence or preliminary classification, the producing agent moves the issue to Review and keeps it open rather than closing it.
 - `Ready + needs:implementer` may be an ordered queue; related low-risk child issues in the same Epic integration branch default to dependency-gated batch execution/review, and obey `Depends on` gates before starting code.
 - `Ready` is pickup state, `Review` is validation state, and `Done` requires acceptance or closure; do not leave one status surface saying `Ready` while another says `Done`. `needs:*` labels route roles, not necessarily different sessions.
@@ -145,6 +148,8 @@ Use canonical architecture practices ARCH-001 through ARCH-009, and DEBUG-001 wh
 
 - Boundaries before tools; if a design is mostly a current tool pipeline, run a boundary rewrite and substitution test.
 - Separate independent axes of change.
+- For mixed or maturing systems, inventory current layers before designing target movement; classify paths, modules, records, generated outputs, runtime state, private state, and proposed design evidence by ownership and change behavior.
+- Mark ambiguous areas as `Mixed` or `Needs Architect Classification` instead of forcing premature final taxonomy.
 - Unify protocol while preserving semantics.
 - Model inevitable failures as state.
 - Let UI consume domain summaries.

@@ -16,7 +16,9 @@ Published asset IDs:
 - ASSET-COLLAB-001 Agent Collaboration
 - ASSET-IMPL-001 Provider Integration Playbook
 
-ASSET-COLLAB-001 currently maps to COLLAB-001 through COLLAB-012, COLLAB-014, IMPL-001, and TEST-001. It covers GitHub issue/PR traceability, repository sync, repo-local multi-agent workflow contracts, issue role-fit gates, GitHub Project/Epic scheduling, issue Execution Contracts with Architect-owned decision boundaries, completion handoff state, current owner role, reviewer target, coherent Project/status/label/session routing, Ready queues with dependency gates and batch handoff, Epic integration branch defaults, dual-surface review handoff, structured self-review marking, batch/Epic checkpoint review, safe CLI Markdown comments, complex handoff continuity, and render-verified document conversion. Proposed practices such as COLLAB-013 are not published into default adapters until approved active.
+ASSET-COLLAB-001 currently maps to COLLAB-001 through COLLAB-012, COLLAB-014, IMPL-001, and TEST-001. It covers GitHub issue/PR traceability, repository sync, repo-local multi-agent workflow contracts, roadmap-to-Project issue planning, issue role-fit gates, GitHub Project/Epic scheduling, built-in Status versus Roadmap Status separation, issue Execution Contracts with Architect-owned decision boundaries, completion handoff state, current owner role, reviewer target, coherent Project/status/label/session routing, Ready queues with dependency gates and batch handoff, Epic integration branch defaults, dual-surface review handoff, structured self-review marking, batch/Epic checkpoint review, safe CLI Markdown comments, complex handoff continuity, and render-verified document conversion. Proposed practices such as COLLAB-013 are not published into default adapters until approved active.
+
+ASSET-ARCH-001 covers architecture design and review, including layer taxonomy and boundary inventory before file movement or migration. For mixed systems, classify paths, modules, records, generated outputs, runtime state, private state, and proposed design evidence by ownership and change behavior, and mark ambiguous areas as `Mixed` or `Needs Architect Classification` instead of forcing premature final taxonomy.
 
 Assets are user-facing reusable tools discovered from repeated work:
 
@@ -24,7 +26,7 @@ Assets are user-facing reusable tools discovered from repeated work:
 - `subagent`: bounded delegable role or investigation task.
 - `automation`: scheduled or recurring check, report, reminder, or monitor.
 
-Discovery outputs asset candidates, not canonical practices. Workflows and adapters are internal maintenance machinery, not user-facing asset types.
+Discovery outputs asset candidates, not canonical practices. Workflows and adapters are internal maintenance machinery, not user-facing asset types. `harvest skills` and `harvest assets` are asset discovery triggers; for whole-session or phase-level harvests, review the requested evidence window, including earlier phases, linked issues, PRs, and commits, rather than only the latest discussion topic.
 
 Memory, session summaries, and activity logs are evidence sources only. Memory can suggest; Agent Foundry decides.
 

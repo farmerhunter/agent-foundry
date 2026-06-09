@@ -2,7 +2,7 @@ id: ASSET-COLLAB-001
 title: Agent Collaboration
 asset_type: skill
 status: active
-version: 9
+version: 10
 created: 2026-05-28
 updated: 2026-06-09
 purpose: Guide GitHub issue, pull request, Project/Epic scheduling, multi-agent synchronization, CLI comment, document conversion, and interruption-resume workflows.
@@ -18,8 +18,11 @@ inputs:
   - CLI comment body or generated document deliverable
 process:
   - identify whether the task touches issues, PRs, multi-agent sync, CLI comments, document conversion, or resumed work
+  - when turning a roadmap stage or milestone into GitHub work, create or update the lightweight scheduler surface before releasing tasks
+  - distinguish GitHub built-in Status from custom Roadmap Status; use labels, Project fields, issue state, and durable comments together
   - when bootstrapping multi-agent work, create or locate the repo-local workflow contract before handing issues to Implementers
   - apply an issue role-fit gate before moving work into an Implementer inbox
+  - decompose epics into dependency-gated issues with clear owner role, risk, acceptance criteria, and Ready conditions
   - split mixed issues or constrain Implementers to evidence, preliminary classification, implementation, or verification when final decisions remain Architect-owned
   - apply the matching collaboration, implementation, or testing practice
   - for Implementer pickup, read Project/label state plus issue execution contracts before creating branches or PRs
@@ -32,6 +35,7 @@ process:
   - do not treat an open child PR as an automatic Architect review request when batch checkpoint mode applies
   - when a session switches roles, label structured self-review and residual risks instead of implying independent review
   - keep Project status, Roadmap Status, issue state, labels, and durable comments semantically coherent
+  - when an Implementer evidence pass reveals mixed taxonomy, architecture, privacy, or policy questions, route the issue to Architect review before releasing downstream batches
   - when executing a task list from another agent or user, verify each item against the original list before declaring done
   - preserve durable traceability in issues, PRs, comments, or verification records
   - validate with artifact-specific checks
@@ -39,6 +43,7 @@ process:
 outputs:
   - issue or PR workflow recommendations
   - repo-local workflow contract recommendations
+  - roadmap-to-Project issue breakdown and scheduler field recommendations
   - Project/Epic/label queue guidance
   - issue role-fit recommendations
   - Execution Contract role-boundary, pickup confirmation, and completion handoff guidance
@@ -81,6 +86,9 @@ usage_triggers:
   - Epic workflow
   - Execution Contract
   - needs label inbox
+  - roadmap planning
+  - milestone to GitHub issues
+  - Roadmap Status
   - issue completion comment
   - PR review handoff
   - CLI Markdown comment
@@ -91,6 +99,8 @@ success_criteria:
   - authorized issue/branch/PR work is not left as uncommitted local state when verification has passed
   - multi-agent repositories have a discovered or bootstrapped repo-local workflow contract
   - Project status, labels, issue comments, and PRs have clear roles in the handoff
+  - roadmap stages or milestones are decomposed into issues with Stage, Epic, Owner Role, Risk, Depends On, Roadmap Status, labels, and durable issue bodies
+  - GitHub built-in Status and custom Roadmap Status are not treated as the same state machine
   - Ready queues are sorted by explicit dependency gates before Implementers start coding
   - related child issues are batched for handoff when dependency gates make the batch safe and detectable
   - issue execution contracts define branch strategy, base branch, PR target, dependencies, role fit, Architect-owned decisions, Implementer boundary, completion handoff, merge rule, and verification
@@ -100,6 +110,7 @@ success_criteria:
   - low-risk child issues in the same Epic integration branch default to batch execution/review when their completion handoff is `batch checkpoint`
   - open child PRs do not automatically become Architect inbox work unless completion handoff, high-risk trigger, failed verification, or batch checkpoint requires review
   - Implementer issues explicitly separate evidence, implementation, and verification from Architect-owned taxonomy, architecture, policy, harvest, privacy, or security decisions
+  - Implementer evidence batches do not become final architecture or taxonomy decisions until Architect review accepts or corrects them
   - evidence-only or preliminary-classification issues move to Review rather than Done when Architect-owned decisions remain
   - Project built-in status, Roadmap Status, issue state, labels, and durable comments do not contradict each other
   - multi-agent feature work prefers Epic integration branches unless a direct-to-main or stacked PR exception is justified

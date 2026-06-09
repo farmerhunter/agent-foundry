@@ -1,5 +1,5 @@
 schema_version: 1
-updated: 2026-06-03
+updated: 2026-06-09
 
 asset_types:
   skill:
@@ -20,6 +20,10 @@ assets:
     usage_triggers:
       - harvest practices
       - 做一次 harvest practice
+      - harvest skills
+      - harvest assets
+      - discover assets
+      - 发现可打包资产
       - import skill
       - review practices
 
@@ -33,6 +37,9 @@ assets:
     usage_triggers:
       - architecture design
       - architecture review
+      - layer taxonomy
+      - boundary inventory
+      - repository layer inventory
       - 架构设计
       - 架构 review
 
@@ -49,7 +56,10 @@ assets:
       - multi-agent repository synchronization
       - GitHub Project workflow
       - Epic workflow
+      - roadmap planning
+      - milestone to GitHub issues
       - Execution Contract
+      - Roadmap Status
       - needs label inbox
       - issue completion comment
       - PR review handoff
