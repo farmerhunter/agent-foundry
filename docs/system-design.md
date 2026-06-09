@@ -146,6 +146,55 @@ Staged split decision:
 4. Design scripts so `core_root` and `vault_root` can point to different repositories or directories.
 5. Do not claim external-user readiness while the maintainer's Vault remains required inside the public Core repository.
 
+## Maintainer Vault Extraction Plan
+
+This is the AF-3 decision baseline for extracting Jinghu's current User Vault from the public Core. It is a plan and verification contract, not approval to move records.
+
+Default target:
+
+- Core remains the public `farmerhunter/agent-foundry` repository or its renamed public successor.
+- Jinghu's maintainer Vault should move to a private-by-default Git repository or private local repository named `agent-foundry-vault-jinghu` unless the user chooses another name before execution.
+- The local path should be explicitly configured through `~/.agent-foundry/config.yaml` as `vault_root`; agents must not infer it from a product project checkout.
+
+Move to the private maintainer Vault:
+
+- `practices/`
+- `assets/`
+- `indexes/`
+- `usage/usage-aggregate.yaml`
+- reviewed import staging if present under `imports/`
+- vault-local workspace docs such as `Agent Foundry.md` and Obsidian-oriented notes when they are not required Core product docs
+
+Keep local-only and ignored:
+
+- `usage/local/`
+- `runtime/local/`
+- `sync/local/`, `sync/imported/`, `sync/pending/`, `sync/applied/`, `sync/conflicts/`, `sync/snapshots/`
+- secrets, tokens, raw exports, transcripts, machine paths, adoption state, and unmanaged runtime copies
+
+Keep in public Core:
+
+- reusable workflows, schemas, scripts, templates, runtime templates, adapter profiles, adapter quality rules, blank Vault initializer, selected-Vault validation, selected-Vault adapter publishing, and product docs
+- non-personal fixtures or examples only when clearly labeled and not required as a default user Vault
+
+Backup and restore gates before movement:
+
+1. Run `python3 scripts/plan_vault_extraction.py` and resolve missing required paths.
+2. Create a local archive or clone of the current combined checkout before moving records.
+3. Verify the backup can be listed or restored before changing tracked files.
+4. Initialize or select the private maintainer Vault target.
+5. Copy records into the private target and run `python3 scripts/check_foundry_roots.py --core-root <core> --vault-root <private-vault>`.
+6. Run `python3 scripts/publish_adapters.py --core-root <core> --vault-root <private-vault> --output-root <temp-output> --apply`.
+7. Update `~/.agent-foundry/config.yaml` only after Core and Vault validate separately.
+
+Stop conditions:
+
+- Any required Vault path is missing from the backup or private target.
+- Any public Core file still requires maintainer active practices/assets as default content.
+- Any generated adapter output includes raw evidence, local private paths, or maintainer Vault records when run against a blank or custom Vault.
+- Runtime install would overwrite unmanaged files or point at the old combined root without an explicit migration step.
+- A private remote must be created, files must be deleted, history must be rewritten, or records must be moved out of the current repo. These require explicit user approval at execution time.
+
 Future split options:
 
 | Option | Use when | Tradeoff |

@@ -91,6 +91,16 @@ Do not use this flow to claim a clean external-user installation: it installs ad
 
 The apply step writes `~/.agent-foundry/config.yaml`. In the current AF-2 repository, `core_root`, `vault_root`, and `repo_root` still point to the same combined checkout. After AF-3, those fields must support a public Core path and a separate user-owned Vault path.
 
+## Maintainer Vault Migration Gate
+
+Do not move the maintainer Vault or create a private Vault remote from this deployment flow. Before any extraction, run:
+
+```bash
+python3 scripts/plan_vault_extraction.py
+```
+
+Then create and verify a local backup, initialize or select the private Vault target, validate it with `scripts/check_foundry_roots.py`, and dry-run adapter publishing from the selected Vault. Moving records, deleting public copies, creating a private remote, or repointing installed runtimes from the combined repo requires explicit user approval at execution time.
+
 ## External-User Boundary
 
 AF-2 defines the setup boundary but does not implement the public setup path.
