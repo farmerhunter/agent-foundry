@@ -235,6 +235,26 @@ def check_usage_aggregate() -> list[str]:
     return []
 
 
+def check_foundry_roots_script() -> list[str]:
+    script = ROOT / "scripts" / "check_foundry_roots.py"
+    if not script.exists():
+        return ["Missing scripts/check_foundry_roots.py"]
+    result = subprocess.run(
+        ["python3", str(script), "--core-root", str(ROOT), "--vault-root", str(ROOT)],
+        cwd=ROOT,
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if result.returncode == 0:
+        return []
+    output = (result.stdout + result.stderr).strip()
+    if not output:
+        return ["Foundry root validation failed without output"]
+    return output.splitlines()
+
+
 def parse_simple_targets(text: str) -> dict[str, dict[str, str]]:
     targets: dict[str, dict[str, str]] = {}
     current: str | None = None
@@ -528,6 +548,7 @@ def main() -> int:
     errors += check_adapter_id_references()
     errors += check_no_deepseek_direct_adapter()
     errors += check_usage_aggregate()
+    errors += check_foundry_roots_script()
     errors += check_runtime_manifest()
     errors += check_claude_managed_block_integrity()
     errors += check_cross_references()
