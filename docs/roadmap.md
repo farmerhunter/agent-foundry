@@ -357,16 +357,17 @@ AF-3 epics and task breakdown:
   - Exit when scripts can validate same-root compatibility mode, split maintainer mode, and blank-Vault mode.
 
 - **Runtime deployment migration**
-  - Treat this epic as the normal close point for the migration window.
+  - This parent issue is a coordination epic for migration-window close readiness.
+  - Track sub-issues #42, #43, #46, #44, #45, and #47 to avoid a single uncontrolled apply bucket.
   - Inventory installed Codex, Claude Code, Hermes, and ChatGPT adapter targets before migration.
   - Reinstall managed runtime files from the split Core plus maintainer Vault.
   - Preserve managed-block and managed-directory ownership markers.
   - Do not overwrite unmanaged runtime files.
-  - Provide a migration check that reports old path references, stale runtime files, adapter drift, and manual ChatGPT import requirements.
+  - Provide migration visibility for old path references, stale runtime files, adapter drift, and manual ChatGPT import requirements.
   - Update `scripts/install_foundry.py`, `scripts/sync_adapters.py`, runtime manifest handling, and deployment docs to consume selected Core/Vault roots.
-  - Verify `~/.agent-foundry/config.yaml` is rewritten only after successful validation or explicit migration command.
+  - Verify `~/.agent-foundry/config.yaml` is rewritten only after successful validation or explicit migration approval.
   - Treat ChatGPT as manual import; do not imply automatic update.
-  - Exit when local runtimes can be refreshed from split Core plus maintainer Vault, drift is visible, rollback is documented, and canonical writes can safely resume through the verified split roots.
+  - Exit when local runtimes can be refreshed from split Core plus maintainer Vault, stale-reference checks and rollback are visible, and canonical writes can safely resume through verified split roots.
 
 - **Compatibility and validation**
   - Update scripts to accept separate `core_root` and `vault_root`.
@@ -382,6 +383,8 @@ AF-3 epics and task breakdown:
   - Exit when consistency, adapter quality, activation, runtime dry-run, and split-root validation checks pass.
 
 - **External-user readiness gate**
+  - This parent issue is a post-window readiness gate and closes AF-3 only after split migration is validated.
+  - Track reviews #48, #49, and #50 to cover clean public Core and runtime/Vault operating modes.
   - Test a clean setup using public Core plus a blank or new user Vault.
   - Confirm setup does not require maintainer-specific paths, private records, or personal adapters.
   - Confirm a user can choose a suitable Vault location: private Git repo, local-only repo, or other explicitly supported storage.
@@ -401,8 +404,17 @@ Planned GitHub issue sequence:
 | 5 | #30 Blank Vault initializer and validation | Task batch | Implementer | Medium | #35 validates empty Vault shape and preserves pack-deployment substrate | Batch checkpoint |
 | 6 | #31 Maintainer Vault extraction plan and backup | Decision / Task | Architect | High | #28, #35, #29, and #30 pass in combined compatibility mode | Explicit user approval before moving private records |
 | 7 | #32 Public Core cleanup and docs rewrite | Task batch | Implementer with Architect review | Medium | #31 defines extraction target and Core contents | Batch checkpoint |
-| 8 | #33 Runtime deployment migration | Epic / Task batch | Architect + Implementer | High | #28, #35, #29, and #30 pass; generated adapters are split-aware | User or structured Architect review before apply |
-| 9 | #34 External-user readiness validation | Review | Reviewer / Architect | High | #27 through #33 and #35 complete | User acceptance before AF-3 close |
+| 8 | #33 Runtime deployment migration | Epic / Task batch coordination | Architect + Implementer | High | #28, #35, #29, and #30 pass; generated adapters are split-aware | User or structured Architect review before apply |
+| 8.1 | #42 Layout compatibility markers and fail-closed checks | Task | Implementer | Medium | #33 approved as first child anchor | Batch checkpoint |
+| 8.2 | #43 Read-only deployment migration planner | Task | Implementer | Medium | #33 approved; #42 complete | Batch checkpoint |
+| 8.3 | #46 Cross-machine split refresh documentation | Task | Implementer | Medium | #33 approved; #42 and #43 complete | Batch checkpoint |
+| 8.4 | #44 Gated split deployment migration apply | Task | Architect | High | #33 approved; #42, #43, and #46 complete; user approval for local write | User approval before local migration writes |
+| 8.5 | #45 Runtime stale-reference and rollback verification | Review | Reviewer | High | #44 and #33 complete | Structured review handoff |
+| 8.6 | #47 Migration window close verification | Review | Reviewer | High | #44, #45, and #46 complete | Batch checkpoint |
+| 9 | #34 External-user readiness validation | Epic / Review batch coordination | Reviewer / Architect | High | #28, #31 through #33, #42-#47 complete | User acceptance before AF-3 close |
+| 9.1 | #48 Clean public Core readiness | Review | Reviewer | High | #34 approved; #47 confirms split chain works; no maintainer dependence in clean Core | Structured review handoff |
+| 9.2 | #49 Split Vault operation readiness | Review | Reviewer | High | #34 approved; #47 confirms split runtime path and runtime migration checks | Structured review handoff |
+| 9.3 | #50 Nested product-project context readiness | Review | Reviewer | High | #34 approved; #47 confirms path/context detection for nested work | Structured review handoff |
 
 Execution order:
 
@@ -410,8 +422,11 @@ Execution order:
 2. Let an Implementer batch Issues 3, 4, and 5 only after the execution contract says which files may change and how to verify blank/maintainer scenarios.
 3. Keep Issue 6 Architect-owned because it moves privacy and repository-boundary decisions.
 4. Let an Implementer help with Issue 7 only after Core cleanup rules are explicit.
-5. Treat Issue 8 as high-risk migration work. Dry-run first; apply only after targets and rollback are visible.
-6. Treat the migration window as closed by Issue 8 only after the split Core/private Vault/runtime chain passes. Close AF-3 only through Issue 9 after clean Core, maintainer Vault, blank Vault, runtime, and nested product-project checks pass.
+5. Treat Issue 8 as a coordination parent for runtime migration.
+6. Execute runtime migration children in this order: #42 -> #43 -> #46 -> #44 -> #45 -> #47.
+7. Apply #44 only after user approval and migration planning checks are complete.
+8. Close the migration window only via #47 after split runtime behavior and rollback evidence are confirmed.
+9. Close AF-3 only through Issue 9 after #47 and #48-#50 pass, covering clean Core, maintainer Vault, blank Vault, runtime, and nested product-project checks.
 
 Role-fit constraints:
 
@@ -441,6 +456,13 @@ Minimum verification matrix:
 | Product project harvest context | Agent locates Core and Vault from outside both roots; product project is evidence source only. |
 | Runtime migration | Codex, Claude Code, Hermes managed outputs are inventoried and dry-run before apply; ChatGPT manual import state is reported. |
 | Privacy check | Public Core contains no required maintainer Vault records, raw evidence, machine-local paths, secrets, or private adoption decisions. |
+
+Migration close conditions:
+
+| Window-close artifact | Required checks |
+| --- | --- |
+| #47 Migration window close verification | Split Core/private Vault runtime chain validated, stale references surfaced, migration logs archived, and rollback boundary published |
+| #9 AF-3 completion | #48, #49, #50 complete, external-user readiness criteria satisfied, and AF-3 issue-chain state consistent with dependency gates |
 
 Acceptance criteria:
 
