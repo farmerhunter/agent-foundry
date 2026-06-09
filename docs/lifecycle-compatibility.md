@@ -53,11 +53,11 @@ When the command is run from another project, that project is the evidence sourc
 
 1. `AGENT_FOUNDRY_HOME`;
 2. `~/.agent-foundry/config.yaml`;
-3. current directory, only if canonical markers exist;
+3. current directory, only if it validates as the required Core and Vault context;
 4. known fallback paths;
 5. ask the user.
 
-After locating the Vault, validate markers such as `indexes/practice_index.yaml`, `indexes/asset_index.yaml`, and `workflows/harvest-practices.md` before writing.
+After locating Agent Foundry, validate Core markers such as `workflows/harvest-practices.md` and `schemas/practice-entry.schema.yaml`, and Vault markers such as `indexes/practice_index.yaml`, `indexes/asset_index.yaml`, and `usage/usage-aggregate.yaml` before writing. Do not require Core-owned workflow files inside a split Vault.
 
 | Agent | Adaptation |
 |---|---|

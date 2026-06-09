@@ -4,7 +4,7 @@ Canonical source: `workflows/harvest-practices.md`
 
 Use when the user says `harvest practices` or `做一次 harvest practice`.
 
-When harvesting from another project, that project is evidence source only. Locate Agent Foundry before proposing canonical changes. Use `AGENT_FOUNDRY_HOME`, then `~/.agent-foundry/config.yaml`, then the current directory only if it contains canonical markers such as `indexes/practice_index.yaml`, `indexes/asset_index.yaml`, and `workflows/harvest-practices.md`.
+When harvesting from another project, that project is evidence source only. Locate Agent Foundry before proposing canonical changes. Prefer explicit roots when available, then `AGENT_FOUNDRY_CORE` plus `AGENT_FOUNDRY_VAULT` after commands support them, then `~/.agent-foundry/config.yaml`, then `AGENT_FOUNDRY_HOME` as same-root compatibility, then the current directory only if it validates as the required Core and Vault context. Core markers include `workflows/harvest-practices.md` and `schemas/practice-entry.schema.yaml`; Vault markers include `indexes/practice_index.yaml`, `indexes/asset_index.yaml`, and `usage/usage-aggregate.yaml`. Do not require Core-owned workflow files inside a split Vault.
 
 Route:
 

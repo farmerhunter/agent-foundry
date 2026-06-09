@@ -333,18 +333,22 @@ Locator semantics:
 - `core_root`: path to the reusable Agent Foundry Core that provides workflows, schemas, scripts, templates, adapter profiles, and docs.
 - `vault_root`: path to the active User Vault that provides practices, assets, indexes, shared aggregates, and vault-local docs.
 - `repo_root`: compatibility field for current single-repo operation. After physical split, it should be derived or deprecated rather than treated as proof that Core and Vault share a root.
-- `canonical_markers`: markers that validate a Vault before canonical writes.
-- `core_markers`: future markers that validate Core before running Core tooling.
+- `core_markers`: markers that validate Core before running Core tooling. Required examples include `workflows/harvest-practices.md`, `schemas/practice-entry.schema.yaml`, and `scripts/foundry_config.py`.
+- `vault_markers`: markers that validate a Vault before canonical writes. Required examples include `indexes/practice_index.yaml`, `indexes/asset_index.yaml`, and `usage/usage-aggregate.yaml`.
+- `canonical_markers`: deprecated compatibility field from the single-root staging state. It may be read for old local configs, but new configs should use `core_markers` and `vault_markers`.
 
-Current capability: `scripts/foundry_config.py` writes `core_root`, `vault_root`, and `repo_root` to the same path. This is valid only for the current single-repo staging state. AF-3 migration work must update the locator and scripts so `core_root` and `vault_root` may differ.
+Current capability: `scripts/foundry_config.py` writes `core_root`, `vault_root`, and `repo_root` to the same path for compatibility, but emits separate Core and Vault marker lists. This is still a single-repo staging mode until later AF-3 work teaches all commands to operate on distinct roots.
 
-Locator precedence should be explicit:
+Locator precedence:
 
 1. Explicit user-provided `--core-root` and `--vault-root` flags, when a command supports them.
-2. Explicit environment variables for Core and Vault roots, after they are designed.
+2. Paired `AGENT_FOUNDRY_CORE` and `AGENT_FOUNDRY_VAULT` environment variables, after commands implement them.
 3. `~/.agent-foundry/config.yaml`.
-4. Current directory only if it validates as the required context for the requested operation.
-5. Ask the user.
+4. `AGENT_FOUNDRY_HOME` as a same-root compatibility locator.
+5. Current directory only if it validates as the required context for the requested operation.
+6. Ask the user.
+
+Do not treat a single root found through `AGENT_FOUNDRY_HOME` or current directory as proof that split mode is unsupported. It is only a compatibility path. Commands should prefer explicit Core/Vault roots once they are available.
 
 Do not use a product project checkout as a Vault merely because the user is working there. Do not use a Vault as Core merely because it contains practices. Do not use Core as a Vault merely because it has templates or examples.
 
@@ -382,7 +386,7 @@ Machine-local locator:
 ~/.agent-foundry/config.yaml
 ```
 
-This file records `repo_root`, `core_root`, `vault_root`, and canonical markers. It is written during install and is not canonical knowledge. Agents working in another repository should locate Agent Foundry through this config or `AGENT_FOUNDRY_HOME`, then validate the markers before writing canonical records. After the physical split, `core_root` and `vault_root` may intentionally point to different repositories or directories; agents must validate both instead of assuming one repo root.
+This file records `repo_root`, `core_root`, `vault_root`, Core markers, and Vault markers. It is written during install and is not canonical knowledge. Agents working in another repository should locate Agent Foundry through this config or `AGENT_FOUNDRY_HOME`, then validate Core and Vault separately before writing canonical records. After the physical split, `core_root` and `vault_root` may intentionally point to different repositories or directories; agents must validate both instead of assuming one repo root.
 
 ## Generated Artifact Policy
 
