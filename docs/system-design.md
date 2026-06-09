@@ -89,7 +89,9 @@ Core and Vault currently live in one repository for maintainability. They are se
 
 ## Core And User Vault Split
 
-AF-2 keeps Agent Foundry in a single repository while making the Core/Vault split explicit. This is a logical split first, not a physical repository split. The goal is to make future external-user setup possible without requiring file movement before the boundaries are stable.
+The target product direction is a reusable public Core with user-owned Vaults. A user's Vault is private by default unless that user explicitly chooses to publish it. In the current repository, the maintainer's User Vault belongs to the maintainer, Jinghu, and should not remain bundled into a public Core distribution before Agent Foundry claims external-user readiness.
+
+AF-2 documents and validates the boundary before moving files. This is a staging step, not a final architecture. Physical Core/Vault separation should happen during the AF-3 migration work, after blank-vault initialization and configuration boundaries are designed well enough to avoid breaking existing local runtimes.
 
 Core contains reusable system capability:
 
@@ -136,18 +138,19 @@ Current repository mapping:
 | `Agent Foundry.md` | User Vault navigation | Maintainer hub, not required for external users. |
 | `.claude/settings.json` | Maintainer/runtime-specific setting | Boundary-sensitive; should not be product setup guidance without review. |
 
-Near-term packaging decision:
+Staged split decision:
 
-1. Keep Core and User Vault in one repository through AF-2.
-2. Treat the split as a documented boundary enforced by policy, checks, and future initialization design.
-3. Do not create a separate package, fork, or repository until AF-3 proves the blank-vault and external-user setup path.
-4. Design scripts so future `--core-root` and `--vault-root` separation is possible, but do not require it in current commands.
+1. Keep Core and User Vault in one repository only until the AF-2 design gates are reviewed.
+2. Treat the current split as a documented boundary enforced by policy, checks, and initialization design.
+3. Plan the physical split as AF-3 migration work, not as distant memory-system work.
+4. Design scripts so `core_root` and `vault_root` can point to different repositories or directories.
+5. Do not claim external-user readiness while the maintainer's Vault remains required inside the public Core repository.
 
 Future split options:
 
 | Option | Use when | Tradeoff |
 | --- | --- | --- |
-| Single repo with logical split | Current AF-2 path | Simple and low migration cost, but personal Vault remains physically adjacent to Core. |
+| Single repo with logical split | AF-2 design staging only | Simple and low migration cost, but personal Vault remains physically adjacent to Core and cannot be the external-user-ready endpoint. |
 | Monorepo with `core/` and `vault/` packages | Core and Vault need separate installs but shared development | More structure and migration work; still one remote. |
 | Core repo plus user vault repo | External-user distribution needs clean separation | Best product boundary, but requires install/init tooling and version compatibility. |
 | Template repository / starter vault | Blank-vault setup becomes the main adoption path | Easier onboarding, but template drift must be managed. |
@@ -167,6 +170,7 @@ AF-2 follow-up implications:
 - #7 should define a blank vault that starts with empty indexes, templates, and no personal practices/assets.
 - #8 should define portable Core config separately from machine-local runtime and adoption state.
 - #9 should describe external-user setup without requiring the maintainer's Vault records.
+- AF-3 should execute the physical split and migration: public Core, maintainer private Vault, updated locators, runtime migration, and compatibility checks.
 
 Machine-local locator:
 
@@ -174,7 +178,7 @@ Machine-local locator:
 ~/.agent-foundry/config.yaml
 ```
 
-This file records `repo_root`, `core_root`, `vault_root`, and canonical markers. It is written during install and is not canonical knowledge. Agents working in another repository should locate Agent Foundry through this config or `AGENT_FOUNDRY_HOME`, then validate the markers before writing canonical records.
+This file records `repo_root`, `core_root`, `vault_root`, and canonical markers. It is written during install and is not canonical knowledge. Agents working in another repository should locate Agent Foundry through this config or `AGENT_FOUNDRY_HOME`, then validate the markers before writing canonical records. After the physical split, `core_root` and `vault_root` may intentionally point to different repositories or directories; agents must validate both instead of assuming one repo root.
 
 ## Generated Artifact Policy
 

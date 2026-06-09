@@ -72,13 +72,13 @@ Agent Foundry should use maturity stages for planning and release versions for d
 | AF-0 | Personal Bootstrap | Early personal repo built through direct iteration before strict planning and multi-agent workflow. | Historical stage; no need to retroactively perfect it. |
 | AF-1 | Governed Foundry | Practices, assets, workflows, review gates, adapter publishing, and current/proposed boundaries are governed explicitly. | Harvest/review/publish lifecycle is coherent; roadmap and hygiene work are tracked. |
 | AF-2 | Productizable Foundry | Repository layers and user/product boundaries are clear enough to support a reusable system. | Core, User Vault, Generated, Runtime, Local Private, and Proposed Design Evidence are separated by policy and implementation plan. |
-| AF-3 | External-User Ready | A new user can initialize and operate a clean vault without inheriting personal records. | Blank vault initialization, user-local config, examples/templates, and setup docs are usable. |
+| AF-3 | Split Vault Migration | Core and the maintainer's User Vault are physically separated without breaking existing local runtimes. | Public Core no longer requires maintainer vault content; maintainer Vault is private by default; existing Codex, Claude Code, Hermes, and ChatGPT setups are migrated or given a tested migration path; clean new-user setup is tested. |
 | AF-4 | Memory-System Ready | Future memory-system records, evidence policy, routing, privacy, and MCP boundaries are designed but not necessarily implemented. | Memory-system implementation home can be chosen with clear tradeoffs. |
 | AF-5 | Memory-System Implementation | A reviewed memory/knowledge system is implemented according to the chosen architecture. | MVP validates the main memory lifecycle without bypassing Agent Foundry governance. |
 
-Current planning stage: AF-1.
+Current planning stage: AF-2.
 
-AF-0 explains the existing mixed history. AF-1 starts the stricter planning and multi-agent coordination era. AF-2 and AF-3 are prerequisites for broad reuse. AF-4 is the decision gate for memory-system architecture. AF-5 is intentionally future work.
+AF-0 explains the existing mixed history. AF-1 starts the stricter planning and multi-agent coordination era. AF-2 designs the productization boundary. AF-3 executes the Core/Vault split needed for broad reuse. AF-4 is the decision gate for memory-system architecture. AF-5 is intentionally future work.
 
 ## Release Version Mapping
 
@@ -90,7 +90,7 @@ Suggested mapping:
 | --- | --- |
 | AF-1 | `v0.1.0`: governed personal foundry baseline. |
 | AF-2 | `v0.2.0`: productizable architecture and repo hygiene baseline. |
-| AF-3 | `v0.3.0`: external-user-ready vault/core setup. |
+| AF-3 | `v0.3.0`: split Core/Vault migration baseline. |
 | AF-4 | `v0.4.0`: memory-system-ready design baseline. |
 | AF-5 MVP | `v0.5.0` or later: memory-system MVP, not automatically `v1.0`. |
 | Post-AF-5 | Future: capability pack discovery/export after the core lifecycle and memory decisions are stable. |
@@ -143,7 +143,7 @@ Multi-agent rule:
 - Reviewer checks against the Epic exit criteria and relevant practices.
 - Harvester extracts reusable practices or asset candidates after meaningful work, using the harvest workflow.
 
-For now, create GitHub Project/Epic items only for AF-1 and AF-2 unless a later discussion explicitly opens AF-4 memory-system readiness work. AF-5 implementation issues should remain placeholders until M5 resolves the implementation home.
+For now, create GitHub Project/Epic items only for AF-1 through AF-3 unless a later discussion explicitly opens AF-4 memory-system readiness work. AF-5 implementation issues should remain placeholders until M6 resolves the implementation home.
 
 ## Milestones
 
@@ -241,8 +241,77 @@ Execution order:
 1. Complete Core/Vault split design (#6).
 2. Use that boundary to design blank vault initialization (#7) and configuration boundary (#8).
 3. Use #6, #7, and #8 together to write the external-user quickstart (#9).
+4. Do not claim external-user readiness until AF-3 physically separates the maintainer Vault from public Core.
 
-### M3: Existing Foundry Lifecycle Completion
+### M3: Physical Core/Vault Split And Migration
+
+Goal: split the reusable public Core from the maintainer's User Vault without breaking already-installed runtimes or losing reliable vault discovery.
+
+Decision baseline:
+
+- Target direction: public Core plus user-owned Vaults.
+- The maintainer's current User Vault belongs to Jinghu and should become private by default.
+- Existing single-repo operation is a staging state, not the final multi-user deployment model.
+- Physical split should happen after #6, #7, #8, and #9 are reviewed, and before claiming external-user readiness.
+
+Epics:
+
+- **Split execution plan**
+  - Choose final repo/directory names for Core and the maintainer Vault.
+  - Decide whether the maintainer Vault is a private GitHub repo, private local repo, or another private remote-backed location.
+  - Define a reversible migration sequence before moving files.
+  - Define rollback points and backups.
+
+- **Maintainer Vault extraction**
+  - Move the maintainer's `practices/`, `assets/`, `indexes/`, `usage/usage-aggregate.yaml`, vault-local docs, and reviewed imports into the private Vault.
+  - Keep raw local evidence ignored and local.
+  - Preserve history where practical, but prioritize correctness and privacy over perfect file history.
+  - Confirm no maintainer Vault content remains required by public Core defaults.
+
+- **Public Core cleanup**
+  - Keep reusable `workflows/`, `schemas/`, `scripts/`, `templates/`, runtime templates, adapter profiles, adapter quality rules, and product docs in Core.
+  - Replace personal defaults with templates, examples, empty indexes, or documented starter packs.
+  - Ensure Core does not publish the maintainer's active practices/assets as default product state.
+
+- **Locator and config migration**
+  - Update `~/.agent-foundry/config.yaml` semantics so `core_root` and `vault_root` may be different paths.
+  - Keep `repo_root` only as a compatibility alias or derived field when appropriate.
+  - Ensure agents can locate Core and Vault reliably from another project.
+  - Define precedence for `AGENT_FOUNDRY_HOME`, explicit Core/Vault environment variables, local config, and current-directory markers.
+  - Add clear failure messages when Core is found but Vault is missing, or Vault is found but Core tooling is missing.
+
+- **Runtime deployment migration**
+  - Inventory installed Codex, Claude Code, Hermes, and ChatGPT adapter targets before migration.
+  - Reinstall managed runtime files from the split Core plus maintainer Vault.
+  - Preserve managed-block and managed-directory ownership markers.
+  - Do not overwrite unmanaged runtime files.
+  - Provide a migration check that reports old path references, stale runtime files, adapter drift, and manual ChatGPT import requirements.
+
+- **Compatibility and validation**
+  - Update scripts to accept separate `core_root` and `vault_root`.
+  - Update consistency checks to validate the active Vault against Core schemas and workflows.
+  - Update adapter publishing so generated outputs can be derived from an arbitrary Vault.
+  - Verify blank-vault and maintainer-vault scenarios separately.
+  - Verify offline sync and usage aggregate behavior after split.
+
+- **External-user readiness gate**
+  - Test a clean setup using public Core plus a blank or new user Vault.
+  - Confirm setup does not require maintainer-specific paths, private records, or personal adapters.
+  - Confirm a user can choose a suitable Vault location: private Git repo, local-only repo, or other explicitly supported storage.
+  - Document where the Vault should live and how agents remember or rediscover it.
+
+Acceptance criteria:
+
+- Public Core can be cloned without exposing or requiring the maintainer's private Vault.
+- The maintainer's Vault is separate and private by default.
+- Existing local Codex, Claude Code, Hermes, and ChatGPT workflows have a tested migration path.
+- `core_root` and `vault_root` can be different paths and are both validated before canonical writes.
+- A blank Vault can be initialized and checked without personal practices/assets.
+- Adapter generation and runtime install work from both the maintainer Vault and a blank/new user Vault.
+- Rollback instructions exist for the split migration.
+- No future memory-system storage is introduced as part of the split.
+
+### M4: Existing Foundry Lifecycle Completion
 
 Goal: finish the practice/asset/adapter loop before adding memory record types.
 
@@ -274,7 +343,7 @@ Acceptance criteria:
 - Candidate/proposed entries do not publish into default adapters.
 - Active entries have either Activation guidance or explicit asset coverage/reference-only intent.
 
-### M4: Memory-System Readiness Design
+### M5: Memory-System Readiness Design
 
 Goal: define memory as an adjacent future capability without implementing storage yet.
 
@@ -309,9 +378,9 @@ Acceptance criteria:
 - Open questions remain visible.
 - No automatic memory writing exists.
 
-### M5: Fork vs Extension Decision
+### M6: Fork vs Extension Decision
 
-Goal: decide the implementation home for memory-system work using evidence from M1 through M4.
+Goal: decide the implementation home for memory-system work using evidence from M1 through M5.
 
 Decision options:
 
@@ -349,11 +418,11 @@ Acceptance criteria:
 - Decision record names the chosen option and rejected alternatives.
 - Future implementation plan has file boundaries, data flow, validation, privacy policy, and rollback path.
 
-### M6: Capability Pack Discovery and Lifecycle
+### M7: Capability Pack Discovery and Lifecycle
 
 Goal: define whether Agent Foundry can recognize, maintain, and export higher-level capability packs that emerge from repeated work.
 
-This is intentionally later than repository hygiene, productization, lifecycle completion, memory readiness, and the fork-vs-extension decision. Do not use this milestone to delay AF-1 through AF-5.
+This is intentionally later than repository hygiene, productization, physical split migration, lifecycle completion, memory readiness, and the fork-vs-extension decision. Do not use this milestone to delay AF-1 through AF-6.
 
 Capability packs are not the same as individual assets. A future capability pack may bundle practices, assets, workflows, templates, adapter snippets, examples, configuration profiles, dependency metadata, and export/install behavior around a recurring user goal such as multi-agent collaboration or technical documentation writing.
 
