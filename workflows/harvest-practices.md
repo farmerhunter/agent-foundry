@@ -228,12 +228,15 @@ When the harvest modifies the harvest workflow, practice-harvester asset, adapte
 harvest report / review list
   -> explicit approval of listed items
   -> canonical mutation
-  -> PR or equivalent review surface
-  -> post-merge adapter/runtime publish
+  -> PR or equivalent traceability surface when the repo workflow uses PRs
+  -> merge/apply approved changes when checks pass
+  -> adapter/runtime publish
   -> final verification
 ```
 
-In self-referential workflow changes, do not repair a missing review list by publishing first and explaining afterward. If the review list was skipped, stop, publish no further runtime changes, add the missing harvest report to the PR or issue, and wait for approval of that report before continuing.
+The PR or equivalent review surface is for traceability and checks; it is not a mandatory second approval gate when the approved review list already disclosed the files, lifecycle changes, adapter impact, runtime/global instruction impact, and post-approval publish behavior. Ask again only if the diff materially departs from the approved review list, checks fail, risk level increases, a new runtime/global target appears, or the change touches destructive, privacy, security, or data-migration behavior that was not listed.
+
+In self-referential workflow changes, do not repair a missing review list by publishing first and explaining afterward. If the review list was skipped, stop, publish no further runtime changes, add the missing harvest report to the PR or issue, and get approval of that report before continuing. After that approval, continue through the approved chain automatically unless one of the escalation conditions above appears.
 
 Present a concise review list. For each new or changed practice, show:
 

@@ -46,7 +46,7 @@ Before substantial changes, check:
 8. Search the practice index before creating anything new.
 9. Present a concise review list including rejected-as-practice items, canonical impact, adapter impact, and runtime/global instruction impact when important.
 10. Treat approval as scoped to the listed items only. Broad phrases such as "continue", "approved", or "do the whole chain" do not permit skipping unshown harvest steps.
-11. For self-referential workflow changes, stop at the review list before canonical mutation; after approval, mutate canonical records and use a PR or equivalent review surface before runtime publish.
+11. For self-referential workflow changes, stop at the review list before canonical mutation. After approval, continue through the listed canonical changes, checks, PR/traceability, merge/apply, and adapter/runtime publish automatically unless the diff departs from the approved list, checks fail, risk increases, or a new unlisted runtime/global target appears.
 12. After the user approves a practice, apply the canonical change and publish relevant adapters automatically.
 13. Report candidates, decisions, changed files, and review needs.
 
@@ -60,7 +60,7 @@ Before substantial changes, check:
 - Record concise, non-sensitive asset usage evidence automatically when an active asset is invoked.
 - Treat memory as evidence, not source of truth.
 - During harvest, route artifacts before abstraction, treat user method corrections as process evidence first, and require insights to pass a generalization gate before they become practice candidates.
-- Do not convert approval of a direction into approval to bypass an unshown harvest review list. If the review list was skipped, stop, add the missing harvest report, and wait for approval of that report before publishing runtime adapters.
+- Do not convert approval of a direction into approval to bypass an unshown harvest review list. If the review list was skipped, stop and add the missing harvest report; after approval of that report, continue through the approved chain without adding another approval gate unless an escalation condition appears.
 - Do not disable Hermes native memory, autonomous skill creation, or local self-improvement. Treat native outputs as candidate inputs when they should become durable or cross-agent.
 - Treat agent runtime directories as shared user-owned environments. When publishing adapters, use managed blocks, namespaced files, ownership markers, backups, dry-runs, and explicit adoption for unmanaged runtime paths; never overwrite unmanaged runtime files by default.
 - Separate portable adapter intent from machine-local deployment state. Keep adapter profiles and runtime templates in the repo, but keep enabled targets, detected paths, and adoption decisions in gitignored local manifests; portable snapshots exclude machine-local runtime state by default.

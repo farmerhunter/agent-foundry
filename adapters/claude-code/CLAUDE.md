@@ -53,9 +53,9 @@ When asked to harvest, persist, deduplicate, merge, or publish reusable lessons:
 7. Search `indexes/practice_index.yaml`.
 8. Present a concise review list before mutation, including rejected-as-practice items, canonical impact, adapter impact, and runtime/global instruction impact when relevant.
 9. Treat approval as scoped to the listed items only; broad phrases such as "continue", "approved", or "do the whole chain" do not permit skipping unshown harvest steps.
-10. Update canonical practice entries under `practices/` first.
-11. Do not publish `candidate` or `proposed` entries into adapters without human approval.
-12. After the user approves a practice, apply it, promote it to `active` when applicable, update the index, and publish relevant adapters automatically.
+10. After approval, continue through the listed canonical changes, checks, PR/traceability, merge/apply, and adapter/runtime publish automatically unless the diff departs from the approved list, checks fail, risk increases, or a new unlisted runtime/global target appears.
+11. Update canonical practice entries under `practices/` first.
+12. Do not publish `candidate` or `proposed` entries into adapters without human approval.
 
 When asked to discover reusable assets, read `workflows/discover-assets.md`, search `indexes/asset_index.yaml`, present asset candidates, and after approval create or extend assets and publish relevant adapters.
 
