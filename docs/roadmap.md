@@ -73,12 +73,13 @@ Agent Foundry should use maturity stages for planning and release versions for d
 | AF-1 | Governed Foundry | Practices, assets, workflows, review gates, adapter publishing, and current/proposed boundaries are governed explicitly. | Harvest/review/publish lifecycle is coherent; roadmap and hygiene work are tracked. |
 | AF-2 | Productizable Foundry | Repository layers and user/product boundaries are clear enough to support a reusable system. | Core, User Vault, Generated, Runtime, Local Private, and Proposed Design Evidence are separated by policy and implementation plan. |
 | AF-3 | Split Vault Migration | Core and the maintainer's User Vault are physically separated without breaking existing local runtimes. | Public Core no longer requires maintainer vault content; maintainer Vault is private by default; existing Codex, Claude Code, Hermes, and ChatGPT setups are migrated or given a tested migration path; clean new-user setup is tested. |
-| AF-4 | Memory-System Ready | Future memory-system records, evidence policy, routing, privacy, and MCP boundaries are designed but not necessarily implemented. | Memory-system implementation home can be chosen with clear tradeoffs. |
-| AF-5 | Memory-System Implementation | A reviewed memory/knowledge system is implemented according to the chosen architecture. | MVP validates the main memory lifecycle without bypassing Agent Foundry governance. |
+| AF-4 | Onboarding Ready | New users can start from an empty Vault, curated capability packs, or imported runtime assets without confusing starter content with canonical truth. | Onboarding flows are tested; starter packs and imports enter as reviewed candidates; external-user setup is understandable without maintainer context. |
+| AF-5 | Memory-System Ready | Future memory-system records, evidence policy, routing, privacy, and MCP boundaries are designed but not necessarily implemented. | Memory-system implementation home can be chosen with clear tradeoffs. |
+| AF-6 | Memory-System Implementation | A reviewed memory/knowledge system is implemented according to the chosen architecture. | MVP validates the main memory lifecycle without bypassing Agent Foundry governance. |
 
 Current planning stage: AF-2.
 
-AF-0 explains the existing mixed history. AF-1 starts the stricter planning and multi-agent coordination era. AF-2 designs the productization boundary. AF-3 executes the Core/Vault split needed for broad reuse. AF-4 is the decision gate for memory-system architecture. AF-5 is intentionally future work.
+AF-0 explains the existing mixed history. AF-1 starts the stricter planning and multi-agent coordination era. AF-2 designs the productization boundary. AF-3 executes the Core/Vault split needed for broad reuse. AF-4 makes onboarding humane and reliable. AF-5 is the decision gate for memory-system architecture. AF-6 is intentionally future work.
 
 ## Release Version Mapping
 
@@ -91,9 +92,10 @@ Suggested mapping:
 | AF-1 | `v0.1.0`: governed personal foundry baseline. |
 | AF-2 | `v0.2.0`: productizable architecture and repo hygiene baseline. |
 | AF-3 | `v0.3.0`: split Core/Vault migration baseline. |
-| AF-4 | `v0.4.0`: memory-system-ready design baseline. |
-| AF-5 MVP | `v0.5.0` or later: memory-system MVP, not automatically `v1.0`. |
-| Post-AF-5 | Future: capability pack discovery/export after the core lifecycle and memory decisions are stable. |
+| AF-4 | `v0.4.0`: external-user onboarding baseline. |
+| AF-5 | `v0.5.0`: memory-system-ready design baseline. |
+| AF-6 MVP | `v0.6.0` or later: memory-system MVP, not automatically `v1.0`. |
+| Post-AF-6 | Future: capability pack discovery/export after the core lifecycle and memory decisions are stable. |
 
 `v1.0` should wait until the reusable core, user vault story, generated artifact policy, and runtime adapter behavior are stable enough that external users can rely on them without understanding this repository's personal history.
 
@@ -112,7 +114,7 @@ Minimal fields:
 | Field | Values | Purpose |
 | --- | --- | --- |
 | Status | Inbox, Ready, In Progress, Review, Done, Blocked | Human-visible work state. |
-| Stage | AF-1, AF-2, AF-3, AF-4, AF-5 | Maturity stage the item serves. |
+| Stage | AF-1, AF-2, AF-3, AF-4, AF-5, AF-6 | Maturity stage the item serves. |
 | Epic | Free text or single-select | Groups issues by roadmap epic. |
 | Owner Role | Architect, Implementer, Reviewer, Harvester | Clarifies expected agent/human role. |
 | Depends On | Issue or PR references | Prevents ready queues from bypassing dependencies. |
@@ -130,7 +132,7 @@ Issue types:
 
 Recommended labels:
 
-- `stage:AF-1` through `stage:AF-5`
+- `stage:AF-1` through `stage:AF-6`
 - `type:epic`, `type:task`, `type:decision`, `type:review`, `type:evidence`
 - `area:core`, `area:vault`, `area:generated`, `area:runtime`, `area:privacy`, `area:memory-readiness`, `area:adapters`
 - `needs:architect`, `needs:implementer`, `needs:reviewer`, `needs:harvester`
@@ -143,7 +145,7 @@ Multi-agent rule:
 - Reviewer checks against the Epic exit criteria and relevant practices.
 - Harvester extracts reusable practices or asset candidates after meaningful work, using the harvest workflow.
 
-For now, create GitHub Project/Epic items only for AF-1 through AF-3 unless a later discussion explicitly opens AF-4 memory-system readiness work. AF-5 implementation issues should remain placeholders until M6 resolves the implementation home.
+For now, create GitHub Project/Epic items only for AF-1 through AF-3 unless a later discussion explicitly opens AF-4 onboarding work. AF-6 implementation issues should remain placeholders until M7 resolves the implementation home.
 
 ## Milestones
 
@@ -225,6 +227,7 @@ Epics:
   - Confirm `~/.agent-foundry/config.yaml` remains a locator, not canonical knowledge.
   - Define where enabled runtimes, paths, privacy defaults, and sync remotes live.
   - Define how agents distinguish product project context, Foundry Vault operations, and Foundry Core maintenance before writing.
+  - Current design location: `docs/system-design.md` section "Configuration Boundary".
 
 - **External-user quickstart**
   - Document what a new user clones or installs.
@@ -243,6 +246,7 @@ Execution order:
 2. Use that boundary to design blank vault initialization (#7) and configuration boundary (#8).
 3. Use #6, #7, and #8 together to write the external-user quickstart (#9).
 4. Do not claim external-user readiness until AF-3 physically separates the maintainer Vault from public Core.
+5. Treat onboarding modes such as starter capability packs or runtime-asset imports as AF-4 design work unless needed as constraints for #7/#8.
 
 ### M3: Physical Core/Vault Split And Migration
 
@@ -315,7 +319,55 @@ Acceptance criteria:
 - Rollback instructions exist for the split migration.
 - No future memory-system storage is introduced as part of the split.
 
-### M4: Existing Foundry Lifecycle Completion
+### M4: Onboarding Experience
+
+Goal: make new-user startup useful without forcing everyone to begin from a completely empty Vault.
+
+Onboarding should support multiple explicit modes:
+
+- **Empty Vault**
+  - Best for users who want full control and no inherited capability records.
+  - Starts with schemas, templates, empty indexes, and empty aggregate evidence.
+
+- **Starter capability packs**
+  - Best for users who want a useful baseline such as multi-agent collaboration, technical documentation writing, or provider integration.
+  - Packs should be curated, public, reviewed, and installable without private evidence.
+  - Pack contents enter the user's Vault as proposed or active records only according to the user's selected onboarding policy.
+
+- **Import existing runtime assets**
+  - Best for users who already have Codex skills, Claude Code instructions, Hermes skills, or ChatGPT project materials.
+  - Imported materials are evidence/candidates first, not canonical truth.
+  - Imports must preserve provenance and should run through Agent Foundry review before activation.
+
+Epics:
+
+- **Onboarding mode selector**
+  - Define the user choice among empty Vault, starter pack, runtime import, or mixed setup.
+  - Make the consequences visible before writing files.
+
+- **Starter capability pack design**
+  - Define how starter packs relate to assets, practices, templates, examples, and generated adapters.
+  - Ensure packs do not include maintainer-private Vault content.
+  - Keep pack activation reviewable and reversible.
+
+- **Runtime asset import path**
+  - Define how to scan existing Codex, Claude Code, Hermes, and ChatGPT assets.
+  - Stage imported materials as candidates with provenance.
+  - Avoid overwriting native runtime capabilities.
+
+- **First-run verification**
+  - Confirm Core and Vault are located.
+  - Confirm runtime targets are detected or intentionally skipped.
+  - Confirm the user knows which records are empty, proposed, active, imported, or starter-pack sourced.
+
+Acceptance criteria:
+
+- A new user can choose empty, starter-pack, or import-based onboarding.
+- Starter content is never confused with the maintainer's private Vault.
+- Imported runtime assets are reviewed before becoming canonical.
+- The onboarding flow preserves Core/Vault/context separation.
+
+### M5: Existing Foundry Lifecycle Completion
 
 Goal: finish the practice/asset/adapter loop before adding memory record types.
 
@@ -347,7 +399,7 @@ Acceptance criteria:
 - Candidate/proposed entries do not publish into default adapters.
 - Active entries have either Activation guidance or explicit asset coverage/reference-only intent.
 
-### M5: Memory-System Readiness Design
+### M6: Memory-System Readiness Design
 
 Goal: define memory as an adjacent future capability without implementing storage yet.
 
@@ -382,9 +434,9 @@ Acceptance criteria:
 - Open questions remain visible.
 - No automatic memory writing exists.
 
-### M6: Fork vs Extension Decision
+### M7: Fork vs Extension Decision
 
-Goal: decide the implementation home for memory-system work using evidence from M1 through M5.
+Goal: decide the implementation home for memory-system work using evidence from M1 through M6.
 
 Decision options:
 
@@ -422,11 +474,11 @@ Acceptance criteria:
 - Decision record names the chosen option and rejected alternatives.
 - Future implementation plan has file boundaries, data flow, validation, privacy policy, and rollback path.
 
-### M7: Capability Pack Discovery and Lifecycle
+### M8: Capability Pack Discovery and Lifecycle
 
 Goal: define whether Agent Foundry can recognize, maintain, and export higher-level capability packs that emerge from repeated work.
 
-This is intentionally later than repository hygiene, productization, physical split migration, lifecycle completion, memory readiness, and the fork-vs-extension decision. Do not use this milestone to delay AF-1 through AF-6.
+This is intentionally later than repository hygiene, productization, physical split migration, onboarding, lifecycle completion, memory readiness, and the fork-vs-extension decision. Do not use this milestone to delay AF-1 through AF-7.
 
 Capability packs are not the same as individual assets. A future capability pack may bundle practices, assets, workflows, templates, adapter snippets, examples, configuration profiles, dependency metadata, and export/install behavior around a recurring user goal such as multi-agent collaboration or technical documentation writing.
 

@@ -210,6 +210,69 @@ Failure modes this prevents:
 - treating the maintainer's Vault as a default public starter pack;
 - using future memory-system paths as current writable destinations.
 
+## Configuration Boundary
+
+Configuration is split by portability and ownership. Core should define schemas, templates, and validation behavior. Vault should define the user's canonical capability records and portable vault policy. Runtime/local files should define machine-specific paths, enabled targets, adoption decisions, and sync state.
+
+Use these configuration classes:
+
+| Class | Examples | Ownership | Git behavior |
+| --- | --- | --- | --- |
+| Core config intent | adapter profiles, schemas, workflow defaults, runtime manifest template | Public Core | Tracked |
+| Vault config intent | vault metadata, selected starter packs, privacy defaults, optional import-pack choices | User Vault | Tracked in the user's Vault when non-sensitive |
+| Machine-local locator | `~/.agent-foundry/config.yaml` with `core_root`, `vault_root`, markers, and compatibility fields | User machine | Not tracked |
+| Machine-local runtime deployment | `runtime/local/runtime_manifest.yaml`, enabled runtimes, install paths, adoption decisions | User machine | Gitignored |
+| Runtime copies | installed files under Codex, Claude Code, Hermes, and manual ChatGPT imports | User runtime | Outside Core/Vault canonical records |
+| Product project config | the actual software project's build/test/app config | Product project | Owned by the product project |
+
+Locator semantics:
+
+- `core_root`: path to the reusable Agent Foundry Core that provides workflows, schemas, scripts, templates, adapter profiles, and docs.
+- `vault_root`: path to the active User Vault that provides practices, assets, indexes, shared aggregates, and vault-local docs.
+- `repo_root`: compatibility field for current single-repo operation. After physical split, it should be derived or deprecated rather than treated as proof that Core and Vault share a root.
+- `canonical_markers`: markers that validate a Vault before canonical writes.
+- `core_markers`: future markers that validate Core before running Core tooling.
+
+Current capability: `scripts/foundry_config.py` writes `core_root`, `vault_root`, and `repo_root` to the same path. This is valid only for the current single-repo staging state. AF-3 migration work must update the locator and scripts so `core_root` and `vault_root` may differ.
+
+Locator precedence should be explicit:
+
+1. Explicit user-provided `--core-root` and `--vault-root` flags, when a command supports them.
+2. Explicit environment variables for Core and Vault roots, after they are designed.
+3. `~/.agent-foundry/config.yaml`.
+4. Current directory only if it validates as the required context for the requested operation.
+5. Ask the user.
+
+Do not use a product project checkout as a Vault merely because the user is working there. Do not use a Vault as Core merely because it contains practices. Do not use Core as a Vault merely because it has templates or examples.
+
+Operation-to-config mapping:
+
+| Operation | Required context | Reads | Writes |
+| --- | --- | --- | --- |
+| Product development | Product project | Product project plus optional Foundry adapter guidance | Product project |
+| `harvest practices` | Product project evidence plus Foundry Core and active Vault | Evidence source, Core workflow/schema, Vault index | Vault canonical records after review |
+| `refresh practices and assets` | Core plus active Vault plus local runtime manifest | Core tooling, Vault records, runtime local manifest | runtime copies and optional sanitized aggregate |
+| `publish adapters` | Core plus active Vault | Core adapter profiles, Vault practices/assets | generated adapter outputs and runtime copies after approval |
+| Foundry Core maintenance | Core | Core docs/workflows/scripts/schemas | Core repo |
+| Vault maintenance | active Vault | Vault practices/assets/indexes/usage | Vault repo |
+
+Failure states should be explicit:
+
+- Core missing: cannot run Foundry tooling; ask for Core root.
+- Vault missing: cannot write practices/assets/indexes; ask for Vault root or initialize a Vault.
+- Product project ambiguous: ask whether the current directory is evidence source or canonical destination.
+- Runtime target missing: skip or mark missing; do not delete installed files automatically.
+- Manual target such as ChatGPT: produce import instructions, do not pretend install is automatic.
+- Core and Vault version mismatch: stop or warn before publishing adapters.
+
+Onboarding implication: a blank Vault should not be the only user path. Future onboarding should support at least three explicit modes:
+
+1. empty Vault for users who want to build capability records from scratch;
+2. starter capability packs curated from public Core examples or reviewed bundles;
+3. import from existing Codex, Claude Code, Hermes, or ChatGPT assets as candidate inputs, not active canonical truth.
+
+These onboarding modes must still preserve the Core/Vault boundary: starter packs and imported runtime assets are proposed inputs until the user accepts them into their Vault.
+
 Machine-local locator:
 
 ```text
