@@ -96,7 +96,8 @@ When asked to borrow or evaluate external skills, read `workflows/import-externa
 
 Use the Agent Collaboration asset ASSET-COLLAB-001 for GitHub issue, PR, GitHub Project/Epic scheduling, multi-agent sync, CLI comment, document conversion, and resume workflows. It applies canonical collaboration practices COLLAB-001 through COLLAB-012 and COLLAB-014:
 
-- For code work tied to a GitHub issue, use a feature branch and PR unless the user explicitly approves skipping the PR.
+- For work already authorized through an issue, branch, and PR workflow, create verified task commits, push the task branch, and open or update the PR without a separate commit-permission round trip.
+- Direct commits to `main`, PR merges, issue closure, force pushes, resets, deletions, data migrations, and privacy/security boundary changes still require explicit authorization.
 - Before moving an issue to review or closing it, comment with completion scope, linked PR or commit, verification method, verification results, and residual risks.
 - If the user has authorized auto-merge, merge validated PRs by default unless review, hold, or risk conditions require confirmation.
 - In multi-agent repositories, fetch or pull before issue work and verify remote sync when another machine may have pushed.

@@ -329,7 +329,7 @@ practices:
     aliases: [failed assumption before patch, search the blast radius before fixing a bug, current error gone is not completion]
 
   - id: COLLAB-001
-    title: Issue code work uses PRs
+    title: Git autonomy follows workflow state
     path: practices/agent-collaboration/COLLAB-001-issue-code-work-uses-prs.md
     domain: agent-collaboration
     type: playbook

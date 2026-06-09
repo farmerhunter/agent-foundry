@@ -67,7 +67,8 @@ When recording or reviewing usage evidence, apply RUNTIME-004: keep raw logs loc
 
 For GitHub and multi-agent collaboration, use the Agent Collaboration asset ASSET-COLLAB-001. It applies COLLAB-001 through COLLAB-012 and COLLAB-014:
 
-- Code work for a GitHub issue should use a feature branch and PR unless I explicitly approve skipping the PR.
+- For work already authorized through an issue, branch, and PR workflow, create verified task commits, push the task branch, and open or update the PR without a separate commit-permission round trip.
+- Direct commits to `main`, PR merges, issue closure, force pushes, resets, deletions, data migrations, and privacy/security boundary changes still require explicit authorization.
 - Issues moved to review or closure need a durable comment with completion scope, linked PR or commit, verification method, verification results, and residual risks.
 - If I have authorized auto-merge, merge validated PRs by default unless I ask for review or a hold.
 - Before issue work in a multi-agent repo, fetch or pull and verify local/remote sync when another machine may have pushed.

@@ -427,7 +427,7 @@ Current repository classification:
 | `workflows/`, `schemas/`, `scripts/`, `templates/`, `runtime/templates/` | Core | Candidate for reusable distribution after AF-2 boundary work |
 | `practices/`, `assets/`, `indexes/`, `usage/usage-aggregate.yaml` | User Vault in this repository | Must not be copied wholesale into a blank external-user vault by default |
 | `adapters/` | Generated distribution outputs plus source-maintained adapter profiles/quality material | Regenerate from the target user's vault; tracked here for current runtime install and manual imports |
-| `docs/` | Mixed Core documentation, User Vault documentation, and proposed design evidence | External quickstart must distinguish product docs from maintainer planning evidence |
+| `docs/` | Mixed Core documentation, User Vault documentation, and proposed design evidence | External-user setup guidance must distinguish product docs from maintainer planning evidence |
 | `docs/memory-system-handoff-dump.md` | Proposed Design Evidence | Do not treat as implemented memory-system architecture |
 | `Agent Foundry.md` | User Vault navigation/hub for the maintainer's Obsidian-style workspace | Not a required Core file for external users |
 | `.claude/settings.json` | Maintainer/runtime-specific workspace setting | Should not become product setup guidance without AF-2 review |
@@ -441,7 +441,7 @@ Example conventions:
 5. Adapter outputs for an external user should be generated from that user's approved vault records, not copied from this repository's personal vault unless explicitly chosen as a starter pack.
 6. Proposed memory-system material must stay in docs/imports/evidence form until reviewed architecture creates implemented memory directories, schemas, and workflows.
 
-AF-2 should use this policy to design a blank vault initialization path, a Core/Vault split, and external-user quickstart. AF-1 does not move files yet; it marks the boundary so future movement is deliberate.
+AF-2 should use this policy to design a blank vault initialization path, a Core/Vault split, and external-user setup boundaries. AF-1 does not move files yet; it marks the boundary so future movement is deliberate.
 
 ## Practice Types
 
