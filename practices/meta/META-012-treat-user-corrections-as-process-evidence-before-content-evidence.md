@@ -4,9 +4,9 @@ title: Treat user corrections as process evidence before content evidence
 domain: meta
 type: heuristic
 status: active
-version: 1
+version: 2
 created: 2026-06-08
-updated: 2026-06-08
+updated: 2026-06-09
 tags: [feedback-learning, corrections, harvesting, process-evidence]
 aliases:
   - META-012
@@ -39,20 +39,26 @@ Analyze corrections for:
 - review checklist gap;
 - handoff risk;
 - harvest risk;
+- approval-scope confusion;
 - generalizable practice evidence.
 
 After that process analysis, decide whether the correction also contains domain content worth routing elsewhere.
+
+When the correction says the agent skipped or compressed the required workflow, do not treat a later `continue`, `approved`, or `do the whole chain` response as retroactive permission to skip the missing step. First name the process failure, restore the missing review checkpoint, and wait for approval of the listed items before mutating canonical records or publishing runtime adapters.
 
 ## Use This When
 
 - The user says the agent drifted, oversimplified, overbuilt, lost nuance, or confused current and proposed systems.
 - A correction changes how the agent should harvest, review, plan, or hand off work.
 - The same correction could be read as both domain content and workflow feedback.
+- The user points out that the agent over-interpreted approval, skipped harvest, published before review, or explained a missed step after the fact.
 
 ## Watch Out For
 
 - Do not bury method corrections inside the domain being discussed.
 - Do not treat every correction as a new practice; route it first, then apply the generalization gate.
+- Do not convert the user's approval of a direction into approval to bypass unshown workflow steps.
+- Do not publish adapters or runtime instructions first and then use an explanation as a substitute for the missing harvest report.
 - Do not record missed activation evidence unless a specific existing practice should have triggered.
 
 ## Activation

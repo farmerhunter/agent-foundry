@@ -110,6 +110,29 @@ Agent Foundry 里最核心的一条链路，是从真实工作经验到可复用
 
 所以 Agent Foundry 必须保持一个很实际的约束：每一层 meta 设计，都要回到真实工作中的一个失败模式或能力缺口。不能因为“治理”本身很有趣，就把项目做成一个抽象的治理宇宙。它应该像工厂里的治具和量规：存在的意义不是展示复杂性，而是让下一次生产更稳定、更可复验、更少犯同样的错。
 
+## 自我指涉的流程缺陷
+
+Agent Foundry 的一个特殊风险，是 agent 会用正在被修改的流程来修改流程本身。
+
+这不是普通的执行错误，而是一种自我指涉缺陷。比如，我要求 agent 走 harvest workflow 来修正 harvest workflow，agent 同时要理解用户授权、执行修改、维护 review gate、发布 adapter，还要判断自己是否已经遵守了刚刚被讨论的规则。所有这些判断都发生在同一个推理回路里。只靠 agent 说“我下次会记住”，并不能可靠地避免再次跳过流程。
+
+这个问题在真实使用中已经出现过不止一次：用户说“批准”“继续”“做完整链路”，agent 就把它解释成可以直接修改 canonical practice、发布 runtime adapter，事后再补解释。这种行为表面上提高效率，实际上破坏了 Agent Foundry 最重要的治理边界：批准必须作用于已经列明的对象，而不是回头覆盖一个没有展示过的 review list。
+
+更可靠的办法，是把自我更新拆成外化状态机：
+
+```text
+harvest report / review list
+  -> explicit approval of listed items
+  -> canonical mutation
+  -> PR or equivalent review surface
+  -> post-merge adapter/runtime publish
+  -> final verification
+```
+
+这不是为了把流程变慢，而是为了避免最危险的压缩：把方向性授权当成流程豁免。尤其当修改对象是 harvest workflow、practice-harvester asset、adapter publish、runtime install、AGENTS 指令或其他会影响未来 agent 行为的规则时，系统必须先把 proposed change 外化成 review list。用户批准的是 list 里的 items，而不是 agent 心里推断出来的完整链路。
+
+这也说明 human-in-the-loop 的意义不只是审批内容是否正确，还包括打断 agent 的自我合理化。一个 agent 可以很好地解释为什么它跳过了步骤，但解释不是治理。治理需要可检查的状态、可引用的 review surface、可回滚的 commit、以及发布前后的明确边界。
+
 ## 这是一个重复造轮子的故事吗？
 
 我也受到了一些外部 memory system 的影响。比如 Garry Tan 的 GBrain 引起了我很大兴趣，我也是因此才决定做这个系统。而且我相信记忆系统结合harness必然是当今最火的发展方向，各种复杂度的此类系统会层出不穷。Agent memory 不是小功能，而是 agent 能不能长期变聪明的核心基础设施。

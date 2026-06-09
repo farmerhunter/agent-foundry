@@ -2,9 +2,9 @@ id: ASSET-META-001
 title: Practice Harvester
 asset_type: skill
 status: active
-version: 1
+version: 2
 created: 2026-05-26
-updated: 2026-05-28
+updated: 2026-06-09
 purpose: Maintain reusable practices by harvesting lessons, importing external skills, publishing adapters, and reviewing skill rot.
 responsibility: Maintain the Agent Foundry lifecycle of practices, assets, indexes, adapters, usage evidence, and related review reports.
 non_responsibility: Does not perform domain-specific engineering work except to harvest or package reusable lessons from it.
@@ -14,12 +14,17 @@ inputs:
   - existing practice and asset indexes
   - recent work history when discovering assets
 process:
+  - locate and validate the current Agent Foundry Core and Vault
+  - reconstruct the relevant session or correction
+  - route artifacts before drafting candidates
+  - apply the generalization gate
   - classify candidate practices or assets
   - deduplicate against indexes
-  - present concise review list
+  - present a concise review list before canonical mutation
   - apply approved items
-  - publish relevant adapters
+  - publish relevant adapters only after approved canonical changes are applied
 outputs:
+  - harvest report or review list
   - proposed or active practice entries
   - active asset records
   - updated indexes
@@ -36,6 +41,9 @@ canonical_practices:
   - META-008
   - META-009
   - META-010
+  - META-011
+  - META-012
+  - META-013
   - GOV-001
   - GOV-002
   - GOV-003
@@ -58,8 +66,11 @@ usage_triggers:
   - review practices
   - 检查 skill rot
 success_criteria:
+  - artifact routing, generalization, rejected-as-practice, canonical impact, adapter impact, and runtime impact are visible before approval
   - candidates are deduplicated against existing practices and assets
   - human approval is requested per meaningful new or changed item
+  - broad approval language is not interpreted as permission to skip unshown workflow steps
+  - self-referential workflow changes stop at a review list before canonical mutation
   - approved items are activated and published to relevant adapters
   - changed files and deferred items are reported clearly
 review_cadence: monthly
