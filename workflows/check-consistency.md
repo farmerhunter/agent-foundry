@@ -22,6 +22,27 @@ This checks:
 - adapter quality checks pass;
 - activation tier and compact preflight checks pass.
 
+For Core/Vault root selection checks, also run:
+
+```bash
+python3 scripts/check_foundry_roots.py --core-root . --vault-root .
+```
+
+This checks:
+
+- selected Core markers exist;
+- selected Vault markers exist;
+- Vault indexes are present and parseable;
+- indexed practice and asset paths resolve relative to the selected Vault;
+- blank Vault indexes and empty usage aggregate are valid;
+- missing or corrupt Vault indexes fail with actionable messages.
+
+To exercise deterministic same-root, blank Vault, maintainer-like Vault, and failure fixtures, run:
+
+```bash
+python3 scripts/test_foundry_roots.py
+```
+
 ## Manual Fallback
 
 If script execution is unavailable, manually inspect:
