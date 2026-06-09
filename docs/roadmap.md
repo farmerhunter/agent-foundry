@@ -230,10 +230,12 @@ Epics:
   - Define how agents distinguish product project context, Foundry Vault operations, and Foundry Core maintenance before writing.
   - Current design location: `docs/system-design.md` section "Configuration Boundary".
 
-- **External-user quickstart**
-  - Document what a new user clones or installs.
+- **External-user setup boundary design**
+  - Document the pre-split setup narrative for a user who is not the repository maintainer.
+  - Identify what a new user would eventually clone, initialize, or install.
   - Document what remains private.
   - Document how adapters are installed and updated.
+  - Identify which parts cannot be completed until AF-3 split migration and AF-4 onboarding.
 
 Acceptance criteria:
 
@@ -245,7 +247,7 @@ Execution order:
 
 1. Complete Core/Vault split design (#6).
 2. Use that boundary to design blank vault initialization (#7) and configuration boundary (#8).
-3. Use #6, #7, and #8 together to write the external-user quickstart (#9).
+3. Use #6, #7, and #8 together to write the external-user setup boundary design (#9).
 4. Do not claim external-user readiness until AF-3 physically separates the maintainer Vault from public Core.
 5. Treat onboarding modes such as starter capability packs or runtime-asset imports as AF-4 design work unless needed as constraints for #7/#8.
 

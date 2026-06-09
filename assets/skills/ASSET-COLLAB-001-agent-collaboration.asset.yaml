@@ -2,7 +2,7 @@ id: ASSET-COLLAB-001
 title: Agent Collaboration
 asset_type: skill
 status: active
-version: 8
+version: 9
 created: 2026-05-28
 updated: 2026-06-09
 purpose: Guide GitHub issue, pull request, Project/Epic scheduling, multi-agent synchronization, CLI comment, document conversion, and interruption-resume workflows.
@@ -23,6 +23,7 @@ process:
   - split mixed issues or constrain Implementers to evidence, preliminary classification, implementation, or verification when final decisions remain Architect-owned
   - apply the matching collaboration, implementation, or testing practice
   - for Implementer pickup, read Project/label state plus issue execution contracts before creating branches or PRs
+  - when issue/branch/PR workflow is authorized, create verified task commits, push task branches, and open PRs without a separate commit-permission round trip
   - require completion handoff state in execution contracts before releasing another agent to work
   - bind task, owner role, current session, and review target explicitly when moving work between scheduler states
   - prefer dependency-gated batch handoff when related child issues can be released safely under one Epic checkpoint
@@ -47,6 +48,7 @@ outputs:
   - dual-surface review handoff and batch review guidance
   - child PR review trigger decisions
   - safe merge or hold decisions
+  - commit, push, and PR creation autonomy guidance
   - synchronization guidance
   - safe CLI comment handling
   - render-verified document conversion results
@@ -86,6 +88,7 @@ usage_triggers:
   - resume after interruption or compaction
 success_criteria:
   - issue work has branch, PR, or explicit direct-change approval
+  - authorized issue/branch/PR work is not left as uncommitted local state when verification has passed
   - multi-agent repositories have a discovered or bootstrapped repo-local workflow contract
   - Project status, labels, issue comments, and PRs have clear roles in the handoff
   - Ready queues are sorted by explicit dependency gates before Implementers start coding
@@ -103,6 +106,7 @@ success_criteria:
   - review handoff appears on both issue and PR surfaces when changes are requested
   - related low-risk issues are reviewed at meaningful batch or Epic checkpoints rather than through unnecessary per-issue churn
   - completion comments include scope, linked artifacts, verification, and residual risks
+  - direct commits to `main`, PR merges, issue closures, force pushes, resets, deletions, data migrations, and privacy/security boundary changes still require explicit authorization
   - merge decisions respect validation state and user hold/review requests
   - repository sync is checked before multi-agent issue work
   - Markdown comments avoid shell interpretation hazards

@@ -27,11 +27,11 @@ aggregates:
     period: 2026-06
     agent: "codex"
     machine_hash: "a6bcad5212d8"
-    useful_count: 2
+    useful_count: 3
     neutral_count: 0
     not_useful_count: 0
     unknown_count: 0
-    last_used: 2026-06-08
+    last_used: 2026-06-09
   - subject_type: asset
     subject_id: ASSET-META-001
     period: 2026-05
@@ -47,7 +47,7 @@ aggregates:
     period: 2026-06
     agent: "codex"
     machine_hash: "a6bcad5212d8"
-    useful_count: 9
+    useful_count: 10
     neutral_count: 0
     not_useful_count: 0
     unknown_count: 0

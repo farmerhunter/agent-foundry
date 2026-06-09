@@ -15,7 +15,7 @@ This skill is an asset that performs a repeatable workflow. During execution, it
 
 ## Core Rules
 
-- COLLAB-001: Code changes made to complete a GitHub issue should go through a feature branch and PR unless the user explicitly approves skipping the PR.
+- COLLAB-001: In authorized issue/branch/PR workflow, create verified task commits, push task branches, and open PRs without a separate commit-permission round trip; direct `main` commits, merges, issue closure, destructive Git operations, deletion, data migration, and privacy/security boundary changes still require explicit authorization.
 - COLLAB-002: Before marking an issue ready for review or closed, comment with completion scope, linked PR or commit, verification method, verification results, and residual risks.
 - COLLAB-003: If the user has authorized auto-merge, merge validated PRs by default unless review, hold, failed checks, or high-risk changes require confirmation.
 - COLLAB-004: In multi-agent repositories, fetch or pull before issue work and verify remote sync when another machine may have pushed.
@@ -36,18 +36,20 @@ This skill is an asset that performs a repeatable workflow. During execution, it
 1. Identify whether the task touches an issue, PR, GitHub Project/Epic workflow, multi-agent sync, document conversion, or CLI comment publishing.
 2. Apply the matching canonical rule above.
 3. For multi-agent projects, locate the repo-local workflow contract and active issue Execution Contracts before choosing branch or PR behavior.
-4. Check issue role fit before pickup or release; split mixed work or constrain Implementers to evidence, preliminary classification, implementation, or verification when final decisions remain Architect-owned.
-5. Check completion handoff before work starts; if it says `batch checkpoint`, do not turn each child PR into a blocking Architect review unless a high-risk trigger or failed verification appears.
-6. Bind task, owner role, current session, and reviewer target explicitly when work moves between scheduler states; `needs:*` labels route roles, not necessarily different sessions.
-7. When a set of related issues has clear dependency gates, treat it as a batch queue instead of forcing one handoff per child issue.
-8. Before reviewing an individual child PR, check whether the issue belongs to an Epic batch queue, whether its completion handoff is `batch checkpoint`, whether a reviewer target is named, and whether a high-risk trigger exists.
-9. Preserve durable traceability in GitHub issues, PRs, labels, Project state, and comments.
-10. Validate with the checks appropriate to the artifact or code path, using batch or Epic review checkpoints when appropriate.
-11. Continue from the newest user request after interruptions or context transitions.
+4. If the work is authorized for branch/PR execution, do not leave verified changes as local-only state: commit, push the task branch, and open or update the PR with traceable evidence.
+5. Check issue role fit before pickup or release; split mixed work or constrain Implementers to evidence, preliminary classification, implementation, or verification when final decisions remain Architect-owned.
+6. Check completion handoff before work starts; if it says `batch checkpoint`, do not turn each child PR into a blocking Architect review unless a high-risk trigger or failed verification appears.
+7. Bind task, owner role, current session, and reviewer target explicitly when work moves between scheduler states; `needs:*` labels route roles, not necessarily different sessions.
+8. When a set of related issues has clear dependency gates, treat it as a batch queue instead of forcing one handoff per child issue.
+9. Before reviewing an individual child PR, check whether the issue belongs to an Epic batch queue, whether its completion handoff is `batch checkpoint`, whether a reviewer target is named, and whether a high-risk trigger exists.
+10. Preserve durable traceability in GitHub issues, PRs, labels, Project state, and comments.
+11. Validate with the checks appropriate to the artifact or code path, using batch or Epic review checkpoints when appropriate.
+12. Continue from the newest user request after interruptions or context transitions.
 
 ## Guardrails
 
-- Do not create direct commits for issue code work unless explicitly approved.
+- Do not stop for separate permission before normal task commits, task-branch pushes, or PR creation when issue/branch/PR workflow is already authorized and checks have passed.
+- Do not direct-commit to `main`, merge PRs, close issues, force push, reset, delete files or branches, migrate data, or change privacy/security boundaries without explicit authorization.
 - Do not close or move an issue without a completion and verification comment.
 - Do not auto-merge failed, risky, destructive, or explicitly held PRs.
 - Do not run destructive sync commands without user confirmation.
