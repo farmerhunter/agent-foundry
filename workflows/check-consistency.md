@@ -36,6 +36,8 @@ This checks:
 - indexed practice and asset paths resolve relative to the selected Vault;
 - blank Vault indexes and empty usage aggregate are valid;
 - missing or corrupt Vault indexes fail with actionable messages.
+- blank Vault publishing reports nothing to publish;
+- maintainer-like Vault publishing can produce adapter outputs in a temporary output root.
 
 To exercise deterministic same-root, blank Vault, maintainer-like Vault, and failure fixtures, run:
 

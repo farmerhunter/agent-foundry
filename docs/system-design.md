@@ -174,7 +174,7 @@ AF-2 follow-up implications:
 
 ## Blank Vault Initialization
 
-Blank Vault initialization is the AF-2 design for creating a new User Vault without inheriting the maintainer's personal records. It is not implemented yet. Current single-repo operation remains the only implemented mode until AF-3 updates locators, scripts, checks, and runtime publishing for separate `core_root` and `vault_root` paths.
+Blank Vault initialization is the AF-2 design for creating a new User Vault without inheriting the maintainer's personal records. AF-3 now provides a local initializer and validation path through `scripts/init_vault.py`, `scripts/check_foundry_roots.py`, and `scripts/test_foundry_roots.py`. Current single-repo operation remains supported for compatibility while AF-3 continues updating publish, install, and migration flows for separate `core_root` and `vault_root` paths.
 
 Design goal:
 
@@ -224,7 +224,16 @@ Validation expectations for a blank Vault:
 7. Consistency checks distinguish "empty but valid Vault" from "missing or corrupt Vault."
 8. Pack deployment can add canonical data after initialization without changing the definition of blank Vault.
 
-Implementation implications for AF-3:
+Implemented AF-3 baseline:
+
+- `scripts/init_vault.py` creates empty `practices/`, `assets/`, `imports/inbox`, `usage/local`, empty practice and asset indexes, and an empty shared usage aggregate;
+- blank Vault initialization does not copy maintainer practices/assets;
+- blank Vault initialization does not trigger runtime install;
+- `scripts/publish_adapters.py` validates selected Core/Vault roots before publishing;
+- blank Vault adapter publishing reports `nothing to publish`;
+- maintainer-like Vault adapter publishing can produce deterministic adapter outputs in a selected output root.
+
+Implementation implications still remaining for AF-3:
 
 - scripts that currently assume repository-relative `practices/`, `assets/`, `indexes/`, and `usage/` must accept a separate `vault_root`;
 - checks should validate Core schemas/workflows against an arbitrary Vault;

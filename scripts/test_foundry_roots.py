@@ -12,6 +12,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 CHECK = ROOT / "scripts" / "check_foundry_roots.py"
+INIT = ROOT / "scripts" / "init_vault.py"
+PUBLISH = ROOT / "scripts" / "publish_adapters.py"
 
 
 def write(path: Path, text: str) -> None:
@@ -37,18 +39,38 @@ def run_check(core_root: Path, vault_root: Path) -> subprocess.CompletedProcess[
     )
 
 
+def run_publish(core_root: Path, vault_root: Path, output_root: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [
+            sys.executable,
+            str(PUBLISH),
+            "--core-root",
+            str(core_root),
+            "--vault-root",
+            str(vault_root),
+            "--output-root",
+            str(output_root),
+            "--apply",
+        ],
+        cwd=ROOT,
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+
 def make_blank_vault(path: Path) -> None:
-    write(
-        path / "indexes" / "practice_index.yaml",
-        "schema_version: 1\nupdated: 2026-06-09\n\ndomains: {}\n\npractices: []\n",
+    result = subprocess.run(
+        [sys.executable, str(INIT), str(path), "--core-root", str(ROOT), "--apply"],
+        cwd=ROOT,
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
     )
-    write(
-        path / "indexes" / "asset_index.yaml",
-        "schema_version: 1\nupdated: 2026-06-09\n\nasset_types: {}\n\nassets: []\n",
-    )
-    write(path / "usage" / "usage-aggregate.yaml", "schema_version: 1\nupdated: 2026-06-09\n\naggregates: []\n")
-    (path / "practices").mkdir(parents=True, exist_ok=True)
-    (path / "assets").mkdir(parents=True, exist_ok=True)
+    if result.returncode != 0:
+        raise RuntimeError(result.stdout + result.stderr)
 
 
 def make_maintainer_like_vault(path: Path) -> None:
@@ -57,6 +79,56 @@ def make_maintainer_like_vault(path: Path) -> None:
         target = path / name
         if source.is_dir():
             shutil.copytree(source, target)
+
+
+def make_custom_vault(path: Path) -> None:
+    make_blank_vault(path)
+    write(
+        path / "practices" / "custom" / "CUST-001-custom-practice.md",
+        "\n".join(
+            [
+                "---",
+                "id: CUST-001",
+                "title: Custom practice",
+                "domain: meta",
+                "type: principle",
+                "status: active",
+                "version: 1",
+                "created: 2026-06-09",
+                "updated: 2026-06-09",
+                "tags: [custom]",
+                "aliases: [CUST-001]",
+                "---",
+                "",
+                "## Principle",
+                "",
+                "Use only the selected Vault records.",
+                "",
+            ]
+        ),
+    )
+    write(
+        path / "indexes" / "practice_index.yaml",
+        "\n".join(
+            [
+                "schema_version: 1",
+                "updated: 2026-06-09",
+                "",
+                "domains:",
+                "  meta:",
+                "    description: Custom test domain.",
+                "",
+                "practices:",
+                "  - id: CUST-001",
+                "    title: Custom practice",
+                "    path: practices/custom/CUST-001-custom-practice.md",
+                "    domain: meta",
+                "    type: principle",
+                "    status: active",
+                "",
+            ]
+        ),
+    )
 
 
 def expect(name: str, result: subprocess.CompletedProcess[str], should_pass: bool, expected_text: str = "") -> list[str]:
@@ -96,6 +168,25 @@ def main() -> int:
         make_blank_vault(corrupt)
         write(corrupt / "indexes" / "practice_index.yaml", "schema_version: 1\nupdated: 2026-06-09\n")
         errors.extend(expect("corrupt-vault", run_check(ROOT, corrupt), False, "index missing required list: practices"))
+
+        blank_publish = run_publish(ROOT, blank, base / "blank-adapters")
+        errors.extend(expect("blank-publish", blank_publish, True, "Nothing to publish"))
+
+        maintainer_publish = run_publish(ROOT, maintainer_like, base / "maintainer-adapters")
+        errors.extend(expect("maintainer-like-publish", maintainer_publish, True, "Adapter publish wrote"))
+        if not (base / "maintainer-adapters" / "adapter-publish-manifest.yaml").exists():
+            errors.append("maintainer-like-publish: manifest was not written")
+
+        custom = base / "custom-vault"
+        custom_output = base / "custom-adapters"
+        make_custom_vault(custom)
+        custom_publish = run_publish(ROOT, custom, custom_output)
+        errors.extend(expect("custom-vault-publish", custom_publish, True, "Adapter publish wrote"))
+        output_text = "\n".join(path.read_text(encoding="utf-8") for path in custom_output.rglob("*") if path.is_file())
+        if "CUST-001" not in output_text:
+            errors.append("custom-vault-publish: selected custom practice ID missing from output")
+        if "META-001" in output_text:
+            errors.append("custom-vault-publish: maintainer practice ID leaked into output")
 
     if errors:
         print("Split-root fixture tests failed:")
