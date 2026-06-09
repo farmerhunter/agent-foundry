@@ -4,9 +4,9 @@ title: Review handoff needs both issue and PR surfaces
 domain: agent-collaboration
 type: checklist
 status: active
-version: 4
+version: 5
 created: 2026-06-07
-updated: 2026-06-08
+updated: 2026-06-09
 tags: [agent-collaboration, review, handoff, github, pull-requests]
 aliases:
   - COLLAB-012
@@ -30,6 +30,8 @@ Agents do not always enter work through the same surface. One may query issues b
 
 Review itself is also a coordination cost. For small related issues inside one Epic, repeated per-issue review can turn the human or Architect into a message broker. When the work is low-risk and dependency-gated, let the Implementer complete the planned batch and review the combined evidence at the natural checkpoint. Child PRs remain useful traceability and integration units, but they are not by themselves blocking review gates.
 
+Review is a validation state, not automatically a cross-session wait. In the lightweight scheduler model, a role can be fulfilled by the current session, the user, a separate Reviewer agent, CI/automation, or a batch/Epic checkpoint. The handoff must name the review target so the next action is detectable.
+
 ## Guidance
 
 When Architect requests changes:
@@ -44,6 +46,9 @@ When planning review granularity:
 
 - Prefer Epic, sub-Epic, or batch review for related low-risk child issues.
 - Before reviewing an individual child PR, check the issue's `Completion handoff`, the parent Epic queue, and whether a high-risk trigger is present.
+- For any issue in `Review`, identify the review target: current Architect session structured self-review, user review, separate Reviewer agent, CI/automation, or batch/Epic checkpoint.
+- If the same session switches from producing role to reviewing role, mark it as structured self-review and list residual risks. Do not present it as independent review.
+- Require independent user or separate-agent review when the contract says so, the user requests it, or the work has high-risk privacy, security, irreversible architecture, external dependency, cost, or data-retention consequences.
 - Review individual issues immediately when they introduce blockers, high-risk changes, unclear dependencies, privacy/security risk, schema/runtime boundary changes, external dependency/provider/cost changes, shared contract changes, or a failed verification signal.
 - If the issue says `Completion handoff: batch checkpoint` and no high-risk trigger exists, do not create a blocking per-issue Architect review. Let the batch continue to its checkpoint.
 - If a batch review sends work back, include both the batch-level summary and the specific issue or PR links that need action.
@@ -51,7 +56,20 @@ When planning review granularity:
 - When an Implementer finishes evidence-only work, preliminary classification, or any task with Architect-owned decisions, the issue should move to `Review`, not `Done`. Remove `needs:implementer`, add `needs:architect` or `needs:reviewer`, keep the issue open, and post completion evidence plus residual risks.
 - For a batch checkpoint, every completed child issue may move to `Review` while the Architect waits for the full batch before reviewing. Batch review reduces interactions; it does not mean child issues skip the review state.
 
-The child issue handoff should include:
+For a review-ready issue or PR, the handoff should include:
+
+```markdown
+## Review handoff
+
+Review target: current Architect session structured self-review | user | separate Reviewer agent | CI/automation | batch/Epic checkpoint
+Review surface: issue | PR | both
+Producer role: Architect | Implementer | Reviewer | Harvester
+Residual risks: ...
+Independent review required: yes/no, because ...
+Done condition: ...
+```
+
+The child issue handoff for requested changes should include:
 
 ```markdown
 ## Implementer handoff: changes requested
@@ -85,6 +103,8 @@ Next action:
 - Do not treat an open child PR as sufficient reason to add `needs:architect`; review ownership follows the completion handoff, high-risk triggers, failed verification, or the batch/Epic checkpoint.
 - Do not let an Implementer close an issue that still requires Architect-owned taxonomy, policy, privacy, security, harvest, generated-artifact, or Core/Vault decisions.
 - Do not leave batch child issues in `Ready` after the producing agent has posted completion evidence; move them to `Review` until the batch is accepted.
+- Do not equate `Review` with "wait for another session" unless the handoff names a separate reviewer. If the current session owns the review role, continue with structured self-review instead of stalling.
+- Do not hide self-review behind generic review wording. Name the review mode so later agents and the user can judge independence.
 
 ## Example
 

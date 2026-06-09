@@ -4,9 +4,9 @@ title: Execution contracts gate Implementer work
 domain: agent-collaboration
 type: checklist
 status: active
-version: 5
+version: 6
 created: 2026-06-07
-updated: 2026-06-08
+updated: 2026-06-09
 tags: [agent-collaboration, issue-contracts, handoff, branches, verification]
 aliases:
   - COLLAB-009
@@ -40,25 +40,31 @@ Base branch: `...`
 Target PR base: `...`
 Depends on: #... / none
 Role fit: evidence gathering | implementation | verification/review | taxonomy/architecture decision | policy decision | mixed
+Current owner role: Architect | Implementer | Reviewer | Harvester | user | CI
 Architect-owned decisions: ...
 Implementer boundary: ...
 Expected PR shape: one PR for this issue
 Completion handoff: close after evidence | move to Review | open PR | return to Architect | batch checkpoint
+Reviewer target: current Architect session self-review | user | separate Reviewer agent | CI/automation | batch/Epic checkpoint | none
 Merge rule: ...
 Verification required: ...
 ```
 
 Role fit is required when the issue includes classification, taxonomy, architecture boundary, policy, harvest, privacy, security, or future-system work. If the role fit is mixed, split the issue or state which decisions remain Architect-owned. Implementer evidence may include preliminary classification, but final taxonomy, policy, and architecture decisions need Architect review unless the contract explicitly delegates that authority.
 
-Completion handoff is required when the work will be executed by another agent. It controls when Architect review is actually requested; an opened child PR alone is not enough to create a blocking Architect inbox item.
+Completion handoff is required when the work will be executed by another agent or when the producing role and reviewing role may differ. It controls when Architect review is actually requested; an opened child PR alone is not enough to create a blocking Architect inbox item.
+
+`Current owner role` and `Reviewer target` make the lightweight scheduler checkable without introducing a separate Manager system. They bind the task to a role and validation target, not necessarily to a different session. The current session may satisfy a later role if it states the role switch explicitly.
 
 Use these meanings:
 
 - `batch checkpoint`: the child issue belongs to a planned Epic or sub-Epic batch. The Implementer posts completion evidence and PR/commit links, then continues the queue according to dependency gates. Architect review happens at the batch/Epic checkpoint unless a high-risk trigger or failed verification appears.
-- `move to Review`: the producing agent posts completion evidence, removes `needs:implementer`, adds the next owner label, keeps the issue open, and sets Project/Roadmap status to `Review`.
+- `move to Review`: the producing agent posts completion evidence, removes `needs:implementer`, adds the next owner label, keeps the issue open, sets Project/Roadmap status to `Review`, and names the reviewer target.
 - `return to Architect`: the issue requires immediate Architect decision or review after this deliverable.
 - `close after evidence`: the Implementer may close the issue directly only when the contract explicitly delegates closure and no downstream review or decision remains.
 - `open PR`: the issue should produce a PR, but this does not by itself decide whether review is per-issue or batch-level; combine it with the review or checkpoint rule.
+
+For Architect-owned work, the reviewer target may be `current Architect session self-review` when the risk profile allows it. Mark this as structured self-review and include residual risks. Use an independent user or separate Reviewer agent when the contract requires it, the user asks for it, or the work has high-risk privacy, security, irreversible architecture, external dependency, cost, or data-retention consequences.
 
 For related low-risk child issues in the same Epic integration branch, prefer `batch checkpoint` as the completion handoff. If `Architect-owned decisions` is not `none`, the default handoff is `move to Review` unless the contract explicitly names a batch checkpoint that preserves the Architect-owned decision for that checkpoint.
 
@@ -96,6 +102,8 @@ Use pickup confirmation only when dependencies are satisfied and implementation 
 - Do not write a closure rule that contradicts the review boundary. Evidence-only and preliminary-classification tasks should move to Review unless direct closure is explicitly delegated.
 - Do not treat an open child PR as an automatic request for immediate Architect review. The `Completion handoff`, high-risk triggers, failed verification, or the batch/Epic checkpoint determine review timing.
 - Do not apply new practice versions to old-format Execution Contracts without checking whether the contract supports the new behavior. When a practice update introduces new contract fields (e.g. `Completion handoff`), issues written before that update do not automatically gain the new behavior. Default to the traditional handoff unless the contract explicitly opts in.
+- Do not write `move to Review` without a reviewer target. Review must be routable to current-session self-review, user review, separate Reviewer agent, CI/automation, or batch/Epic checkpoint.
+- Do not assume self-review is independent review. If the same session changes from producing role to reviewing role, label it as structured self-review and list residual risks.
 
 ## Example
 

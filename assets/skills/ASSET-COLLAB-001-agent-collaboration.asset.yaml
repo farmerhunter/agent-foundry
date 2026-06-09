@@ -2,9 +2,9 @@ id: ASSET-COLLAB-001
 title: Agent Collaboration
 asset_type: skill
 status: active
-version: 7
+version: 8
 created: 2026-05-28
-updated: 2026-06-08
+updated: 2026-06-09
 purpose: Guide GitHub issue, pull request, Project/Epic scheduling, multi-agent synchronization, CLI comment, document conversion, and interruption-resume workflows.
 responsibility: Apply collaboration and delivery practices that preserve traceability, repo-local workflow contracts, verification, safe synchronization, and continuity across humans and agents.
 non_responsibility: Does not maintain Agent Foundry lifecycle records, import external skills, or make architecture decisions except when collaboration workflow boundaries require escalation.
@@ -24,10 +24,12 @@ process:
   - apply the matching collaboration, implementation, or testing practice
   - for Implementer pickup, read Project/label state plus issue execution contracts before creating branches or PRs
   - require completion handoff state in execution contracts before releasing another agent to work
+  - bind task, owner role, current session, and review target explicitly when moving work between scheduler states
   - prefer dependency-gated batch handoff when related child issues can be released safely under one Epic checkpoint
   - prefer batch or Epic-level review checkpoints when related low-risk issues can be verified together
   - before reviewing an individual child PR, check whether its completion handoff points to a batch checkpoint and whether a high-risk trigger exists
   - do not treat an open child PR as an automatic Architect review request when batch checkpoint mode applies
+  - when a session switches roles, label structured self-review and residual risks instead of implying independent review
   - keep Project status, Roadmap Status, issue state, labels, and durable comments semantically coherent
   - when executing a task list from another agent or user, verify each item against the original list before declaring done
   - preserve durable traceability in issues, PRs, comments, or verification records
@@ -39,6 +41,7 @@ outputs:
   - Project/Epic/label queue guidance
   - issue role-fit recommendations
   - Execution Contract role-boundary, pickup confirmation, and completion handoff guidance
+  - session-role-task binding and reviewer target guidance
   - dependency-gated batch handoff guidance
   - completion and verification comments
   - dual-surface review handoff and batch review guidance
@@ -88,6 +91,9 @@ success_criteria:
   - Ready queues are sorted by explicit dependency gates before Implementers start coding
   - related child issues are batched for handoff when dependency gates make the batch safe and detectable
   - issue execution contracts define branch strategy, base branch, PR target, dependencies, role fit, Architect-owned decisions, Implementer boundary, completion handoff, merge rule, and verification
+  - issue execution contracts or review handoffs identify the current owner role and reviewer target when work moves to Review
+  - `needs:*` labels route the next role, not necessarily a different session
+  - structured self-review is explicitly marked with residual risks when the same session switches from producing role to reviewing role
   - low-risk child issues in the same Epic integration branch default to batch execution/review when their completion handoff is `batch checkpoint`
   - open child PRs do not automatically become Architect inbox work unless completion handoff, high-risk trigger, failed verification, or batch checkpoint requires review
   - Implementer issues explicitly separate evidence, implementation, and verification from Architect-owned taxonomy, architecture, policy, harvest, privacy, or security decisions
