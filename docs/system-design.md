@@ -172,6 +172,44 @@ AF-2 follow-up implications:
 - #9 should describe external-user setup without requiring the maintainer's Vault records.
 - AF-3 should execute the physical split and migration: public Core, maintainer private Vault, updated locators, runtime migration, and compatibility checks.
 
+## Operating Context Separation
+
+Agent Foundry must remain safe when it is used inside another software project. Users and agents regularly operate in nested contexts:
+
+1. **Product project context**: the user's actual software project, such as `token-panic`. This project is the evidence source and work target.
+2. **Foundry Vault context**: harvest, refresh, review, asset discovery, and adapter publishing for the user's Agent Foundry capability records.
+3. **Foundry Core maintenance context**: changing Agent Foundry's workflows, schemas, scripts, templates, adapter generation, install behavior, or roadmap.
+
+These contexts must not be inferred only from the current working directory or from a recent chat message. Before writing files, installing adapters, recording evidence, or updating GitHub issues, an agent should identify:
+
+```text
+work context: product project | foundry vault operation | foundry core maintenance
+evidence source: <project/session/import path>
+canonical vault root: <path>
+core root: <path>
+write target: <repo/path/runtime>
+review target: current session | user | separate reviewer | batch checkpoint
+```
+
+Context rules:
+
+1. Product project work may generate evidence for Agent Foundry, but the product project is not the canonical Foundry Vault unless it validates as one.
+2. Foundry Vault operations may read product project evidence, but canonical practice/asset/index writes go to the active Vault.
+3. Foundry Core maintenance changes reusable machinery and should go through Core review, even when prompted by a product project session.
+4. Runtime adapter install writes to user-owned runtime directories and must be derived from Core plus the selected Vault.
+5. `refresh practices and assets` is a Vault/Core synchronization command, not a product project dependency install.
+6. `harvest practices` must route artifacts before writing: product facts stay with the product project, reusable practices/assets go to the Vault, and Core workflow defects become Core maintenance.
+7. After the physical split, agents must validate both `core_root` and `vault_root` before canonical writes. If either is missing or ambiguous, stop and ask instead of guessing.
+
+Failure modes this prevents:
+
+- writing product project notes into the Foundry Core repo;
+- harvesting a project-local decision as a general Foundry practice;
+- modifying Core scripts when the user intended only to refresh a Vault;
+- installing stale adapters from the wrong Vault;
+- treating the maintainer's Vault as a default public starter pack;
+- using future memory-system paths as current writable destinations.
+
 Machine-local locator:
 
 ```text

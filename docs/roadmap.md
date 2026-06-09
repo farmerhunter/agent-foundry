@@ -224,6 +224,7 @@ Epics:
   - Separate portable config from machine-local config.
   - Confirm `~/.agent-foundry/config.yaml` remains a locator, not canonical knowledge.
   - Define where enabled runtimes, paths, privacy defaults, and sync remotes live.
+  - Define how agents distinguish product project context, Foundry Vault operations, and Foundry Core maintenance before writing.
 
 - **External-user quickstart**
   - Document what a new user clones or installs.
@@ -279,6 +280,7 @@ Epics:
   - Ensure agents can locate Core and Vault reliably from another project.
   - Define precedence for `AGENT_FOUNDRY_HOME`, explicit Core/Vault environment variables, local config, and current-directory markers.
   - Add clear failure messages when Core is found but Vault is missing, or Vault is found but Core tooling is missing.
+  - Add context checks that identify whether the current operation is product project work, Foundry Vault operation, or Foundry Core maintenance.
 
 - **Runtime deployment migration**
   - Inventory installed Codex, Claude Code, Hermes, and ChatGPT adapter targets before migration.
@@ -299,6 +301,7 @@ Epics:
   - Confirm setup does not require maintainer-specific paths, private records, or personal adapters.
   - Confirm a user can choose a suitable Vault location: private Git repo, local-only repo, or other explicitly supported storage.
   - Document where the Vault should live and how agents remember or rediscover it.
+  - Test nested usage: running harvest/refresh from inside a product project must locate the correct Core and Vault without confusing the product project with either.
 
 Acceptance criteria:
 
@@ -306,6 +309,7 @@ Acceptance criteria:
 - The maintainer's Vault is separate and private by default.
 - Existing local Codex, Claude Code, Hermes, and ChatGPT workflows have a tested migration path.
 - `core_root` and `vault_root` can be different paths and are both validated before canonical writes.
+- Product project, Foundry Vault operation, and Foundry Core maintenance contexts are distinguishable before writes or runtime installs.
 - A blank Vault can be initialized and checked without personal practices/assets.
 - Adapter generation and runtime install work from both the maintainer Vault and a blank/new user Vault.
 - Rollback instructions exist for the split migration.
