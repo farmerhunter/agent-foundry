@@ -113,6 +113,10 @@ User Vault contains a user's governed capability records and review evidence:
 
 Generated outputs are neither Core nor Vault. They are projections from Core tooling plus Vault records. Runtime copies are installed downstream and are never canonical.
 
+Executable helper scripts expose a remaining boundary gap. AF-3 has an implemented home only for Core platform scripts, so any script that needs to run today must live under Core `scripts/`. That is correct for platform lifecycle tooling such as root validation, Vault initialization, adapter publishing, runtime install, migration planning, consistency checks, and rollback helpers. It is not a complete answer for scripts that belong to a specific capability, practice, or asset, such as multi-agent GitHub Project helpers.
+
+Until capability-owned executable packaging exists, capability-specific helpers may live in Core `scripts/` only as capability-helper candidates. They must avoid personal defaults, avoid treating the User Vault as an executable trust boundary, and remain reviewable as future migration candidates. The follow-up design work is #53: define capability-owned executable helpers, including package location, metadata, permission model, provenance, install/update behavior, and how helpers relate to Vault records without conflicting with freeform practice/asset CRUD.
+
 Current repository mapping:
 
 | Path or content | Split classification | Notes |

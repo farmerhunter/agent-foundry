@@ -500,6 +500,8 @@ The blank Vault remains genuinely blank. It contains structure, metadata, empty 
 
 Capability packs are canonical data bundles, not runtime-only helpers and not a second CRUD system. Deploying a pack writes normal practices, assets, index entries, and pack metadata into the user's Vault. After deployment, those records are governed by the same create, read, update, deprecate, retire, review, and adapter-publish workflows as manually created records.
 
+Known gap: AF-3 still has only one implemented executable-script home: Core `scripts/`. That is acceptable for platform lifecycle tooling, but it conflicts with the future capability-pack boundary when a helper script belongs to a specific capability, practice, or asset. Until #53 defines capability-owned executable helpers, such scripts should remain in Core `scripts/` as capability-helper candidates rather than being placed directly in the User Vault. This does not block the AF-3 Core/User Vault data split, but it must be resolved before Agent Foundry claims polished capability-pack packaging.
+
 Predefined packs and discovered packs are compatible with freeform Vault maintenance:
 
 - Predefined packs are curated Core-distributed canonical data.
@@ -539,6 +541,7 @@ Epics:
   - Define pack manifest, provenance, record copy/merge behavior, pack membership metadata, version compatibility, and conflict handling.
   - Define mandatory bootstrap pack deployment and optional pack selection using the same mechanism.
   - Ensure pack deployment writes canonical data into the Vault before refresh.
+  - Resolve #53 by defining where capability-owned executable helpers live, how they are reviewed, what permissions they declare, and how they are installed or updated without polluting Core or turning the User Vault into an executable trust boundary.
 
 - **Bootstrap capability pack**
   - Identify the minimal harvest/discover/refresh/review/publish records needed for normal onboarding.
@@ -547,6 +550,7 @@ Epics:
 
 - **Optional capability pack design**
   - Define how optional packs relate to assets, practices, templates, examples, generated adapters, and pack membership metadata.
+  - Define how optional packs may include or reference executable helper scripts without bypassing review or runtime install gates.
   - Ensure packs do not include maintainer-private Vault content.
   - Keep pack deployment reviewable, reversible, and compatible with user edits.
   - Package multi-agent collaboration as the first optional pack after bootstrap works.
