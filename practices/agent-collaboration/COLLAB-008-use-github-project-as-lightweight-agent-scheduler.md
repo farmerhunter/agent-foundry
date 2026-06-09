@@ -4,9 +4,9 @@ title: Use GitHub Project as a lightweight agent scheduler
 domain: agent-collaboration
 type: pattern
 status: active
-version: 2
+version: 3
 created: 2026-06-07
-updated: 2026-06-08
+updated: 2026-06-09
 tags: [agent-collaboration, github-project, scheduler, labels, epics]
 aliases:
   - COLLAB-008
@@ -45,6 +45,20 @@ PR = deliverable and review surface
 CI = automated validation gate
 ```
 
+This is a lightweight scheduler substrate, not a full coordinator. It does not maintain an independent Manager/Coordinator entity, persistent session ownership model, or automatic role assignment. Keep the simple mode robust by making the session, role, and task binding explicit whenever work moves between states.
+
+Use these meanings:
+
+```text
+task = issue, PR, batch checkpoint, or Epic acceptance unit
+role = Architect, Implementer, Reviewer, Harvester, user, or CI responsibility
+session = the current agent conversation or runtime instance that may perform one or more roles
+owner role = the role currently responsible for the next action on the task
+review target = who or what must validate the task before Done
+```
+
+Roles are responsibilities, not identities. A single session may perform multiple roles over time, and the same human account may drive several roles. When a session changes role for a task, say so explicitly in the issue comment, PR comment, or final report.
+
 Keep Epics as coordination containers. Do not put `needs:implementer` on an Epic merely because its child issues are ready. If an Epic-level concern requires code, tests, manual QA, data migration, or completion evidence from an Implementer, create a child issue for that executable work.
 
 Keep issue type semantically honest. Use an Epic for coordination across child issues, dependencies, or exit criteria. If the remaining work has collapsed into one concrete deliverable, classify it as a Task even when the Architect performs it directly.
@@ -62,6 +76,8 @@ blocked
 
 When changing handoff ownership, change both the label and the durable comment. The label routes the next agent; the comment explains what to do.
 
+`needs:*` labels route the next role. They do not automatically require a different session or a new conversation. If the current session can satisfy the next role, state that explicitly, for example: `Next action: current Architect session will perform structured self-review`.
+
 Keep scheduler state coherent across surfaces:
 
 - `Ready` means available for pickup, not completed.
@@ -70,6 +86,8 @@ Keep scheduler state coherent across surfaces:
 - `Done` means the work has been accepted and closed, or the Epic exit criteria are satisfied.
 
 Do not leave one status surface saying `Ready` while another says `Done`. If a repository uses both GitHub's built-in Project `Status` and a custom roadmap status field, update both to represent the same lifecycle phase.
+
+When a task enters `Review`, its durable comment or contract should name the review target: current session structured self-review, user review, separate Reviewer agent, CI/automation, or batch/Epic checkpoint.
 
 ## Use This When
 
@@ -84,6 +102,8 @@ Do not leave one status surface saying `Ready` while another says `Done`. If a r
 - Do not let Epic coordination issues become fake implementation work. Split executable concerns into child issues.
 - Do not keep a completed or closed issue in `Ready`; move it to `Review` for validation or `Done` after acceptance.
 - Do not keep a single-deliverable policy or implementation issue labeled as an Epic merely because it came from roadmap planning.
+- Do not confuse role with session identity. `needs:architect` or `needs:reviewer` routes the next role; it does not always require a different agent or conversation.
+- Do not leave `Review` without a review target. The scheduler cannot be checked if no one can tell whether review means current-session self-review, user review, separate reviewer, CI, or batch checkpoint.
 
 ## Example
 
