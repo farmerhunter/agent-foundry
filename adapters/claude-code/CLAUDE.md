@@ -44,7 +44,7 @@ When asked to refresh, read `workflows/refresh.md` and follow the steps: git pul
 
 When asked to harvest, persist, deduplicate, merge, or publish reusable lessons:
 
-1. Locate Agent Foundry Core and Vault. Use `AGENT_FOUNDRY_HOME`, then `~/.agent-foundry/config.yaml`, then the current directory only if canonical markers exist. The current project is evidence source, not canonical destination.
+1. Locate Agent Foundry Core and Vault. Prefer explicit roots when available, then `AGENT_FOUNDRY_CORE` plus `AGENT_FOUNDRY_VAULT` after commands support them, then `~/.agent-foundry/config.yaml`, then `AGENT_FOUNDRY_HOME` as same-root compatibility, then the current directory only if it validates as the required Core and Vault context. The current project is evidence source, not canonical destination.
 2. Read `workflows/harvest-practices.md`.
 3. Read `schemas/practice-entry.schema.yaml`.
 4. Run the current capability check; do not use future architecture concepts as current writable substrate.

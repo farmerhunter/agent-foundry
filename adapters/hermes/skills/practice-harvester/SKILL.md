@@ -36,7 +36,7 @@ Before substantial changes, check:
 
 ## Workflow
 
-1. Locate Agent Foundry Core and Vault. Use `AGENT_FOUNDRY_HOME`, then `~/.agent-foundry/config.yaml`, then the current directory only if canonical markers exist. The current project is evidence source, not canonical destination.
+1. Locate Agent Foundry Core and Vault. Prefer explicit roots when available, then `AGENT_FOUNDRY_CORE` plus `AGENT_FOUNDRY_VAULT` after commands support them, then `~/.agent-foundry/config.yaml`, then `AGENT_FOUNDRY_HOME` as same-root compatibility, then the current directory only if it validates as the required Core and Vault context. The current project is evidence source, not canonical destination.
 2. Select the workflow from the short command or user intent.
 3. Read `references/harvest-workflow.md` for harvesting, `references/import-policy.md` for imports, `references/asset-policy.md` for assets, `workflows/refresh.md` from the repo for refresh, or the repository workflow file for publish/review.
 4. Read `references/schema.md`.
@@ -73,4 +73,4 @@ Before substantial changes, check:
 - Make adapter fidelity executable. Adapter quality checks must verify the exact contract surface they claim to protect, such as Compact Preflight sections, canonical IDs, published asset IDs, target conventions, and high-fidelity requirements, not just generated file existence or broad text matches.
 - Review assets with lifecycle evidence. Asset review should use lifecycle state, usage evidence, overlap, canonical coverage, stale triggers, and published targets before recommending keep, revise, deprecate, archive, split, or merge.
 - Sync aggregate usage statistics, not raw evidence. Keep raw usage logs local under `usage/local/`, sync sanitized aggregate rows in `usage/usage-aggregate.yaml`, and keep missed activation or other review-only signals out of shared usage counts unless explicitly summarized through an approved aggregate format.
-- When working from another project, locate and validate the Foundry Vault before writing canonical records. Required markers include `indexes/practice_index.yaml`, `indexes/asset_index.yaml`, and `workflows/harvest-practices.md`.
+- When working from another project, locate and validate Foundry Core and Vault before writing canonical records. Core markers include `workflows/harvest-practices.md` and `schemas/practice-entry.schema.yaml`; Vault markers include `indexes/practice_index.yaml`, `indexes/asset_index.yaml`, and `usage/usage-aggregate.yaml`. Do not require Core-owned workflow files inside a split Vault.

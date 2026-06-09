@@ -5,7 +5,7 @@ Canonical sources:
 - `workflows/harvest-practices.md`
 - META-001, META-002, META-003
 
-Locate Agent Foundry before writing canonical records. Use `AGENT_FOUNDRY_HOME`, then `~/.agent-foundry/config.yaml`, then the current directory only if it contains canonical markers. The current project is evidence source, not canonical destination.
+Locate Agent Foundry before writing canonical records. Prefer explicit roots when available, then `AGENT_FOUNDRY_CORE` plus `AGENT_FOUNDRY_VAULT` after commands support them, then `~/.agent-foundry/config.yaml`, then `AGENT_FOUNDRY_HOME` as same-root compatibility, then the current directory only if it validates as the required Core and Vault context. Core markers include `workflows/harvest-practices.md` and `schemas/practice-entry.schema.yaml`; Vault markers include `indexes/practice_index.yaml`, `indexes/asset_index.yaml`, and `usage/usage-aggregate.yaml`. Do not require Core-owned workflow files inside a split Vault. The current project is evidence source, not canonical destination.
 
 Route:
 

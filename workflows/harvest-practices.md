@@ -12,17 +12,26 @@ The current project is usually the evidence source, not the canonical destinatio
 
 Use this order:
 
-1. `AGENT_FOUNDRY_HOME`, if set.
-2. `~/.agent-foundry/config.yaml`, using `vault_root` and `core_root`.
-3. The current directory, only if it contains canonical markers.
-4. Known fallback paths.
-5. Ask the user for the Agent Foundry path.
+1. Explicit `--core-root` and `--vault-root` flags, when the command supports them.
+2. Paired `AGENT_FOUNDRY_CORE` and `AGENT_FOUNDRY_VAULT` environment variables, after commands implement them.
+3. `~/.agent-foundry/config.yaml`, using `core_root`, `vault_root`, `core_markers`, and `vault_markers`.
+4. `AGENT_FOUNDRY_HOME`, if set, as a same-root compatibility locator.
+5. The current directory, only if it validates as the required Core and Vault context for the requested operation.
+6. Known fallback paths.
+7. Ask the user for the Agent Foundry path.
 
-Validate the location before proceeding. Required markers:
+Validate the location before proceeding. Required Core markers:
+
+- `workflows/harvest-practices.md`
+- `schemas/practice-entry.schema.yaml`
+
+Required Vault markers:
 
 - `indexes/practice_index.yaml`
 - `indexes/asset_index.yaml`
-- `workflows/harvest-practices.md`
+- `usage/usage-aggregate.yaml`
+
+During AF-3 compatibility mode, Core and Vault may share one root. After the physical split, do not validate a Vault by requiring Core-owned workflow files under `workflows/`.
 
 If the Vault is locked, dirty in a conflicting way, or unavailable, produce candidate recommendations only and do not write files.
 

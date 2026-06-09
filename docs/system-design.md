@@ -182,7 +182,7 @@ Design goal:
 public Core + empty User Vault -> valid starting point for reviewed practices, assets, usage evidence, and adapter generation
 ```
 
-`init-vault` should mean "create a valid, empty canonical destination" rather than "copy the maintainer's current vault." It should initialize structure and metadata only. It should not activate starter practices, install runtime adapters, import external skills, or write memory-system records.
+`init-vault` should mean "create a valid, empty canonical destination" rather than "copy the maintainer's current vault." It should initialize structure and metadata only. It should not activate practices, install runtime adapters, import external skills, deploy capability packs, or write memory-system records.
 
 Blank Vault contents:
 
@@ -199,7 +199,19 @@ Blank Vault contents:
 
 Template rule: practice and asset templates belong to Core. A blank Vault may receive copied template files only if the implementation needs standalone editing affordances, and those copies must be clearly marked as templates, not canonical records. Template copies must not appear in indexes as active records.
 
-Starter content rule: starter capability packs, imported Codex/Claude Code/Hermes/ChatGPT assets, and examples are onboarding inputs, not blank Vault defaults. They belong to AF-4 unless a later implementation explicitly lets the user choose them. If chosen, they enter as candidate/proposed records or as active records only under an explicit, reviewed onboarding policy.
+Capability pack rule: capability packs are deployed after blank Vault creation, not during blank Vault initialization. A deployed pack writes canonical practice and asset records, index entries, and any pack metadata into the user's Vault. After deployment, those records are normal Vault records governed by the same create, read, update, deprecate, retire, review, and adapter-publish workflows as manually created records. Pack deployment is an import/bootstrap path, not a second source of truth.
+
+Normal onboarding should deploy a mandatory bootstrap pack after the blank Vault exists. Optional packs, such as multi-agent collaboration or future technical documentation writing, use the same deployment mechanism but remain user-selected. Runtime adapters are generated only after pack deployment through `refresh`, from Vault canonical data.
+
+Predefined packs and discovered packs do not conflict with freeform Vault CRUD because they operate at different moments:
+
+- A predefined pack is curated Core-distributed canonical data that can be deployed into a Vault.
+- A discovered pack is a reviewed bundle proposal inferred from existing practices, assets, workflows, and usage evidence.
+- Once deployed, both become ordinary Vault records with provenance and pack membership metadata.
+- Later pack updates must propose normal record changes; they must not overwrite user-edited Vault records silently.
+- Users and agents may still create, edit, archive, or retire individual practices and assets outside any pack.
+- A record may belong to no pack, one pack, or multiple packs; pack membership is metadata, not ownership.
+- `refresh` ignores pack source and reads only the current active/revised Vault records.
 
 Validation expectations for a blank Vault:
 
@@ -210,6 +222,7 @@ Validation expectations for a blank Vault:
 5. Adapter publishing can report "nothing to publish" or produce an empty/minimal adapter output without treating that as a failure.
 6. Runtime install must not copy the maintainer's generated adapters into a new user's runtime.
 7. Consistency checks distinguish "empty but valid Vault" from "missing or corrupt Vault."
+8. Pack deployment can add canonical data after initialization without changing the definition of blank Vault.
 
 Implementation implications for AF-3:
 
@@ -217,13 +230,14 @@ Implementation implications for AF-3:
 - checks should validate Core schemas/workflows against an arbitrary Vault;
 - generated adapter outputs should be derived from the selected Vault, not from this repository's maintainer Vault by default;
 - blank-vault fixtures or templates should be reproducible from Core and should not require copying personal records;
+- later pack deployment should be able to populate a blank Vault with the mandatory bootstrap pack before `refresh`;
 - migration must test both the maintainer Vault and a blank/new-user Vault.
 
 Rejected as #7 scope:
 
 - creating `memory/`, `knowledge/`, `research_memos/`, or `project_memory`;
 - importing runtime skills or ChatGPT exports;
-- defining capability pack lifecycle beyond the constraint that packs are not blank defaults;
+- implementing capability pack deployment before the blank Vault and selected-root substrate are reviewed;
 - moving the maintainer's Vault into a private repo;
 - implementing `init-vault` scripts before the design is reviewed.
 
@@ -245,11 +259,13 @@ Target setup narrative after AF-3/AF-4:
 
 1. The user obtains the public Core.
 2. The user creates or selects a User Vault location.
-3. The user initializes an empty Vault or chooses an approved onboarding mode.
-4. The local locator records separate `core_root` and `vault_root`.
-5. Core tooling validates both roots before any canonical write.
-6. The user reviews runtime targets and applies adapter install only to selected local runtimes.
-7. ChatGPT remains manual unless a future supported import path exists.
+3. The user initializes an empty Vault.
+4. Core deploys the mandatory bootstrap pack into that Vault as canonical data.
+5. The user optionally deploys selected capability packs into the Vault.
+6. The local locator records separate `core_root` and `vault_root`.
+7. Core tooling validates both roots before any canonical write.
+8. The user runs `refresh`, which generates adapters from Vault canonical data and installs only to selected local runtimes.
+9. ChatGPT remains manual unless a future supported import path exists.
 
 Pre-split boundary for #9:
 
@@ -261,7 +277,8 @@ Pre-split boundary for #9:
 | How Core/Vault are located | `~/.agent-foundry/config.yaml` exists, but current scripts assume one root. | AF-3 separate root support. |
 | How adapters are generated | Current adapters are generated from the maintainer Vault. | AF-3 arbitrary-vault adapter generation. |
 | How runtimes are installed | Current machine-local manifest installs into selected local runtimes. | AF-3 migration checks for split Core/Vault; AF-4 first-run UX. |
-| How starter content appears | Starter packs and runtime imports are not blank defaults. | AF-4 onboarding mode selector. |
+| How bootstrap capability appears | Blank Vault is created first, then mandatory bootstrap pack is deployed as canonical Vault data. | AF-4 pack deployment and first-run verification. |
+| How optional capability content appears | Optional capability packs and runtime imports are not blank defaults; they are deployed or imported after the Vault exists. | AF-4 pack selection and import workflow. |
 | How existing runtime assets are imported | Existing runtime assets are evidence/candidates first. | AF-4 import workflow. |
 | What remains private | Raw evidence, local manifests, adoption state, secrets, maintainer Vault, personal records. | Current policy plus AF-3 migration. |
 
@@ -271,7 +288,7 @@ Docs implications:
 - `docs/usage.md` currently documents day-to-day use after Agent Foundry is already installed.
 - Neither file should be read as a tested external-user quickstart until AF-3 and AF-4 are complete.
 - AF-3 should rewrite deployment docs around public Core plus selected Vault.
-- AF-4 should add first-run onboarding choices: empty Vault, starter capability packs, runtime-asset import, or mixed setup.
+- AF-4 should add first-run onboarding sequence: blank Vault creation, mandatory bootstrap pack deployment, optional capability pack selection, runtime-asset import when selected, and unified refresh.
 
 Do not promise future memory-system behavior in external-user setup. Memory-system records, `knowledge/`, `research_memos/`, project memory, and MCP memory access remain proposed/future until reviewed architecture implements them.
 
@@ -310,7 +327,7 @@ Failure modes this prevents:
 - harvesting a project-local decision as a general Foundry practice;
 - modifying Core scripts when the user intended only to refresh a Vault;
 - installing stale adapters from the wrong Vault;
-- treating the maintainer's Vault as a default public starter pack;
+- treating the maintainer's Vault as a default public capability pack;
 - using future memory-system paths as current writable destinations.
 
 ## Configuration Boundary
@@ -322,7 +339,7 @@ Use these configuration classes:
 | Class | Examples | Ownership | Git behavior |
 | --- | --- | --- | --- |
 | Core config intent | adapter profiles, schemas, workflow defaults, runtime manifest template | Public Core | Tracked |
-| Vault config intent | vault metadata, selected starter packs, privacy defaults, optional import-pack choices | User Vault | Tracked in the user's Vault when non-sensitive |
+| Vault config intent | vault metadata, selected capability packs, privacy defaults, optional import-pack choices | User Vault | Tracked in the user's Vault when non-sensitive |
 | Machine-local locator | `~/.agent-foundry/config.yaml` with `core_root`, `vault_root`, markers, and compatibility fields | User machine | Not tracked |
 | Machine-local runtime deployment | `runtime/local/runtime_manifest.yaml`, enabled runtimes, install paths, adoption decisions | User machine | Gitignored |
 | Runtime copies | installed files under Codex, Claude Code, Hermes, and manual ChatGPT imports | User runtime | Outside Core/Vault canonical records |
@@ -333,18 +350,22 @@ Locator semantics:
 - `core_root`: path to the reusable Agent Foundry Core that provides workflows, schemas, scripts, templates, adapter profiles, and docs.
 - `vault_root`: path to the active User Vault that provides practices, assets, indexes, shared aggregates, and vault-local docs.
 - `repo_root`: compatibility field for current single-repo operation. After physical split, it should be derived or deprecated rather than treated as proof that Core and Vault share a root.
-- `canonical_markers`: markers that validate a Vault before canonical writes.
-- `core_markers`: future markers that validate Core before running Core tooling.
+- `core_markers`: markers that validate Core before running Core tooling. Required examples include `workflows/harvest-practices.md`, `schemas/practice-entry.schema.yaml`, and `scripts/foundry_config.py`.
+- `vault_markers`: markers that validate a Vault before canonical writes. Required examples include `indexes/practice_index.yaml`, `indexes/asset_index.yaml`, and `usage/usage-aggregate.yaml`.
+- `canonical_markers`: deprecated compatibility field from the single-root staging state. It may be read for old local configs, but new configs should use `core_markers` and `vault_markers`.
 
-Current capability: `scripts/foundry_config.py` writes `core_root`, `vault_root`, and `repo_root` to the same path. This is valid only for the current single-repo staging state. AF-3 migration work must update the locator and scripts so `core_root` and `vault_root` may differ.
+Current capability: `scripts/foundry_config.py` writes `core_root`, `vault_root`, and `repo_root` to the same path for compatibility, but emits separate Core and Vault marker lists. This is still a single-repo staging mode until later AF-3 work teaches all commands to operate on distinct roots.
 
-Locator precedence should be explicit:
+Locator precedence:
 
 1. Explicit user-provided `--core-root` and `--vault-root` flags, when a command supports them.
-2. Explicit environment variables for Core and Vault roots, after they are designed.
+2. Paired `AGENT_FOUNDRY_CORE` and `AGENT_FOUNDRY_VAULT` environment variables, after commands implement them.
 3. `~/.agent-foundry/config.yaml`.
-4. Current directory only if it validates as the required context for the requested operation.
-5. Ask the user.
+4. `AGENT_FOUNDRY_HOME` as a same-root compatibility locator.
+5. Current directory only if it validates as the required context for the requested operation.
+6. Ask the user.
+
+Do not treat a single root found through `AGENT_FOUNDRY_HOME` or current directory as proof that split mode is unsupported. It is only a compatibility path. Commands should prefer explicit Core/Vault roots once they are available.
 
 Do not use a product project checkout as a Vault merely because the user is working there. Do not use a Vault as Core merely because it contains practices. Do not use Core as a Vault merely because it has templates or examples.
 
@@ -368,13 +389,7 @@ Failure states should be explicit:
 - Manual target such as ChatGPT: produce import instructions, do not pretend install is automatic.
 - Core and Vault version mismatch: stop or warn before publishing adapters.
 
-Onboarding implication: a blank Vault should not be the only user path. Future onboarding should support at least three explicit modes:
-
-1. empty Vault for users who want to build capability records from scratch;
-2. starter capability packs curated from public Core examples or reviewed bundles;
-3. import from existing Codex, Claude Code, Hermes, or ChatGPT assets as candidate inputs, not active canonical truth.
-
-These onboarding modes must still preserve the Core/Vault boundary: starter packs and imported runtime assets are proposed inputs until the user accepts them into their Vault.
+Onboarding implication: a blank Vault is the first state, not the complete usable setup. Future onboarding should always create a blank Vault, deploy the mandatory bootstrap pack as canonical Vault data, optionally deploy selected capability packs, and then run `refresh`. Existing Codex, Claude Code, Hermes, or ChatGPT assets remain import candidates, not canonical truth, unless the user accepts them into the Vault.
 
 Machine-local locator:
 
@@ -382,7 +397,7 @@ Machine-local locator:
 ~/.agent-foundry/config.yaml
 ```
 
-This file records `repo_root`, `core_root`, `vault_root`, and canonical markers. It is written during install and is not canonical knowledge. Agents working in another repository should locate Agent Foundry through this config or `AGENT_FOUNDRY_HOME`, then validate the markers before writing canonical records. After the physical split, `core_root` and `vault_root` may intentionally point to different repositories or directories; agents must validate both instead of assuming one repo root.
+This file records `repo_root`, `core_root`, `vault_root`, Core markers, and Vault markers. It is written during install and is not canonical knowledge. Agents working in another repository should locate Agent Foundry through this config or `AGENT_FOUNDRY_HOME`, then validate Core and Vault separately before writing canonical records. After the physical split, `core_root` and `vault_root` may intentionally point to different repositories or directories; agents must validate both instead of assuming one repo root.
 
 ## Generated Artifact Policy
 
@@ -486,7 +501,7 @@ Example conventions:
 2. Example records should avoid real personal project history, private paths, raw session evidence, and maintainer-specific runtime assumptions.
 3. A blank vault should start from schemas, templates, empty indexes, and empty or zeroed aggregates, not from the maintainer's active practices/assets by default.
 4. The maintainer's active practices and assets may be used as design references or optional import packs only after the Core/Vault split defines that packaging model.
-5. Adapter outputs for an external user should be generated from that user's approved vault records, not copied from this repository's personal vault unless explicitly chosen as a starter pack.
+5. Adapter outputs for an external user should be generated from that user's approved vault records, not copied from this repository's personal vault unless explicitly deployed through a reviewed capability pack.
 6. Proposed memory-system material must stay in docs/imports/evidence form until reviewed architecture creates implemented memory directories, schemas, and workflows.
 
 AF-2 should use this policy to design a blank vault initialization path, a Core/Vault split, and external-user setup boundaries. AF-1 does not move files yet; it marks the boundary so future movement is deliberate.

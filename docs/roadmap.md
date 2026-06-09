@@ -73,7 +73,7 @@ Agent Foundry should use maturity stages for planning and release versions for d
 | AF-1 | Governed Foundry | Practices, assets, workflows, review gates, adapter publishing, and current/proposed boundaries are governed explicitly. | Harvest/review/publish lifecycle is coherent; roadmap and hygiene work are tracked. |
 | AF-2 | Productizable Foundry | Repository layers and user/product boundaries are clear enough to support a reusable system. | Core, User Vault, Generated, Runtime, Local Private, and Proposed Design Evidence are separated by policy and implementation plan. |
 | AF-3 | Split Vault Migration | Core and the maintainer's User Vault are physically separated without breaking existing local runtimes. | Public Core no longer requires maintainer vault content; maintainer Vault is private by default; existing Codex, Claude Code, Hermes, and ChatGPT setups are migrated or given a tested migration path; clean new-user setup is tested. |
-| AF-4 | Onboarding Ready | New users can start from an empty Vault, curated capability packs, or imported runtime assets without confusing starter content with canonical truth. | Onboarding flows are tested; starter packs and imports enter as reviewed candidates; external-user setup is understandable without maintainer context. |
+| AF-4 | Onboarding Ready | New users can install Core, create a blank Vault, deploy the mandatory bootstrap capability pack, optionally deploy additional capability packs, and refresh adapters without confusing pack content with private maintainer history. | Blank Vault creation, bootstrap pack deployment, optional pack selection, runtime-asset import, and first-run refresh are tested. |
 | AF-5 | Memory-System Ready | Future memory-system records, evidence policy, routing, privacy, and MCP boundaries are designed but not necessarily implemented. | Memory-system implementation home can be chosen with clear tradeoffs. |
 | AF-6 | Memory-System Implementation | A reviewed memory/knowledge system is implemented according to the chosen architecture. | MVP validates the main memory lifecycle without bypassing Agent Foundry governance. |
 
@@ -95,7 +95,7 @@ Suggested mapping:
 | AF-4 | `v0.4.0`: external-user onboarding baseline. |
 | AF-5 | `v0.5.0`: memory-system-ready design baseline. |
 | AF-6 MVP | `v0.6.0` or later: memory-system MVP, not automatically `v1.0`. |
-| Post-AF-6 | Future: capability pack discovery/export after the core lifecycle and memory decisions are stable. |
+| Post-AF-6 | Future: advanced automatic capability pack discovery and lifecycle optimization after the core onboarding path is stable. |
 
 `v1.0` should wait until the reusable core, user vault story, generated artifact policy, and runtime adapter behavior are stable enough that external users can rely on them without understanding this repository's personal history.
 
@@ -258,7 +258,8 @@ Blank Vault baseline:
 - It should include empty indexes and empty aggregate evidence, not the maintainer's current active practice/asset records.
 - Core owns schemas, templates, workflows, and initialization logic. The Vault owns user records and non-sensitive vault policy.
 - Runtime install is not implied by blank Vault creation. Runtime deployment remains a separate local operation using Core tooling plus the selected Vault.
-- Starter capability packs and runtime-asset imports are optional AF-4 onboarding inputs, not AF-2 blank defaults.
+- Capability pack deployment happens after blank Vault creation. The mandatory bootstrap pack and optional packs enter the Vault as canonical data before `refresh`.
+- Runtime-asset imports are optional AF-4 onboarding inputs, not AF-2 blank defaults.
 - Empty indexes and aggregates should pass validation once AF-3 updates checks for separate Core and Vault roots.
 
 ### M3: Physical Core/Vault Split And Migration
@@ -327,7 +328,7 @@ AF-3 epics and task breakdown:
 
 - **Public Core cleanup**
   - Keep reusable `workflows/`, `schemas/`, `scripts/`, `templates/`, runtime templates, adapter profiles, adapter quality rules, and product docs in Core.
-  - Replace personal defaults with templates, examples, empty indexes, or documented starter packs.
+  - Replace personal defaults with templates, examples, empty indexes, or documented capability pack deployment constraints.
   - Ensure Core does not publish the maintainer's active practices/assets as default product state.
   - Preserve blank-vault templates or generation logic in Core, while keeping blank-vault records empty and non-personal.
   - Separate Core-owned adapter profiles and quality checks from generated adapter outputs.
@@ -368,6 +369,7 @@ AF-3 epics and task breakdown:
   - Add fixtures or temporary test directories for combined repo, blank Vault, and maintainer-like Vault validation.
   - Keep tests local and deterministic; do not require private remote access for public Core validation.
   - Verify generated adapter outputs do not leak inactive candidate/proposed records or private paths.
+  - Preserve the substrate needed for later pack deployment: blank Vault first, pack canonical data second, refresh third.
   - Exit when consistency, adapter quality, activation, runtime dry-run, and split-root validation checks pass.
 
 - **External-user readiness gate**
@@ -376,7 +378,7 @@ AF-3 epics and task breakdown:
   - Confirm a user can choose a suitable Vault location: private Git repo, local-only repo, or other explicitly supported storage.
   - Document where the Vault should live and how agents remember or rediscover it.
   - Test nested usage: running harvest/refresh from inside a product project must locate the correct Core and Vault without confusing the product project with either.
-  - Confirm setup docs clearly state what AF-3 does not include: starter packs, runtime-asset import, and memory-system implementation.
+  - Confirm setup docs clearly state what AF-3 does not include: implementing bootstrap pack deployment, optional pack UX, runtime-asset import, or memory-system implementation.
   - Exit when the project can truthfully say "public Core plus separate Vault works" without claiming AF-4 onboarding polish.
 
 Planned GitHub issue sequence:
@@ -387,7 +389,7 @@ Planned GitHub issue sequence:
 | 2 | #28 Split-aware locator and context model | Epic | Architect | High | #27 defines root names, markers, and precedence | Batch checkpoint |
 | 3 | #35 Split-root validation fixtures and checks | Task batch | Implementer with Architect-owned acceptance | Medium | #28 defines marker contract | Batch checkpoint with #28 |
 | 4 | #29 Adapter generation from selected Vault | Task batch | Implementer | Medium | #28 marker contract and #35 validation helpers exist | Batch checkpoint |
-| 5 | #30 Blank Vault initializer and validation | Task batch | Implementer | Medium | #35 validates empty Vault shape | Batch checkpoint |
+| 5 | #30 Blank Vault initializer and validation | Task batch | Implementer | Medium | #35 validates empty Vault shape and preserves pack-deployment substrate | Batch checkpoint |
 | 6 | #31 Maintainer Vault extraction plan and backup | Decision / Task | Architect | High | #28, #35, #29, and #30 pass in combined compatibility mode | Explicit user approval before moving private records |
 | 7 | #32 Public Core cleanup and docs rewrite | Task batch | Implementer with Architect review | Medium | #31 defines extraction target and Core contents | Batch checkpoint |
 | 8 | #33 Runtime deployment migration | Epic / Task batch | Architect + Implementer | High | #28, #35, #29, and #30 pass; generated adapters are split-aware | User or structured Architect review before apply |
@@ -426,6 +428,7 @@ Minimum verification matrix:
 | Current combined compatibility | Existing consistency, adapter quality, activation, runtime dry-run, and locator status pass. |
 | Split maintainer operation | Core root and maintainer Vault root validate separately; adapter generation and runtime dry-run use the selected Vault. |
 | Blank Vault operation | Empty indexes and aggregate validate; adapter publishing reports empty/minimal output without copying maintainer content. |
+| Pack deployment substrate | The design preserves the sequence blank Vault -> pack canonical data deployment -> refresh, without treating packs as runtime-only helpers or a second source of truth. |
 | Product project harvest context | Agent locates Core and Vault from outside both roots; product project is evidence source only. |
 | Runtime migration | Codex, Claude Code, Hermes managed outputs are inventoried and dry-run before apply; ChatGPT manual import state is reported. |
 | Privacy check | Public Core contains no required maintainer Vault records, raw evidence, machine-local paths, secrets, or private adoption decisions. |
@@ -437,25 +440,54 @@ Acceptance criteria:
 - Existing local Codex, Claude Code, Hermes, and ChatGPT workflows have a tested migration path.
 - `core_root` and `vault_root` can be different paths and are both validated before canonical writes.
 - Product project, Foundry Vault operation, and Foundry Core maintenance contexts are distinguishable before writes or runtime installs.
-- A blank Vault can be initialized and checked without personal practices/assets.
+- A blank Vault can be initialized and checked without personal practices/assets, and later pack deployment can add canonical data without redefining blank Vault.
 - Adapter generation and runtime install work from both the maintainer Vault and a blank/new user Vault.
 - Rollback instructions exist for the split migration.
 - No future memory-system storage is introduced as part of the split.
 
 ### M4: Onboarding Experience
 
-Goal: make new-user startup useful without forcing everyone to begin from a completely empty Vault.
+Goal: make new-user startup useful by separating blank Vault creation from capability pack deployment and adapter refresh.
 
-Onboarding should support multiple explicit modes:
+Onboarding sequence:
 
-- **Empty Vault**
-  - Best for users who want full control and no inherited capability records.
-  - Starts with schemas, templates, empty indexes, and empty aggregate evidence.
+```text
+install Core
+  -> create blank Vault
+  -> deploy mandatory bootstrap capability pack as canonical Vault data
+  -> optionally deploy selected capability packs as canonical Vault data
+  -> optionally import existing runtime assets as reviewed candidates
+  -> refresh
+  -> generate and install adapters from the Vault
+```
 
-- **Starter capability packs**
-  - Best for users who want a useful baseline such as multi-agent collaboration, technical documentation writing, or provider integration.
-  - Packs should be curated, public, reviewed, and installable without private evidence.
-  - Pack contents enter the user's Vault as proposed or active records only according to the user's selected onboarding policy.
+The blank Vault remains genuinely blank. It contains structure, metadata, empty indexes, and empty aggregate evidence, but no practices or assets. The mandatory bootstrap pack is deployed immediately after blank Vault creation so the installed system is usable. Optional packs use the same deployment mechanism.
+
+Capability packs are canonical data bundles, not runtime-only helpers and not a second CRUD system. Deploying a pack writes normal practices, assets, index entries, and pack metadata into the user's Vault. After deployment, those records are governed by the same create, read, update, deprecate, retire, review, and adapter-publish workflows as manually created records.
+
+Predefined packs and discovered packs are compatible with freeform Vault maintenance:
+
+- Predefined packs are curated Core-distributed canonical data.
+- Discovered packs are reviewed bundle proposals inferred from existing Vault records, workflows, and usage evidence.
+- Deployment creates or updates ordinary Vault records with provenance and pack membership metadata.
+- Pack membership is metadata, not ownership; a record may belong to no pack, one pack, or multiple packs.
+- Pack updates must propose normal record changes and must not silently overwrite user-edited records.
+- Users and agents can still create, edit, archive, or retire arbitrary practices and assets outside any pack.
+- `refresh` reads current Vault records, not pack definitions, when generating adapters.
+
+Mandatory pack:
+
+- **Bootstrap capability pack**
+  - Required for normal onboarding.
+  - Contains the minimal canonical data needed for Agent Foundry to run harvest, asset discovery, refresh, review, and adapter publishing.
+  - Must be public, reviewed, private-evidence-free, and small enough not to import the maintainer's whole Vault history.
+
+Optional early pack:
+
+- **Multi-agent collaboration pack**
+  - Strong first optional pack candidate because the current collaboration practices/assets are mature, repeatedly used, and bounded.
+  - Should not block bootstrap pack completion.
+  - Should be packaged only after the bootstrap deployment path works.
 
 - **Import existing runtime assets**
   - Best for users who already have Codex skills, Claude Code instructions, Hermes skills, or ChatGPT project materials.
@@ -464,15 +496,25 @@ Onboarding should support multiple explicit modes:
 
 Epics:
 
-- **Onboarding mode selector**
-  - Define the user choice among empty Vault, starter pack, runtime import, or mixed setup.
-  - Make the consequences visible before writing files.
-  - Start from the AF-2 blank Vault baseline, then layer optional starter/import choices explicitly.
+- **Blank Vault creation**
+  - Implement the AF-2 blank Vault baseline as an empty but valid Vault.
+  - Keep runtime install and pack deployment separate from Vault creation.
 
-- **Starter capability pack design**
-  - Define how starter packs relate to assets, practices, templates, examples, and generated adapters.
+- **Capability pack deployment**
+  - Define pack manifest, provenance, record copy/merge behavior, pack membership metadata, version compatibility, and conflict handling.
+  - Define mandatory bootstrap pack deployment and optional pack selection using the same mechanism.
+  - Ensure pack deployment writes canonical data into the Vault before refresh.
+
+- **Bootstrap capability pack**
+  - Identify the minimal harvest/discover/refresh/review/publish records needed for normal onboarding.
+  - Build the pack from public, reviewed canonical data, not from private maintainer evidence.
+  - Verify that a user can refresh adapters after deploying only the bootstrap pack.
+
+- **Optional capability pack design**
+  - Define how optional packs relate to assets, practices, templates, examples, generated adapters, and pack membership metadata.
   - Ensure packs do not include maintainer-private Vault content.
-  - Keep pack activation reviewable and reversible.
+  - Keep pack deployment reviewable, reversible, and compatible with user edits.
+  - Package multi-agent collaboration as the first optional pack after bootstrap works.
 
 - **Runtime asset import path**
   - Define how to scan existing Codex, Claude Code, Hermes, and ChatGPT assets.
@@ -481,14 +523,19 @@ Epics:
 
 - **First-run verification**
   - Confirm Core and Vault are located.
+  - Confirm blank Vault validates before pack deployment.
+  - Confirm bootstrap pack deploys canonical data into the Vault.
+  - Confirm optional packs, when selected, use the same deployment path.
   - Confirm runtime targets are detected or intentionally skipped.
-  - Confirm the user knows which records are empty, proposed, active, imported, or starter-pack sourced.
+  - Confirm `refresh` generates adapters from Vault canonical records, not Core hidden state.
+  - Confirm the user knows which records are pack-sourced, imported, user-created, proposed, active, deprecated, or retired.
 
 Acceptance criteria:
 
-- A new user can choose empty, starter-pack, or import-based onboarding.
-- Starter content is never confused with the maintainer's private Vault.
-- Imported runtime assets are reviewed before becoming canonical.
+- A new user can install Core, create a blank Vault, deploy the mandatory bootstrap pack, optionally deploy selected packs, and run refresh.
+- Bootstrap pack content is never confused with the maintainer's private Vault.
+- Optional packs and imported runtime assets are reviewed or selected before becoming canonical.
+- Pack deployment and freeform practice/asset CRUD share the same Vault records and do not create parallel truth sources.
 - The onboarding flow preserves Core/Vault/context separation.
 
 ### M5: Existing Foundry Lifecycle Completion
@@ -598,11 +645,11 @@ Acceptance criteria:
 - Decision record names the chosen option and rejected alternatives.
 - Future implementation plan has file boundaries, data flow, validation, privacy policy, and rollback path.
 
-### M8: Capability Pack Discovery and Lifecycle
+### M8: Advanced Capability Pack Discovery and Lifecycle
 
-Goal: define whether Agent Foundry can recognize, maintain, and export higher-level capability packs that emerge from repeated work.
+Goal: improve whether Agent Foundry can recognize, maintain, and export higher-level capability packs that emerge from repeated work after the basic AF-4 pack deployment path exists.
 
-This is intentionally later than repository hygiene, productization, physical split migration, onboarding, lifecycle completion, memory readiness, and the fork-vs-extension decision. Do not use this milestone to delay AF-1 through AF-7.
+This is intentionally later than repository hygiene, productization, physical split migration, onboarding, lifecycle completion, memory readiness, and the fork-vs-extension decision. Do not use this milestone to delay AF-1 through AF-7. AF-4 owns the mandatory bootstrap pack, optional pack deployment mechanism, and first optional multi-agent collaboration pack. M8 is for automatic discovery, advanced lifecycle optimization, export polish, and maintenance of emergent packs.
 
 Capability packs are not the same as individual assets. A future capability pack may bundle practices, assets, workflows, templates, adapter snippets, examples, configuration profiles, dependency metadata, and export/install behavior around a recurring user goal such as multi-agent collaboration or technical documentation writing.
 
@@ -613,9 +660,9 @@ Epics:
   - Let agents propose capability candidates during harvest, asset discovery, or lifecycle review.
   - Avoid requiring humans to predefine all future capability categories.
 
-- **Capability pack schema**
-  - Define relationships among practices, assets, workflows, templates, adapters, examples, dependencies, versions, and target runtimes.
-  - Keep the schema separate from current asset records unless review proves they should converge.
+- **Capability pack schema evolution**
+  - Extend the AF-4 manifest only when usage proves more fields are needed.
+  - Keep schema changes compatible with deployed Vault records and pack membership metadata.
 
 - **Review and activation lifecycle**
   - Define states such as detected, candidate, proposed, active, deprecated, split, and merged.
@@ -640,7 +687,7 @@ Acceptance criteria:
 - Do not add semantic/vector/graph indexes.
 - Do not add MCP write tools.
 - Do not import raw ChatGPT exports.
-- Do not implement capability pack discovery, packaging, export, or install before the earlier repository, lifecycle, and memory-readiness decisions are stable.
+- Do not implement advanced automatic capability pack discovery, export marketplace behavior, or broad pack lifecycle automation before the basic AF-4 pack deployment path is stable.
 - Do not refactor adapters or runtime install behavior until repository hygiene policy exists.
 
 ## Immediate Next Planning Tasks
