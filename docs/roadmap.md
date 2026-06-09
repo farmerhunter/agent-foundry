@@ -360,7 +360,7 @@ AF-3 epics and task breakdown:
 
 - **Runtime deployment migration**
   - This parent issue is a coordination epic for migration-window close readiness.
-  - Track sub-issues #42, #43, #46, #44, #45, and #47 to avoid a single uncontrolled apply bucket.
+  - Track sub-issues #42, #43, #46, #44, #51, #45, and #47 to avoid a single uncontrolled apply bucket.
   - Inventory installed Codex, Claude Code, Hermes, and ChatGPT adapter targets before migration.
   - Reinstall managed runtime files from the split Core plus active User Vault.
   - Preserve managed-block and managed-directory ownership markers.
@@ -410,9 +410,10 @@ Planned GitHub issue sequence:
 | 8.1 | #42 Layout compatibility markers and fail-closed checks | Task | Implementer | Medium | #33 approved as first child anchor | Batch checkpoint |
 | 8.2 | #43 Read-only deployment migration planner | Task | Implementer | Medium | #33 approved; #42 complete | Batch checkpoint |
 | 8.3 | #46 Cross-machine split refresh documentation | Task | Implementer | Medium | #33 approved; #42 and #43 complete | Batch checkpoint |
-| 8.4 | #44 Gated split deployment migration apply | Task | Architect | High | #33 approved; #42, #43, and #46 complete; user approval for local write | User approval before local migration writes |
-| 8.5 | #45 Runtime stale-reference and rollback verification | Review | Reviewer | High | #44 and #33 complete | Structured review handoff |
-| 8.6 | #47 Migration window close verification | Review | Reviewer | High | #44, #45, and #46 complete | Batch checkpoint |
+| 8.4 | #44 Gated split locator and selected-Vault dry-run | Task | Architect | High | #33 approved; #42, #43, and #46 complete; user approval for Vault init/copy and local locator write | Structured review handoff before runtime apply |
+| 8.5 | #51 Runtime apply from selected User Vault | Task | Architect | High | #44 complete; planner reports `mode: split` and `safe_apply_candidate: yes`; explicit user approval for runtime writes | Structured review handoff |
+| 8.6 | #45 Runtime stale-reference and rollback verification | Review | Reviewer | High | #51 and #33 complete | Structured review handoff |
+| 8.7 | #47 Migration window close verification | Review | Reviewer | High | #44, #51, #45, and #46 complete | Batch checkpoint |
 | 9 | #34 External-user readiness validation | Epic / Review batch coordination | Reviewer / Architect | High | #28, #31 through #33, #42-#47 complete | User acceptance before AF-3 close |
 | 9.1 | #48 Clean public Core readiness | Review | Reviewer | High | #34 approved; #47 confirms split chain works; no maintainer dependence in clean Core | Structured review handoff |
 | 9.2 | #49 Split Vault operation readiness | Review | Reviewer | High | #34 approved; #47 confirms split runtime path and runtime migration checks | Structured review handoff |
@@ -425,10 +426,11 @@ Execution order:
 3. Keep Issue 6 Architect-owned because it moves privacy and repository-boundary decisions.
 4. Let an Implementer help with Issue 7 only after Core cleanup rules are explicit.
 5. Treat Issue 8 as a coordination parent for runtime migration.
-6. Execute runtime migration children in this order: #42 -> #43 -> #46 -> #44 -> #45 -> #47.
-7. Apply #44 only after user approval and migration planning checks are complete.
-8. Close the migration window only via #47 after split runtime behavior and rollback evidence are confirmed.
-9. Close AF-3 only through Issue 9 after #47 and #48-#50 pass, covering clean Core, active User Vault, blank Vault, runtime, and nested product-project checks.
+6. Execute runtime migration children in this order: #42 -> #43 -> #46 -> #44 -> #51 -> #45 -> #47.
+7. Apply #44 only after user approval for Vault init/copy and local locator write; runtime apply is split into #51.
+8. Apply #51 only after explicit user approval for runtime writes.
+9. Close the migration window only via #47 after split runtime behavior and rollback evidence are confirmed.
+10. Close AF-3 only through Issue 9 after #47 and #48-#50 pass, covering clean Core, active User Vault, blank Vault, runtime, and nested product-project checks.
 
 Role-fit constraints:
 
