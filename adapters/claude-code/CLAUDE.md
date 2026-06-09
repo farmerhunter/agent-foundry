@@ -51,9 +51,11 @@ When asked to harvest, persist, deduplicate, merge, or publish reusable lessons:
 5. Route artifacts before abstracting practices.
 6. Apply the generalization gate before drafting practice candidates.
 7. Search `indexes/practice_index.yaml`.
-8. Update canonical practice entries under `practices/` first.
-9. Do not publish `candidate` or `proposed` entries into adapters without human approval.
-10. After the user approves a practice, apply it, promote it to `active` when applicable, update the index, and publish relevant adapters automatically.
+8. Present a concise review list before mutation, including rejected-as-practice items, canonical impact, adapter impact, and runtime/global instruction impact when relevant.
+9. Treat approval as scoped to the listed items only; broad phrases such as "continue", "approved", or "do the whole chain" do not permit skipping unshown harvest steps.
+10. Update canonical practice entries under `practices/` first.
+11. Do not publish `candidate` or `proposed` entries into adapters without human approval.
+12. After the user approves a practice, apply it, promote it to `active` when applicable, update the index, and publish relevant adapters automatically.
 
 When asked to discover reusable assets, read `workflows/discover-assets.md`, search `indexes/asset_index.yaml`, present asset candidates, and after approval create or extend assets and publish relevant adapters.
 
@@ -84,7 +86,7 @@ Apply META-009 when publishing adapters: adapter quality must be executable and 
 
 Apply META-010 when reviewing assets: use lifecycle state, usage evidence, overlap, canonical coverage, stale triggers, and published targets before recommending keep, revise, deprecate, archive, split, or merge.
 
-Apply META-011 through META-013 during harvest: route artifacts before abstracting practices, treat user method corrections as process evidence before domain content, and require insights to pass a generalization gate before they become practice candidates.
+Apply META-011 through META-013 during harvest: route artifacts before abstracting practices, treat user method corrections as process evidence before domain content, require insights to pass a generalization gate before they become practice candidates, and do not convert approval of a direction into approval to bypass an unshown review list.
 
 Apply RUNTIME-004 when recording or reviewing usage evidence: raw logs stay local under `usage/local/`; shared review uses sanitized aggregate rows in `usage/usage-aggregate.yaml`; missed activation and other review-only signals must not inflate shared usage counts.
 

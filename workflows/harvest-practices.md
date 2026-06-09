@@ -216,6 +216,25 @@ Ask for approval before:
 - importing external skill content;
 - executing or adapting external scripts.
 
+### Approval Scope Guard
+
+User approval applies only to the items, files, status changes, adapter updates, and runtime publish actions that were listed in the harvest review list or an equivalent PR/issue harvest report. Do not interpret broad phrases such as `continue`, `approved`, `do the whole chain`, or `finish it` as permission to skip artifact routing, the generalization gate, rejected-as-practice reporting, or adapter/runtime impact disclosure.
+
+If the user approves a direction before the review list exists, treat that approval as approval to prepare the review list, not as approval to mutate canonical records or publish runtime adapters.
+
+When the harvest modifies the harvest workflow, practice-harvester asset, adapter publishing workflow, runtime publish behavior, AGENTS instructions, or any rule that governs future self-updates, use a stricter self-referential sequence:
+
+```text
+harvest report / review list
+  -> explicit approval of listed items
+  -> canonical mutation
+  -> PR or equivalent review surface
+  -> post-merge adapter/runtime publish
+  -> final verification
+```
+
+In self-referential workflow changes, do not repair a missing review list by publishing first and explaining afterward. If the review list was skipped, stop, publish no further runtime changes, add the missing harvest report to the PR or issue, and wait for approval of that report before continuing.
+
 Present a concise review list. For each new or changed practice, show:
 
 - title;
@@ -223,6 +242,7 @@ Present a concise review list. For each new or changed practice, show:
 - reason;
 - canonical files affected;
 - adapters that will be updated after approval.
+- runtime or global instruction files that will be updated after approval.
 
 Approval is per practice. When the user approves an item, apply that item's full chain:
 
