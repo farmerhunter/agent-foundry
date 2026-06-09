@@ -213,6 +213,7 @@ Epics:
   - Define Core responsibilities.
   - Define User Vault responsibilities.
   - Decide whether Core and Vault remain in one repo for now or become separately installable later.
+  - Current design location: `docs/system-design.md` section "Core And User Vault Split".
 
 - **Blank vault initialization**
   - Design `init-vault` semantics before implementation.
@@ -234,6 +235,12 @@ Acceptance criteria:
 - A new user can create an empty vault conceptually without inheriting personal records.
 - Config and local runtime state are not confused with canonical knowledge.
 - The setup story does not require knowing the maintainer's machine or personal workflow.
+
+Execution order:
+
+1. Complete Core/Vault split design (#6).
+2. Use that boundary to design blank vault initialization (#7) and configuration boundary (#8).
+3. Use #6, #7, and #8 together to write the external-user quickstart (#9).
 
 ### M3: Existing Foundry Lifecycle Completion
 
