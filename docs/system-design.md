@@ -89,7 +89,7 @@ Core and Vault currently live in one repository for maintainability. They are se
 
 ## Core And User Vault Split
 
-The target product direction is a reusable public Core with user-owned Vaults. A user's Vault is private by default unless that user explicitly chooses to publish it. In the current repository, the maintainer's User Vault belongs to the maintainer, Jinghu, and should not remain bundled into a public Core distribution before Agent Foundry claims external-user readiness.
+The target product direction is a reusable public Core with user-owned Vaults. A user's Vault is private by default unless that user explicitly chooses to publish it. In the current repository, the maintainer's User Vault belongs to the `farmerhunter` account and should not remain bundled into a public Core distribution before Agent Foundry claims external-user readiness.
 
 AF-2 documents and validates the boundary before moving files. This is a staging step, not a final architecture. Physical Core/Vault separation should happen during the AF-3 migration work, after blank-vault initialization and configuration boundaries are designed well enough to avoid breaking existing local runtimes.
 
@@ -148,13 +148,21 @@ Staged split decision:
 
 ## Maintainer Vault Extraction Plan
 
-This is the AF-3 decision baseline for extracting Jinghu's current User Vault from the public Core. It is a plan and verification contract, not approval to move records.
+This is the AF-3 decision baseline for extracting the `farmerhunter` maintainer Vault from the public Core. It is a plan and verification contract, not approval to move records.
 
 Default target:
 
 - Core remains the public `farmerhunter/agent-foundry` repository or its renamed public successor.
-- Jinghu's maintainer Vault should move to a private-by-default Git repository or private local repository named `agent-foundry-vault-jinghu` unless the user chooses another name before execution.
+- The `farmerhunter` maintainer Vault should move to a private-by-default Git repository or private local repository named `agent-foundry-vault-farmerhunter` unless the user chooses another name before execution.
 - The local path should be explicitly configured through `~/.agent-foundry/config.yaml` as `vault_root`; agents must not infer it from a product project checkout.
+
+Migration window:
+
+- The migration window starts only when execution changes the substrate: a private Vault target is initialized or selected for records, maintainer Vault records are copied or moved, public copies are deleted, or `vault_root`/runtime config is repointed away from the combined repository.
+- The migration window is not opened by this plan, by read-only inventory, or by public Core cleanup that does not move Vault records.
+- While the window is open, pause normal canonical writes and adapter/runtime publishing unless the operation explicitly uses verified split `core_root` and `vault_root`.
+- The normal window close point is #33 Runtime deployment migration, not #34. It closes only after Core and private Vault validate separately, selected-Vault adapter publishing succeeds, local runtime refresh/dry-run no longer depends on the old combined root, stale path checks pass, and rollback is visible.
+- #34 is a post-window readiness audit. Failures found in #34 should reopen or fix the migration result instead of extending an ambiguous half-migrated state.
 
 Move to the private maintainer Vault:
 
@@ -186,6 +194,7 @@ Backup and restore gates before movement:
 5. Copy records into the private target and run `python3 scripts/check_foundry_roots.py --core-root <core> --vault-root <private-vault>`.
 6. Run `python3 scripts/publish_adapters.py --core-root <core> --vault-root <private-vault> --output-root <temp-output> --apply`.
 7. Update `~/.agent-foundry/config.yaml` only after Core and Vault validate separately.
+8. Resume harvest/publish/refresh only after #33 verifies split Core, private maintainer Vault, generated adapters, runtime install or dry-run, stale-path checks, and rollback visibility.
 
 Stop conditions:
 

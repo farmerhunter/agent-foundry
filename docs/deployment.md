@@ -101,6 +101,8 @@ python3 scripts/plan_vault_extraction.py
 
 Then create and verify a local backup, initialize or select the private Vault target, validate it with `scripts/check_foundry_roots.py`, and dry-run adapter publishing from the selected Vault. Moving records, deleting public copies, creating a private remote, or repointing installed runtimes from the combined repo requires explicit user approval at execution time.
 
+During the actual migration window, pause ordinary harvest, asset discovery, publish, refresh, and runtime install operations unless they explicitly use verified split `core_root` and `vault_root`. The normal end of that window is the successful completion of AF-3 runtime deployment migration (#33), where split Core plus private maintainer Vault can validate, publish, refresh/install or dry-run, detect stale paths, and roll back if needed. AF-3 external-user readiness review (#34) is a post-window audit, not the normal window close point.
+
 ## External-User Boundary
 
 AF-2 defines the setup boundary but does not implement the public setup path.

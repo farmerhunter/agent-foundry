@@ -269,7 +269,7 @@ Goal: split the reusable public Core from the maintainer's User Vault without br
 Decision baseline:
 
 - Target direction: public Core plus user-owned Vaults.
-- The maintainer's current User Vault belongs to Jinghu and should become private by default.
+- The maintainer's current User Vault belongs to the `farmerhunter` account and should become private by default.
 - Existing single-repo operation is a staging state, not the final multi-user deployment model.
 - Physical split should happen after #6, #7, #8, and #9 are reviewed, and before claiming external-user readiness.
 
@@ -294,6 +294,14 @@ Migration strategy:
 4. **Regenerate adapters from the selected Vault**: prove runtime outputs come from Core plus Vault selection, not hardcoded repo-relative personal records.
 5. **Migrate local runtimes after generated outputs are split-aware**: inventory, dry-run, install, then verify stale path references and manual ChatGPT steps.
 6. **Gate external-user readiness separately**: AF-3 exits when split migration is reliable; AF-4 handles humane onboarding and starter/import choices.
+
+Migration window:
+
+- The window starts only when extraction execution begins: private Vault target is initialized or selected, maintainer Vault records are copied or moved, or `vault_root` is repointed away from the combined repository.
+- The window is not opened by #31 planning or by #32 public Core cleanup if those changes do not move records or repoint runtime/local config.
+- During the window, pause canonical writes such as harvest practice, harvest asset, publish, refresh, and runtime install unless the command explicitly uses verified split `core_root` and `vault_root`.
+- The window closes in #33, after split Core plus private maintainer Vault pass root validation, selected-Vault adapter publishing, runtime dry-run/install verification, stale-path checks, and rollback visibility.
+- #34 is the post-window AF-3 readiness audit. If #34 finds a failure, reopen or fix the migration result; do not treat #34 as the normal window close.
 
 Rollback points:
 
@@ -334,7 +342,7 @@ AF-3 epics and task breakdown:
   - Separate Core-owned adapter profiles and quality checks from generated adapter outputs.
   - Decide whether tracked generated adapters remain in Core as distribution artifacts, move to Vault-derived build output, or become release artifacts.
   - Review `README.md`, `AGENTS.md`, `docs/usage.md`, `docs/deployment.md`, and adapter instructions for maintainer-specific wording.
-  - Exit when a clean Core checkout can explain itself without requiring Jinghu's Vault.
+  - Exit when a clean Core checkout can explain itself without requiring the `farmerhunter` maintainer Vault.
 
 - **Locator and config migration**
   - Update `~/.agent-foundry/config.yaml` semantics so `core_root` and `vault_root` may be different paths.
@@ -349,6 +357,7 @@ AF-3 epics and task breakdown:
   - Exit when scripts can validate same-root compatibility mode, split maintainer mode, and blank-Vault mode.
 
 - **Runtime deployment migration**
+  - Treat this epic as the normal close point for the migration window.
   - Inventory installed Codex, Claude Code, Hermes, and ChatGPT adapter targets before migration.
   - Reinstall managed runtime files from the split Core plus maintainer Vault.
   - Preserve managed-block and managed-directory ownership markers.
@@ -357,7 +366,7 @@ AF-3 epics and task breakdown:
   - Update `scripts/install_foundry.py`, `scripts/sync_adapters.py`, runtime manifest handling, and deployment docs to consume selected Core/Vault roots.
   - Verify `~/.agent-foundry/config.yaml` is rewritten only after successful validation or explicit migration command.
   - Treat ChatGPT as manual import; do not imply automatic update.
-  - Exit when local runtimes can be refreshed from split Core plus maintainer Vault and drift is visible.
+  - Exit when local runtimes can be refreshed from split Core plus maintainer Vault, drift is visible, rollback is documented, and canonical writes can safely resume through the verified split roots.
 
 - **Compatibility and validation**
   - Update scripts to accept separate `core_root` and `vault_root`.
@@ -402,7 +411,7 @@ Execution order:
 3. Keep Issue 6 Architect-owned because it moves privacy and repository-boundary decisions.
 4. Let an Implementer help with Issue 7 only after Core cleanup rules are explicit.
 5. Treat Issue 8 as high-risk migration work. Dry-run first; apply only after targets and rollback are visible.
-6. Close AF-3 only through Issue 9 after clean Core, maintainer Vault, blank Vault, runtime, and nested product-project checks pass.
+6. Treat the migration window as closed by Issue 8 only after the split Core/private Vault/runtime chain passes. Close AF-3 only through Issue 9 after clean Core, maintainer Vault, blank Vault, runtime, and nested product-project checks pass.
 
 Role-fit constraints:
 
