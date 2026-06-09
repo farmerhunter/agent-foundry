@@ -12,6 +12,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 CHECK = ROOT / "scripts" / "check_foundry_roots.py"
+INIT = ROOT / "scripts" / "init_vault.py"
+PUBLISH = ROOT / "scripts" / "publish_adapters.py"
 
 
 def write(path: Path, text: str) -> None:
@@ -37,18 +39,38 @@ def run_check(core_root: Path, vault_root: Path) -> subprocess.CompletedProcess[
     )
 
 
+def run_publish(core_root: Path, vault_root: Path, output_root: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [
+            sys.executable,
+            str(PUBLISH),
+            "--core-root",
+            str(core_root),
+            "--vault-root",
+            str(vault_root),
+            "--output-root",
+            str(output_root),
+            "--apply",
+        ],
+        cwd=ROOT,
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+
 def make_blank_vault(path: Path) -> None:
-    write(
-        path / "indexes" / "practice_index.yaml",
-        "schema_version: 1\nupdated: 2026-06-09\n\ndomains: {}\n\npractices: []\n",
+    result = subprocess.run(
+        [sys.executable, str(INIT), str(path), "--core-root", str(ROOT), "--apply"],
+        cwd=ROOT,
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
     )
-    write(
-        path / "indexes" / "asset_index.yaml",
-        "schema_version: 1\nupdated: 2026-06-09\n\nasset_types: {}\n\nassets: []\n",
-    )
-    write(path / "usage" / "usage-aggregate.yaml", "schema_version: 1\nupdated: 2026-06-09\n\naggregates: []\n")
-    (path / "practices").mkdir(parents=True, exist_ok=True)
-    (path / "assets").mkdir(parents=True, exist_ok=True)
+    if result.returncode != 0:
+        raise RuntimeError(result.stdout + result.stderr)
 
 
 def make_maintainer_like_vault(path: Path) -> None:
@@ -96,6 +118,14 @@ def main() -> int:
         make_blank_vault(corrupt)
         write(corrupt / "indexes" / "practice_index.yaml", "schema_version: 1\nupdated: 2026-06-09\n")
         errors.extend(expect("corrupt-vault", run_check(ROOT, corrupt), False, "index missing required list: practices"))
+
+        blank_publish = run_publish(ROOT, blank, base / "blank-adapters")
+        errors.extend(expect("blank-publish", blank_publish, True, "Nothing to publish"))
+
+        maintainer_publish = run_publish(ROOT, maintainer_like, base / "maintainer-adapters")
+        errors.extend(expect("maintainer-like-publish", maintainer_publish, True, "Adapter publish wrote"))
+        if not (base / "maintainer-adapters" / "adapter-publish-manifest.yaml").exists():
+            errors.append("maintainer-like-publish: manifest was not written")
 
     if errors:
         print("Split-root fixture tests failed:")

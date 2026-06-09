@@ -8,6 +8,20 @@ Adapters are downstream outputs. Direct programming agents should receive full f
 
 Before publishing, read `workflows/transform-canonical-to-adapters.md` and `adapters/adapter_profiles.yaml`.
 
+Current AF-3 capability:
+
+- use `scripts/publish_adapters.py` for selected Core/Vault root validation and deterministic publishing;
+- pass `--core-root` and `--vault-root` when Core and Vault are split;
+- blank Vault publishing is valid and reports `nothing to publish`;
+- nonblank Vault publishing currently uses Core adapter templates plus selected active/revised Vault records as a transitional generator;
+- full semantic regeneration of every adapter file from canonical sections remains future generator work.
+
+Example:
+
+```bash
+python3 scripts/publish_adapters.py --core-root . --vault-root . --output-root /tmp/agent-foundry-adapters --apply
+```
+
 ## 1. Select Practices
 
 Publish only practices with:
@@ -71,6 +85,7 @@ Then run:
 
 ```bash
 python3 scripts/check_consistency.py
+python3 scripts/test_foundry_roots.py
 ```
 
 If unavailable, follow `workflows/check-consistency.md` manually.
