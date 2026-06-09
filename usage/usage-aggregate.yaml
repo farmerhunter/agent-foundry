@@ -47,7 +47,7 @@ aggregates:
     period: 2026-06
     agent: "codex"
     machine_hash: "a6bcad5212d8"
-    useful_count: 11
+    useful_count: 12
     neutral_count: 0
     not_useful_count: 0
     unknown_count: 0

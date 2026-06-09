@@ -1,6 +1,6 @@
 ---
 name: agent-collaboration
-description: Use when working on GitHub issues, pull requests, multi-agent repository synchronization, issue completion comments, CLI-posted Markdown comments, converted document deliverables, or resuming after interruption/compaction.
+description: Use when working on GitHub issues, pull requests, GitHub Project/Epic roadmap planning, multi-agent repository synchronization, issue completion comments, CLI-posted Markdown comments, converted document deliverables, or resuming after interruption/compaction.
 ---
 
 # Agent Collaboration
@@ -33,18 +33,21 @@ This skill is an asset that performs a repeatable workflow. During execution, it
 
 ## Workflow
 
-1. Identify whether the task touches an issue, PR, GitHub Project/Epic workflow, multi-agent sync, document conversion, or CLI comment publishing.
+1. Identify whether the task touches an issue, PR, GitHub Project/Epic workflow, roadmap-to-issue planning, multi-agent sync, document conversion, or CLI comment publishing.
 2. Apply the matching canonical rule above.
-3. For multi-agent projects, locate the repo-local workflow contract and active issue Execution Contracts before choosing branch or PR behavior.
-4. If the work is authorized for branch/PR execution, do not leave verified changes as local-only state: commit, push the task branch, and open or update the PR with traceable evidence.
-5. Check issue role fit before pickup or release; split mixed work or constrain Implementers to evidence, preliminary classification, implementation, or verification when final decisions remain Architect-owned.
-6. Check completion handoff before work starts; if it says `batch checkpoint`, do not turn each child PR into a blocking Architect review unless a high-risk trigger or failed verification appears.
-7. Bind task, owner role, current session, and reviewer target explicitly when work moves between scheduler states; `needs:*` labels route roles, not necessarily different sessions.
-8. When a set of related issues has clear dependency gates, treat it as a batch queue instead of forcing one handoff per child issue.
-9. Before reviewing an individual child PR, check whether the issue belongs to an Epic batch queue, whether its completion handoff is `batch checkpoint`, whether a reviewer target is named, and whether a high-risk trigger exists.
-10. Preserve durable traceability in GitHub issues, PRs, labels, Project state, and comments.
-11. Validate with the checks appropriate to the artifact or code path, using batch or Epic review checkpoints when appropriate.
-12. Continue from the newest user request after interruptions or context transitions.
+3. When turning a roadmap stage or milestone into GitHub work, create or update issues with Stage, Epic, Owner Role, Risk, Depends On, Roadmap Status, labels, and durable bodies before releasing tasks.
+4. Distinguish GitHub built-in `Status` from custom `Roadmap Status`; use labels and durable comments as the agent inbox surface.
+5. For multi-agent projects, locate the repo-local workflow contract and active issue Execution Contracts before choosing branch or PR behavior.
+6. If the work is authorized for branch/PR execution, do not leave verified changes as local-only state: commit, push the task branch, and open or update the PR with traceable evidence.
+7. Check issue role fit before pickup or release; split mixed work or constrain Implementers to evidence, preliminary classification, implementation, or verification when final decisions remain Architect-owned.
+8. If an Implementer evidence pass exposes taxonomy, architecture, privacy, or policy questions, route to Architect review before releasing downstream batches.
+9. Check completion handoff before work starts; if it says `batch checkpoint`, do not turn each child PR into a blocking Architect review unless a high-risk trigger or failed verification appears.
+10. Bind task, owner role, current session, and reviewer target explicitly when work moves between scheduler states; `needs:*` labels route roles, not necessarily different sessions.
+11. When a set of related issues has clear dependency gates, treat it as a batch queue instead of forcing one handoff per child issue.
+12. Before reviewing an individual child PR, check whether the issue belongs to an Epic batch queue, whether its completion handoff is `batch checkpoint`, whether a reviewer target is named, and whether a high-risk trigger exists.
+13. Preserve durable traceability in GitHub issues, PRs, labels, Project state, and comments.
+14. Validate with the checks appropriate to the artifact or code path, using batch or Epic review checkpoints when appropriate.
+15. Continue from the newest user request after interruptions or context transitions.
 
 ## Guardrails
 
@@ -57,6 +60,7 @@ This skill is an asset that performs a repeatable workflow. During execution, it
 - Do not let Implementers infer missing repo workflow, branch base, PR target, or dependency gates; route unclear issues back to Architect.
 - Do not let Implementers make final taxonomy, architecture boundary, policy, harvest, privacy, or security decisions unless the Execution Contract explicitly assigns that authority.
 - Do not let status surfaces contradict each other; `Ready` is pickup state, `Review` is validation state, and `Done` requires acceptance or closure.
+- Do not treat GitHub built-in `Status` as a complete roadmap state machine when custom `Roadmap Status`, labels, dependencies, and issue comments carry scheduling semantics.
 - Do not leave `Review` without a reviewer target: current-session structured self-review, user, separate Reviewer agent, CI/automation, or batch/Epic checkpoint.
 - Do not imply self-review is independent review; if the same session switches roles, name structured self-review and residual risks.
 - Do not treat an open child PR as automatic `needs:architect`; review ownership follows completion handoff, high-risk triggers, failed verification, or the batch/Epic checkpoint.
