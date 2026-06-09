@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CHECK = ROOT / "scripts" / "check_foundry_roots.py"
 INIT = ROOT / "scripts" / "init_vault.py"
 PUBLISH = ROOT / "scripts" / "publish_adapters.py"
+MIGRATE = ROOT / "scripts" / "migrate_deployment.py"
 
 
 def write(path: Path, text: str) -> None:
@@ -60,6 +61,25 @@ def run_publish(core_root: Path, vault_root: Path, output_root: Path) -> subproc
     )
 
 
+def run_plan(core_root: Path, vault_root: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [
+            sys.executable,
+            str(MIGRATE),
+            "plan",
+            "--core-root",
+            str(core_root),
+            "--vault-root",
+            str(vault_root),
+        ],
+        cwd=ROOT,
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+
 def make_blank_vault(path: Path) -> None:
     result = subprocess.run(
         [sys.executable, str(INIT), str(path), "--core-root", str(ROOT), "--apply"],
@@ -74,6 +94,8 @@ def make_blank_vault(path: Path) -> None:
 
 
 def make_maintainer_like_vault(path: Path) -> None:
+    path.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(ROOT / ".agent-foundry-vault.yaml", path / ".agent-foundry-vault.yaml")
     for name in ["indexes", "practices", "assets", "usage"]:
         source = ROOT / name
         target = path / name
@@ -150,10 +172,12 @@ def main() -> int:
         base = Path(tmp)
 
         errors.extend(expect("same-root", run_check(ROOT, ROOT), True))
+        errors.extend(expect("same-root-plan", run_plan(ROOT, ROOT), True, "mode: combined_compatibility"))
 
         blank = base / "blank-vault"
         make_blank_vault(blank)
         errors.extend(expect("blank-vault", run_check(ROOT, blank), True))
+        errors.extend(expect("blank-vault-plan", run_plan(ROOT, blank), True, "mode: split"))
 
         maintainer_like = base / "maintainer-like-vault"
         make_maintainer_like_vault(maintainer_like)
@@ -163,11 +187,21 @@ def main() -> int:
         make_blank_vault(missing)
         (missing / "indexes" / "asset_index.yaml").unlink()
         errors.extend(expect("missing-vault", run_check(ROOT, missing), False, "vault marker missing"))
+        errors.extend(expect("missing-vault-plan", run_plan(ROOT, base / "absent-vault"), False, "mode: missing_vault"))
+        errors.extend(expect("missing-core-plan", run_plan(base / "absent-core", blank), False, "mode: missing_core"))
 
         corrupt = base / "corrupt-vault"
         make_blank_vault(corrupt)
         write(corrupt / "indexes" / "practice_index.yaml", "schema_version: 1\nupdated: 2026-06-09\n")
         errors.extend(expect("corrupt-vault", run_check(ROOT, corrupt), False, "index missing required list: practices"))
+        errors.extend(expect("corrupt-vault-plan", run_plan(ROOT, corrupt), False, "mode: unknown"))
+
+        mismatched = base / "mismatched-vault"
+        make_blank_vault(mismatched)
+        marker = mismatched / ".agent-foundry-vault.yaml"
+        marker.write_text(marker.read_text(encoding="utf-8").replace("layout_version: 1", "layout_version: 99"), encoding="utf-8")
+        errors.extend(expect("mismatched-vault", run_check(ROOT, mismatched), False, "layout compatibility failed"))
+        errors.extend(expect("mismatched-vault-plan", run_plan(ROOT, mismatched), False, "safe_apply_candidate: no"))
 
         blank_publish = run_publish(ROOT, blank, base / "blank-adapters")
         errors.extend(expect("blank-publish", blank_publish, True, "Nothing to publish"))

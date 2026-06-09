@@ -103,6 +103,97 @@ Then create and verify a local backup, initialize or select the private Vault ta
 
 During the actual migration window, pause ordinary harvest, asset discovery, publish, refresh, and runtime install operations unless they explicitly use verified split `core_root` and `vault_root`. The normal end of that window is the successful completion of AF-3 runtime deployment migration (#33), where split Core plus private maintainer Vault can validate, publish, refresh/install or dry-run, detect stale paths, and roll back if needed. AF-3 external-user readiness review (#34) is a post-window audit, not the normal window close point.
 
+## Cross-Machine Split Refresh
+
+Use this on another deployed machine after the public Core and private Vault have been split.
+
+The public Core cannot fetch, clone, or repair a private Vault automatically. Clone or sync the private Vault through the private channel you control before running Core scripts.
+
+1. Refresh or clone the public Core:
+
+   ```bash
+   git clone <public-core-url> agent-foundry-core
+   cd agent-foundry-core
+   git pull --ff-only
+   ```
+
+2. Clone or sync the private Vault into a separate local path:
+
+   ```bash
+   git clone <private-vault-url> <private-vault-path>
+   cd <private-vault-path>
+   git pull --ff-only
+   cd <public-core-path>
+   ```
+
+3. Write and verify the machine-local locator:
+
+   ```bash
+   python3 scripts/foundry_config.py write \
+     --repo-root <public-core-path> \
+     --core-root <public-core-path> \
+     --vault-root <private-vault-path>
+   python3 scripts/foundry_config.py status
+   ```
+
+4. Validate the selected roots and layout markers:
+
+   ```bash
+   python3 scripts/check_foundry_roots.py \
+     --core-root <public-core-path> \
+     --vault-root <private-vault-path>
+   ```
+
+5. Review the read-only deployment migration plan:
+
+   ```bash
+   python3 scripts/migrate_deployment.py plan \
+     --core-root <public-core-path> \
+     --vault-root <private-vault-path>
+   ```
+
+6. Publish selected-Vault adapter outputs into a review directory:
+
+   ```bash
+   python3 scripts/publish_adapters.py \
+     --core-root <public-core-path> \
+     --vault-root <private-vault-path> \
+     --output-root /tmp/agent-foundry-adapters \
+     --apply
+   ```
+
+7. Review local runtime targets:
+
+   ```bash
+   python3 scripts/runtime_manifest.py status
+   python3 scripts/runtime_manifest.py plan
+   ```
+
+8. Dry-run runtime install from the verified Core checkout:
+
+   ```bash
+   python3 scripts/install_foundry.py \
+     --core-root <public-core-path> \
+     --vault-root <private-vault-path> \
+     --adapter-root /tmp/agent-foundry-adapters
+   ```
+
+9. Apply runtime install only after the dry-run destinations, selected Vault, generated adapter output, and stale path report are clean:
+
+   ```bash
+   python3 scripts/install_foundry.py \
+     --core-root <public-core-path> \
+     --vault-root <private-vault-path> \
+     --adapter-root /tmp/agent-foundry-adapters \
+     --apply
+   python3 scripts/sync_status.py
+   python3 scripts/foundry_config.py status
+   ```
+
+ChatGPT remains a manual runtime. Refresh it from `adapters/chatgpt/` after adapter publishing has been reviewed.
+
+Fail closed if the private Vault is absent, its `.agent-foundry-vault.yaml` marker is missing or incompatible with the Core marker, the Core marker is missing, runtime targets are ambiguous, or stale combined-root paths remain in local deployment state. Do not let a public Core checkout infer or fetch private Vault content.
+
 ## External-User Boundary
 
 AF-2 defines the setup boundary but does not implement the public setup path.

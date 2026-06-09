@@ -32,6 +32,8 @@ ASSET_STATUSES = {
     "retired",
     "archived",
 }
+CORE_LAYOUT_MARKER = ".agent-foundry-core.yaml"
+VAULT_LAYOUT_MARKER = ".agent-foundry-vault.yaml"
 
 
 def read(path: Path) -> str:
@@ -94,6 +96,97 @@ def scan_yaml_field(path: Path, field: str) -> str | None:
         if line.startswith(f"{field}:"):
             return line.split(":", 1)[1].strip().strip('"')
     return None
+
+
+def parse_marker(path: Path) -> tuple[dict[str, str | list[str]], list[str]]:
+    data: dict[str, str | list[str]] = {}
+    errors: list[str] = []
+    for line in read(path).splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if ":" not in stripped:
+            errors.append(f"{path.name} contains unsupported YAML line: {stripped}")
+            continue
+        key, value = stripped.split(":", 1)
+        value = value.strip().strip('"')
+        if value.startswith("[") and value.endswith("]"):
+            items = [item.strip().strip('"') for item in value[1:-1].split(",") if item.strip()]
+            data[key.strip()] = items
+        else:
+            data[key.strip()] = value
+    return data, errors
+
+
+def int_field(marker: dict[str, str | list[str]], field: str, label: str) -> tuple[int | None, list[str]]:
+    value = marker.get(field)
+    if not isinstance(value, str):
+        return None, [f"{label} layout marker missing {field}"]
+    try:
+        return int(value), []
+    except ValueError:
+        return None, [f"{label} layout marker has non-integer {field}: {value}"]
+
+
+def list_field(marker: dict[str, str | list[str]], field: str, label: str) -> tuple[list[str], list[str]]:
+    value = marker.get(field)
+    if not isinstance(value, list) or not value:
+        return [], [f"{label} layout marker missing {field}"]
+    return value, []
+
+
+def check_layout_compatibility(core_root: Path, vault_root: Path) -> list[str]:
+    errors: list[str] = []
+    core_marker_path = core_root / CORE_LAYOUT_MARKER
+    vault_marker_path = vault_root / VAULT_LAYOUT_MARKER
+    if not core_marker_path.exists() or not vault_marker_path.exists():
+        return errors
+
+    core_marker, core_errors = parse_marker(core_marker_path)
+    vault_marker, vault_errors = parse_marker(vault_marker_path)
+    errors.extend(f"core {error}" for error in core_errors)
+    errors.extend(f"vault {error}" for error in vault_errors)
+    if errors:
+        return errors
+
+    if core_marker.get("layout_kind") != "core":
+        errors.append("core layout marker layout_kind must be core")
+    if vault_marker.get("layout_kind") != "vault":
+        errors.append("vault layout marker layout_kind must be vault")
+    if not isinstance(core_marker.get("identity"), str) or not core_marker.get("identity"):
+        errors.append("core layout marker missing non-sensitive identity")
+    if not isinstance(vault_marker.get("identity"), str) or not vault_marker.get("identity"):
+        errors.append("vault layout marker missing non-sensitive identity")
+
+    core_version, core_version_errors = int_field(core_marker, "layout_version", "core")
+    vault_version, vault_version_errors = int_field(vault_marker, "layout_version", "vault")
+    errors.extend(core_version_errors)
+    errors.extend(vault_version_errors)
+    core_supported_vault, core_supported_vault_errors = list_field(
+        core_marker, "supported_vault_layout_versions", "core"
+    )
+    vault_supported_core, vault_supported_core_errors = list_field(
+        vault_marker, "supported_core_layout_versions", "vault"
+    )
+    core_supported_modes, core_modes_errors = list_field(core_marker, "supported_modes", "core")
+    vault_supported_modes, vault_modes_errors = list_field(vault_marker, "supported_modes", "vault")
+    errors.extend(core_supported_vault_errors)
+    errors.extend(vault_supported_core_errors)
+    errors.extend(core_modes_errors)
+    errors.extend(vault_modes_errors)
+    if errors:
+        return errors
+
+    mode = "combined" if core_root == vault_root else "split"
+    if str(vault_version) not in core_supported_vault:
+        errors.append(f"layout compatibility failed: core does not support vault layout version {vault_version}")
+    if str(core_version) not in vault_supported_core:
+        errors.append(f"layout compatibility failed: vault does not support core layout version {core_version}")
+    if mode not in core_supported_modes:
+        errors.append(f"layout compatibility failed: core does not support {mode} mode")
+    if mode not in vault_supported_modes:
+        errors.append(f"layout compatibility failed: vault does not support {mode} mode")
+    return errors
 
 
 def check_markers(root: Path, markers: list[str], label: str) -> list[str]:
@@ -195,6 +288,9 @@ def validate(core_root: Path, vault_root: Path) -> list[str]:
     errors: list[str] = []
     errors.extend(check_markers(core_root, CORE_MARKERS, "core"))
     errors.extend(check_markers(vault_root, VAULT_MARKERS, "vault"))
+    if errors:
+        return errors
+    errors.extend(check_layout_compatibility(core_root, vault_root))
     if errors:
         return errors
 
