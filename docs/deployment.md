@@ -36,7 +36,7 @@ cd "/path/to/agent-foundry"
 
 Use this on a new maintainer machine after cloning or unpacking the current combined Agent Foundry repository.
 
-Do not use this flow to claim a clean external-user installation: it installs adapters from the currently selected Vault, which is still the maintainer Vault in the AF-2 staging repository.
+Do not use this flow to claim a clean external-user installation: it installs adapters from the currently selected Vault, which is still the current account's User Vault in the AF-2 staging repository.
 
 1. Initialize the machine-local runtime manifest:
 
@@ -93,21 +93,21 @@ The apply step writes `~/.agent-foundry/config.yaml`. In the current AF-2 reposi
 
 ## Maintainer Vault Migration Gate
 
-Do not move the maintainer Vault or create a private Vault remote from this deployment flow. Before any extraction, run:
+Do not move User Vault records or create a private Vault remote from this deployment flow. Before any extraction, run:
 
 ```bash
 python3 scripts/plan_vault_extraction.py
 ```
 
-Then create and verify a local backup, initialize or select the private Vault target, validate it with `scripts/check_foundry_roots.py`, and dry-run adapter publishing from the selected Vault. Moving records, deleting public copies, creating a private remote, or repointing installed runtimes from the combined repo requires explicit user approval at execution time.
+Then create and verify a local backup, initialize or select the active User Vault target, validate it with `scripts/check_foundry_roots.py`, and dry-run adapter publishing from the selected Vault. The default local pattern is `~/.agent-foundry/vault/agent-foundry-vault-<account>`; for this account the selected local path is `~/.agent-foundry/vault/agent-foundry-vault-farmerhunter`. Moving records, deleting public copies, creating a private remote, or repointing installed runtimes from the combined repo requires explicit user approval at execution time.
 
-During the actual migration window, pause ordinary harvest, asset discovery, publish, refresh, and runtime install operations unless they explicitly use verified split `core_root` and `vault_root`. The normal end of that window is the successful completion of AF-3 runtime deployment migration (#33), where split Core plus private maintainer Vault can validate, publish, refresh/install or dry-run, detect stale paths, and roll back if needed. AF-3 external-user readiness review (#34) is a post-window audit, not the normal window close point.
+During the actual migration window, pause ordinary harvest, asset discovery, publish, refresh, and runtime install operations unless they explicitly use verified split `core_root` and `vault_root`. The normal end of that window is the successful completion of AF-3 runtime deployment migration (#33), where split Core plus active User Vault can validate, publish, refresh/install or dry-run, detect stale paths, and roll back if needed. AF-3 external-user readiness review (#34) is a post-window audit, not the normal window close point.
 
 ## Cross-Machine Split Refresh
 
-Use this on another deployed machine after the public Core and private Vault have been split.
+Use this on another deployed machine after the public Core and active User Vault have been split.
 
-The public Core cannot fetch, clone, or repair a private Vault automatically. Clone or sync the private Vault through the private channel you control before running Core scripts.
+The public Core cannot fetch, clone, or repair a private Vault automatically. Clone or sync the active User Vault through the private channel you control before running Core scripts. Use the same local path pattern on each deployment, normally `~/.agent-foundry/vault/agent-foundry-vault-<account>`.
 
 1. Refresh or clone the public Core:
 
@@ -117,11 +117,11 @@ The public Core cannot fetch, clone, or repair a private Vault automatically. Cl
    git pull --ff-only
    ```
 
-2. Clone or sync the private Vault into a separate local path:
+2. Clone or sync the active User Vault into the standard local path:
 
    ```bash
-   git clone <private-vault-url> <private-vault-path>
-   cd <private-vault-path>
+   git clone <private-vault-url> ~/.agent-foundry/vault/agent-foundry-vault-<account>
+   cd ~/.agent-foundry/vault/agent-foundry-vault-<account>
    git pull --ff-only
    cd <public-core-path>
    ```
@@ -200,11 +200,11 @@ AF-2 defines the setup boundary but does not implement the public setup path.
 
 A future external-user setup needs:
 
-- public Core that does not require maintainer Vault content;
+- public Core that does not require current-user Vault content;
 - a user-owned Vault location, private by default;
 - an implemented blank Vault initializer and validation checks;
 - locator support for distinct `core_root` and `vault_root`;
-- adapter generation from the selected user's Vault, not the maintainer Vault;
+- adapter generation from the selected user's Vault, not a bundled current-user Vault;
 - runtime install that can verify split Core/Vault state before writing managed runtime files;
 - onboarding choices for empty Vault, starter capability packs, runtime-asset imports, or mixed setup.
 

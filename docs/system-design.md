@@ -144,27 +144,30 @@ Staged split decision:
 2. Treat the current split as a documented boundary enforced by policy, checks, and initialization design.
 3. Plan the physical split as AF-3 migration work, not as distant memory-system work.
 4. Design scripts so `core_root` and `vault_root` can point to different repositories or directories.
-5. Do not claim external-user readiness while the maintainer's Vault remains required inside the public Core repository.
+5. Do not claim external-user readiness while any current user's Vault records remain required inside the public Core repository.
 
-## Maintainer Vault Extraction Plan
+## User Vault Extraction Plan
 
-This is the AF-3 decision baseline for extracting the `farmerhunter` maintainer Vault from the public Core. It is a plan and verification contract, not approval to move records.
+This is the AF-3 decision baseline for extracting the current account's User Vault from the public Core. It is a plan and verification contract, not approval to move records. `farmerhunter` is the current account identity for this migration instance, not a special maintainer-only architecture role.
 
 Default target:
 
 - Core remains the public `farmerhunter/agent-foundry` repository or its renamed public successor.
-- The `farmerhunter` maintainer Vault should move to a private-by-default Git repository or private local repository named `agent-foundry-vault-farmerhunter` unless the user chooses another name before execution.
+- The active User Vault should live under the same machine-local location pattern on every deployment: `~/.agent-foundry/vault/agent-foundry-vault-<account>`.
+- For this account, the selected local target is `~/.agent-foundry/vault/agent-foundry-vault-farmerhunter`.
+- The Vault may later have a private remote, but its local locator path should stay stable across deployments.
 - The local path should be explicitly configured through `~/.agent-foundry/config.yaml` as `vault_root`; agents must not infer it from a product project checkout.
+- Use the singular directory name `vault` for the active account Vault location. Avoid a generic `vaults` path unless a future multi-vault manager defines what it means.
 
 Migration window:
 
-- The migration window starts only when execution changes the substrate: a private Vault target is initialized or selected for records, maintainer Vault records are copied or moved, public copies are deleted, or `vault_root`/runtime config is repointed away from the combined repository.
+- The migration window starts only when execution changes the substrate: a private User Vault target is initialized or selected for records, current User Vault records are copied or moved, public copies are deleted, or `vault_root`/runtime config is repointed away from the combined repository.
 - The migration window is not opened by this plan, by read-only inventory, or by public Core cleanup that does not move Vault records.
 - While the window is open, pause normal canonical writes and adapter/runtime publishing unless the operation explicitly uses verified split `core_root` and `vault_root`.
-- The normal window close point is #33 Runtime deployment migration, not #34. It closes only after Core and private Vault validate separately, selected-Vault adapter publishing succeeds, local runtime refresh/dry-run no longer depends on the old combined root, stale path checks pass, and rollback is visible.
+- The normal window close point is #33 Runtime deployment migration, not #34. It closes only after Core and active User Vault validate separately, selected-Vault adapter publishing succeeds, local runtime refresh/dry-run no longer depends on the old combined root, stale path checks pass, and rollback is visible.
 - #34 is a post-window readiness audit. Failures found in #34 should reopen or fix the migration result instead of extending an ambiguous half-migrated state.
 
-Move to the private maintainer Vault:
+Move to the active User Vault:
 
 - `practices/`
 - `assets/`
@@ -190,17 +193,17 @@ Backup and restore gates before movement:
 1. Run `python3 scripts/plan_vault_extraction.py` and resolve missing required paths.
 2. Create a local archive or clone of the current combined checkout before moving records.
 3. Verify the backup can be listed or restored before changing tracked files.
-4. Initialize or select the private maintainer Vault target.
-5. Copy records into the private target and run `python3 scripts/check_foundry_roots.py --core-root <core> --vault-root <private-vault>`.
-6. Run `python3 scripts/publish_adapters.py --core-root <core> --vault-root <private-vault> --output-root <temp-output> --apply`.
+4. Initialize or select the active User Vault target, normally `~/.agent-foundry/vault/agent-foundry-vault-<account>`.
+5. Copy records into the private target and run `python3 scripts/check_foundry_roots.py --core-root <core> --vault-root <user-vault>`.
+6. Run `python3 scripts/publish_adapters.py --core-root <core> --vault-root <user-vault> --output-root <temp-output> --apply`.
 7. Update `~/.agent-foundry/config.yaml` only after Core and Vault validate separately.
-8. Resume harvest/publish/refresh only after #33 verifies split Core, private maintainer Vault, generated adapters, runtime install or dry-run, stale-path checks, and rollback visibility.
+8. Resume harvest/publish/refresh only after #33 verifies split Core, active User Vault, generated adapters, runtime install or dry-run, stale-path checks, and rollback visibility.
 
 Stop conditions:
 
 - Any required Vault path is missing from the backup or private target.
-- Any public Core file still requires maintainer active practices/assets as default content.
-- Any generated adapter output includes raw evidence, local private paths, or maintainer Vault records when run against a blank or custom Vault.
+- Any public Core file still requires a current user's active practices/assets as default content.
+- Any generated adapter output includes raw evidence, local private paths, or current User Vault records when run against a blank or custom Vault.
 - Runtime install would overwrite unmanaged files or point at the old combined root without an explicit migration step.
 - A private remote must be created, files must be deleted, history must be rewritten, or records must be moved out of the current repo. These require explicit user approval at execution time.
 
@@ -240,14 +243,14 @@ Design goal:
 public Core + empty User Vault -> valid starting point for reviewed practices, assets, usage evidence, and adapter generation
 ```
 
-`init-vault` should mean "create a valid, empty canonical destination" rather than "copy the maintainer's current vault." It should initialize structure and metadata only. It should not activate practices, install runtime adapters, import external skills, deploy capability packs, or write memory-system records.
+`init-vault` should mean "create a valid, empty canonical destination" rather than "copy the current account's active Vault." It should initialize structure and metadata only. It should not activate practices, install runtime adapters, import external skills, deploy capability packs, or write memory-system records.
 
 Blank Vault contents:
 
 | Vault path or record | Blank state | Source of shape |
 | --- | --- | --- |
-| `practices/` | Empty practice tree, with no active/candidate/proposed practice records copied from the maintainer Vault. | Core schemas and templates. |
-| `assets/` | Empty asset tree, with no active/candidate/proposed asset records copied from the maintainer Vault. | Core schemas and templates. |
+| `practices/` | Empty practice tree, with no active/candidate/proposed practice records copied from a current-user Vault. | Core schemas and templates. |
+| `assets/` | Empty asset tree, with no active/candidate/proposed asset records copied from a current-user Vault. | Core schemas and templates. |
 | `indexes/practice_index.yaml` | `schema_version`, `updated`, Core-provided domain vocabulary, and `practices: []`. | Core index template or generated initializer. |
 | `indexes/asset_index.yaml` | `schema_version`, `updated`, Core-provided asset type vocabulary, and `assets: []`. | Core index template or generated initializer. |
 | `usage/usage-aggregate.yaml` | `schema_version`, `updated`, and `aggregates: []`. | Core usage aggregate template or generated initializer. |
@@ -274,31 +277,31 @@ Predefined packs and discovered packs do not conflict with freeform Vault CRUD b
 Validation expectations for a blank Vault:
 
 1. It validates as a Vault destination before canonical writes.
-2. It contains no maintainer-specific practices, assets, usage aggregate rows, local paths, runtime adoption decisions, raw evidence, or future memory-system directories.
+2. It contains no current-user-specific practices, assets, usage aggregate rows, local paths, runtime adoption decisions, raw evidence, or future memory-system directories.
 3. Empty indexes and empty aggregates are accepted as valid starting state.
 4. Practice and asset creation workflows can add the first candidate without requiring preexisting personal records.
 5. Adapter publishing can report "nothing to publish" or produce an empty/minimal adapter output without treating that as a failure.
-6. Runtime install must not copy the maintainer's generated adapters into a new user's runtime.
+6. Runtime install must not copy the current account's generated adapters into a new user's runtime.
 7. Consistency checks distinguish "empty but valid Vault" from "missing or corrupt Vault."
 8. Pack deployment can add canonical data after initialization without changing the definition of blank Vault.
 
 Implemented AF-3 baseline:
 
 - `scripts/init_vault.py` creates empty `practices/`, `assets/`, `imports/inbox`, `usage/local`, empty practice and asset indexes, and an empty shared usage aggregate;
-- blank Vault initialization does not copy maintainer practices/assets;
+- blank Vault initialization does not copy current-user practices/assets;
 - blank Vault initialization does not trigger runtime install;
 - `scripts/publish_adapters.py` validates selected Core/Vault roots before publishing;
 - blank Vault adapter publishing reports `nothing to publish`;
-- maintainer-like Vault adapter publishing can produce deterministic adapter outputs in a selected output root.
+- current-user-like Vault adapter publishing can produce deterministic adapter outputs in a selected output root.
 
 Implementation implications still remaining for AF-3:
 
 - scripts that currently assume repository-relative `practices/`, `assets/`, `indexes/`, and `usage/` must accept a separate `vault_root`;
 - checks should validate Core schemas/workflows against an arbitrary Vault;
-- generated adapter outputs should be derived from the selected Vault, not from this repository's maintainer Vault by default;
+- generated adapter outputs should be derived from the selected Vault, not from a bundled current-user Vault by default;
 - blank-vault fixtures or templates should be reproducible from Core and should not require copying personal records;
 - later pack deployment should be able to populate a blank Vault with the mandatory bootstrap pack before `refresh`;
-- migration must test both the maintainer Vault and a blank/new-user Vault.
+- migration must test both the active User Vault and a blank/new-user Vault.
 
 Rejected as #7 scope:
 
@@ -310,11 +313,11 @@ Rejected as #7 scope:
 
 ## External-User Setup Boundary
 
-External-user setup is not a current complete quickstart. AF-2 defines the boundary and prerequisites; AF-3 must physically split public Core from the maintainer's private Vault, and AF-4 must define onboarding modes before Agent Foundry can claim a tested external-user start path.
+External-user setup is not a current complete quickstart. AF-2 defines the boundary and prerequisites; AF-3 must physically split public Core from the active private User Vault, and AF-4 must define onboarding modes before Agent Foundry can claim a tested external-user start path.
 
 Current capability:
 
-- single-repo operation where Core and the maintainer Vault share one repository root;
+- single-repo operation where Core and the active User Vault share one repository root;
 - machine-local runtime manifest setup for the current user;
 - adapter install into enabled local Codex, Claude Code, and Hermes runtimes;
 - manual ChatGPT import from generated adapter files;
@@ -338,16 +341,16 @@ Pre-split boundary for #9:
 
 | Setup concern | Current AF-2 answer | Blocked by |
 | --- | --- | --- |
-| What to clone | Current repo contains both Core and maintainer Vault; this is a maintainer setup, not public Core distribution. | AF-3 public Core split. |
-| Where Vault lives | Designed as user-owned and private by default; current repo still contains maintainer Vault. | AF-3 maintainer Vault extraction. |
+| What to clone | Current repo contains both Core and the current account's User Vault; this is a combined staging setup, not public Core distribution. | AF-3 public Core split. |
+| Where Vault lives | Designed as user-owned and private by default; current repo still contains the active User Vault. | AF-3 User Vault extraction. |
 | How blank Vault starts | Defined as empty indexes, empty aggregate, no personal practices/assets. | AF-3 `init-vault` implementation and validation. |
 | How Core/Vault are located | `~/.agent-foundry/config.yaml` exists, but current scripts assume one root. | AF-3 separate root support. |
-| How adapters are generated | Current adapters are generated from the maintainer Vault. | AF-3 arbitrary-vault adapter generation. |
+| How adapters are generated | Current adapters are generated from the active User Vault. | AF-3 arbitrary-vault adapter generation. |
 | How runtimes are installed | Current machine-local manifest installs into selected local runtimes. | AF-3 migration checks for split Core/Vault; AF-4 first-run UX. |
 | How bootstrap capability appears | Blank Vault is created first, then mandatory bootstrap pack is deployed as canonical Vault data. | AF-4 pack deployment and first-run verification. |
 | How optional capability content appears | Optional capability packs and runtime imports are not blank defaults; they are deployed or imported after the Vault exists. | AF-4 pack selection and import workflow. |
 | How existing runtime assets are imported | Existing runtime assets are evidence/candidates first. | AF-4 import workflow. |
-| What remains private | Raw evidence, local manifests, adoption state, secrets, maintainer Vault, personal records. | Current policy plus AF-3 migration. |
+| What remains private | Raw evidence, local manifests, adoption state, secrets, User Vault, personal records. | Current policy plus AF-3 migration. |
 
 Docs implications:
 

@@ -72,8 +72,8 @@ Agent Foundry should use maturity stages for planning and release versions for d
 | AF-0 | Personal Bootstrap | Early personal repo built through direct iteration before strict planning and multi-agent workflow. | Historical stage; no need to retroactively perfect it. |
 | AF-1 | Governed Foundry | Practices, assets, workflows, review gates, adapter publishing, and current/proposed boundaries are governed explicitly. | Harvest/review/publish lifecycle is coherent; roadmap and hygiene work are tracked. |
 | AF-2 | Productizable Foundry | Repository layers and user/product boundaries are clear enough to support a reusable system. | Core, User Vault, Generated, Runtime, Local Private, and Proposed Design Evidence are separated by policy and implementation plan. |
-| AF-3 | Split Vault Migration | Core and the maintainer's User Vault are physically separated without breaking existing local runtimes. | Public Core no longer requires maintainer vault content; maintainer Vault is private by default; existing Codex, Claude Code, Hermes, and ChatGPT setups are migrated or given a tested migration path; clean new-user setup is tested. |
-| AF-4 | Onboarding Ready | New users can install Core, create a blank Vault, deploy the mandatory bootstrap capability pack, optionally deploy additional capability packs, and refresh adapters without confusing pack content with private maintainer history. | Blank Vault creation, bootstrap pack deployment, optional pack selection, runtime-asset import, and first-run refresh are tested. |
+| AF-3 | Split Vault Migration | Core and the current account's User Vault are physically separated without breaking existing local runtimes. | Public Core no longer requires current-user vault content; the active User Vault is private by default; existing Codex, Claude Code, Hermes, and ChatGPT setups are migrated or given a tested migration path; clean new-user setup is tested. |
+| AF-4 | Onboarding Ready | New users can install Core, create a blank Vault, deploy the mandatory bootstrap capability pack, optionally deploy additional capability packs, and refresh adapters without confusing pack content with private user history. | Blank Vault creation, bootstrap pack deployment, optional pack selection, runtime-asset import, and first-run refresh are tested. |
 | AF-5 | Memory-System Ready | Future memory-system records, evidence policy, routing, privacy, and MCP boundaries are designed but not necessarily implemented. | Memory-system implementation home can be chosen with clear tradeoffs. |
 | AF-6 | Memory-System Implementation | A reviewed memory/knowledge system is implemented according to the chosen architecture. | MVP validates the main memory lifecycle without bypassing Agent Foundry governance. |
 
@@ -249,7 +249,7 @@ Execution order:
 1. Complete Core/Vault split design (#6).
 2. Use that boundary to design blank vault initialization (#7) and configuration boundary (#8).
 3. Use #6, #7, and #8 together to write the external-user setup boundary design (#9).
-4. Do not claim external-user readiness until AF-3 physically separates the maintainer Vault from public Core.
+4. Do not claim external-user readiness until AF-3 physically separates the active User Vault from public Core.
 5. Treat onboarding modes such as starter capability packs or runtime-asset imports as AF-4 design work unless needed as constraints for #7/#8.
 
 Blank Vault baseline:
@@ -277,8 +277,8 @@ AF-3 is a migration stage, not only a documentation stage. It should be planned 
 
 Non-negotiable invariants:
 
-- Public Core must not require the maintainer's private Vault records.
-- Maintainer Vault records must remain available to the maintainer after migration.
+- Public Core must not require any current user's private Vault records.
+- The current account's User Vault records must remain available after migration.
 - Existing local Codex, Claude Code, Hermes, and ChatGPT workflows must have a tested migration path before the combined repository stops being the operational source.
 - Core and Vault roots must be validated independently before canonical writes, adapter publishing, or runtime install.
 - Runtime adapters are downstream projections from Core tooling plus the selected Vault; they are not the source of truth.
@@ -289,33 +289,35 @@ Non-negotiable invariants:
 Migration strategy:
 
 1. **Design and dry-run first**: map current paths, script assumptions, generated outputs, runtime installs, and private Vault candidates before moving files.
-2. **Make tooling split-aware while still in the combined repo**: introduce separate `core_root` and `vault_root` support behind compatibility behavior so checks can compare combined, maintainer-Vault, and blank-Vault scenarios.
-3. **Extract the maintainer Vault only after validation can target an arbitrary Vault**: avoid moving canonical records before scripts know how to find and validate them.
+2. **Make tooling split-aware while still in the combined repo**: introduce separate `core_root` and `vault_root` support behind compatibility behavior so checks can compare combined, current-user Vault, and blank-Vault scenarios.
+3. **Extract the active User Vault only after validation can target an arbitrary Vault**: avoid moving canonical records before scripts know how to find and validate them.
 4. **Regenerate adapters from the selected Vault**: prove runtime outputs come from Core plus Vault selection, not hardcoded repo-relative personal records.
 5. **Migrate local runtimes after generated outputs are split-aware**: inventory, dry-run, install, then verify stale path references and manual ChatGPT steps.
 6. **Gate external-user readiness separately**: AF-3 exits when split migration is reliable; AF-4 handles humane onboarding and starter/import choices.
 
 Migration window:
 
-- The window starts only when extraction execution begins: private Vault target is initialized or selected, maintainer Vault records are copied or moved, or `vault_root` is repointed away from the combined repository.
+- The window starts only when extraction execution begins: active User Vault target is initialized or selected, current User Vault records are copied or moved, or `vault_root` is repointed away from the combined repository.
 - The window is not opened by #31 planning or by #32 public Core cleanup if those changes do not move records or repoint runtime/local config.
 - During the window, pause canonical writes such as harvest practice, harvest asset, publish, refresh, and runtime install unless the command explicitly uses verified split `core_root` and `vault_root`.
-- The window closes in #33, after split Core plus private maintainer Vault pass root validation, selected-Vault adapter publishing, runtime dry-run/install verification, stale-path checks, and rollback visibility.
+- The window closes in #33, after split Core plus active User Vault pass root validation, selected-Vault adapter publishing, runtime dry-run/install verification, stale-path checks, and rollback visibility.
 - #34 is the post-window AF-3 readiness audit. If #34 finds a failure, reopen or fix the migration result; do not treat #34 as the normal window close.
 
 Rollback points:
 
 - Before script changes: current combined repo is the working baseline.
 - After split-aware tooling but before file extraction: revert tooling changes or keep compatibility mode.
-- After maintainer Vault extraction: restore from private Vault backup or keep old combined checkout read-only until runtime migration passes.
+- After User Vault extraction: restore from private Vault backup or keep old combined checkout read-only until runtime migration passes.
 - After runtime reinstall: use existing `scripts/rollback_runtime.py` and managed markers for local runtime rollback where supported; ChatGPT remains manual.
 - Before public Core claim: verify no private Vault records are required by Core defaults.
 
 AF-3 epics and task breakdown:
 
 - **Split execution plan**
-  - Choose final repo/directory names for Core and the maintainer Vault.
-  - Decide whether the maintainer Vault is a private GitHub repo, private local repo, or another private remote-backed location.
+  - Choose final repo/directory names for Core and the active User Vault.
+  - Use the common local User Vault pattern `~/.agent-foundry/vault/agent-foundry-vault-<account>` unless explicitly overridden.
+  - For the current `farmerhunter` account, the selected local target is `~/.agent-foundry/vault/agent-foundry-vault-farmerhunter`.
+  - Decide whether the active User Vault also has a private GitHub repo, private local repo, or another private remote-backed location.
   - Define a reversible migration sequence before moving files.
   - Define rollback points and backups.
   - Decide whether AF-3 uses an integration branch for the whole migration or smaller PRs with a protected checkpoint before file extraction.
@@ -323,16 +325,16 @@ AF-3 epics and task breakdown:
   - Identify hardcoded single-repo assumptions in scripts, workflows, adapters, docs, and runtime manifests.
   - Exit when the migration sequence, backup plan, issue order, and stop conditions are explicit.
 
-- **Maintainer Vault extraction**
-  - Move the maintainer's `practices/`, `assets/`, `indexes/`, `usage/usage-aggregate.yaml`, vault-local docs, and reviewed imports into the private Vault.
+- **User Vault extraction**
+  - Move the current account's `practices/`, `assets/`, `indexes/`, `usage/usage-aggregate.yaml`, vault-local docs, and reviewed imports into the active User Vault.
   - Keep raw local evidence ignored and local.
   - Preserve history where practical, but prioritize correctness and privacy over perfect file history.
-  - Confirm no maintainer Vault content remains required by public Core defaults.
-  - Define the maintainer Vault repository or local path before moving files.
+  - Confirm no current User Vault content remains required by public Core defaults.
+  - Define the User Vault repository or local path before moving files.
   - Create a Vault backup and verify it contains all canonical records and sanitized aggregate evidence.
   - Move only after split-aware checks can validate an arbitrary Vault.
   - Leave Core templates or fixtures empty and non-personal.
-  - Exit when the maintainer Vault validates separately and Core no longer depends on its active records.
+  - Exit when the active User Vault validates separately and Core no longer depends on its active records.
 
 - **Public Core cleanup**
   - Keep reusable `workflows/`, `schemas/`, `scripts/`, `templates/`, runtime templates, adapter profiles, adapter quality rules, and product docs in Core.
@@ -342,7 +344,7 @@ AF-3 epics and task breakdown:
   - Separate Core-owned adapter profiles and quality checks from generated adapter outputs.
   - Decide whether tracked generated adapters remain in Core as distribution artifacts, move to Vault-derived build output, or become release artifacts.
   - Review `README.md`, `AGENTS.md`, `docs/usage.md`, `docs/deployment.md`, and adapter instructions for maintainer-specific wording.
-  - Exit when a clean Core checkout can explain itself without requiring the `farmerhunter` maintainer Vault.
+  - Exit when a clean Core checkout can explain itself without requiring the `farmerhunter` User Vault.
 
 - **Locator and config migration**
   - Update `~/.agent-foundry/config.yaml` semantics so `core_root` and `vault_root` may be different paths.
@@ -360,23 +362,23 @@ AF-3 epics and task breakdown:
   - This parent issue is a coordination epic for migration-window close readiness.
   - Track sub-issues #42, #43, #46, #44, #45, and #47 to avoid a single uncontrolled apply bucket.
   - Inventory installed Codex, Claude Code, Hermes, and ChatGPT adapter targets before migration.
-  - Reinstall managed runtime files from the split Core plus maintainer Vault.
+  - Reinstall managed runtime files from the split Core plus active User Vault.
   - Preserve managed-block and managed-directory ownership markers.
   - Do not overwrite unmanaged runtime files.
   - Provide migration visibility for old path references, stale runtime files, adapter drift, and manual ChatGPT import requirements.
   - Update `scripts/install_foundry.py`, `scripts/sync_adapters.py`, runtime manifest handling, and deployment docs to consume selected Core/Vault roots.
   - Verify `~/.agent-foundry/config.yaml` is rewritten only after successful validation or explicit migration approval.
   - Treat ChatGPT as manual import; do not imply automatic update.
-  - Exit when local runtimes can be refreshed from split Core plus maintainer Vault, stale-reference checks and rollback are visible, and canonical writes can safely resume through verified split roots.
+  - Exit when local runtimes can be refreshed from split Core plus active User Vault, stale-reference checks and rollback are visible, and canonical writes can safely resume through verified split roots.
 
 - **Compatibility and validation**
   - Update scripts to accept separate `core_root` and `vault_root`.
   - Update consistency checks to validate the active Vault against Core schemas and workflows.
   - Update adapter publishing so generated outputs can be derived from an arbitrary Vault.
-  - Verify blank-vault and maintainer-vault scenarios separately.
+  - Verify blank-vault and current-user-vault scenarios separately.
   - Verify offline sync and usage aggregate behavior after split.
   - Confirm empty indexes and empty usage aggregates are valid, while missing/corrupt indexes still fail clearly.
-  - Add fixtures or temporary test directories for combined repo, blank Vault, and maintainer-like Vault validation.
+  - Add fixtures or temporary test directories for combined repo, blank Vault, and current-user-like Vault validation.
   - Keep tests local and deterministic; do not require private remote access for public Core validation.
   - Verify generated adapter outputs do not leak inactive candidate/proposed records or private paths.
   - Preserve the substrate needed for later pack deployment: blank Vault first, pack canonical data second, refresh third.
@@ -426,7 +428,7 @@ Execution order:
 6. Execute runtime migration children in this order: #42 -> #43 -> #46 -> #44 -> #45 -> #47.
 7. Apply #44 only after user approval and migration planning checks are complete.
 8. Close the migration window only via #47 after split runtime behavior and rollback evidence are confirmed.
-9. Close AF-3 only through Issue 9 after #47 and #48-#50 pass, covering clean Core, maintainer Vault, blank Vault, runtime, and nested product-project checks.
+9. Close AF-3 only through Issue 9 after #47 and #48-#50 pass, covering clean Core, active User Vault, blank Vault, runtime, and nested product-project checks.
 
 Role-fit constraints:
 
@@ -450,12 +452,12 @@ Minimum verification matrix:
 | Scenario | Required checks |
 | --- | --- |
 | Current combined compatibility | Existing consistency, adapter quality, activation, runtime dry-run, and locator status pass. |
-| Split maintainer operation | Core root and maintainer Vault root validate separately; adapter generation and runtime dry-run use the selected Vault. |
-| Blank Vault operation | Empty indexes and aggregate validate; adapter publishing reports empty/minimal output without copying maintainer content. |
+| Split current-user operation | Core root and active User Vault root validate separately; adapter generation and runtime dry-run use the selected Vault. |
+| Blank Vault operation | Empty indexes and aggregate validate; adapter publishing reports empty/minimal output without copying current-user content. |
 | Pack deployment substrate | The design preserves the sequence blank Vault -> pack canonical data deployment -> refresh, without treating packs as runtime-only helpers or a second source of truth. |
 | Product project harvest context | Agent locates Core and Vault from outside both roots; product project is evidence source only. |
 | Runtime migration | Codex, Claude Code, Hermes managed outputs are inventoried and dry-run before apply; ChatGPT manual import state is reported. |
-| Privacy check | Public Core contains no required maintainer Vault records, raw evidence, machine-local paths, secrets, or private adoption decisions. |
+| Privacy check | Public Core contains no required current-user Vault records, raw evidence, machine-local paths, secrets, or private adoption decisions. |
 
 Migration close conditions:
 
@@ -466,13 +468,13 @@ Migration close conditions:
 
 Acceptance criteria:
 
-- Public Core can be cloned without exposing or requiring the maintainer's private Vault.
-- The maintainer's Vault is separate and private by default.
+- Public Core can be cloned without exposing or requiring the current account's private User Vault.
+- The active User Vault is separate and private by default.
 - Existing local Codex, Claude Code, Hermes, and ChatGPT workflows have a tested migration path.
 - `core_root` and `vault_root` can be different paths and are both validated before canonical writes.
 - Product project, Foundry Vault operation, and Foundry Core maintenance contexts are distinguishable before writes or runtime installs.
 - A blank Vault can be initialized and checked without personal practices/assets, and later pack deployment can add canonical data without redefining blank Vault.
-- Adapter generation and runtime install work from both the maintainer Vault and a blank/new user Vault.
+- Adapter generation and runtime install work from both the active User Vault and a blank/new user Vault.
 - Rollback instructions exist for the split migration.
 - No future memory-system storage is introduced as part of the split.
 
@@ -538,7 +540,7 @@ Epics:
 
 - **Bootstrap capability pack**
   - Identify the minimal harvest/discover/refresh/review/publish records needed for normal onboarding.
-  - Build the pack from public, reviewed canonical data, not from private maintainer evidence.
+  - Build the pack from public, reviewed canonical data, not from private user evidence.
   - Verify that a user can refresh adapters after deploying only the bootstrap pack.
 
 - **Optional capability pack design**
@@ -564,7 +566,7 @@ Epics:
 Acceptance criteria:
 
 - A new user can install Core, create a blank Vault, deploy the mandatory bootstrap pack, optionally deploy selected packs, and run refresh.
-- Bootstrap pack content is never confused with the maintainer's private Vault.
+- Bootstrap pack content is never confused with a user's private Vault.
 - Optional packs and imported runtime assets are reviewed or selected before becoming canonical.
 - Pack deployment and freeform practice/asset CRUD share the same Vault records and do not create parallel truth sources.
 - The onboarding flow preserves Core/Vault/context separation.

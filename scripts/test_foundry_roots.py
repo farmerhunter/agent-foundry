@@ -179,9 +179,9 @@ def main() -> int:
         errors.extend(expect("blank-vault", run_check(ROOT, blank), True))
         errors.extend(expect("blank-vault-plan", run_plan(ROOT, blank), True, "mode: split"))
 
-        maintainer_like = base / "maintainer-like-vault"
-        make_maintainer_like_vault(maintainer_like)
-        errors.extend(expect("maintainer-like-vault", run_check(ROOT, maintainer_like), True))
+        current_user_like = base / "current-user-like-vault"
+        make_maintainer_like_vault(current_user_like)
+        errors.extend(expect("current-user-like-vault", run_check(ROOT, current_user_like), True))
 
         missing = base / "missing-vault"
         make_blank_vault(missing)
@@ -206,10 +206,10 @@ def main() -> int:
         blank_publish = run_publish(ROOT, blank, base / "blank-adapters")
         errors.extend(expect("blank-publish", blank_publish, True, "Nothing to publish"))
 
-        maintainer_publish = run_publish(ROOT, maintainer_like, base / "maintainer-adapters")
-        errors.extend(expect("maintainer-like-publish", maintainer_publish, True, "Adapter publish wrote"))
-        if not (base / "maintainer-adapters" / "adapter-publish-manifest.yaml").exists():
-            errors.append("maintainer-like-publish: manifest was not written")
+        current_user_publish = run_publish(ROOT, current_user_like, base / "current-user-adapters")
+        errors.extend(expect("current-user-like-publish", current_user_publish, True, "Adapter publish wrote"))
+        if not (base / "current-user-adapters" / "adapter-publish-manifest.yaml").exists():
+            errors.append("current-user-like-publish: manifest was not written")
 
         custom = base / "custom-vault"
         custom_output = base / "custom-adapters"
