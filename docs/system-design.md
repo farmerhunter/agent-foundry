@@ -172,6 +172,61 @@ AF-2 follow-up implications:
 - #9 should describe external-user setup without requiring the maintainer's Vault records.
 - AF-3 should execute the physical split and migration: public Core, maintainer private Vault, updated locators, runtime migration, and compatibility checks.
 
+## Blank Vault Initialization
+
+Blank Vault initialization is the AF-2 design for creating a new User Vault without inheriting the maintainer's personal records. It is not implemented yet. Current single-repo operation remains the only implemented mode until AF-3 updates locators, scripts, checks, and runtime publishing for separate `core_root` and `vault_root` paths.
+
+Design goal:
+
+```text
+public Core + empty User Vault -> valid starting point for reviewed practices, assets, usage evidence, and adapter generation
+```
+
+`init-vault` should mean "create a valid, empty canonical destination" rather than "copy the maintainer's current vault." It should initialize structure and metadata only. It should not activate starter practices, install runtime adapters, import external skills, or write memory-system records.
+
+Blank Vault contents:
+
+| Vault path or record | Blank state | Source of shape |
+| --- | --- | --- |
+| `practices/` | Empty practice tree, with no active/candidate/proposed practice records copied from the maintainer Vault. | Core schemas and templates. |
+| `assets/` | Empty asset tree, with no active/candidate/proposed asset records copied from the maintainer Vault. | Core schemas and templates. |
+| `indexes/practice_index.yaml` | `schema_version`, `updated`, Core-provided domain vocabulary, and `practices: []`. | Core index template or generated initializer. |
+| `indexes/asset_index.yaml` | `schema_version`, `updated`, Core-provided asset type vocabulary, and `assets: []`. | Core index template or generated initializer. |
+| `usage/usage-aggregate.yaml` | `schema_version`, `updated`, and `aggregates: []`. | Core usage aggregate template or generated initializer. |
+| `imports/` | Empty reviewed-import staging area, with no raw external imports. | Core workflow convention. |
+| Vault metadata | Minimal non-sensitive vault identity, privacy default, Core compatibility range, and initialized date. | Proposed AF-3 implementation detail; no current schema exists yet. |
+| Runtime manifest | Not part of the canonical Vault by default. Runtime deployment remains machine-local unless a later reviewed policy defines portable runtime intent. | Runtime template and local manifest policy. |
+
+Template rule: practice and asset templates belong to Core. A blank Vault may receive copied template files only if the implementation needs standalone editing affordances, and those copies must be clearly marked as templates, not canonical records. Template copies must not appear in indexes as active records.
+
+Starter content rule: starter capability packs, imported Codex/Claude Code/Hermes/ChatGPT assets, and examples are onboarding inputs, not blank Vault defaults. They belong to AF-4 unless a later implementation explicitly lets the user choose them. If chosen, they enter as candidate/proposed records or as active records only under an explicit, reviewed onboarding policy.
+
+Validation expectations for a blank Vault:
+
+1. It validates as a Vault destination before canonical writes.
+2. It contains no maintainer-specific practices, assets, usage aggregate rows, local paths, runtime adoption decisions, raw evidence, or future memory-system directories.
+3. Empty indexes and empty aggregates are accepted as valid starting state.
+4. Practice and asset creation workflows can add the first candidate without requiring preexisting personal records.
+5. Adapter publishing can report "nothing to publish" or produce an empty/minimal adapter output without treating that as a failure.
+6. Runtime install must not copy the maintainer's generated adapters into a new user's runtime.
+7. Consistency checks distinguish "empty but valid Vault" from "missing or corrupt Vault."
+
+Implementation implications for AF-3:
+
+- scripts that currently assume repository-relative `practices/`, `assets/`, `indexes/`, and `usage/` must accept a separate `vault_root`;
+- checks should validate Core schemas/workflows against an arbitrary Vault;
+- generated adapter outputs should be derived from the selected Vault, not from this repository's maintainer Vault by default;
+- blank-vault fixtures or templates should be reproducible from Core and should not require copying personal records;
+- migration must test both the maintainer Vault and a blank/new-user Vault.
+
+Rejected as #7 scope:
+
+- creating `memory/`, `knowledge/`, `research_memos/`, or `project_memory`;
+- importing runtime skills or ChatGPT exports;
+- defining capability pack lifecycle beyond the constraint that packs are not blank defaults;
+- moving the maintainer's Vault into a private repo;
+- implementing `init-vault` scripts before the design is reviewed.
+
 ## Operating Context Separation
 
 Agent Foundry must remain safe when it is used inside another software project. Users and agents regularly operate in nested contexts:

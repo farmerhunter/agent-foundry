@@ -221,6 +221,7 @@ Epics:
   - Design `init-vault` semantics before implementation.
   - Define starter indexes, practice/asset templates, runtime templates, and empty usage aggregate.
   - Ensure no personal content is required for a new user.
+  - Current design location: `docs/system-design.md` section "Blank Vault Initialization".
 
 - **Configuration boundary**
   - Separate portable config from machine-local config.
@@ -247,6 +248,15 @@ Execution order:
 3. Use #6, #7, and #8 together to write the external-user quickstart (#9).
 4. Do not claim external-user readiness until AF-3 physically separates the maintainer Vault from public Core.
 5. Treat onboarding modes such as starter capability packs or runtime-asset imports as AF-4 design work unless needed as constraints for #7/#8.
+
+Blank Vault baseline:
+
+- A blank Vault is an empty but valid canonical destination for a new user's reviewed practices, assets, indexes, usage aggregate, and reviewed imports.
+- It should include empty indexes and empty aggregate evidence, not the maintainer's current active practice/asset records.
+- Core owns schemas, templates, workflows, and initialization logic. The Vault owns user records and non-sensitive vault policy.
+- Runtime install is not implied by blank Vault creation. Runtime deployment remains a separate local operation using Core tooling plus the selected Vault.
+- Starter capability packs and runtime-asset imports are optional AF-4 onboarding inputs, not AF-2 blank defaults.
+- Empty indexes and aggregates should pass validation once AF-3 updates checks for separate Core and Vault roots.
 
 ### M3: Physical Core/Vault Split And Migration
 
@@ -277,6 +287,7 @@ Epics:
   - Keep reusable `workflows/`, `schemas/`, `scripts/`, `templates/`, runtime templates, adapter profiles, adapter quality rules, and product docs in Core.
   - Replace personal defaults with templates, examples, empty indexes, or documented starter packs.
   - Ensure Core does not publish the maintainer's active practices/assets as default product state.
+  - Preserve blank-vault templates or generation logic in Core, while keeping blank-vault records empty and non-personal.
 
 - **Locator and config migration**
   - Update `~/.agent-foundry/config.yaml` semantics so `core_root` and `vault_root` may be different paths.
@@ -299,6 +310,7 @@ Epics:
   - Update adapter publishing so generated outputs can be derived from an arbitrary Vault.
   - Verify blank-vault and maintainer-vault scenarios separately.
   - Verify offline sync and usage aggregate behavior after split.
+  - Confirm empty indexes and empty usage aggregates are valid, while missing/corrupt indexes still fail clearly.
 
 - **External-user readiness gate**
   - Test a clean setup using public Core plus a blank or new user Vault.
@@ -344,6 +356,7 @@ Epics:
 - **Onboarding mode selector**
   - Define the user choice among empty Vault, starter pack, runtime import, or mixed setup.
   - Make the consequences visible before writing files.
+  - Start from the AF-2 blank Vault baseline, then layer optional starter/import choices explicitly.
 
 - **Starter capability pack design**
   - Define how starter packs relate to assets, practices, templates, examples, and generated adapters.
