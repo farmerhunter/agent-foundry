@@ -10,11 +10,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG_PATH = Path.home() / ".agent-foundry" / "config.yaml"
 CORE_MARKERS = [
+    ".agent-foundry-core.yaml",
     "workflows/harvest-practices.md",
     "schemas/practice-entry.schema.yaml",
     "scripts/foundry_config.py",
 ]
 VAULT_MARKERS = [
+    ".agent-foundry-vault.yaml",
     "indexes/practice_index.yaml",
     "indexes/asset_index.yaml",
     "usage/usage-aggregate.yaml",

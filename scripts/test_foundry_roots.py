@@ -3,17 +3,23 @@
 
 from __future__ import annotations
 
-import shutil
 import subprocess
 import sys
 import tempfile
+import hashlib
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
 CHECK = ROOT / "scripts" / "check_foundry_roots.py"
+CONFIG = ROOT / "scripts" / "foundry_config.py"
 INIT = ROOT / "scripts" / "init_vault.py"
 PUBLISH = ROOT / "scripts" / "publish_adapters.py"
+MIGRATE = ROOT / "scripts" / "migrate_deployment.py"
+RECORD_USAGE = ROOT / "scripts" / "record_asset_usage.py"
+AGGREGATE_USAGE = ROOT / "scripts" / "aggregate_usage.py"
+REVIEW_PRACTICES = ROOT / "scripts" / "review_practices.py"
+REVIEW_ASSETS = ROOT / "scripts" / "review_assets.py"
 
 
 def write(path: Path, text: str) -> None:
@@ -60,6 +66,137 @@ def run_publish(core_root: Path, vault_root: Path, output_root: Path) -> subproc
     )
 
 
+def run_plan(core_root: Path, vault_root: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [
+            sys.executable,
+            str(MIGRATE),
+            "plan",
+            "--core-root",
+            str(core_root),
+            "--vault-root",
+            str(vault_root),
+        ],
+        cwd=ROOT,
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+
+def run_config_write(config_path: Path, core_root: Path, vault_root: Path, cwd: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [
+            sys.executable,
+            str(CONFIG),
+            "write",
+            "--path",
+            str(config_path),
+            "--repo-root",
+            str(core_root),
+            "--core-root",
+            str(core_root),
+            "--vault-root",
+            str(vault_root),
+        ],
+        cwd=cwd,
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+
+def run_config_status(config_path: Path, cwd: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(CONFIG), "status", "--path", str(config_path)],
+        cwd=cwd,
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+
+def run_record_usage(cwd: Path, core_root: Path, vault_root: Path, asset_id: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [
+            sys.executable,
+            str(RECORD_USAGE),
+            "--core-root",
+            str(core_root),
+            "--vault-root",
+            str(vault_root),
+            "--asset-id",
+            asset_id,
+            "--agent",
+            "fixture",
+            "--project",
+            "nested-product",
+            "--trigger",
+            "nested-context-fixture",
+            "--outcome",
+            "useful",
+            "--note",
+            "nested context write path smoke test",
+            "--date",
+            "2026-06-10",
+        ],
+        cwd=cwd,
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+
+def run_aggregate_usage(cwd: Path, core_root: Path, vault_root: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [
+            sys.executable,
+            str(AGGREGATE_USAGE),
+            "--core-root",
+            str(core_root),
+            "--vault-root",
+            str(vault_root),
+        ],
+        cwd=cwd,
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+
+def run_review_script(script: Path, cwd: Path, core_root: Path, vault_root: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--core-root",
+            str(core_root),
+            "--vault-root",
+            str(vault_root),
+        ],
+        cwd=cwd,
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+
+def digest_tree(path: Path) -> dict[str, str]:
+    if not path.exists():
+        return {}
+    digests: dict[str, str] = {}
+    for file_path in sorted(p for p in path.rglob("*") if p.is_file()):
+        rel = str(file_path.relative_to(path))
+        digests[rel] = hashlib.sha256(file_path.read_bytes()).hexdigest()
+    return digests
+
+
 def make_blank_vault(path: Path) -> None:
     result = subprocess.run(
         [sys.executable, str(INIT), str(path), "--core-root", str(ROOT), "--apply"],
@@ -74,11 +211,53 @@ def make_blank_vault(path: Path) -> None:
 
 
 def make_maintainer_like_vault(path: Path) -> None:
-    for name in ["indexes", "practices", "assets", "usage"]:
-        source = ROOT / name
-        target = path / name
-        if source.is_dir():
-            shutil.copytree(source, target)
+    make_blank_vault(path)
+    write(
+        path / "practices" / "meta" / "META-001-test-maintainer-like-practice.md",
+        "\n".join(
+            [
+                "---",
+                "id: META-001",
+                "title: Test maintainer-like practice",
+                "domain: meta",
+                "type: principle",
+                "status: active",
+                "version: 1",
+                "created: 2026-06-09",
+                "updated: 2026-06-09",
+                "tags: [test]",
+                "aliases: [META-001]",
+                "---",
+                "",
+                "## Principle",
+                "",
+                "Use the selected populated Vault records.",
+                "",
+            ]
+        ),
+    )
+    write(
+        path / "indexes" / "practice_index.yaml",
+        "\n".join(
+            [
+                "schema_version: 1",
+                "updated: 2026-06-09",
+                "",
+                "domains:",
+                "  meta:",
+                "    description: Test domain.",
+                "",
+                "practices:",
+                "  - id: META-001",
+                "    title: Test maintainer-like practice",
+                "    path: practices/meta/META-001-test-maintainer-like-practice.md",
+                "    domain: meta",
+                "    type: principle",
+                "    status: active",
+                "",
+            ]
+        ),
+    )
 
 
 def make_custom_vault(path: Path) -> None:
@@ -149,33 +328,45 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix="agent-foundry-root-fixtures-") as tmp:
         base = Path(tmp)
 
-        errors.extend(expect("same-root", run_check(ROOT, ROOT), True))
+        errors.extend(expect("clean-core-same-root", run_check(ROOT, ROOT), False, "vault marker missing"))
+        errors.extend(expect("clean-core-same-root-plan", run_plan(ROOT, ROOT), False, "mode: unknown"))
 
         blank = base / "blank-vault"
         make_blank_vault(blank)
         errors.extend(expect("blank-vault", run_check(ROOT, blank), True))
+        errors.extend(expect("blank-vault-plan", run_plan(ROOT, blank), True, "mode: split"))
 
-        maintainer_like = base / "maintainer-like-vault"
-        make_maintainer_like_vault(maintainer_like)
-        errors.extend(expect("maintainer-like-vault", run_check(ROOT, maintainer_like), True))
+        current_user_like = base / "current-user-like-vault"
+        make_maintainer_like_vault(current_user_like)
+        errors.extend(expect("current-user-like-vault", run_check(ROOT, current_user_like), True))
 
         missing = base / "missing-vault"
         make_blank_vault(missing)
         (missing / "indexes" / "asset_index.yaml").unlink()
         errors.extend(expect("missing-vault", run_check(ROOT, missing), False, "vault marker missing"))
+        errors.extend(expect("missing-vault-plan", run_plan(ROOT, base / "absent-vault"), False, "mode: missing_vault"))
+        errors.extend(expect("missing-core-plan", run_plan(base / "absent-core", blank), False, "mode: missing_core"))
 
         corrupt = base / "corrupt-vault"
         make_blank_vault(corrupt)
         write(corrupt / "indexes" / "practice_index.yaml", "schema_version: 1\nupdated: 2026-06-09\n")
         errors.extend(expect("corrupt-vault", run_check(ROOT, corrupt), False, "index missing required list: practices"))
+        errors.extend(expect("corrupt-vault-plan", run_plan(ROOT, corrupt), False, "mode: unknown"))
+
+        mismatched = base / "mismatched-vault"
+        make_blank_vault(mismatched)
+        marker = mismatched / ".agent-foundry-vault.yaml"
+        marker.write_text(marker.read_text(encoding="utf-8").replace("layout_version: 1", "layout_version: 99"), encoding="utf-8")
+        errors.extend(expect("mismatched-vault", run_check(ROOT, mismatched), False, "layout compatibility failed"))
+        errors.extend(expect("mismatched-vault-plan", run_plan(ROOT, mismatched), False, "safe_apply_candidate: no"))
 
         blank_publish = run_publish(ROOT, blank, base / "blank-adapters")
         errors.extend(expect("blank-publish", blank_publish, True, "Nothing to publish"))
 
-        maintainer_publish = run_publish(ROOT, maintainer_like, base / "maintainer-adapters")
-        errors.extend(expect("maintainer-like-publish", maintainer_publish, True, "Adapter publish wrote"))
-        if not (base / "maintainer-adapters" / "adapter-publish-manifest.yaml").exists():
-            errors.append("maintainer-like-publish: manifest was not written")
+        current_user_publish = run_publish(ROOT, current_user_like, base / "current-user-adapters")
+        errors.extend(expect("current-user-like-publish", current_user_publish, True, "Adapter publish wrote"))
+        if not (base / "current-user-adapters" / "adapter-publish-manifest.yaml").exists():
+            errors.append("current-user-like-publish: manifest was not written")
 
         custom = base / "custom-vault"
         custom_output = base / "custom-adapters"
@@ -187,6 +378,76 @@ def main() -> int:
             errors.append("custom-vault-publish: selected custom practice ID missing from output")
         if "META-001" in output_text:
             errors.append("custom-vault-publish: maintainer practice ID leaked into output")
+
+        product_project = base / "product-project"
+        product_project.mkdir()
+        write(product_project / "README.md", "# Product project fixture\n")
+
+        nested_vault = base / "nested-context-vault"
+        make_blank_vault(nested_vault)
+        nested_vault_display = nested_vault.resolve()
+        nested_config = base / "nested-config.yaml"
+        errors.extend(expect("nested-config-write", run_config_write(nested_config, ROOT, nested_vault, product_project), True))
+        for name, cwd in [
+            ("product-project", product_project),
+            ("vault-operation", nested_vault),
+            ("core-maintenance", ROOT),
+        ]:
+            errors.extend(
+                expect(
+                    f"nested-{name}-locator",
+                    run_config_status(nested_config, cwd),
+                    True,
+                    "validation: passed",
+                )
+            )
+            errors.extend(
+                expect(
+                    f"nested-{name}-review-practices",
+                    run_review_script(REVIEW_PRACTICES, cwd, ROOT, nested_vault),
+                    True,
+                    f"vault_root: {nested_vault_display}",
+                )
+            )
+            errors.extend(
+                expect(
+                    f"nested-{name}-review-assets",
+                    run_review_script(REVIEW_ASSETS, cwd, ROOT, nested_vault),
+                    True,
+                    f"vault_root: {nested_vault_display}",
+                )
+            )
+
+        core_usage_before = digest_tree(ROOT / "usage")
+        product_before = digest_tree(product_project)
+        errors.extend(
+            expect(
+                "nested-product-record-usage",
+                run_record_usage(product_project, ROOT, nested_vault, "ASSET-NESTED-001"),
+                True,
+                "Recorded usage for asset ASSET-NESTED-001",
+            )
+        )
+        errors.extend(expect("nested-product-aggregate-usage", run_aggregate_usage(product_project, ROOT, nested_vault), True, "aggregates: 1"))
+        if digest_tree(ROOT / "usage") != core_usage_before:
+            errors.append("nested-product-write: public Core usage tree changed")
+        if digest_tree(product_project) != product_before:
+            errors.append("nested-product-write: product project tree changed")
+        nested_usage_text = "\n".join(path.read_text(encoding="utf-8") for path in (nested_vault / "usage").rglob("*") if path.is_file())
+        if "ASSET-NESTED-001" not in nested_usage_text:
+            errors.append("nested-product-write: selected Vault usage evidence missing")
+        if "nested context write path smoke test" not in nested_usage_text:
+            errors.append("nested-product-write: selected Vault raw evidence note missing")
+
+        errors.extend(expect("nested-missing-config", run_config_status(base / "absent-config.yaml", product_project), False, "foundry locator: missing"))
+        errors.extend(
+            expect(
+                "nested-missing-vault-write",
+                run_record_usage(product_project, ROOT, base / "absent-vault", "ASSET-NESTED-FAIL"),
+                False,
+                "Core/Vault validation failed",
+            )
+        )
 
     if errors:
         print("Split-root fixture tests failed:")

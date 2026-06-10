@@ -30,6 +30,8 @@ Action = Literal["copy", "upsert-managed-block"]
 
 
 def copytree_contents(src: Path, dest: Path, apply: bool) -> list[tuple[Action, Path, Path]]:
+    if not src.exists():
+        raise SystemExit(f"Adapter source missing: {src}")
     copied: list[tuple[Action, Path, Path]] = []
     for path in sorted(src.rglob("*")):
         if path.is_dir():
@@ -76,6 +78,8 @@ def ensure_managed_dir(dest: Path, apply: bool, adopt: bool) -> None:
 
 
 def copy_skill_dirs(src: Path, dest: Path, apply: bool, adopt: bool) -> list[tuple[Action, Path, Path]]:
+    if not src.exists():
+        raise SystemExit(f"Adapter source missing: {src}")
     copied: list[tuple[Action, Path, Path]] = []
     for skill_dir in sorted(path for path in src.iterdir() if path.is_dir()):
         target_dir = dest / skill_dir.name
@@ -103,8 +107,8 @@ def managed_block(import_path: Path) -> str:
     )
 
 
-def upsert_managed_block(path: Path, block: str, apply: bool, backup: bool) -> list[tuple[Action, Path, Path]]:
-    copied = [("upsert-managed-block", ROOT / "adapters" / "claude-code" / "CLAUDE.md", path)]
+def upsert_managed_block(source: Path, path: Path, block: str, apply: bool, backup: bool) -> list[tuple[Action, Path, Path]]:
+    copied = [("upsert-managed-block", source, path)]
     if not apply:
         return copied
 
@@ -124,21 +128,23 @@ def upsert_managed_block(path: Path, block: str, apply: bool, backup: bool) -> l
     return copied
 
 
-def sync_codex(dest: Path, apply: bool, adopt: bool) -> list[tuple[Action, Path, Path]]:
-    src = ROOT / "adapters" / "codex" / "skills"
+def sync_codex(adapter_root: Path, dest: Path, apply: bool, adopt: bool) -> list[tuple[Action, Path, Path]]:
+    src = adapter_root / "codex" / "skills"
     return copy_skill_dirs(src, dest, apply, adopt)
 
 
-def sync_hermes(dest: Path, apply: bool, adopt: bool) -> list[tuple[Action, Path, Path]]:
-    src = ROOT / "adapters" / "hermes" / "skills"
+def sync_hermes(adapter_root: Path, dest: Path, apply: bool, adopt: bool) -> list[tuple[Action, Path, Path]]:
+    src = adapter_root / "hermes" / "skills"
     return copy_skill_dirs(src, dest, apply, adopt)
 
 
-def sync_claude(dest: Path, apply: bool, backup: bool) -> list[tuple[Action, Path, Path]]:
+def sync_claude(adapter_root: Path, dest: Path, apply: bool, backup: bool) -> list[tuple[Action, Path, Path]]:
     copied: list[tuple[Action, Path, Path]] = []
-    src_root = ROOT / "adapters" / "claude-code"
+    src_root = adapter_root / "claude-code"
 
     claude_md = src_root / "CLAUDE.md"
+    if not claude_md.exists():
+        raise SystemExit(f"Adapter source missing: {claude_md}")
     managed_claude = dest / "agent-foundry" / "CLAUDE.md"
     copied.append(("copy", claude_md, managed_claude))
     if apply:
@@ -146,7 +152,7 @@ def sync_claude(dest: Path, apply: bool, backup: bool) -> list[tuple[Action, Pat
         shutil.copy2(claude_md, managed_claude)
 
     user_claude = dest / "CLAUDE.md"
-    copied.extend(upsert_managed_block(user_claude, managed_block(managed_claude), apply, backup))
+    copied.extend(upsert_managed_block(claude_md, user_claude, managed_block(managed_claude), apply, backup))
 
     commands_src = src_root / "commands"
     commands_dest = dest / "commands" / "agent-foundry"
@@ -154,8 +160,10 @@ def sync_claude(dest: Path, apply: bool, backup: bool) -> list[tuple[Action, Pat
     return copied
 
 
-def sync_chatgpt(dest: Path | None, apply: bool) -> list[tuple[Action, Path, Path]]:
-    src = ROOT / "adapters" / "chatgpt"
+def sync_chatgpt(adapter_root: Path, dest: Path | None, apply: bool) -> list[tuple[Action, Path, Path]]:
+    src = adapter_root / "chatgpt"
+    if not src.exists():
+        raise SystemExit(f"Adapter source missing: {src}")
     if dest is None:
         print("ChatGPT has no default local runtime. Use these files manually:")
         print(f"- {src / 'custom-instructions.md'}")
@@ -177,6 +185,7 @@ def main() -> int:
     parser.add_argument("--adopt", action="store_true", help="Adopt unmanaged skill directories into Agent Foundry management.")
     parser.add_argument("--force", action="store_true", dest="adopt", help=argparse.SUPPRESS)
     parser.add_argument("--no-backup", action="store_true", help="Do not back up CLAUDE.md before editing its managed block.")
+    parser.add_argument("--adapter-root", default="", help="Adapter output root to install from. Defaults to <core>/adapters.")
     args = parser.parse_args()
 
     apply = bool(args.apply)
@@ -187,21 +196,26 @@ def main() -> int:
     if args.dest and len(targets) != 1:
         raise SystemExit("--dest can only be used with a single --target")
 
+    adapter_root = Path(args.adapter_root).expanduser().resolve() if args.adapter_root else ROOT / "adapters"
     all_copied: list[tuple[Action, Path, Path]] = []
     for target in targets:
         dest = Path(args.dest).expanduser() if args.dest else DEFAULT_DESTS.get(target)
         if target == "codex":
-            all_copied.extend(sync_codex(dest, apply, args.adopt))
+            all_copied.extend(sync_codex(adapter_root, dest, apply, args.adopt))
         elif target == "claude-code":
-            all_copied.extend(sync_claude(dest, apply, not args.no_backup))
+            all_copied.extend(sync_claude(adapter_root, dest, apply, not args.no_backup))
         elif target == "hermes":
-            all_copied.extend(sync_hermes(dest, apply, args.adopt))
+            all_copied.extend(sync_hermes(adapter_root, dest, apply, args.adopt))
         elif target == "chatgpt":
-            all_copied.extend(sync_chatgpt(Path(args.dest).expanduser() if args.dest else None, apply))
+            all_copied.extend(sync_chatgpt(adapter_root, Path(args.dest).expanduser() if args.dest else None, apply))
 
     for action, src, dest in all_copied:
         mode = action if apply else f"would {action}"
-        print(f"{mode}: {src.relative_to(ROOT)} -> {dest}")
+        try:
+            src_label = src.relative_to(ROOT)
+        except ValueError:
+            src_label = src
+        print(f"{mode}: {src_label} -> {dest}")
     if not all_copied:
         print("No files copied.")
     return 0

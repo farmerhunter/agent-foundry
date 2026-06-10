@@ -89,7 +89,7 @@ Core and Vault currently live in one repository for maintainability. They are se
 
 ## Core And User Vault Split
 
-The target product direction is a reusable public Core with user-owned Vaults. A user's Vault is private by default unless that user explicitly chooses to publish it. In the current repository, the maintainer's User Vault belongs to the maintainer, Jinghu, and should not remain bundled into a public Core distribution before Agent Foundry claims external-user readiness.
+The target product direction is a reusable public Core with user-owned Vaults. A user's Vault is private by default unless that user explicitly chooses to publish it. In the current repository, the maintainer's User Vault belongs to the `farmerhunter` account and should not remain bundled into a public Core distribution before Agent Foundry claims external-user readiness.
 
 AF-2 documents and validates the boundary before moving files. This is a staging step, not a final architecture. Physical Core/Vault separation should happen during the AF-3 migration work, after blank-vault initialization and configuration boundaries are designed well enough to avoid breaking existing local runtimes.
 
@@ -112,6 +112,10 @@ User Vault contains a user's governed capability records and review evidence:
 - reviewed imports or staged external material that belongs to that user's capability base.
 
 Generated outputs are neither Core nor Vault. They are projections from Core tooling plus Vault records. Runtime copies are installed downstream and are never canonical.
+
+Executable helper scripts expose a remaining boundary gap. AF-3 has an implemented home only for Core platform scripts, so any script that needs to run today must live under Core `scripts/`. That is correct for platform lifecycle tooling such as root validation, Vault initialization, adapter publishing, runtime install, migration planning, consistency checks, and rollback helpers. It is not a complete answer for scripts that belong to a specific capability, practice, or asset, such as multi-agent GitHub Project helpers.
+
+Until capability-owned executable packaging exists, capability-specific helpers may live in Core `scripts/` only as capability-helper candidates. They must avoid personal defaults, avoid treating the User Vault as an executable trust boundary, and remain reviewable as future migration candidates. The follow-up design work is #53: define capability-owned executable helpers, including package location, metadata, permission model, provenance, install/update behavior, and how helpers relate to Vault records without conflicting with freeform practice/asset CRUD.
 
 Current repository mapping:
 
@@ -144,7 +148,213 @@ Staged split decision:
 2. Treat the current split as a documented boundary enforced by policy, checks, and initialization design.
 3. Plan the physical split as AF-3 migration work, not as distant memory-system work.
 4. Design scripts so `core_root` and `vault_root` can point to different repositories or directories.
-5. Do not claim external-user readiness while the maintainer's Vault remains required inside the public Core repository.
+5. Do not claim external-user readiness while any current user's Vault records remain required inside the public Core repository.
+
+## User Vault Extraction Plan
+
+This is the AF-3 decision baseline for extracting the current account's User Vault from the public Core. It is a plan and verification contract, not approval to move records. `farmerhunter` is the current account identity for this migration instance, not a special maintainer-only architecture role.
+
+Default target:
+
+- Core remains the public `farmerhunter/agent-foundry` repository or its renamed public successor.
+- The active User Vault should live under the same machine-local location pattern on every deployment: `~/.agent-foundry/vault/agent-foundry-vault-<account>`.
+- For this account, the selected local target is `~/.agent-foundry/vault/agent-foundry-vault-farmerhunter`.
+- The Vault should receive a reviewed private remote or equivalent sync substrate during AF-4 current-user multi-deployment migration. Its local locator path should stay stable across deployments.
+- The local path should be explicitly configured through `~/.agent-foundry/config.yaml` as `vault_root`; agents must not infer it from a product project checkout.
+- Use the singular directory name `vault` for the active account Vault location. Avoid a generic `vaults` path unless a future multi-vault manager defines what it means.
+
+Migration window:
+
+- The AF-3 migration window starts only when execution changes the local substrate: a private User Vault target is initialized or selected for records, current User Vault records are copied or moved, public copies are deleted, or `vault_root`/runtime config is repointed away from the combined repository.
+- The migration window is not opened by this plan, by read-only inventory, or by public Core cleanup that does not move Vault records.
+- While the window is open, pause normal canonical writes and adapter/runtime publishing unless the operation explicitly uses verified split `core_root` and `vault_root`.
+- The normal window close point is #33 Runtime deployment migration, not #34. It closes only after Core and active User Vault validate separately, selected-Vault adapter publishing succeeds, local runtime refresh/dry-run no longer depends on the old combined root, stale path checks pass, and rollback is visible.
+- #34 is a post-window readiness audit. Failures found in #34 should reopen or fix the migration result instead of extending an ambiguous half-migrated state.
+- AF-4 starts after the local split window closes. It is responsible for private Vault remote setup, all existing deployment migrations, real workflow verification across machines, and the reusable upgrade discipline needed for future data-schema or program-structure major changes. AF-5 new-user onboarding should not become the main priority until AF-4 proves the current user can actually operate and upgrade the split system.
+
+Move to the active User Vault:
+
+- `practices/`
+- `assets/`
+- `indexes/`
+- `usage/usage-aggregate.yaml`
+- reviewed import staging if present under `imports/`
+- vault-local workspace docs such as `Agent Foundry.md` and Obsidian-oriented notes when they are not required Core product docs
+
+Keep local-only and ignored:
+
+- `usage/local/`
+- `runtime/local/`
+- `sync/local/`, `sync/imported/`, `sync/pending/`, `sync/applied/`, `sync/conflicts/`, `sync/snapshots/`
+- secrets, tokens, raw exports, transcripts, machine paths, adoption state, and unmanaged runtime copies
+
+Keep in public Core:
+
+- reusable workflows, schemas, scripts, templates, runtime templates, adapter profiles, adapter quality rules, blank Vault initializer, selected-Vault validation, selected-Vault adapter publishing, and product docs
+- non-personal fixtures or examples only when clearly labeled and not required as a default user Vault
+
+Backup and restore gates before movement:
+
+1. Run `python3 scripts/plan_vault_extraction.py` and resolve missing required paths.
+2. Create a local archive or clone of the current combined checkout before moving records.
+3. Verify the backup can be listed or restored before changing tracked files.
+4. Initialize or select the active User Vault target, normally `~/.agent-foundry/vault/agent-foundry-vault-<account>`.
+5. Copy records into the private target and run `python3 scripts/check_foundry_roots.py --core-root <core> --vault-root <user-vault>`.
+6. Run `python3 scripts/publish_adapters.py --core-root <core> --vault-root <user-vault> --output-root <temp-output> --apply`.
+7. Update `~/.agent-foundry/config.yaml` only after Core and Vault validate separately.
+8. Resume harvest/publish/refresh only after #33 verifies split Core, active User Vault, generated adapters, runtime install or dry-run, stale-path checks, and rollback visibility.
+
+Stop conditions:
+
+- Any required Vault path is missing from the backup or private target.
+- Any public Core file still requires a current user's active practices/assets as default content.
+- Any generated adapter output includes raw evidence, local private paths, or current User Vault records when run against a blank or custom Vault.
+- Runtime install would overwrite unmanaged files or point at the old combined root without an explicit migration step.
+- A private remote must be created, files must be deleted, history must be rewritten, or records must be moved out of the current repo. These require explicit user approval at execution time.
+
+## Current-User Deployment And Upgrade Migration
+
+AF-4 is not new-user onboarding. It is the operational migration and upgrade-readiness stage for the current only real user, whose Agent Foundry setup already exists on multiple machines and runtime surfaces.
+
+AF-4 should establish the current user's private Vault sync substrate before broad onboarding work:
+
+1. Initialize the selected User Vault as its own git repository only after a Vault-specific `.gitignore` and tracked/untracked policy are reviewed.
+2. Push canonical Vault records to a private remote, normally named for the account and Vault, such as `agent-foundry-vault-farmerhunter`.
+3. Verify the remote is private and does not contain raw evidence, secrets, machine-local manifests, local sync state, unmanaged runtime files, or product project material.
+4. On every existing deployment, clone or pull public Core and private Vault separately.
+5. Keep the local Vault path stable: `~/.agent-foundry/vault/agent-foundry-vault-farmerhunter`.
+6. Write or verify `~/.agent-foundry/config.yaml` on each machine so agents can locate both `core_root` and `vault_root` from product project work, Vault work, or Core maintenance work.
+7. Run validation, selected-Vault adapter publishing, runtime refresh, stale-reference checks, and at least one real harvest/review/publish workflow across deployments.
+8. Generalize the migration checks into an upgrade playbook that future schema/layout/program changes can reuse.
+
+AF-4 should also treat the Core/Vault split as the first real production migration rehearsal. Later changes may introduce new Vault schema versions, Core layout changes, adapter packaging changes, capability-pack metadata, or memory-system record types. Those upgrades should not rely on ad hoc human memory. They should have the same structure: version markers, inventory, compatibility check, backup, dry-run, gated apply, validation, runtime refresh, real workflow smoke test, cross-machine propagation, and close verification.
+
+AF-4 exit means the current user can actually operate and upgrade the split system across deployed machines. It does not require polished blank-Vault onboarding, bootstrap capability packs, optional pack UX, or memory-system records. Those belong to later stages.
+
+Future major-upgrade invariants:
+
+- Core, Vault, generated adapters, runtime installs, and local-private state must be distinguishable before upgrade.
+- Version/layout markers must be explicit enough for tooling to decide whether an operation is safe, blocked, or only diagnostic.
+- Upgrade scripts should fail closed when Core and Vault versions are incompatible or unknown.
+- Backups and rollback boundaries must be visible before destructive or irreversible steps.
+- A partially migrated deployment must be detectable.
+- Real workflow verification is required before a major upgrade is considered complete.
+
+## Private User Vault Remote Policy
+
+AF-4 should make the current User Vault syncable before broad onboarding work starts. The default remote target for the current account is:
+
+```text
+owner: farmerhunter
+repository: agent-foundry-vault-farmerhunter
+visibility: private
+local path: ~/.agent-foundry/vault/agent-foundry-vault-farmerhunter
+```
+
+Remote creation and first push are privacy-boundary operations. They require explicit user approval at execution time. Planning, inventory, and dry-run checks may happen before approval; remote creation, `git init` inside the Vault, commits, pushes, and remote visibility changes may not.
+
+The first Vault repository should use a clean privacy-boundary history by default. Preserving the old public Core file history is lower priority than proving the private Vault contains only approved Vault records and no raw/local evidence. Historical context remains available in the public Core repository history and AF-3 migration comments; the private Vault should not need to carry that full history to be operational.
+
+Tracked in the private Vault:
+
+- `.agent-foundry-vault.yaml`
+- `Agent Foundry.md` and other vault-local user docs approved for sync
+- `practices/`
+- `assets/`
+- `indexes/`
+- `imports/` instructions and reviewed import records that are safe to sync
+- `usage/usage-aggregate.yaml`
+- sanitized shared usage/adoption records only when explicitly approved for sync
+- Vault-specific documentation needed to operate the current user's capability base
+
+Ignored or excluded from the private Vault remote:
+
+- raw usage evidence under `usage/local/`
+- secrets, tokens, credentials, cookies, API keys, and environment files
+- machine-local runtime manifests or install state
+- sync transport state, snapshots, conflicts, pending/applied queues, and imported archives
+- unmanaged runtime copies from Codex, Claude Code, Hermes, or ChatGPT
+- product project source trees, build outputs, logs, caches, and temporary files
+- raw chat exports, transcripts, screenshots, or sensitive evidence unless a later reviewed policy defines a sanitized form
+
+Proposed Vault `.gitignore` baseline:
+
+```gitignore
+usage/local/
+runtime/
+sync/
+.env
+.env.*
+*.secret
+*.key
+*.pem
+*.p12
+*.log
+.DS_Store
+__pycache__/
+*.pyc
+```
+
+The ignore file is a starting point, not approval to push. Before first push, run an explicit file inventory and review every tracked path. If any tracked file contains a machine path, secret, raw evidence, unmanaged runtime copy, or product project material, stop and revise the policy.
+
+Cross-machine expectations:
+
+- Every deployment should use the same local Vault path pattern unless explicitly overridden.
+- `~/.agent-foundry/config.yaml` is machine-local and points to the local Core and Vault paths; it is not committed to the Vault.
+- The private Vault remote is the canonical sync substrate for the current user's Vault records.
+- The public Core remote remains the source for reusable tooling and docs.
+- A deployment is not considered migrated until it can validate Core plus Vault, publish adapters from the selected Vault, refresh managed runtimes or record an intentional manual/deferred runtime, and run at least one real workflow after pulling the Vault.
+
+## Major Upgrade Migration Discipline
+
+AF-4 should turn the split migration into the standard pattern for future major upgrades. A major upgrade is any change that may make existing deployments or Vault records incompatible without a planned transition. Examples include:
+
+- Vault schema version changes;
+- Core marker or directory layout changes;
+- generated adapter packaging changes;
+- runtime install ownership model changes;
+- capability-pack metadata introduction;
+- memory-system record type introduction;
+- migration from local-only state to remote-backed state;
+- any change that can make one deployment write records another deployment cannot read safely.
+
+Required upgrade states:
+
+| State | Meaning |
+| --- | --- |
+| `compatible` | Current Core, Vault, generated outputs, and runtime state can operate safely. |
+| `dry_run_only` | The upgrade can be planned but must not apply yet. |
+| `blocked` | A required dependency, approval, backup, or compatibility condition is missing. |
+| `unknown` | Tooling cannot determine the current version/layout safely. |
+| `partial` | Some deployments or layers have migrated and others have not. |
+| `rollback_required` | Validation failed after apply and the documented rollback path should be used. |
+| `complete` | All in-scope deployments pass validation and real workflow smoke tests. |
+
+Standard upgrade issue chain:
+
+1. Decision issue: define the target version/layout, compatibility rule, stop conditions, and owner role.
+2. Inventory issue: record current Core, Vault, generated, runtime, local-private, and deployment states.
+3. Implementation issue: make tooling support both old and new states where practical.
+4. Dry-run issue: prove migration planning without writes.
+5. Apply issue: perform gated writes only after explicit approval.
+6. Review issue: verify backups, rollback visibility, version markers, stale references, and real workflows.
+7. Close issue: record cross-machine completion and residual risks.
+
+Standard upgrade checklist:
+
+- identify authoritative Core and Vault layout/schema markers;
+- classify generated outputs and runtime copies as downstream, not canonical;
+- inventory every in-scope deployment before applying;
+- create or verify backups before destructive or irreversible changes;
+- run dry-run planning before apply;
+- fail closed on unknown or incompatible marker pairs;
+- apply only after explicit approval when privacy, data movement, deletion, or runtime writes are involved;
+- validate Core plus Vault separately after apply;
+- regenerate or refresh adapters from the selected Vault;
+- run at least one real workflow smoke test;
+- verify another deployment can pull/sync the result;
+- record residual risks and intentionally deferred deployments;
+- keep AF-5 onboarding and AF-7 memory implementation out of the upgrade unless explicitly scoped.
 
 Future split options:
 
@@ -182,14 +392,14 @@ Design goal:
 public Core + empty User Vault -> valid starting point for reviewed practices, assets, usage evidence, and adapter generation
 ```
 
-`init-vault` should mean "create a valid, empty canonical destination" rather than "copy the maintainer's current vault." It should initialize structure and metadata only. It should not activate practices, install runtime adapters, import external skills, deploy capability packs, or write memory-system records.
+`init-vault` should mean "create a valid, empty canonical destination" rather than "copy the current account's active Vault." It should initialize structure and metadata only. It should not activate practices, install runtime adapters, import external skills, deploy capability packs, or write memory-system records.
 
 Blank Vault contents:
 
 | Vault path or record | Blank state | Source of shape |
 | --- | --- | --- |
-| `practices/` | Empty practice tree, with no active/candidate/proposed practice records copied from the maintainer Vault. | Core schemas and templates. |
-| `assets/` | Empty asset tree, with no active/candidate/proposed asset records copied from the maintainer Vault. | Core schemas and templates. |
+| `practices/` | Empty practice tree, with no active/candidate/proposed practice records copied from a current-user Vault. | Core schemas and templates. |
+| `assets/` | Empty asset tree, with no active/candidate/proposed asset records copied from a current-user Vault. | Core schemas and templates. |
 | `indexes/practice_index.yaml` | `schema_version`, `updated`, Core-provided domain vocabulary, and `practices: []`. | Core index template or generated initializer. |
 | `indexes/asset_index.yaml` | `schema_version`, `updated`, Core-provided asset type vocabulary, and `assets: []`. | Core index template or generated initializer. |
 | `usage/usage-aggregate.yaml` | `schema_version`, `updated`, and `aggregates: []`. | Core usage aggregate template or generated initializer. |
@@ -216,31 +426,31 @@ Predefined packs and discovered packs do not conflict with freeform Vault CRUD b
 Validation expectations for a blank Vault:
 
 1. It validates as a Vault destination before canonical writes.
-2. It contains no maintainer-specific practices, assets, usage aggregate rows, local paths, runtime adoption decisions, raw evidence, or future memory-system directories.
+2. It contains no current-user-specific practices, assets, usage aggregate rows, local paths, runtime adoption decisions, raw evidence, or future memory-system directories.
 3. Empty indexes and empty aggregates are accepted as valid starting state.
 4. Practice and asset creation workflows can add the first candidate without requiring preexisting personal records.
 5. Adapter publishing can report "nothing to publish" or produce an empty/minimal adapter output without treating that as a failure.
-6. Runtime install must not copy the maintainer's generated adapters into a new user's runtime.
+6. Runtime install must not copy the current account's generated adapters into a new user's runtime.
 7. Consistency checks distinguish "empty but valid Vault" from "missing or corrupt Vault."
 8. Pack deployment can add canonical data after initialization without changing the definition of blank Vault.
 
 Implemented AF-3 baseline:
 
 - `scripts/init_vault.py` creates empty `practices/`, `assets/`, `imports/inbox`, `usage/local`, empty practice and asset indexes, and an empty shared usage aggregate;
-- blank Vault initialization does not copy maintainer practices/assets;
+- blank Vault initialization does not copy current-user practices/assets;
 - blank Vault initialization does not trigger runtime install;
 - `scripts/publish_adapters.py` validates selected Core/Vault roots before publishing;
 - blank Vault adapter publishing reports `nothing to publish`;
-- maintainer-like Vault adapter publishing can produce deterministic adapter outputs in a selected output root.
+- current-user-like Vault adapter publishing can produce deterministic adapter outputs in a selected output root.
 
 Implementation implications still remaining for AF-3:
 
 - scripts that currently assume repository-relative `practices/`, `assets/`, `indexes/`, and `usage/` must accept a separate `vault_root`;
 - checks should validate Core schemas/workflows against an arbitrary Vault;
-- generated adapter outputs should be derived from the selected Vault, not from this repository's maintainer Vault by default;
+- generated adapter outputs should be derived from the selected Vault, not from a bundled current-user Vault by default;
 - blank-vault fixtures or templates should be reproducible from Core and should not require copying personal records;
 - later pack deployment should be able to populate a blank Vault with the mandatory bootstrap pack before `refresh`;
-- migration must test both the maintainer Vault and a blank/new-user Vault.
+- migration must test both the active User Vault and a blank/new-user Vault.
 
 Rejected as #7 scope:
 
@@ -252,11 +462,11 @@ Rejected as #7 scope:
 
 ## External-User Setup Boundary
 
-External-user setup is not a current complete quickstart. AF-2 defines the boundary and prerequisites; AF-3 must physically split public Core from the maintainer's private Vault, and AF-4 must define onboarding modes before Agent Foundry can claim a tested external-user start path.
+External-user setup is not a current complete quickstart. AF-2 defines the boundary and prerequisites; AF-3 must physically split public Core from the active private User Vault, AF-4 must prove the current user's existing deployments can operate the split system, and AF-5 must define onboarding modes before Agent Foundry can claim a tested external-user start path.
 
 Current capability:
 
-- single-repo operation where Core and the maintainer Vault share one repository root;
+- single-repo operation where Core and the active User Vault share one repository root;
 - machine-local runtime manifest setup for the current user;
 - adapter install into enabled local Codex, Claude Code, and Hermes runtimes;
 - manual ChatGPT import from generated adapter files;
@@ -264,7 +474,7 @@ Current capability:
 - blank Vault initialization design, but no implemented `init-vault` command;
 - locator config that currently writes `core_root`, `vault_root`, and `repo_root` to the same path.
 
-Target setup narrative after AF-3/AF-4:
+Target setup narrative after AF-3 through AF-5:
 
 1. The user obtains the public Core.
 2. The user creates or selects a User Vault location.
@@ -280,24 +490,24 @@ Pre-split boundary for #9:
 
 | Setup concern | Current AF-2 answer | Blocked by |
 | --- | --- | --- |
-| What to clone | Current repo contains both Core and maintainer Vault; this is a maintainer setup, not public Core distribution. | AF-3 public Core split. |
-| Where Vault lives | Designed as user-owned and private by default; current repo still contains maintainer Vault. | AF-3 maintainer Vault extraction. |
+| What to clone | Current repo contains both Core and the current account's User Vault; this is a combined staging setup, not public Core distribution. | AF-3 public Core split. |
+| Where Vault lives | Designed as user-owned and private by default; current repo still contains the active User Vault. | AF-3 User Vault extraction. |
 | How blank Vault starts | Defined as empty indexes, empty aggregate, no personal practices/assets. | AF-3 `init-vault` implementation and validation. |
 | How Core/Vault are located | `~/.agent-foundry/config.yaml` exists, but current scripts assume one root. | AF-3 separate root support. |
-| How adapters are generated | Current adapters are generated from the maintainer Vault. | AF-3 arbitrary-vault adapter generation. |
-| How runtimes are installed | Current machine-local manifest installs into selected local runtimes. | AF-3 migration checks for split Core/Vault; AF-4 first-run UX. |
-| How bootstrap capability appears | Blank Vault is created first, then mandatory bootstrap pack is deployed as canonical Vault data. | AF-4 pack deployment and first-run verification. |
-| How optional capability content appears | Optional capability packs and runtime imports are not blank defaults; they are deployed or imported after the Vault exists. | AF-4 pack selection and import workflow. |
-| How existing runtime assets are imported | Existing runtime assets are evidence/candidates first. | AF-4 import workflow. |
-| What remains private | Raw evidence, local manifests, adoption state, secrets, maintainer Vault, personal records. | Current policy plus AF-3 migration. |
+| How adapters are generated | Current adapters are generated from the active User Vault. | AF-3 arbitrary-vault adapter generation. |
+| How runtimes are installed | Current machine-local manifest installs into selected local runtimes. | AF-3 migration checks for split Core/Vault; AF-4 proves current deployments; AF-5 first-run UX. |
+| How bootstrap capability appears | Blank Vault is created first, then mandatory bootstrap pack is deployed as canonical Vault data. | AF-5 pack deployment and first-run verification. |
+| How optional capability content appears | Optional capability packs and runtime imports are not blank defaults; they are deployed or imported after the Vault exists. | AF-5 pack selection and import workflow. |
+| How existing runtime assets are imported | Existing runtime assets are evidence/candidates first. | AF-5 import workflow. |
+| What remains private | Raw evidence, local manifests, adoption state, secrets, User Vault, personal records. | Current policy plus AF-3 migration. |
 
 Docs implications:
 
 - `docs/deployment.md` currently documents maintainer/single-repo deployment and local runtime install.
 - `docs/usage.md` currently documents day-to-day use after Agent Foundry is already installed.
-- Neither file should be read as a tested external-user quickstart until AF-3 and AF-4 are complete.
+- Neither file should be read as a tested external-user quickstart until AF-3, AF-4, and AF-5 are complete.
 - AF-3 should rewrite deployment docs around public Core plus selected Vault.
-- AF-4 should add first-run onboarding sequence: blank Vault creation, mandatory bootstrap pack deployment, optional capability pack selection, runtime-asset import when selected, and unified refresh.
+- AF-5 should add first-run onboarding sequence: blank Vault creation, mandatory bootstrap pack deployment, optional capability pack selection, runtime-asset import when selected, and unified refresh.
 
 Do not promise future memory-system behavior in external-user setup. Memory-system records, `knowledge/`, `research_memos/`, project memory, and MCP memory access remain proposed/future until reviewed architecture implements them.
 
@@ -416,11 +626,12 @@ Use these categories:
 
 | Category | Current examples | Git behavior | Source of truth |
 | --- | --- | --- | --- |
-| Canonical source | `practices/`, `assets/`, `workflows/`, `schemas/`, `templates/`, source scripts, `adapters/adapter_profiles.yaml`, adapter quality rules | Tracked | Human-reviewed canonical records and source-maintained tooling |
+| Core source | `workflows/`, `schemas/`, `templates/`, source scripts, `adapters/adapter_profiles.yaml`, adapter quality rules, product docs | Tracked in public Core | Source-maintained tooling and operating rules |
+| User Vault canonical records | `practices/`, `assets/`, `indexes/`, reviewed imports, `usage/usage-aggregate.yaml` | Tracked in the selected User Vault, not public Core by default | Human-reviewed canonical records and sanitized Vault metadata |
 | Tracked generated distribution output | `adapters/codex/`, `adapters/hermes/`, `adapters/claude-code/`, `adapters/chatgpt/` | Tracked when needed for runtime install, manual import, review, or distribution | Canonical practices/assets plus adapter profiles |
 | Runtime copy | Installed files under `~/.codex`, `~/.claude`, `~/.hermes`, and manual ChatGPT imports | Not tracked here | Regenerated or installed from `adapters/` |
 | Local private/generated operational state | `runtime/local/`, `usage/local/`, `usage/adoption-log.yaml`, `sync/local/`, `sync/imported/`, `sync/pending/`, `sync/applied/`, `sync/conflicts/`, `sync/snapshots/` | Gitignored by default | Local runtime, sync, or evidence workflows |
-| Shared aggregate or derived metadata | `usage/usage-aggregate.yaml`; future derived indexes if approved | Tracked only when sanitized and reviewable | Raw local evidence or canonical records, depending on artifact |
+| Shared aggregate or derived metadata | Future Core-owned derived indexes if approved | Tracked only when sanitized, reviewable, and Core-owned | Derived metadata, not raw local evidence |
 
 Rules:
 
@@ -452,7 +663,7 @@ Legacy `usage/asset-usage-log.yaml` remains migration input. New recording shoul
 
 ## Local And Private Data Policy
 
-Agent Foundry is local-first, but local-first does not mean every local artifact belongs in git. The repository may contain portable Core files, canonical User Vault records, tracked generated adapter outputs, and sanitized shared aggregates. Raw evidence, machine state, secrets, personal exports, and sensitive material stay local unless a reviewed policy defines a sanitized shared form.
+Agent Foundry is local-first, but local-first does not mean every local artifact belongs in git. The public Core repository contains portable Core files and tracked generated adapter outputs. Canonical User Vault records and sanitized shared aggregates belong to the selected User Vault. Raw evidence, machine state, secrets, personal exports, and sensitive material stay local unless a reviewed policy defines a sanitized shared form.
 
 Default classifications:
 
@@ -460,9 +671,9 @@ Default classifications:
 | --- | --- | --- |
 | Machine-local runtime state | `runtime/local/`, `~/.agent-foundry/config.yaml`, enabled runtime paths, adoption decisions | Ignored or outside the repo |
 | Raw usage evidence | `usage/local/usage-log.yaml` | Ignored |
-| Sanitized usage aggregate | `usage/usage-aggregate.yaml` | Tracked |
+| Sanitized usage aggregate | `usage/usage-aggregate.yaml` in the selected User Vault | Tracked in the Vault, not public Core by default |
 | Offline sync operational state | `sync/local/`, `sync/imported/`, `sync/pending/`, `sync/applied/`, `sync/conflicts/`, `sync/snapshots/` | Ignored |
-| External skill staging instructions | `imports/*/INSTRUCTIONS.md` | Tracked |
+| External skill staging instructions | `imports/*/INSTRUCTIONS.md` in the selected User Vault or future Core templates | Tracked only in the owning layer |
 | Raw external imports or exports | downloaded skills, raw chat exports, transcripts, source dumps, sensitive review packets | Not committed by default; stage only after explicit review |
 | Runtime adapter outputs | `adapters/codex/`, `adapters/claude-code/`, `adapters/hermes/`, `adapters/chatgpt/` | Tracked distribution/manual-import outputs |
 | User workspace affordances | `Agent Foundry.md`, Obsidian-oriented metadata, local agent settings | Treat as User Vault or maintainer-local unless promoted into Core by review |
@@ -481,7 +692,7 @@ Current ignored local/private paths include `runtime/local/`, `usage/local/`, `u
 
 ## Example Versus User Content Separation
 
-Agent Foundry currently stores reusable Core machinery and the maintainer's User Vault in one repository. That is acceptable for AF-1, but external users must not be asked to inherit the maintainer's personal vault as if it were product Core.
+Agent Foundry now separates reusable Core machinery from the selected User Vault. External users must not be asked to inherit the maintainer's personal vault as if it were product Core.
 
 Use these terms:
 
@@ -494,12 +705,12 @@ Use these terms:
 
 Current repository classification:
 
-| Path or content | AF-1 classification | External-user implication |
+| Path or content | AF-3 classification | External-user implication |
 | --- | --- | --- |
-| `workflows/`, `schemas/`, `scripts/`, `templates/`, `runtime/templates/` | Core | Candidate for reusable distribution after AF-2 boundary work |
-| `practices/`, `assets/`, `indexes/`, `usage/usage-aggregate.yaml` | User Vault in this repository | Must not be copied wholesale into a blank external-user vault by default |
+| `workflows/`, `schemas/`, `scripts/`, `templates/`, `runtime/templates/` | Core | Reusable distribution substrate |
+| `practices/`, `assets/`, `indexes/`, `usage/usage-aggregate.yaml` | User Vault outside public Core by default | Must not be copied wholesale into a blank external-user vault by default |
 | `adapters/` | Generated distribution outputs plus source-maintained adapter profiles/quality material | Regenerate from the target user's vault; tracked here for current runtime install and manual imports |
-| `docs/` | Mixed Core documentation, User Vault documentation, and proposed design evidence | External-user setup guidance must distinguish product docs from maintainer planning evidence |
+| `docs/` | Core documentation plus proposed design evidence | External-user setup guidance must distinguish current capability from future plans |
 | `docs/memory-system-handoff-dump.md` | Proposed Design Evidence | Do not treat as implemented memory-system architecture |
 | `Agent Foundry.md` | User Vault navigation/hub for the maintainer's Obsidian-style workspace | Not a required Core file for external users |
 | `.claude/settings.json` | Maintainer/runtime-specific workspace setting | Should not become product setup guidance without AF-2 review |
@@ -513,7 +724,7 @@ Example conventions:
 5. Adapter outputs for an external user should be generated from that user's approved vault records, not copied from this repository's personal vault unless explicitly deployed through a reviewed capability pack.
 6. Proposed memory-system material must stay in docs/imports/evidence form until reviewed architecture creates implemented memory directories, schemas, and workflows.
 
-AF-2 should use this policy to design a blank vault initialization path, a Core/Vault split, and external-user setup boundaries. AF-1 does not move files yet; it marks the boundary so future movement is deliberate.
+AF-3 implements the Core/Vault split and blank Vault initialization path. AF-4 proves the current user's multi-deployment operation on top of that split. AF-5 should build polished onboarding and capability pack deployment on top of the proven boundary.
 
 ## Practice Types
 

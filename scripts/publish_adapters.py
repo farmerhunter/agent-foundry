@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 from datetime import date
 from pathlib import Path
 
@@ -55,6 +56,77 @@ def inline_list(value: str) -> list[str]:
     if not (value.startswith("[") and value.endswith("]")):
         return []
     return [item.strip().strip('"').strip("'") for item in value[1:-1].split(",") if item.strip()]
+
+
+def yaml_scalar(text: str, key: str) -> str:
+    for line in text.splitlines():
+        if line.startswith(f"{key}:"):
+            return line.split(":", 1)[1].strip().strip('"').strip("'")
+    return ""
+
+
+def yaml_list(text: str, key: str) -> list[str]:
+    lines = text.splitlines()
+    values: list[str] = []
+    in_list = False
+    for line in lines:
+        if line.startswith(f"{key}:"):
+            rest = line.split(":", 1)[1].strip()
+            if rest.startswith("[") and rest.endswith("]"):
+                return inline_list(rest)
+            in_list = True
+            continue
+        if in_list and line and not line.startswith(" "):
+            break
+        if in_list and line.strip().startswith("- "):
+            values.append(line.strip()[2:].strip().strip('"').strip("'"))
+    return values
+
+
+def slug_from_asset(entry: dict[str, str]) -> str:
+    path = Path(entry.get("path", ""))
+    stem = path.name.removesuffix(".asset.yaml").removesuffix(".yaml")
+    asset_id = entry.get("id", "")
+    prefix = f"{asset_id}-"
+    if stem.startswith(prefix):
+        stem = stem[len(prefix) :]
+    slug = re.sub(r"[^a-z0-9]+", "-", stem.lower()).strip("-")
+    return slug or re.sub(r"[^a-z0-9]+", "-", entry.get("title", asset_id).lower()).strip("-")
+
+
+def skill_asset_records(vault_root: Path, active_assets: list[dict[str, str]]) -> list[dict[str, object]]:
+    records: list[dict[str, object]] = []
+    for entry in active_assets:
+        rel = entry.get("path", "")
+        if not rel:
+            continue
+        path = vault_root / rel
+        if not path.exists():
+            continue
+        text = read(path)
+        if yaml_scalar(text, "asset_type") != "skill":
+            continue
+        record = dict(entry)
+        record.update(
+            {
+                "slug": slug_from_asset(entry),
+                "source_path": rel,
+                "asset_type": "skill",
+                "title": yaml_scalar(text, "title") or entry.get("title", entry["id"]),
+                "purpose": yaml_scalar(text, "purpose"),
+                "responsibility": yaml_scalar(text, "responsibility"),
+                "non_responsibility": yaml_scalar(text, "non_responsibility"),
+                "usage_triggers": yaml_list(text, "usage_triggers"),
+                "inputs": yaml_list(text, "inputs"),
+                "process": yaml_list(text, "process"),
+                "outputs": yaml_list(text, "outputs"),
+                "success_criteria": yaml_list(text, "success_criteria"),
+                "canonical_practices": yaml_list(text, "canonical_practices"),
+                "published_to": yaml_list(text, "published_to") or inline_list(entry.get("published_to", "")),
+            }
+        )
+        records.append(record)
+    return records
 
 
 def parse_profiles(core_root: Path) -> dict[str, dict[str, object]]:
@@ -204,6 +276,90 @@ def write_adapter_outputs(
     return written
 
 
+def bullet_lines(values: object) -> list[str]:
+    items = [str(value) for value in values] if isinstance(values, list) else []
+    return [f"- {item}" for item in items] or ["- Not specified in canonical asset record."]
+
+
+def generated_skill_body(record: dict[str, object]) -> str:
+    slug = str(record["slug"])
+    title = str(record.get("title") or record["id"])
+    purpose = str(record.get("purpose") or "Generated Agent Foundry runtime skill.")
+    triggers = record.get("usage_triggers", [])
+    trigger_summary = ", ".join(str(item) for item in triggers[:4]) if isinstance(triggers, list) else ""
+    description = purpose
+    if trigger_summary:
+        description = f"{purpose} Triggers: {trigger_summary}."
+    if len(description) > 260:
+        description = description[:257].rstrip() + "..."
+    quoted_description = '"' + description.replace("\\", "\\\\").replace('"', '\\"') + '"'
+    lines = [
+        "---",
+        f"name: {slug}",
+        f"description: {quoted_description}",
+        "---",
+        "",
+        f"# {title}",
+        "",
+        "Generated transitional runtime skill from the selected Agent Foundry Vault.",
+        f"Canonical source: `{record.get('source_path', '')}`.",
+        f"Asset ID: `{record['id']}`.",
+        "",
+        "## Trigger Guidance",
+        *bullet_lines(triggers),
+        "",
+        "## Responsibility",
+        str(record.get("responsibility") or "Not specified in canonical asset record."),
+        "",
+        "## Non-Responsibility",
+        str(record.get("non_responsibility") or "Not specified in canonical asset record."),
+        "",
+        "## Required Or Optional Inputs",
+        *bullet_lines(record.get("inputs", [])),
+        "",
+        "## Process",
+        *bullet_lines(record.get("process", [])),
+        "",
+        "## Outputs",
+        *bullet_lines(record.get("outputs", [])),
+        "",
+        "## Success Criteria",
+        *bullet_lines(record.get("success_criteria", [])),
+        "",
+        "## Canonical Practices",
+        *bullet_lines(record.get("canonical_practices", [])),
+        "",
+        "## Safety Boundaries",
+        "- Treat the Vault YAML asset record as the source of truth.",
+        "- Do not perform high-risk actions without explicit approval.",
+        "- Do not mutate runtime, config, private remote, or canonical practice state unless the user explicitly approves that action.",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def write_generated_skill_outputs(
+    output_root: Path,
+    skill_assets: list[dict[str, object]],
+    apply: bool,
+) -> list[Path]:
+    written: list[Path] = []
+    for record in skill_assets:
+        published_to = record.get("published_to", [])
+        if not isinstance(published_to, list):
+            continue
+        for adapter_id in ("codex", "hermes"):
+            if adapter_id not in published_to:
+                continue
+            target = output_root / adapter_id / "skills" / str(record["slug"]) / "SKILL.md"
+            written.append(target)
+            print(f"{'write' if apply else 'would write'}: {target}")
+            if apply:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(generated_skill_body(record), encoding="utf-8")
+    return written
+
+
 def publish(core_root: Path, vault_root: Path, output_root: Path, apply: bool) -> int:
     errors = validate(core_root, vault_root)
     if errors:
@@ -228,6 +384,7 @@ def publish(core_root: Path, vault_root: Path, output_root: Path, apply: bool) -
         return 1
 
     written = write_adapter_outputs(core_root, output_root, active_practices, active_assets, apply)
+    written.extend(write_generated_skill_outputs(output_root, skill_asset_records(vault_root, active_assets), apply))
     write_manifest(output_root, manifest_text(active_practices, active_assets), apply)
     print(f"Adapter publish {'wrote' if apply else 'planned'} {len(written)} files.")
     print(f"Active practices selected: {len(active_practices)}")

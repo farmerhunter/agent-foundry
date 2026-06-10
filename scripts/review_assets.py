@@ -7,9 +7,25 @@ import argparse
 import datetime as dt
 from pathlib import Path
 
+from check_foundry_roots import validate
+from foundry_config import CONFIG_PATH, ROOT, parse_config
 
-ROOT = Path(__file__).resolve().parents[1]
 ACTIVE_STATUSES = {"active", "revised"}
+
+
+def configured_roots(core_root_arg: str = "", vault_root_arg: str = "") -> tuple[Path, Path]:
+    data = parse_config(CONFIG_PATH)
+    core_root_text = core_root_arg or str(data.get("core_root", "") or ROOT)
+    vault_root_text = vault_root_arg or str(data.get("vault_root", "") or "")
+    core_root = Path(core_root_text).expanduser().resolve()
+    if not vault_root_text:
+        raise SystemExit("missing vault_root: pass --vault-root or configure ~/.agent-foundry/config.yaml")
+    vault_root = Path(vault_root_text).expanduser().resolve()
+    errors = validate(core_root, vault_root)
+    if errors:
+        message = "\n".join(f"- {error}" for error in errors)
+        raise SystemExit(f"refusing to review assets because Core/Vault validation failed:\n{message}")
+    return core_root, vault_root
 
 
 def read(path: Path) -> str:
@@ -43,16 +59,16 @@ def extract_list(text: str, key: str) -> list[str]:
     return []
 
 
-def load_assets() -> list[dict[str, object]]:
+def load_assets(vault_root: Path) -> list[dict[str, object]]:
     assets: list[dict[str, object]] = []
-    for path in sorted((ROOT / "assets").glob("*/*.yaml")):
+    for path in sorted((vault_root / "assets").glob("*/*.yaml")):
         text = read(path)
         assets.append(
             {
                 "id": extract_scalar(text, "id"),
                 "title": extract_scalar(text, "title"),
                 "status": extract_scalar(text, "status"),
-                "path": str(path.relative_to(ROOT)),
+                "path": str(path.relative_to(vault_root)),
                 "review_after_days": int(extract_scalar(text, "review_after_days") or "90"),
                 "triggers": extract_list(text, "usage_triggers"),
                 "canonical_practices": extract_list(text, "canonical_practices"),
@@ -62,8 +78,8 @@ def load_assets() -> list[dict[str, object]]:
     return assets
 
 
-def load_aggregate_usage() -> dict[str, list[dt.date]]:
-    usage_path = ROOT / "usage" / "usage-aggregate.yaml"
+def load_aggregate_usage(vault_root: Path) -> dict[str, list[dt.date]]:
+    usage_path = vault_root / "usage" / "usage-aggregate.yaml"
     usage: dict[str, list[dt.date]] = {}
     current: str | None = None
     current_counts = 0
@@ -94,8 +110,8 @@ def load_aggregate_usage() -> dict[str, list[dt.date]]:
     return usage
 
 
-def load_legacy_usage() -> dict[str, list[dt.date]]:
-    usage_path = ROOT / "usage" / "asset-usage-log.yaml"
+def load_legacy_usage(vault_root: Path) -> dict[str, list[dt.date]]:
+    usage_path = vault_root / "usage" / "asset-usage-log.yaml"
     usage: dict[str, list[dt.date]] = {}
     current: str | None = None
     if not usage_path.exists():
@@ -114,11 +130,11 @@ def load_legacy_usage() -> dict[str, list[dt.date]]:
     return usage
 
 
-def load_usage() -> tuple[dict[str, list[dt.date]], str]:
-    usage = load_aggregate_usage()
+def load_usage(vault_root: Path) -> tuple[dict[str, list[dt.date]], str]:
+    usage = load_aggregate_usage(vault_root)
     if usage:
         return usage, "usage/usage-aggregate.yaml"
-    return load_legacy_usage(), "usage/asset-usage-log.yaml"
+    return load_legacy_usage(vault_root), "usage/asset-usage-log.yaml"
 
 
 def trigger_overlaps(assets: list[dict[str, object]]) -> dict[str, list[str]]:
@@ -150,15 +166,20 @@ def recommendation(asset: dict[str, object], usage_dates: list[dt.date], today: 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Review Agent Foundry assets for lifecycle and usage risk.")
     parser.add_argument("--today", default=dt.date.today().isoformat())
+    parser.add_argument("--core-root", default="", help="Agent Foundry Core root. Defaults to configured core_root.")
+    parser.add_argument("--vault-root", default="", help="Selected Agent Foundry Vault root. Defaults to configured vault_root.")
     args = parser.parse_args()
     today = dt.date.fromisoformat(args.today)
+    core_root, vault_root = configured_roots(args.core_root, args.vault_root)
 
-    assets = load_assets()
-    usage, usage_source = load_usage()
+    assets = load_assets(vault_root)
+    usage, usage_source = load_usage(vault_root)
     overlaps = trigger_overlaps(assets)
 
     print("# Asset Review")
     print(f"date: {today}")
+    print(f"core_root: {core_root}")
+    print(f"vault_root: {vault_root}")
     print(f"usage_source: {usage_source}")
     print()
     for asset in assets:

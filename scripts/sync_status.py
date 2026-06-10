@@ -8,6 +8,8 @@ import hashlib
 import subprocess
 import tarfile
 from pathlib import Path
+from adapter_install_receipt import RECEIPT_PATH, read_receipt, receipt_status, receipt_target_statuses
+from foundry_config import CONFIG_PATH, parse_config, validate as validate_config
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -128,12 +130,57 @@ def compare_tree(src: Path, dest: Path) -> tuple[int, int, int]:
     return checked, missing, changed
 
 
+def locator_mode() -> tuple[str, str]:
+    if not CONFIG_PATH.exists():
+        return "unknown", f"locator missing: {CONFIG_PATH}"
+    errors = validate_config(CONFIG_PATH)
+    if errors:
+        return "invalid", "locator invalid: " + "; ".join(errors)
+    data = parse_config(CONFIG_PATH)
+    core_root = Path(str(data.get("core_root", ""))).expanduser().resolve()
+    vault_root = Path(str(data.get("vault_root", ""))).expanduser().resolve()
+    if core_root == vault_root:
+        return "combined_compatibility", "runtime comparison uses tracked Core adapters"
+    return (
+        "split",
+        "selected-Vault generated adapter manifest unavailable; comparing installed runtime against tracked Core adapters as reference only",
+    )
+
+
 def runtime_drift_status() -> str:
     manifest_path = ROOT / "runtime" / "local" / "runtime_manifest.yaml"
     if not manifest_path.exists():
         return "no local runtime manifest"
     targets = parse_runtime_manifest(manifest_path.read_text(encoding="utf-8"))
-    lines: list[str] = []
+    mode, note = locator_mode()
+    lines: list[str] = [
+        f"mode: {mode}",
+    ]
+    if mode == "split":
+        receipt = read_receipt(RECEIPT_PATH)
+        if receipt is None:
+            lines.append(f"comparison: {note}")
+            lines.append("selected-output: selected-output-unknown reason=install receipt missing")
+        else:
+            lines.append("comparison: selected-output install receipt is authoritative; Core adapters are secondary reference diagnostics")
+            state, problems = receipt_status(receipt)
+            installed_at = receipt.get("installed_at", "unknown") if isinstance(receipt, dict) else "unknown"
+            manifest_sha = receipt.get("adapter_manifest_sha256", "") if isinstance(receipt, dict) else ""
+            files = receipt.get("installed_files", []) if isinstance(receipt, dict) else []
+            count = len(files) if isinstance(files, list) else 0
+            suffix = f" installed_at={installed_at} files={count}"
+            if manifest_sha:
+                suffix += f" manifest_sha256={str(manifest_sha)[:12]}"
+            lines.append(f"selected-output: {state}{suffix}")
+            for target, (target_state, target_problems, checked) in sorted(receipt_target_statuses(receipt).items()):
+                lines.append(f"{target}: {target_state} checked={checked} missing_changed={len(target_problems)}")
+            for problem in problems[:10]:
+                lines.append(f"selected-output detail: {problem}")
+            if len(problems) > 10:
+                lines.append(f"selected-output detail: ... {len(problems) - 10} more")
+        lines.append("core-reference:")
+    else:
+        lines.append(f"comparison: {note}")
     for name, config in targets.items():
         if config.get("status") != "enabled":
             lines.append(f"{name}: skipped status={config.get('status')}")
@@ -157,7 +204,10 @@ def runtime_drift_status() -> str:
         else:
             lines.append(f"{name}: manual or unsupported drift check")
             continue
-        state = "in-sync" if missing == 0 and changed == 0 else "drift"
+        if mode == "split":
+            state = "reference-in-sync" if missing == 0 and changed == 0 else "reference-drift"
+        else:
+            state = "in-sync" if missing == 0 and changed == 0 else "drift"
         lines.append(f"{name}: {state} checked={checked} missing={missing} changed={changed}")
     return "\n".join(lines)
 

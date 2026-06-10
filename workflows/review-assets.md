@@ -19,13 +19,13 @@ Review:
 
 Read:
 
-- `indexes/asset_index.yaml`
-- `usage/usage-aggregate.yaml`
+- selected Vault `indexes/asset_index.yaml`
+- selected Vault `usage/usage-aggregate.yaml`
 - `workflows/record-asset-usage.md`
 - relevant adapters
-- relevant canonical practices
+- relevant canonical practices from the selected Vault
 
-Use `usage/asset-usage-log.yaml` only as legacy migration input or fallback when the shared aggregate has not been initialized.
+Use selected Vault `usage/asset-usage-log.yaml` only as legacy migration input or fallback when the shared aggregate has not been initialized.
 
 ## Decisions
 
@@ -48,7 +48,7 @@ python3 scripts/aggregate_usage.py --include-legacy
 python3 scripts/review_assets.py
 ```
 
-Use the report as evidence, not as an automatic mutation. Human approval is required before status changes, merges, retirement, archiving, or broad adapter rewrites. Raw logs under `usage/local/` stay local; the review report should be based on the sanitized aggregate.
+Use the report as evidence, not as an automatic mutation. Human approval is required before status changes, merges, retirement, archiving, or broad adapter rewrites. Raw logs under selected Vault `usage/local/` stay local; the review report should be based on the sanitized aggregate.
 
 ## Decision Table
 

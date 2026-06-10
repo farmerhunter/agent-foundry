@@ -1,0 +1,7 @@
+schema_version: 1
+layout_kind: core
+layout_version: 1
+identity: agent-foundry-core
+supported_modes: [combined, split]
+supported_vault_layout_versions: [1]
+public_boundary: public_core

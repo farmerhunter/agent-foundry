@@ -19,7 +19,7 @@ Current AF-3 capability:
 Example:
 
 ```bash
-python3 scripts/publish_adapters.py --core-root . --vault-root . --output-root /tmp/agent-foundry-adapters --apply
+python3 scripts/publish_adapters.py --core-root . --vault-root ~/.agent-foundry/vault/my-agent-foundry-vault --output-root /tmp/agent-foundry-adapters --apply
 ```
 
 ## 1. Select Practices

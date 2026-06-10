@@ -11,11 +11,24 @@ import subprocess
 import sys
 from pathlib import Path
 
+from foundry_config import CONFIG_PATH, parse_config
+
 
 ROOT = Path(__file__).resolve().parents[1]
 ACTIVE_STATUSES = {"active", "revised"}
 INACTIVE_PRACTICE_STATUSES = {"candidate", "proposed", "superseded", "archived"}
 INACTIVE_ASSET_STATUSES = {"candidate", "proposed", "deprecated", "retired", "archived"}
+
+
+def configured_vault_root() -> Path:
+    data = parse_config(CONFIG_PATH)
+    vault_root = data.get("vault_root", "")
+    if isinstance(vault_root, str) and vault_root:
+        return Path(vault_root).expanduser().resolve()
+    return ROOT
+
+
+VAULT_ROOT = configured_vault_root()
 
 
 def read(path: Path) -> str:
@@ -102,14 +115,16 @@ def load_adapter_names() -> set[str]:
     return names
 
 
-def check_index_paths(index_path: Path, label: str) -> list[str]:
+def check_index_paths(index_path: Path, base_root: Path, label: str) -> list[str]:
     errors: list[str] = []
+    if not index_path.exists():
+        return [f"Missing {index_path.relative_to(index_path.parents[1]) if len(index_path.parents) > 1 else index_path}"]
     for entry in simple_yaml_entries(read(index_path)):
         rel = entry.get("path")
         if not rel:
             errors.append(f"{label} {entry.get('id')} has no path")
             continue
-        path = ROOT / rel
+        path = base_root / rel
         if not path.exists():
             errors.append(f"{label} {entry.get('id')} path missing: {rel}")
     return errors
@@ -117,16 +132,16 @@ def check_index_paths(index_path: Path, label: str) -> list[str]:
 
 def check_practice_frontmatter() -> list[str]:
     errors: list[str] = []
-    for path in sorted((ROOT / "practices").glob("*/*.md")):
+    for path in sorted((VAULT_ROOT / "practices").glob("*/*.md")):
         fm = frontmatter(path)
         if not fm:
-            errors.append(f"Practice missing frontmatter: {path.relative_to(ROOT)}")
+            errors.append(f"Practice missing frontmatter: {path.relative_to(VAULT_ROOT)}")
             continue
         pid = fm.get("id")
         if not pid:
-            errors.append(f"Practice missing id: {path.relative_to(ROOT)}")
+            errors.append(f"Practice missing id: {path.relative_to(VAULT_ROOT)}")
         elif not path.name.startswith(pid):
-            errors.append(f"Practice filename/id mismatch: {path.relative_to(ROOT)} has id {pid}")
+            errors.append(f"Practice filename/id mismatch: {path.relative_to(VAULT_ROOT)} has id {pid}")
         status = fm.get("status")
         if status not in ACTIVE_STATUSES | INACTIVE_PRACTICE_STATUSES:
             errors.append(f"Practice {pid} has invalid status: {status}")
@@ -151,7 +166,7 @@ def check_asset_files() -> list[str]:
         "usage_triggers:",
         "success_criteria:",
     ]
-    for path in sorted((ROOT / "assets").glob("*/*.yaml")):
+    for path in sorted((VAULT_ROOT / "assets").glob("*/*.yaml")):
         text = read(path)
         asset_id = None
         for line in text.splitlines():
@@ -159,9 +174,9 @@ def check_asset_files() -> list[str]:
                 asset_id = line.split(":", 1)[1].strip()
                 break
         if not asset_id:
-            errors.append(f"Asset missing id: {path.relative_to(ROOT)}")
+            errors.append(f"Asset missing id: {path.relative_to(VAULT_ROOT)}")
         elif not path.name.startswith(asset_id):
-            errors.append(f"Asset filename/id mismatch: {path.relative_to(ROOT)} has id {asset_id}")
+            errors.append(f"Asset filename/id mismatch: {path.relative_to(VAULT_ROOT)} has id {asset_id}")
         status = scan_yaml_status(path)
         if status not in ACTIVE_STATUSES | INACTIVE_ASSET_STATUSES:
             errors.append(f"Asset {asset_id} has invalid status: {status}")
@@ -188,11 +203,11 @@ def check_no_inactive_leakage() -> list[str]:
 def check_adapter_id_references() -> list[str]:
     errors: list[str] = []
     valid_ids: set[str] = set()
-    for entry in simple_yaml_entries(read(ROOT / "indexes" / "practice_index.yaml")):
+    for entry in simple_yaml_entries(read(VAULT_ROOT / "indexes" / "practice_index.yaml")):
         pid = entry.get("id")
         if pid:
             valid_ids.add(pid)
-    for entry in simple_yaml_entries(read(ROOT / "indexes" / "asset_index.yaml")):
+    for entry in simple_yaml_entries(read(VAULT_ROOT / "indexes" / "asset_index.yaml")):
         aid = entry.get("id")
         if aid:
             valid_ids.add(aid)
@@ -223,7 +238,7 @@ def check_no_deepseek_direct_adapter() -> list[str]:
 
 
 def check_usage_aggregate() -> list[str]:
-    path = ROOT / "usage" / "usage-aggregate.yaml"
+    path = VAULT_ROOT / "usage" / "usage-aggregate.yaml"
     if not path.exists():
         return ["Missing usage/usage-aggregate.yaml"]
     text = read(path)
@@ -240,7 +255,7 @@ def check_foundry_roots_script() -> list[str]:
     if not script.exists():
         return ["Missing scripts/check_foundry_roots.py"]
     result = subprocess.run(
-        ["python3", str(script), "--core-root", str(ROOT), "--vault-root", str(ROOT)],
+        ["python3", str(script), "--core-root", str(ROOT), "--vault-root", str(VAULT_ROOT)],
         cwd=ROOT,
         check=False,
         text=True,
@@ -301,20 +316,20 @@ def check_runtime_manifest() -> list[str]:
 def check_cross_references() -> list[str]:
     errors: list[str] = []
     practice_ids: set[str] = set()
-    for entry in simple_yaml_entries(read(ROOT / "indexes" / "practice_index.yaml")):
+    for entry in simple_yaml_entries(read(VAULT_ROOT / "indexes" / "practice_index.yaml")):
         pid = entry.get("id")
         if pid:
             practice_ids.add(pid)
 
     asset_ids: set[str] = set()
-    for entry in simple_yaml_entries(read(ROOT / "indexes" / "asset_index.yaml")):
+    for entry in simple_yaml_entries(read(VAULT_ROOT / "indexes" / "asset_index.yaml")):
         aid = entry.get("id")
         if aid:
             asset_ids.add(aid)
 
     adapter_names = load_adapter_names()
 
-    for path in sorted((ROOT / "practices").glob("*/*.md")):
+    for path in sorted((VAULT_ROOT / "practices").glob("*/*.md")):
         text = read(path)
         fm = frontmatter(path)
         pid = fm.get("id")
@@ -330,7 +345,7 @@ def check_cross_references() -> list[str]:
             if ref not in practice_ids:
                 errors.append(f"Practice {pid} references unknown practice in superseded_by: {ref}")
 
-    for path in sorted((ROOT / "assets").glob("*/*.yaml")):
+    for path in sorted((VAULT_ROOT / "assets").glob("*/*.yaml")):
         text = read(path)
         asset_id = None
         for line in text.splitlines():
@@ -363,7 +378,7 @@ def check_supersede_bidirectional() -> list[str]:
     superseded_by_map: dict[str, str] = {}
     supersedes_map: dict[str, list[str]] = {}
 
-    for path in sorted((ROOT / "practices").glob("*/*.md")):
+    for path in sorted((VAULT_ROOT / "practices").glob("*/*.md")):
         text = read(path)
         fm = frontmatter(path)
         pid = fm.get("id")
@@ -382,7 +397,7 @@ def check_supersede_bidirectional() -> list[str]:
 
     asset_superseded_by_map: dict[str, str] = {}
     asset_supersedes_map: dict[str, list[str]] = {}
-    for path in sorted((ROOT / "assets").glob("*/*.yaml")):
+    for path in sorted((VAULT_ROOT / "assets").glob("*/*.yaml")):
         text = read(path)
         asset_id = None
         for line in text.splitlines():
@@ -450,7 +465,7 @@ def check_claude_managed_block_integrity() -> list[str]:
 
 def check_obsidian_compatibility() -> list[str]:
     errors: list[str] = []
-    for path in sorted((ROOT / "practices").glob("*/*.md")):
+    for path in sorted((VAULT_ROOT / "practices").glob("*/*.md")):
         text = read(path)
         fm = frontmatter(path)
         pid = fm.get("id")
@@ -460,10 +475,10 @@ def check_obsidian_compatibility() -> list[str]:
         # Check that id is the first alias for stable Obsidian wikilinks.
         aliases = extract_yaml_list(text, "aliases", limit_to_frontmatter=True)
         if not aliases:
-            errors.append(f"Practice {pid} missing aliases (Obsidian wikilink): {path.relative_to(ROOT)}")
+            errors.append(f"Practice {pid} missing aliases (Obsidian wikilink): {path.relative_to(VAULT_ROOT)}")
         elif aliases[0] != pid:
             errors.append(
-                f"Practice {pid} must have id as first alias (Obsidian wikilink): {path.relative_to(ROOT)}"
+                f"Practice {pid} must have id as first alias (Obsidian wikilink): {path.relative_to(VAULT_ROOT)}"
             )
 
         # Check that related IDs have a Related Practices section with wikilinks
@@ -471,7 +486,7 @@ def check_obsidian_compatibility() -> list[str]:
         if related:
             if "## Related Practices" not in text:
                 errors.append(
-                    f"Practice {pid} has related entries but no '## Related Practices' section: {path.relative_to(ROOT)}"
+                    f"Practice {pid} has related entries but no '## Related Practices' section: {path.relative_to(VAULT_ROOT)}"
                 )
             else:
                 # Extract wikilinks from Related Practices section
@@ -485,15 +500,15 @@ def check_obsidian_compatibility() -> list[str]:
                     extra = [w for w in wikilinks if w not in related]
                     if missing:
                         errors.append(
-                            f"Practice {pid} Related Practices missing wikilinks: {missing} in {path.relative_to(ROOT)}"
+                            f"Practice {pid} Related Practices missing wikilinks: {missing} in {path.relative_to(VAULT_ROOT)}"
                         )
                     if extra:
                         errors.append(
-                            f"Practice {pid} Related Practices has extra wikilinks: {extra} in {path.relative_to(ROOT)}"
+                            f"Practice {pid} Related Practices has extra wikilinks: {extra} in {path.relative_to(VAULT_ROOT)}"
                         )
                 else:
                     errors.append(
-                        f"Practice {pid} '## Related Practices' section malformed: {path.relative_to(ROOT)}"
+                        f"Practice {pid} '## Related Practices' section malformed: {path.relative_to(VAULT_ROOT)}"
                     )
     return errors
 
@@ -540,8 +555,8 @@ def check_activation_script() -> list[str]:
 
 def main() -> int:
     errors: list[str] = []
-    errors += check_index_paths(ROOT / "indexes" / "practice_index.yaml", "Practice")
-    errors += check_index_paths(ROOT / "indexes" / "asset_index.yaml", "Asset")
+    errors += check_index_paths(VAULT_ROOT / "indexes" / "practice_index.yaml", VAULT_ROOT, "Practice")
+    errors += check_index_paths(VAULT_ROOT / "indexes" / "asset_index.yaml", VAULT_ROOT, "Asset")
     errors += check_practice_frontmatter()
     errors += check_asset_files()
     errors += check_no_inactive_leakage()

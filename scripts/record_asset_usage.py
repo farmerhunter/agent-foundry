@@ -12,10 +12,23 @@ import hashlib
 import socket
 from pathlib import Path
 
+from check_foundry_roots import validate
+from foundry_config import CONFIG_PATH, ROOT, parse_config
 
-ROOT = Path(__file__).resolve().parents[1]
-LOCAL_LOG_PATH = ROOT / "usage" / "local" / "usage-log.yaml"
-AGGREGATE_PATH = ROOT / "usage" / "usage-aggregate.yaml"
+
+def configured_roots(core_root_arg: str = "", vault_root_arg: str = "") -> tuple[Path, Path]:
+    data = parse_config(CONFIG_PATH)
+    core_root_text = core_root_arg or str(data.get("core_root", "") or ROOT)
+    vault_root_text = vault_root_arg or str(data.get("vault_root", "") or "")
+    core_root = Path(core_root_text).expanduser().resolve()
+    if not vault_root_text:
+        raise SystemExit("missing vault_root: pass --vault-root or configure ~/.agent-foundry/config.yaml")
+    vault_root = Path(vault_root_text).expanduser().resolve()
+    errors = validate(core_root, vault_root)
+    if errors:
+        message = "\n".join(f"- {error}" for error in errors)
+        raise SystemExit(f"refusing to write usage evidence because Core/Vault validation failed:\n{message}")
+    return core_root, vault_root
 
 
 OUTCOMES = ["useful", "neutral", "not_useful", "unknown"]
@@ -31,12 +44,12 @@ def machine_hash() -> str:
     return hashlib.sha256(socket.gethostname().encode("utf-8")).hexdigest()[:12]
 
 
-def append_local_entry(args: argparse.Namespace, subject_type: str, subject_id: str) -> None:
-    LOCAL_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    if not LOCAL_LOG_PATH.exists():
-        LOCAL_LOG_PATH.write_text("schema_version: 1\nupdated: \n\nentries:\n", encoding="utf-8")
+def append_local_entry(args: argparse.Namespace, local_log_path: Path, subject_type: str, subject_id: str) -> None:
+    local_log_path.parent.mkdir(parents=True, exist_ok=True)
+    if not local_log_path.exists():
+        local_log_path.write_text("schema_version: 1\nupdated: \n\nentries:\n", encoding="utf-8")
 
-    text = LOCAL_LOG_PATH.read_text(encoding="utf-8")
+    text = local_log_path.read_text(encoding="utf-8")
     lines = text.rstrip().splitlines()
     for i, line in enumerate(lines):
         if line.startswith("updated:"):
@@ -56,15 +69,15 @@ def append_local_entry(args: argparse.Namespace, subject_type: str, subject_id: 
         f"    note: {yaml_quote(args.note)}",
     ]
     lines.extend(entry)
-    LOCAL_LOG_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    local_log_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def parse_aggregate() -> dict[tuple[str, str, str, str, str], dict[str, str | int]]:
+def parse_aggregate(aggregate_path: Path) -> dict[tuple[str, str, str, str, str], dict[str, str | int]]:
     rows: dict[tuple[str, str, str, str, str], dict[str, str | int]] = {}
-    if not AGGREGATE_PATH.exists():
+    if not aggregate_path.exists():
         return rows
     current: dict[str, str | int] | None = None
-    for line in AGGREGATE_PATH.read_text(encoding="utf-8").splitlines():
+    for line in aggregate_path.read_text(encoding="utf-8").splitlines():
         stripped = line.strip()
         if stripped.startswith("- subject_type:"):
             if current:
@@ -93,8 +106,12 @@ def aggregate_key(row: dict[str, str | int]) -> tuple[str, str, str, str, str]:
     )
 
 
-def write_aggregate(rows: dict[tuple[str, str, str, str, str], dict[str, str | int]], updated: str) -> None:
-    AGGREGATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+def write_aggregate(
+    aggregate_path: Path,
+    rows: dict[tuple[str, str, str, str, str], dict[str, str | int]],
+    updated: str,
+) -> None:
+    aggregate_path.parent.mkdir(parents=True, exist_ok=True)
     lines = ["schema_version: 1", f"updated: {updated}", "", "aggregates:"]
     for row in sorted(rows.values(), key=aggregate_key):
         lines.extend(
@@ -111,11 +128,11 @@ def write_aggregate(rows: dict[tuple[str, str, str, str, str], dict[str, str | i
                 f"    last_used: {row['last_used']}",
             ]
         )
-    AGGREGATE_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    aggregate_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def update_aggregate(args: argparse.Namespace, subject_type: str, subject_id: str) -> None:
-    rows = parse_aggregate()
+def update_aggregate(args: argparse.Namespace, aggregate_path: Path, subject_type: str, subject_id: str) -> None:
+    rows = parse_aggregate(aggregate_path)
     period = args.date[:7]
     key = (subject_type, subject_id, period, args.agent, machine_hash())
     row = rows.setdefault(
@@ -137,7 +154,7 @@ def update_aggregate(args: argparse.Namespace, subject_type: str, subject_id: st
     row[count_key] = int(row.get(count_key, 0)) + 1
     if str(row.get("last_used", "")) < args.date:
         row["last_used"] = args.date
-    write_aggregate(rows, args.date)
+    write_aggregate(aggregate_path, rows, args.date)
 
 
 def main() -> int:
@@ -152,7 +169,13 @@ def main() -> int:
     parser.add_argument("--note", default="")
     parser.add_argument("--date", default=dt.date.today().isoformat())
     parser.add_argument("--no-aggregate", action="store_true", help="Record raw local evidence only.")
+    parser.add_argument("--core-root", default="", help="Agent Foundry Core root. Defaults to configured core_root.")
+    parser.add_argument("--vault-root", default="", help="Selected Agent Foundry Vault root. Defaults to configured vault_root.")
     args = parser.parse_args()
+
+    _, vault_root = configured_roots(args.core_root, args.vault_root)
+    local_log_path = vault_root / "usage" / "local" / "usage-log.yaml"
+    aggregate_path = vault_root / "usage" / "usage-aggregate.yaml"
 
     subjects: list[tuple[str, str]] = []
     if args.asset_id:
@@ -163,9 +186,9 @@ def main() -> int:
         raise SystemExit("Provide --asset-id or --practice-id.")
 
     for subject_type, subject_id in subjects:
-        append_local_entry(args, subject_type, subject_id)
+        append_local_entry(args, local_log_path, subject_type, subject_id)
         if not args.no_aggregate and args.evidence_type == "applied":
-            update_aggregate(args, subject_type, subject_id)
+            update_aggregate(args, aggregate_path, subject_type, subject_id)
         print(f"Recorded usage for {subject_type} {subject_id}.")
     return 0
 

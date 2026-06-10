@@ -7,6 +7,8 @@ import re
 import sys
 from pathlib import Path
 
+from foundry_config import CONFIG_PATH, parse_config
+
 
 ROOT = Path(__file__).resolve().parents[1]
 ACTIVE_STATUSES = {"active", "revised"}
@@ -17,6 +19,17 @@ ALLOWED_TIERS = {
     "review_only",
     "reference_only",
 }
+
+
+def configured_vault_root() -> Path:
+    data = parse_config(CONFIG_PATH)
+    vault_root = data.get("vault_root", "")
+    if isinstance(vault_root, str) and vault_root:
+        return Path(vault_root).expanduser().resolve()
+    return ROOT
+
+
+VAULT_ROOT = configured_vault_root()
 
 
 def read(path: Path) -> str:
@@ -108,7 +121,7 @@ def activation_field(section: str, name: str) -> str:
 
 def practice_entries() -> list[tuple[Path, dict[str, str], str]]:
     entries: list[tuple[Path, dict[str, str], str]] = []
-    for path in sorted((ROOT / "practices").glob("*/*.md")):
+    for path in sorted((VAULT_ROOT / "practices").glob("*/*.md")):
         text = read(path)
         entries.append((path, frontmatter(path), text))
     return entries

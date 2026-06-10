@@ -26,6 +26,7 @@ def ensure_dir(path: Path, apply: bool) -> None:
 
 def fail_if_existing_vault(vault_root: Path, force: bool) -> None:
     markers = [
+        vault_root / ".agent-foundry-vault.yaml",
         vault_root / "indexes" / "practice_index.yaml",
         vault_root / "indexes" / "asset_index.yaml",
         vault_root / "usage" / "usage-aggregate.yaml",
@@ -80,6 +81,21 @@ def usage_aggregate_text(today: str) -> str:
     )
 
 
+def vault_marker_text() -> str:
+    return "\n".join(
+        [
+            "schema_version: 1",
+            "layout_kind: vault",
+            "layout_version: 1",
+            "identity: user-vault",
+            "supported_modes: [combined, split]",
+            "supported_core_layout_versions: [1]",
+            "privacy_boundary: private_by_default",
+            "",
+        ]
+    )
+
+
 def initialize(vault_root: Path, apply: bool, force: bool) -> None:
     vault_root = vault_root.expanduser().resolve()
     fail_if_existing_vault(vault_root, force)
@@ -91,6 +107,7 @@ def initialize(vault_root: Path, apply: bool, force: bool) -> None:
         "usage/local",
     ]:
         ensure_dir(vault_root / rel, apply)
+    write(vault_root / ".agent-foundry-vault.yaml", vault_marker_text(), apply)
     write(vault_root / "indexes" / "practice_index.yaml", practice_index_text(today), apply)
     write(vault_root / "indexes" / "asset_index.yaml", asset_index_text(today), apply)
     write(vault_root / "usage" / "usage-aggregate.yaml", usage_aggregate_text(today), apply)

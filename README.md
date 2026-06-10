@@ -25,12 +25,12 @@ For the longer motivation, see [docs/philosophy.md](docs/philosophy.md).
 
 ## What It Does
 
-Agent Foundry keeps durable knowledge and runtime delivery separate.
+Agent Foundry keeps Core tooling, User Vault records, and runtime delivery separate.
 
-- `practices/`: canonical rules, principles, patterns, playbooks, and checks.
-- `assets/`: reusable skills, subagents, automations, and other user-facing capability packages.
+- Core contains workflows, schemas, scripts, templates, docs, adapter profiles, and validation tools.
+- A User Vault contains canonical practices, reusable assets, indexes, imports, and sanitized usage aggregates.
 - `adapters/`: downstream outputs for specific agent environments.
-- `usage/`: evidence that practices and assets were used, missed, or need review.
+- Runtime installs under agent-specific home directories are downstream copies.
 
 Agent memory, session summaries, and external skills are treated as evidence sources. They can suggest candidates, but they do not become durable rules until reviewed.
 
@@ -38,30 +38,32 @@ Agent memory, session summaries, and external skills are treated as evidence sou
 
 | Path | Purpose |
 | --- | --- |
-| `practices/` | Canonical practice vault. |
-| `assets/` | Reusable capability assets governed by practices. |
-| `indexes/` | Search, dedupe, routing, and registry metadata. |
 | `workflows/` | Procedures agents should follow for harvest, import, review, publish, and sync. |
 | `schemas/` | Canonical record shapes and validation rules. |
 | `scripts/` | Deterministic tooling for checks, install, sync, evidence, and review. |
-| `adapters/` | Agent-specific skills, prompts, instructions, and knowledge files. |
+| `templates/` | Blank practice, asset, and import templates for Vault records. |
+| `adapters/` | Adapter profiles and tracked distribution outputs. |
 | `runtime/` | Machine-local deployment manifests and portable runtime templates. |
+| `sync/` | Portable sync templates and ignored local sync state. |
 | `docs/` | Human-readable philosophy, usage, design, deployment, and compatibility notes. |
+
+Vault-owned paths such as `practices/`, `assets/`, `indexes/`, `imports/`, and `usage/usage-aggregate.yaml` live in the selected User Vault, not in the clean public Core checkout.
 
 ## Quick Start
 
-Run these from the Agent Foundry repo root on a new machine:
+Run these from the Agent Foundry Core checkout on a new machine:
 
 ```bash
 cd "/path/to/agent-foundry"
+python3 scripts/init_vault.py ~/.agent-foundry/vault/my-agent-foundry-vault --core-root . --apply
+python3 scripts/foundry_config.py write --core-root . --vault-root ~/.agent-foundry/vault/my-agent-foundry-vault
+python3 scripts/foundry_config.py status
 python3 scripts/runtime_manifest.py init
 python3 scripts/runtime_manifest.py detect
 python3 scripts/runtime_manifest.py plan
-python3 scripts/install_foundry.py --apply
-python3 scripts/foundry_config.py status
 ```
 
-The install step writes a machine-local locator at `~/.agent-foundry/config.yaml`. Agents working in other repositories use that locator to find the canonical Foundry repo.
+The locator step writes `~/.agent-foundry/config.yaml`. Agents working in other repositories use that locator to find both the Core checkout and the selected User Vault.
 
 For full install, adding or removing agents, and offline/online sync, see [docs/deployment.md](docs/deployment.md).
 

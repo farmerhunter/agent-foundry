@@ -27,7 +27,7 @@ For each reviewed entry choose:
 
 ## Checks
 
-- Run `python3 scripts/review_practices.py` and use the report as review input.
+- Run `python3 scripts/review_practices.py` and use the report as review input. The script validates Core/Vault roots, reads practice and asset records from the selected Vault, and reads adapter evidence from Core.
 - Is the practice still actionable?
 - Is it specific enough?
 - Does it duplicate another practice?
