@@ -1,32 +1,32 @@
 # Deployment
 
-Agent Foundry is local-first. The repository is the canonical workspace; installed agent runtime files are downstream copies.
+Agent Foundry is local-first. Core tooling, User Vault records, and installed runtime files are separate layers.
 
-Current scope: this document describes the current single-repo maintainer setup, where Foundry Core and the maintainer's User Vault share one repository root. It is not a complete external-user quickstart. External-user setup requires the AF-3 physical Core/Vault split and AF-4 onboarding work described in `docs/roadmap.md`.
+Current scope: this document describes the AF-3 split Core/Vault deployment model. A clean public Core checkout contains workflows, schemas, scripts, templates, docs, and adapter profiles. Canonical practice and asset records live in a selected User Vault, typically outside the Core checkout. AF-4 still owns polished onboarding, bootstrap pack deployment, and optional capability packs.
 
 ```text
-Agent Foundry repo
+Agent Foundry Core + selected User Vault
   -> generated adapters
   -> machine-local runtime manifest
   -> installed runtime copies
   -> real agent usage
   -> local raw usage evidence
-  -> shared usage aggregate back into Agent Foundry
+  -> shared usage aggregate back into the selected User Vault
 ```
 
 ## Boundaries
 
-- `practices/`, `assets/`, `indexes/`: canonical vault.
-- `usage/usage-aggregate.yaml`: shared sanitized usage statistics for review.
+- Core checkout: `workflows/`, `schemas/`, `scripts/`, `templates/`, `docs/`, adapter profiles, runtime templates, and sync templates.
+- User Vault: `practices/`, `assets/`, `indexes/`, `imports/`, and shared sanitized usage aggregates.
+- `usage/usage-aggregate.yaml` in the selected Vault: shared sanitized usage statistics for review.
 - `usage/local/`: machine-local raw usage evidence, ignored by git and portable snapshots.
-- `workflows/`, `schemas/`, `scripts/`, `templates/`: Foundry system.
 - `adapters/`: generated or maintained adapter outputs.
 - `runtime/templates/runtime_manifest.template.yaml`: portable deployment template, tracked in git.
 - `runtime/local/runtime_manifest.yaml`: this machine's private deployment state, ignored by git and portable snapshots.
 - `~/.agent-foundry/config.yaml`: this machine's private Foundry locator for agents working outside the repo.
 - Installed runtime locations such as `~/.codex`, `~/.claude`, and `~/.hermes`: downstream copies, not source of truth.
 
-Run repo scripts from the Agent Foundry repo root unless a workflow explicitly says otherwise:
+Run Core scripts from the Agent Foundry Core checkout unless a workflow explicitly says otherwise:
 
 ```bash
 cd "/path/to/agent-foundry"
@@ -34,23 +34,36 @@ cd "/path/to/agent-foundry"
 
 ## Fresh Install
 
-Use this on a new maintainer machine after cloning or unpacking the current combined Agent Foundry repository.
+Use this on a new machine after cloning or unpacking the Agent Foundry Core checkout.
 
-Do not use this flow to claim a clean external-user installation: it installs adapters from the currently selected Vault, which is still the current account's User Vault in the AF-2 staging repository.
+This flow creates or selects a local User Vault. The Vault may be blank, restored from a private backup, or later populated through a reviewed capability pack.
 
-1. Initialize the machine-local runtime manifest:
+1. Initialize or select a User Vault:
+
+   ```bash
+   python3 scripts/init_vault.py ~/.agent-foundry/vault/my-agent-foundry-vault --core-root . --apply
+   ```
+
+2. Write and verify the machine-local Core/Vault locator:
+
+   ```bash
+   python3 scripts/foundry_config.py write --core-root . --vault-root ~/.agent-foundry/vault/my-agent-foundry-vault
+   python3 scripts/foundry_config.py status
+   ```
+
+3. Initialize the machine-local runtime manifest:
 
    ```bash
    python3 scripts/runtime_manifest.py init
    ```
 
-2. Detect local agent runtimes:
+4. Detect local agent runtimes:
 
    ```bash
    python3 scripts/runtime_manifest.py detect
    ```
 
-3. Enable only agents that exist and should receive Agent Foundry content:
+5. Enable only agents that exist and should receive Agent Foundry content:
 
    ```bash
    python3 scripts/runtime_manifest.py enable codex
@@ -58,48 +71,48 @@ Do not use this flow to claim a clean external-user installation: it installs ad
    python3 scripts/runtime_manifest.py enable hermes
    ```
 
-4. If a runtime uses a non-default path, configure it:
+6. If a runtime uses a non-default path, configure it:
 
    ```bash
    python3 scripts/runtime_manifest.py configure hermes --path <hermes-skills-dir>
    ```
 
-5. Review the install plan:
+7. Review the install plan:
 
    ```bash
    python3 scripts/runtime_manifest.py plan
    ```
 
-6. Dry-run the full install:
+8. Dry-run the full install:
 
    ```bash
    python3 scripts/install_foundry.py
    ```
 
-7. Apply after reviewing destinations:
+9. Apply after reviewing destinations:
 
    ```bash
    python3 scripts/install_foundry.py --apply
    ```
 
-8. Verify status:
+10. Verify status:
 
    ```bash
    python3 scripts/sync_status.py
    python3 scripts/foundry_config.py status
    ```
 
-The apply step writes `~/.agent-foundry/config.yaml`. In the current AF-2 repository, `core_root`, `vault_root`, and `repo_root` still point to the same combined checkout. After AF-3, those fields must support a public Core path and a separate user-owned Vault path.
+The locator step writes `~/.agent-foundry/config.yaml`. `core_root` points to the public Core checkout; `vault_root` points to the selected user-owned Vault.
 
-## Maintainer Vault Migration Gate
+## Existing Combined Deployment Migration
 
-Do not move User Vault records or create a private Vault remote from this deployment flow. Before any extraction, run:
+Use this only when upgrading an older combined Core/Vault checkout. A clean public Core checkout should not contain active User Vault records. Before extracting records from an older combined deployment, run:
 
 ```bash
 python3 scripts/plan_vault_extraction.py
 ```
 
-Then create and verify a local backup, initialize or select the active User Vault target, validate it with `scripts/check_foundry_roots.py`, and dry-run adapter publishing from the selected Vault. The default local pattern is `~/.agent-foundry/vault/agent-foundry-vault-<account>`; for this account the selected local path is `~/.agent-foundry/vault/agent-foundry-vault-farmerhunter`. Moving records, deleting public copies, creating a private remote, or repointing installed runtimes from the combined repo requires explicit user approval at execution time.
+Then create and verify a local backup, initialize or select the active User Vault target, copy records into that Vault, validate it with `scripts/check_foundry_roots.py`, and dry-run adapter publishing from the selected Vault. The default local pattern is `~/.agent-foundry/vault/agent-foundry-vault-<account>`. Moving records, deleting public copies, creating a private remote, or repointing installed runtimes from a combined repo requires explicit user approval at execution time.
 
 During the actual migration window, pause ordinary harvest, asset discovery, publish, refresh, and runtime install operations unless they explicitly use verified split `core_root` and `vault_root`. The normal end of that window is the successful completion of AF-3 runtime deployment migration (#33), where split Core plus active User Vault can validate, publish, refresh/install or dry-run, detect stale paths, and roll back if needed. AF-3 external-user readiness review (#34) is a post-window audit, not the normal window close point.
 

@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -94,13 +93,53 @@ def make_blank_vault(path: Path) -> None:
 
 
 def make_maintainer_like_vault(path: Path) -> None:
-    path.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(ROOT / ".agent-foundry-vault.yaml", path / ".agent-foundry-vault.yaml")
-    for name in ["indexes", "practices", "assets", "usage"]:
-        source = ROOT / name
-        target = path / name
-        if source.is_dir():
-            shutil.copytree(source, target)
+    make_blank_vault(path)
+    write(
+        path / "practices" / "meta" / "META-001-test-maintainer-like-practice.md",
+        "\n".join(
+            [
+                "---",
+                "id: META-001",
+                "title: Test maintainer-like practice",
+                "domain: meta",
+                "type: principle",
+                "status: active",
+                "version: 1",
+                "created: 2026-06-09",
+                "updated: 2026-06-09",
+                "tags: [test]",
+                "aliases: [META-001]",
+                "---",
+                "",
+                "## Principle",
+                "",
+                "Use the selected populated Vault records.",
+                "",
+            ]
+        ),
+    )
+    write(
+        path / "indexes" / "practice_index.yaml",
+        "\n".join(
+            [
+                "schema_version: 1",
+                "updated: 2026-06-09",
+                "",
+                "domains:",
+                "  meta:",
+                "    description: Test domain.",
+                "",
+                "practices:",
+                "  - id: META-001",
+                "    title: Test maintainer-like practice",
+                "    path: practices/meta/META-001-test-maintainer-like-practice.md",
+                "    domain: meta",
+                "    type: principle",
+                "    status: active",
+                "",
+            ]
+        ),
+    )
 
 
 def make_custom_vault(path: Path) -> None:
@@ -171,8 +210,8 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix="agent-foundry-root-fixtures-") as tmp:
         base = Path(tmp)
 
-        errors.extend(expect("same-root", run_check(ROOT, ROOT), True))
-        errors.extend(expect("same-root-plan", run_plan(ROOT, ROOT), True, "mode: combined_compatibility"))
+        errors.extend(expect("clean-core-same-root", run_check(ROOT, ROOT), False, "vault marker missing"))
+        errors.extend(expect("clean-core-same-root-plan", run_plan(ROOT, ROOT), False, "mode: unknown"))
 
         blank = base / "blank-vault"
         make_blank_vault(blank)

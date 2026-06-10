@@ -76,7 +76,7 @@ The agent should show title, decision, reason, canonical files affected, and ada
 
 ### 3. Canonical Record Update
 
-Canonical updates include `practices/`, `assets/`, `indexes/`, `schemas/`, `workflows/`, and `usage/usage-aggregate.yaml`.
+Canonical updates must target the owning layer: User Vault updates include `practices/`, `assets/`, `indexes/`, imports, and `usage/usage-aggregate.yaml`; Core updates include `schemas/`, `workflows/`, templates, scripts, adapter profiles, and product docs.
 
 Codex, Claude Code, and Hermes can edit the repo directly. ChatGPT cannot be assumed to write the repo or run checks, so it should not claim completion unless a local agent or human has applied the changes.
 

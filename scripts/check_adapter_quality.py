@@ -12,10 +12,23 @@ import re
 import sys
 from pathlib import Path
 
+from foundry_config import CONFIG_PATH, parse_config
+
 
 ROOT = Path(__file__).resolve().parents[1]
 PROFILE = ROOT / "adapters" / "adapter_profiles.yaml"
 ACTIVE_STATUSES = {"active", "revised"}
+
+
+def configured_vault_root() -> Path:
+    data = parse_config(CONFIG_PATH)
+    vault_root = data.get("vault_root", "")
+    if isinstance(vault_root, str) and vault_root:
+        return Path(vault_root).expanduser().resolve()
+    return ROOT
+
+
+VAULT_ROOT = configured_vault_root()
 
 
 def read(path: Path) -> str:
@@ -131,7 +144,7 @@ def id_visible(identifier: str, text: str) -> bool:
 
 def active_practices_by_domain() -> dict[str, list[str]]:
     by_domain: dict[str, list[str]] = {}
-    for entry in parse_index_entries(ROOT / "indexes" / "practice_index.yaml"):
+    for entry in parse_index_entries(VAULT_ROOT / "indexes" / "practice_index.yaml"):
         if entry.get("status") not in ACTIVE_STATUSES:
             continue
         by_domain.setdefault(entry.get("domain", ""), []).append(entry["id"])
@@ -140,7 +153,7 @@ def active_practices_by_domain() -> dict[str, list[str]]:
 
 def active_assets_by_adapter() -> dict[str, list[str]]:
     by_adapter: dict[str, list[str]] = {}
-    for entry in parse_index_entries(ROOT / "indexes" / "asset_index.yaml"):
+    for entry in parse_index_entries(VAULT_ROOT / "indexes" / "asset_index.yaml"):
         if entry.get("status") not in ACTIVE_STATUSES:
             continue
         published = inline_list(entry.get("published_to", ""))

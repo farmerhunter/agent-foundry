@@ -25,7 +25,8 @@ This checks:
 For Core/Vault root selection checks, also run:
 
 ```bash
-python3 scripts/check_foundry_roots.py --core-root . --vault-root .
+python3 scripts/foundry_config.py status
+python3 scripts/check_foundry_roots.py --core-root . --vault-root ~/.agent-foundry/vault/my-agent-foundry-vault
 ```
 
 This checks:
@@ -37,7 +38,7 @@ This checks:
 - blank Vault indexes and empty usage aggregate are valid;
 - missing or corrupt Vault indexes fail with actionable messages.
 - blank Vault publishing reports nothing to publish;
-- maintainer-like Vault publishing can produce adapter outputs in a temporary output root.
+- populated Vault publishing can produce adapter outputs in a temporary output root.
 
 To exercise deterministic same-root, blank Vault, maintainer-like Vault, and failure fixtures, run:
 
@@ -53,6 +54,8 @@ If script execution is unavailable, manually inspect:
 - `indexes/asset_index.yaml`
 - changed files under `practices/`, `assets/`, and `adapters/`
 - `usage/usage-aggregate.yaml`
+
+In split mode, inspect the `indexes/`, `practices/`, `assets/`, and `usage/` paths under the selected User Vault, not under the public Core checkout.
 
 ## Rule
 

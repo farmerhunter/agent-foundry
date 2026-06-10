@@ -481,11 +481,12 @@ Use these categories:
 
 | Category | Current examples | Git behavior | Source of truth |
 | --- | --- | --- | --- |
-| Canonical source | `practices/`, `assets/`, `workflows/`, `schemas/`, `templates/`, source scripts, `adapters/adapter_profiles.yaml`, adapter quality rules | Tracked | Human-reviewed canonical records and source-maintained tooling |
+| Core source | `workflows/`, `schemas/`, `templates/`, source scripts, `adapters/adapter_profiles.yaml`, adapter quality rules, product docs | Tracked in public Core | Source-maintained tooling and operating rules |
+| User Vault canonical records | `practices/`, `assets/`, `indexes/`, reviewed imports, `usage/usage-aggregate.yaml` | Tracked in the selected User Vault, not public Core by default | Human-reviewed canonical records and sanitized Vault metadata |
 | Tracked generated distribution output | `adapters/codex/`, `adapters/hermes/`, `adapters/claude-code/`, `adapters/chatgpt/` | Tracked when needed for runtime install, manual import, review, or distribution | Canonical practices/assets plus adapter profiles |
 | Runtime copy | Installed files under `~/.codex`, `~/.claude`, `~/.hermes`, and manual ChatGPT imports | Not tracked here | Regenerated or installed from `adapters/` |
 | Local private/generated operational state | `runtime/local/`, `usage/local/`, `usage/adoption-log.yaml`, `sync/local/`, `sync/imported/`, `sync/pending/`, `sync/applied/`, `sync/conflicts/`, `sync/snapshots/` | Gitignored by default | Local runtime, sync, or evidence workflows |
-| Shared aggregate or derived metadata | `usage/usage-aggregate.yaml`; future derived indexes if approved | Tracked only when sanitized and reviewable | Raw local evidence or canonical records, depending on artifact |
+| Shared aggregate or derived metadata | Future Core-owned derived indexes if approved | Tracked only when sanitized, reviewable, and Core-owned | Derived metadata, not raw local evidence |
 
 Rules:
 
@@ -517,7 +518,7 @@ Legacy `usage/asset-usage-log.yaml` remains migration input. New recording shoul
 
 ## Local And Private Data Policy
 
-Agent Foundry is local-first, but local-first does not mean every local artifact belongs in git. The repository may contain portable Core files, canonical User Vault records, tracked generated adapter outputs, and sanitized shared aggregates. Raw evidence, machine state, secrets, personal exports, and sensitive material stay local unless a reviewed policy defines a sanitized shared form.
+Agent Foundry is local-first, but local-first does not mean every local artifact belongs in git. The public Core repository contains portable Core files and tracked generated adapter outputs. Canonical User Vault records and sanitized shared aggregates belong to the selected User Vault. Raw evidence, machine state, secrets, personal exports, and sensitive material stay local unless a reviewed policy defines a sanitized shared form.
 
 Default classifications:
 
@@ -525,9 +526,9 @@ Default classifications:
 | --- | --- | --- |
 | Machine-local runtime state | `runtime/local/`, `~/.agent-foundry/config.yaml`, enabled runtime paths, adoption decisions | Ignored or outside the repo |
 | Raw usage evidence | `usage/local/usage-log.yaml` | Ignored |
-| Sanitized usage aggregate | `usage/usage-aggregate.yaml` | Tracked |
+| Sanitized usage aggregate | `usage/usage-aggregate.yaml` in the selected User Vault | Tracked in the Vault, not public Core by default |
 | Offline sync operational state | `sync/local/`, `sync/imported/`, `sync/pending/`, `sync/applied/`, `sync/conflicts/`, `sync/snapshots/` | Ignored |
-| External skill staging instructions | `imports/*/INSTRUCTIONS.md` | Tracked |
+| External skill staging instructions | `imports/*/INSTRUCTIONS.md` in the selected User Vault or future Core templates | Tracked only in the owning layer |
 | Raw external imports or exports | downloaded skills, raw chat exports, transcripts, source dumps, sensitive review packets | Not committed by default; stage only after explicit review |
 | Runtime adapter outputs | `adapters/codex/`, `adapters/claude-code/`, `adapters/hermes/`, `adapters/chatgpt/` | Tracked distribution/manual-import outputs |
 | User workspace affordances | `Agent Foundry.md`, Obsidian-oriented metadata, local agent settings | Treat as User Vault or maintainer-local unless promoted into Core by review |
@@ -546,7 +547,7 @@ Current ignored local/private paths include `runtime/local/`, `usage/local/`, `u
 
 ## Example Versus User Content Separation
 
-Agent Foundry currently stores reusable Core machinery and the maintainer's User Vault in one repository. That is acceptable for AF-1, but external users must not be asked to inherit the maintainer's personal vault as if it were product Core.
+Agent Foundry now separates reusable Core machinery from the selected User Vault. External users must not be asked to inherit the maintainer's personal vault as if it were product Core.
 
 Use these terms:
 
@@ -559,12 +560,12 @@ Use these terms:
 
 Current repository classification:
 
-| Path or content | AF-1 classification | External-user implication |
+| Path or content | AF-3 classification | External-user implication |
 | --- | --- | --- |
-| `workflows/`, `schemas/`, `scripts/`, `templates/`, `runtime/templates/` | Core | Candidate for reusable distribution after AF-2 boundary work |
-| `practices/`, `assets/`, `indexes/`, `usage/usage-aggregate.yaml` | User Vault in this repository | Must not be copied wholesale into a blank external-user vault by default |
+| `workflows/`, `schemas/`, `scripts/`, `templates/`, `runtime/templates/` | Core | Reusable distribution substrate |
+| `practices/`, `assets/`, `indexes/`, `usage/usage-aggregate.yaml` | User Vault outside public Core by default | Must not be copied wholesale into a blank external-user vault by default |
 | `adapters/` | Generated distribution outputs plus source-maintained adapter profiles/quality material | Regenerate from the target user's vault; tracked here for current runtime install and manual imports |
-| `docs/` | Mixed Core documentation, User Vault documentation, and proposed design evidence | External-user setup guidance must distinguish product docs from maintainer planning evidence |
+| `docs/` | Core documentation plus proposed design evidence | External-user setup guidance must distinguish current capability from future plans |
 | `docs/memory-system-handoff-dump.md` | Proposed Design Evidence | Do not treat as implemented memory-system architecture |
 | `Agent Foundry.md` | User Vault navigation/hub for the maintainer's Obsidian-style workspace | Not a required Core file for external users |
 | `.claude/settings.json` | Maintainer/runtime-specific workspace setting | Should not become product setup guidance without AF-2 review |
@@ -578,7 +579,7 @@ Example conventions:
 5. Adapter outputs for an external user should be generated from that user's approved vault records, not copied from this repository's personal vault unless explicitly deployed through a reviewed capability pack.
 6. Proposed memory-system material must stay in docs/imports/evidence form until reviewed architecture creates implemented memory directories, schemas, and workflows.
 
-AF-2 should use this policy to design a blank vault initialization path, a Core/Vault split, and external-user setup boundaries. AF-1 does not move files yet; it marks the boundary so future movement is deliberate.
+AF-3 implements the Core/Vault split and blank Vault initialization path. AF-4 should build polished onboarding and capability pack deployment on top of that boundary.
 
 ## Practice Types
 
