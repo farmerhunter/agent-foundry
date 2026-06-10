@@ -261,7 +261,8 @@ def stale_reference_lines(core_root: Path, vault_root: Path) -> tuple[list[str],
         lines.extend(f"- {ref}" for ref in refs)
     else:
         lines.append("- none")
-    return lines, []
+    stops = [f"stale/local path reference found: {ref}" for ref in refs]
+    return lines, stops
 
 
 def stop_lines(stops: list[str]) -> list[str]:

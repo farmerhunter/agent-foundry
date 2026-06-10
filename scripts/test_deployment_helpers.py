@@ -45,7 +45,7 @@ def alternate_core_runtime_fixture() -> list[str]:
             ),
         )
         runtime_report, runtime_stops = runtime_lines(alt_core)
-        stale_report, _ = stale_reference_lines(alt_core, Path("/tmp/af65-vault"))
+        stale_report, stale_stops = stale_reference_lines(alt_core, Path("/tmp/af65-vault"))
         runtime_text = "\n".join(runtime_report)
         stale_text = "\n".join(stale_report)
         if str(distinctive) not in runtime_text:
@@ -58,6 +58,8 @@ def alternate_core_runtime_fixture() -> list[str]:
             errors.append("alternate-core-runtime: stale scan did not use alternate core manifest")
         if str(current_manifest) in stale_text:
             errors.append("alternate-core-runtime: stale scan leaked current checkout manifest")
+        if not stale_stops:
+            errors.append("alternate-core-runtime: stale path reference did not produce a stop condition")
         if not any("runtime target codex enabled but install path is missing" in stop for stop in runtime_stops):
             errors.append("alternate-core-runtime: missing distinctive runtime path did not fail closed")
     return errors
