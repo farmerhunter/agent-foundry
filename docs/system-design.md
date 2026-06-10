@@ -240,6 +240,122 @@ Future major-upgrade invariants:
 - A partially migrated deployment must be detectable.
 - Real workflow verification is required before a major upgrade is considered complete.
 
+## Private User Vault Remote Policy
+
+AF-4 should make the current User Vault syncable before broad onboarding work starts. The default remote target for the current account is:
+
+```text
+owner: farmerhunter
+repository: agent-foundry-vault-farmerhunter
+visibility: private
+local path: ~/.agent-foundry/vault/agent-foundry-vault-farmerhunter
+```
+
+Remote creation and first push are privacy-boundary operations. They require explicit user approval at execution time. Planning, inventory, and dry-run checks may happen before approval; remote creation, `git init` inside the Vault, commits, pushes, and remote visibility changes may not.
+
+The first Vault repository should use a clean privacy-boundary history by default. Preserving the old public Core file history is lower priority than proving the private Vault contains only approved Vault records and no raw/local evidence. Historical context remains available in the public Core repository history and AF-3 migration comments; the private Vault should not need to carry that full history to be operational.
+
+Tracked in the private Vault:
+
+- `.agent-foundry-vault.yaml`
+- `Agent Foundry.md` and other vault-local user docs approved for sync
+- `practices/`
+- `assets/`
+- `indexes/`
+- `imports/` instructions and reviewed import records that are safe to sync
+- `usage/usage-aggregate.yaml`
+- sanitized shared usage/adoption records only when explicitly approved for sync
+- Vault-specific documentation needed to operate the current user's capability base
+
+Ignored or excluded from the private Vault remote:
+
+- raw usage evidence under `usage/local/`
+- secrets, tokens, credentials, cookies, API keys, and environment files
+- machine-local runtime manifests or install state
+- sync transport state, snapshots, conflicts, pending/applied queues, and imported archives
+- unmanaged runtime copies from Codex, Claude Code, Hermes, or ChatGPT
+- product project source trees, build outputs, logs, caches, and temporary files
+- raw chat exports, transcripts, screenshots, or sensitive evidence unless a later reviewed policy defines a sanitized form
+
+Proposed Vault `.gitignore` baseline:
+
+```gitignore
+usage/local/
+runtime/
+sync/
+.env
+.env.*
+*.secret
+*.key
+*.pem
+*.p12
+*.log
+.DS_Store
+__pycache__/
+*.pyc
+```
+
+The ignore file is a starting point, not approval to push. Before first push, run an explicit file inventory and review every tracked path. If any tracked file contains a machine path, secret, raw evidence, unmanaged runtime copy, or product project material, stop and revise the policy.
+
+Cross-machine expectations:
+
+- Every deployment should use the same local Vault path pattern unless explicitly overridden.
+- `~/.agent-foundry/config.yaml` is machine-local and points to the local Core and Vault paths; it is not committed to the Vault.
+- The private Vault remote is the canonical sync substrate for the current user's Vault records.
+- The public Core remote remains the source for reusable tooling and docs.
+- A deployment is not considered migrated until it can validate Core plus Vault, publish adapters from the selected Vault, refresh managed runtimes or record an intentional manual/deferred runtime, and run at least one real workflow after pulling the Vault.
+
+## Major Upgrade Migration Discipline
+
+AF-4 should turn the split migration into the standard pattern for future major upgrades. A major upgrade is any change that may make existing deployments or Vault records incompatible without a planned transition. Examples include:
+
+- Vault schema version changes;
+- Core marker or directory layout changes;
+- generated adapter packaging changes;
+- runtime install ownership model changes;
+- capability-pack metadata introduction;
+- memory-system record type introduction;
+- migration from local-only state to remote-backed state;
+- any change that can make one deployment write records another deployment cannot read safely.
+
+Required upgrade states:
+
+| State | Meaning |
+| --- | --- |
+| `compatible` | Current Core, Vault, generated outputs, and runtime state can operate safely. |
+| `dry_run_only` | The upgrade can be planned but must not apply yet. |
+| `blocked` | A required dependency, approval, backup, or compatibility condition is missing. |
+| `unknown` | Tooling cannot determine the current version/layout safely. |
+| `partial` | Some deployments or layers have migrated and others have not. |
+| `rollback_required` | Validation failed after apply and the documented rollback path should be used. |
+| `complete` | All in-scope deployments pass validation and real workflow smoke tests. |
+
+Standard upgrade issue chain:
+
+1. Decision issue: define the target version/layout, compatibility rule, stop conditions, and owner role.
+2. Inventory issue: record current Core, Vault, generated, runtime, local-private, and deployment states.
+3. Implementation issue: make tooling support both old and new states where practical.
+4. Dry-run issue: prove migration planning without writes.
+5. Apply issue: perform gated writes only after explicit approval.
+6. Review issue: verify backups, rollback visibility, version markers, stale references, and real workflows.
+7. Close issue: record cross-machine completion and residual risks.
+
+Standard upgrade checklist:
+
+- identify authoritative Core and Vault layout/schema markers;
+- classify generated outputs and runtime copies as downstream, not canonical;
+- inventory every in-scope deployment before applying;
+- create or verify backups before destructive or irreversible changes;
+- run dry-run planning before apply;
+- fail closed on unknown or incompatible marker pairs;
+- apply only after explicit approval when privacy, data movement, deletion, or runtime writes are involved;
+- validate Core plus Vault separately after apply;
+- regenerate or refresh adapters from the selected Vault;
+- run at least one real workflow smoke test;
+- verify another deployment can pull/sync the result;
+- record residual risks and intentionally deferred deployments;
+- keep AF-5 onboarding and AF-7 memory implementation out of the upgrade unless explicitly scoped.
+
 Future split options:
 
 | Option | Use when | Tradeoff |
