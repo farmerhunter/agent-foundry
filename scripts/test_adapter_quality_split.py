@@ -171,9 +171,42 @@ def main() -> int:
             ]
         )
         errors.extend(expect("selected-output-promoted-asset", selected_quality, True, "selected-output surface"))
+        codex_skill = generated / "codex" / "skills" / "role-automation-planner" / "SKILL.md"
+        hermes_skill = generated / "hermes" / "skills" / "role-automation-planner" / "SKILL.md"
+        for name, path in [("codex", codex_skill), ("hermes", hermes_skill)]:
+            if not path.exists():
+                errors.append(f"selected-output-promoted-asset: {name} generated SKILL.md missing: {path}")
+                continue
+            text = path.read_text(encoding="utf-8")
+            for expected in ["ASSET-COLLAB-002", "Role Dispatch and Automation Planner", "## Responsibility", "## Process"]:
+                if expected not in text:
+                    errors.append(f"selected-output-promoted-asset: {name} generated SKILL.md missing {expected}")
         generated_text = "\n".join(path.read_text(encoding="utf-8") for path in generated.rglob("*") if path.is_file())
         if "ASSET-COLLAB-002" not in generated_text:
             errors.append("selected-output-promoted-asset: generated output missing ASSET-COLLAB-002")
+
+        codex_skill.unlink()
+        missing_skill_quality = run(
+            [
+                str(QUALITY),
+                "--core-root",
+                str(ROOT),
+                "--vault-root",
+                str(temp_vault),
+                "--surface",
+                "selected-output",
+                "--generated-root",
+                str(generated),
+            ]
+        )
+        errors.extend(
+            expect(
+                "selected-output-missing-generated-skill",
+                missing_skill_quality,
+                False,
+                "missing generated SKILL.md for active skill asset ASSET-COLLAB-002",
+            )
+        )
 
         unsafe_publish = run(
             [
