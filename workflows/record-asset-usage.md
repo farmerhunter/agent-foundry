@@ -73,7 +73,7 @@ Use concise notes. Do not store raw session transcripts.
 
 ## Data Boundary
 
-`scripts/record_asset_usage.py` writes raw evidence to gitignored `usage/local/usage-log.yaml` and updates sanitized shared counts in `usage/usage-aggregate.yaml` for `evidence_type: applied`.
+`scripts/record_asset_usage.py` validates the selected Core and Vault, writes raw evidence to the selected Vault's gitignored `usage/local/usage-log.yaml`, and updates sanitized shared counts in the selected Vault's `usage/usage-aggregate.yaml` for `evidence_type: applied`.
 
 Raw local evidence may include project, trigger, and note fields for local audit. It is machine-local by default and should not be synced unless the user explicitly chooses to share it.
 
@@ -87,4 +87,4 @@ python3 scripts/aggregate_usage.py --include-legacy
 
 ## Review
 
-`review assets` should use `usage/usage-aggregate.yaml` as its primary evidence for keep/revise/merge/deprecate/retire decisions. Legacy `usage/asset-usage-log.yaml` is fallback or migration input only.
+`review assets` should use the selected Vault's `usage/usage-aggregate.yaml` as its primary evidence for keep/revise/merge/deprecate/retire decisions. Legacy `usage/asset-usage-log.yaml` in the selected Vault is fallback or migration input only.

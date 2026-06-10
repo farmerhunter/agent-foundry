@@ -8,12 +8,25 @@ import hashlib
 import socket
 from pathlib import Path
 
+from check_foundry_roots import validate
+from foundry_config import CONFIG_PATH, ROOT, parse_config
 
-ROOT = Path(__file__).resolve().parents[1]
-LOCAL_LOG = ROOT / "usage" / "local" / "usage-log.yaml"
-LEGACY_ASSET_LOG = ROOT / "usage" / "asset-usage-log.yaml"
-AGGREGATE = ROOT / "usage" / "usage-aggregate.yaml"
 OUTCOMES = {"useful", "neutral", "not_useful", "unknown"}
+
+
+def configured_roots(core_root_arg: str = "", vault_root_arg: str = "") -> tuple[Path, Path]:
+    data = parse_config(CONFIG_PATH)
+    core_root_text = core_root_arg or str(data.get("core_root", "") or ROOT)
+    vault_root_text = vault_root_arg or str(data.get("vault_root", "") or "")
+    core_root = Path(core_root_text).expanduser().resolve()
+    if not vault_root_text:
+        raise SystemExit("missing vault_root: pass --vault-root or configure ~/.agent-foundry/config.yaml")
+    vault_root = Path(vault_root_text).expanduser().resolve()
+    errors = validate(core_root, vault_root)
+    if errors:
+        message = "\n".join(f"- {error}" for error in errors)
+        raise SystemExit(f"refusing to aggregate usage because Core/Vault validation failed:\n{message}")
+    return core_root, vault_root
 
 
 def yaml_quote(value: str) -> str:
@@ -104,12 +117,12 @@ def aggregate(entries: list[dict[str, str]]) -> dict[tuple[str, str, str, str, s
     return rows
 
 
-def parse_existing_aggregate() -> dict[tuple[str, str, str, str, str], dict[str, str | int]]:
-    if not AGGREGATE.exists():
+def parse_existing_aggregate(aggregate_path: Path) -> dict[tuple[str, str, str, str, str], dict[str, str | int]]:
+    if not aggregate_path.exists():
         return {}
     rows: dict[tuple[str, str, str, str, str], dict[str, str | int]] = {}
     current: dict[str, str | int] | None = None
-    for line in AGGREGATE.read_text(encoding="utf-8").splitlines():
+    for line in aggregate_path.read_text(encoding="utf-8").splitlines():
         stripped = line.strip()
         if stripped.startswith("- subject_type:"):
             if current:
@@ -154,7 +167,8 @@ def row_key(row: dict[str, str | int]) -> tuple[str, str, str, str, str]:
     )
 
 
-def write(rows: dict[tuple[str, str, str, str, str], dict[str, str | int]], updated: str) -> None:
+def write(aggregate_path: Path, rows: dict[tuple[str, str, str, str, str], dict[str, str | int]], updated: str) -> None:
+    aggregate_path.parent.mkdir(parents=True, exist_ok=True)
     lines = ["schema_version: 1", f"updated: {updated}", "", "aggregates:"]
     for row in sorted(rows.values(), key=row_key):
         lines.extend(
@@ -171,27 +185,34 @@ def write(rows: dict[tuple[str, str, str, str, str], dict[str, str | int]], upda
                 f"    last_used: {row['last_used']}",
             ]
         )
-    AGGREGATE.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    aggregate_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Build shared usage aggregates from usage logs.")
     parser.add_argument("--include-legacy", action="store_true", help="Include usage/asset-usage-log.yaml.")
     parser.add_argument("--replace", action="store_true", help="Replace the aggregate instead of preserving existing rows.")
+    parser.add_argument("--core-root", default="", help="Agent Foundry Core root. Defaults to configured core_root.")
+    parser.add_argument("--vault-root", default="", help="Selected Agent Foundry Vault root. Defaults to configured vault_root.")
     args = parser.parse_args()
 
-    entries = parse_entries(LOCAL_LOG)
+    _, vault_root = configured_roots(args.core_root, args.vault_root)
+    local_log = vault_root / "usage" / "local" / "usage-log.yaml"
+    legacy_asset_log = vault_root / "usage" / "asset-usage-log.yaml"
+    aggregate_path = vault_root / "usage" / "usage-aggregate.yaml"
+
+    entries = parse_entries(local_log)
     if args.include_legacy:
-        entries.extend(parse_entries(LEGACY_ASSET_LOG, legacy_asset=True))
+        entries.extend(parse_entries(legacy_asset_log, legacy_asset=True))
     rows = aggregate(entries)
     if not args.replace:
-        rows = merge_rows(parse_existing_aggregate(), rows)
+        rows = merge_rows(parse_existing_aggregate(aggregate_path), rows)
     updated = max(
         [str(row.get("last_used", "")) for row in rows.values()] + [entry["date"] for entry in entries if entry.get("date")],
         default="",
     )
-    write(rows, updated)
-    print(f"wrote {AGGREGATE}")
+    write(aggregate_path, rows, updated)
+    print(f"wrote {aggregate_path}")
     print(f"aggregates: {len(rows)}")
     return 0
 

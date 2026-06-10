@@ -8,11 +8,27 @@ import datetime as dt
 import re
 from pathlib import Path
 
+from check_foundry_roots import validate
+from foundry_config import CONFIG_PATH, ROOT, parse_config
 
-ROOT = Path(__file__).resolve().parents[1]
 ACTIVE_STATUSES = {"active", "revised"}
 ALWAYS_PREFLIGHT_SOFT_LIMIT = 8
 MISSED_ACTIVATION_PROMOTE_THRESHOLD = 3
+
+
+def configured_roots(core_root_arg: str = "", vault_root_arg: str = "") -> tuple[Path, Path]:
+    data = parse_config(CONFIG_PATH)
+    core_root_text = core_root_arg or str(data.get("core_root", "") or ROOT)
+    vault_root_text = vault_root_arg or str(data.get("vault_root", "") or "")
+    core_root = Path(core_root_text).expanduser().resolve()
+    if not vault_root_text:
+        raise SystemExit("missing vault_root: pass --vault-root or configure ~/.agent-foundry/config.yaml")
+    vault_root = Path(vault_root_text).expanduser().resolve()
+    errors = validate(core_root, vault_root)
+    if errors:
+        message = "\n".join(f"- {error}" for error in errors)
+        raise SystemExit(f"refusing to review practices because Core/Vault validation failed:\n{message}")
+    return core_root, vault_root
 
 
 def read(path: Path) -> str:
@@ -55,9 +71,9 @@ def extract_list(fm: str, key: str) -> list[str]:
     return []
 
 
-def load_practices() -> list[dict[str, object]]:
+def load_practices(vault_root: Path) -> list[dict[str, object]]:
     practices: list[dict[str, object]] = []
-    for path in sorted((ROOT / "practices").glob("*/*.md")):
+    for path in sorted((vault_root / "practices").glob("*/*.md")):
         text = read(path)
         fm = frontmatter_text(text)
         tier = ""
@@ -76,14 +92,14 @@ def load_practices() -> list[dict[str, object]]:
                 "aliases": extract_list(fm, "aliases"),
                 "related": extract_list(fm, "related"),
                 "tier": tier,
-                "path": str(path.relative_to(ROOT)),
+                "path": str(path.relative_to(vault_root)),
             }
         )
     return practices
 
 
-def load_missed_evidence() -> dict[str, int]:
-    path = ROOT / "usage" / "local" / "usage-log.yaml"
+def load_missed_evidence(vault_root: Path) -> dict[str, int]:
+    path = vault_root / "usage" / "local" / "usage-log.yaml"
     missed: dict[str, int] = {}
     if not path.exists():
         return missed
@@ -107,9 +123,9 @@ def load_missed_evidence() -> dict[str, int]:
     return missed
 
 
-def load_asset_coverage() -> dict[str, list[str]]:
+def load_asset_coverage(vault_root: Path) -> dict[str, list[str]]:
     coverage: dict[str, list[str]] = {}
-    for path in sorted((ROOT / "assets").glob("*/*.yaml")):
+    for path in sorted((vault_root / "assets").glob("*/*.yaml")):
         text = read(path)
         asset_id = ""
         for line in text.splitlines():
@@ -123,9 +139,9 @@ def load_asset_coverage() -> dict[str, list[str]]:
     return coverage
 
 
-def load_asset_ids() -> set[str]:
+def load_asset_ids(vault_root: Path) -> set[str]:
     asset_ids: set[str] = set()
-    for path in sorted((ROOT / "assets").glob("*/*.yaml")):
+    for path in sorted((vault_root / "assets").glob("*/*.yaml")):
         for line in read(path).splitlines():
             if line.startswith("id:"):
                 asset_ids.add(line.split(":", 1)[1].strip())
@@ -133,10 +149,10 @@ def load_asset_ids() -> set[str]:
     return asset_ids
 
 
-def infer_adapter_asset_candidates(asset_ids: set[str]) -> list[dict[str, object]]:
+def infer_adapter_asset_candidates(core_root: Path, asset_ids: set[str]) -> list[dict[str, object]]:
     candidates: list[dict[str, object]] = []
     practice_pattern = re.compile(r"\b[A-Z]+-\d{3}\b")
-    for path in sorted((ROOT / "adapters").rglob("SKILL.md")):
+    for path in sorted((core_root / "adapters").rglob("SKILL.md")):
         text = read(path)
         asset_match = re.search(r"Asset ID:\s*(ASSET-[A-Z]+-\d{3})", text)
         if not asset_match:
@@ -155,7 +171,7 @@ def infer_adapter_asset_candidates(asset_ids: set[str]) -> list[dict[str, object
             {
                 "asset_id": asset_id,
                 "title": title,
-                "adapter_path": str(path.relative_to(ROOT)),
+                "adapter_path": str(path.relative_to(core_root)),
                 "practice_ids": practice_ids,
             }
         )
@@ -271,17 +287,22 @@ def parse_date(value: str) -> dt.date | None:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Review Agent Foundry practices for rot and activation gaps.")
     parser.add_argument("--today", default=dt.date.today().isoformat())
+    parser.add_argument("--core-root", default="", help="Agent Foundry Core root. Defaults to configured core_root.")
+    parser.add_argument("--vault-root", default="", help="Selected Agent Foundry Vault root. Defaults to configured vault_root.")
     args = parser.parse_args()
     today = dt.date.fromisoformat(args.today)
+    core_root, vault_root = configured_roots(args.core_root, args.vault_root)
 
-    practices = load_practices()
-    missed = load_missed_evidence()
-    coverage = load_asset_coverage()
-    asset_ids = load_asset_ids()
-    adapter_asset_candidates = infer_adapter_asset_candidates(asset_ids)
+    practices = load_practices(vault_root)
+    missed = load_missed_evidence(vault_root)
+    coverage = load_asset_coverage(vault_root)
+    asset_ids = load_asset_ids(vault_root)
+    adapter_asset_candidates = infer_adapter_asset_candidates(core_root, asset_ids)
 
     print("# Practice Review")
     print(f"date: {today}")
+    print(f"core_root: {core_root}")
+    print(f"vault_root: {vault_root}")
     print(f"practices: {len(practices)}")
     print()
 
