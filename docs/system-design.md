@@ -170,7 +170,7 @@ Migration window:
 - While the window is open, pause normal canonical writes and adapter/runtime publishing unless the operation explicitly uses verified split `core_root` and `vault_root`.
 - The normal window close point is #33 Runtime deployment migration, not #34. It closes only after Core and active User Vault validate separately, selected-Vault adapter publishing succeeds, local runtime refresh/dry-run no longer depends on the old combined root, stale path checks pass, and rollback is visible.
 - #34 is a post-window readiness audit. Failures found in #34 should reopen or fix the migration result instead of extending an ambiguous half-migrated state.
-- AF-4 starts after the local split window closes. It is responsible for private Vault remote setup, all existing deployment migrations, and real workflow verification across machines. AF-5 new-user onboarding should not become the main priority until AF-4 proves the current user can actually operate the split system.
+- AF-4 starts after the local split window closes. It is responsible for private Vault remote setup, all existing deployment migrations, real workflow verification across machines, and the reusable upgrade discipline needed for future data-schema or program-structure major changes. AF-5 new-user onboarding should not become the main priority until AF-4 proves the current user can actually operate and upgrade the split system.
 
 Move to the active User Vault:
 
@@ -212,9 +212,9 @@ Stop conditions:
 - Runtime install would overwrite unmanaged files or point at the old combined root without an explicit migration step.
 - A private remote must be created, files must be deleted, history must be rewritten, or records must be moved out of the current repo. These require explicit user approval at execution time.
 
-## Current-User Multi-Deployment Migration
+## Current-User Deployment And Upgrade Migration
 
-AF-4 is not new-user onboarding. It is the operational migration stage for the current only real user, whose Agent Foundry setup already exists on multiple machines and runtime surfaces.
+AF-4 is not new-user onboarding. It is the operational migration and upgrade-readiness stage for the current only real user, whose Agent Foundry setup already exists on multiple machines and runtime surfaces.
 
 AF-4 should establish the current user's private Vault sync substrate before broad onboarding work:
 
@@ -225,8 +225,20 @@ AF-4 should establish the current user's private Vault sync substrate before bro
 5. Keep the local Vault path stable: `~/.agent-foundry/vault/agent-foundry-vault-farmerhunter`.
 6. Write or verify `~/.agent-foundry/config.yaml` on each machine so agents can locate both `core_root` and `vault_root` from product project work, Vault work, or Core maintenance work.
 7. Run validation, selected-Vault adapter publishing, runtime refresh, stale-reference checks, and at least one real harvest/review/publish workflow across deployments.
+8. Generalize the migration checks into an upgrade playbook that future schema/layout/program changes can reuse.
 
-AF-4 exit means the current user can actually operate the split system across deployed machines. It does not require polished blank-Vault onboarding, bootstrap capability packs, optional pack UX, or memory-system records. Those belong to later stages.
+AF-4 should also treat the Core/Vault split as the first real production migration rehearsal. Later changes may introduce new Vault schema versions, Core layout changes, adapter packaging changes, capability-pack metadata, or memory-system record types. Those upgrades should not rely on ad hoc human memory. They should have the same structure: version markers, inventory, compatibility check, backup, dry-run, gated apply, validation, runtime refresh, real workflow smoke test, cross-machine propagation, and close verification.
+
+AF-4 exit means the current user can actually operate and upgrade the split system across deployed machines. It does not require polished blank-Vault onboarding, bootstrap capability packs, optional pack UX, or memory-system records. Those belong to later stages.
+
+Future major-upgrade invariants:
+
+- Core, Vault, generated adapters, runtime installs, and local-private state must be distinguishable before upgrade.
+- Version/layout markers must be explicit enough for tooling to decide whether an operation is safe, blocked, or only diagnostic.
+- Upgrade scripts should fail closed when Core and Vault versions are incompatible or unknown.
+- Backups and rollback boundaries must be visible before destructive or irreversible steps.
+- A partially migrated deployment must be detectable.
+- Real workflow verification is required before a major upgrade is considered complete.
 
 Future split options:
 
