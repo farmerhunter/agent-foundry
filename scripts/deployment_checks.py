@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import hashlib
-import os
 import platform
 import socket
 import subprocess
@@ -16,8 +15,6 @@ from foundry_config import CONFIG_PATH, parse_config, validate as validate_locat
 
 
 ROOT = Path(__file__).resolve().parents[1]
-RUNTIME_LOCAL = ROOT / "runtime" / "local" / "runtime_manifest.yaml"
-RUNTIME_TEMPLATE = ROOT / "runtime" / "templates" / "runtime_manifest.template.yaml"
 
 
 @dataclass
@@ -79,8 +76,10 @@ def parse_runtime_manifest(path: Path) -> dict[str, dict[str, str]]:
     return targets
 
 
-def runtime_manifest_path() -> Path:
-    return RUNTIME_LOCAL if RUNTIME_LOCAL.exists() else RUNTIME_TEMPLATE
+def runtime_manifest_path(core_root: Path) -> Path:
+    local = core_root / "runtime" / "local" / "runtime_manifest.yaml"
+    template = core_root / "runtime" / "templates" / "runtime_manifest.template.yaml"
+    return local if local.exists() else template
 
 
 def machine_lines(alias: str) -> list[str]:
@@ -170,7 +169,7 @@ def root_validation_lines(core_root: Path, vault_root: Path) -> tuple[list[str],
 
 
 def runtime_lines(core_root: Path) -> tuple[list[str], list[str]]:
-    manifest = runtime_manifest_path()
+    manifest = runtime_manifest_path(core_root)
     targets = parse_runtime_manifest(manifest)
     lines = ["### Runtime"]
     stops: list[str] = []
@@ -245,7 +244,7 @@ def publish_dry_run_lines(core_root: Path, vault_root: Path) -> tuple[list[str],
 
 
 def stale_reference_lines(core_root: Path, vault_root: Path) -> tuple[list[str], list[str]]:
-    scan_paths = [runtime_manifest_path()]
+    scan_paths = [runtime_manifest_path(core_root)]
     refs: list[str] = []
     needles = [str(core_root)]
     if core_root != vault_root:
