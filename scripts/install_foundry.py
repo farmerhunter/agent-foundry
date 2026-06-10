@@ -7,6 +7,7 @@ import argparse
 import subprocess
 from pathlib import Path
 
+from adapter_install_receipt import write_receipt
 from foundry_config import CONFIG_PATH, parse_config, write_config
 from runtime_manifest import parse_targets, read_manifest
 
@@ -77,6 +78,7 @@ def main() -> int:
 
     targets = parse_targets(read_manifest())
     selected = [args.target] if args.target else list(targets)
+    installed_targets: dict[str, Path] = {}
     for target in selected:
         if target not in targets:
             raise SystemExit(f"Unknown target: {target}")
@@ -93,6 +95,11 @@ def main() -> int:
         code = run(sync_command(target, config.get("install_path", ""), adapter_root, args.apply), execute=True)
         if code != 0:
             return code
+        if args.apply:
+            installed_targets[target] = Path(config.get("install_path", "")).expanduser()
+    if args.apply and installed_targets:
+        write_receipt(core_root=core_root, vault_root=vault_root, adapter_root=adapter_root, installed_targets=installed_targets)
+        print(f"wrote adapter install receipt: {ROOT / 'runtime' / 'local' / 'adapter-install-receipt.yaml'}")
     return 0
 
 
