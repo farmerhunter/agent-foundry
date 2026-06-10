@@ -101,6 +101,72 @@ def parse_index_entries(path: Path) -> list[dict[str, str]]:
     return entries
 
 
+def yaml_scalar(text: str, key: str) -> str:
+    for line in text.splitlines():
+        if line.startswith(f"{key}:"):
+            return line.split(":", 1)[1].strip().strip('"').strip("'")
+    return ""
+
+
+def yaml_list(text: str, key: str) -> list[str]:
+    values: list[str] = []
+    in_list = False
+    for line in text.splitlines():
+        if line.startswith(f"{key}:"):
+            rest = line.split(":", 1)[1].strip()
+            if rest.startswith("[") and rest.endswith("]"):
+                return inline_list(rest)
+            in_list = True
+            continue
+        if in_list and line and not line.startswith(" "):
+            break
+        if in_list and line.strip().startswith("- "):
+            values.append(line.strip()[2:].strip().strip('"').strip("'"))
+    return values
+
+
+def slug_from_asset(entry: dict[str, str]) -> str:
+    stem = Path(entry.get("path", "")).name.removesuffix(".asset.yaml").removesuffix(".yaml")
+    prefix = f"{entry.get('id', '')}-"
+    if stem.startswith(prefix):
+        stem = stem[len(prefix) :]
+    slug = re.sub(r"[^a-z0-9]+", "-", stem.lower()).strip("-")
+    return slug or re.sub(r"[^a-z0-9]+", "-", entry.get("title", entry.get("id", "")).lower()).strip("-")
+
+
+def active_asset_entries(vault_root: Path) -> list[dict[str, str]]:
+    return [
+        entry
+        for entry in parse_index_entries(vault_root / "indexes" / "asset_index.yaml")
+        if entry.get("status") in ACTIVE_STATUSES
+    ]
+
+
+def active_skill_assets(vault_root: Path) -> list[dict[str, object]]:
+    records: list[dict[str, object]] = []
+    for entry in active_asset_entries(vault_root):
+        path = vault_root / entry.get("path", "")
+        if not path.exists():
+            continue
+        text = read(path)
+        if yaml_scalar(text, "asset_type") != "skill":
+            continue
+        record = dict(entry)
+        record.update(
+            {
+                "slug": slug_from_asset(entry),
+                "title": yaml_scalar(text, "title") or entry.get("title", entry["id"]),
+                "purpose": yaml_scalar(text, "purpose"),
+                "responsibility": yaml_scalar(text, "responsibility"),
+                "usage_triggers": yaml_list(text, "usage_triggers"),
+                "process": yaml_list(text, "process"),
+                "published_to": yaml_list(text, "published_to") or inline_list(entry.get("published_to", "")),
+            }
+        )
+        records.append(record)
+    return records
+
+
 def core_adapter_files(core_root: Path, outputs: list[str]) -> list[Path]:
     files: list[Path] = []
     for output in outputs:
@@ -167,6 +233,43 @@ def active_ids(vault_root: Path, index_rel: str) -> list[str]:
             continue
         ids.append(entry["id"])
     return ids
+
+
+def expected_skill_path(generated_root: Path, adapter_id: str, slug: str) -> Path:
+    return generated_root / adapter_id / "skills" / slug / "SKILL.md"
+
+
+def check_generated_skill_artifacts(generated_root: Path, vault_root: Path) -> list[str]:
+    errors: list[str] = []
+    for record in active_skill_assets(vault_root):
+        published_to = record.get("published_to", [])
+        if not isinstance(published_to, list):
+            continue
+        for adapter_id in ("codex", "hermes"):
+            if adapter_id not in published_to:
+                continue
+            path = expected_skill_path(generated_root, adapter_id, str(record["slug"]))
+            if not path.exists():
+                errors.append(
+                    f"Selected output skill artifact: {adapter_id} missing generated SKILL.md "
+                    f"for active skill asset {record['id']}: {path}"
+                )
+                continue
+            text = read(path)
+            checks = {
+                "front matter": text.startswith("---\n") and "\n---\n" in text[4:],
+                "asset ID": str(record["id"]) in text,
+                "title": str(record.get("title", "")) in text,
+                "purpose": str(record.get("purpose", "")) in text,
+                "responsibility": "## Responsibility" in text and str(record.get("responsibility", "")) in text,
+                "trigger or process": "## Trigger Guidance" in text or "## Process" in text,
+            }
+            for label, ok in checks.items():
+                if not ok:
+                    errors.append(
+                        f"Selected output skill artifact: {adapter_id} {record['id']} SKILL.md missing {label}: {path}"
+                    )
+    return errors
 
 
 def manifest_ids(manifest: Path, key: str) -> list[str]:
@@ -278,6 +381,7 @@ def check_selected_output_surface(core_root: Path, vault_root: Path, generated_r
                 phrase = phrase.split("<", 1)[0].strip()
             if phrase and phrase not in text:
                 errors.append(f"Selected output coverage: {name} generated output missing command phrase: {phrase}")
+    errors.extend(check_generated_skill_artifacts(generated_root, vault_root))
     return errors
 
 
