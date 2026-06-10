@@ -159,17 +159,18 @@ Default target:
 - Core remains the public `farmerhunter/agent-foundry` repository or its renamed public successor.
 - The active User Vault should live under the same machine-local location pattern on every deployment: `~/.agent-foundry/vault/agent-foundry-vault-<account>`.
 - For this account, the selected local target is `~/.agent-foundry/vault/agent-foundry-vault-farmerhunter`.
-- The Vault may later have a private remote, but its local locator path should stay stable across deployments.
+- The Vault should receive a reviewed private remote or equivalent sync substrate during AF-4 current-user multi-deployment migration. Its local locator path should stay stable across deployments.
 - The local path should be explicitly configured through `~/.agent-foundry/config.yaml` as `vault_root`; agents must not infer it from a product project checkout.
 - Use the singular directory name `vault` for the active account Vault location. Avoid a generic `vaults` path unless a future multi-vault manager defines what it means.
 
 Migration window:
 
-- The migration window starts only when execution changes the substrate: a private User Vault target is initialized or selected for records, current User Vault records are copied or moved, public copies are deleted, or `vault_root`/runtime config is repointed away from the combined repository.
+- The AF-3 migration window starts only when execution changes the local substrate: a private User Vault target is initialized or selected for records, current User Vault records are copied or moved, public copies are deleted, or `vault_root`/runtime config is repointed away from the combined repository.
 - The migration window is not opened by this plan, by read-only inventory, or by public Core cleanup that does not move Vault records.
 - While the window is open, pause normal canonical writes and adapter/runtime publishing unless the operation explicitly uses verified split `core_root` and `vault_root`.
 - The normal window close point is #33 Runtime deployment migration, not #34. It closes only after Core and active User Vault validate separately, selected-Vault adapter publishing succeeds, local runtime refresh/dry-run no longer depends on the old combined root, stale path checks pass, and rollback is visible.
 - #34 is a post-window readiness audit. Failures found in #34 should reopen or fix the migration result instead of extending an ambiguous half-migrated state.
+- AF-4 starts after the local split window closes. It is responsible for private Vault remote setup, all existing deployment migrations, and real workflow verification across machines. AF-5 new-user onboarding should not become the main priority until AF-4 proves the current user can actually operate the split system.
 
 Move to the active User Vault:
 
@@ -210,6 +211,22 @@ Stop conditions:
 - Any generated adapter output includes raw evidence, local private paths, or current User Vault records when run against a blank or custom Vault.
 - Runtime install would overwrite unmanaged files or point at the old combined root without an explicit migration step.
 - A private remote must be created, files must be deleted, history must be rewritten, or records must be moved out of the current repo. These require explicit user approval at execution time.
+
+## Current-User Multi-Deployment Migration
+
+AF-4 is not new-user onboarding. It is the operational migration stage for the current only real user, whose Agent Foundry setup already exists on multiple machines and runtime surfaces.
+
+AF-4 should establish the current user's private Vault sync substrate before broad onboarding work:
+
+1. Initialize the selected User Vault as its own git repository only after a Vault-specific `.gitignore` and tracked/untracked policy are reviewed.
+2. Push canonical Vault records to a private remote, normally named for the account and Vault, such as `agent-foundry-vault-farmerhunter`.
+3. Verify the remote is private and does not contain raw evidence, secrets, machine-local manifests, local sync state, unmanaged runtime files, or product project material.
+4. On every existing deployment, clone or pull public Core and private Vault separately.
+5. Keep the local Vault path stable: `~/.agent-foundry/vault/agent-foundry-vault-farmerhunter`.
+6. Write or verify `~/.agent-foundry/config.yaml` on each machine so agents can locate both `core_root` and `vault_root` from product project work, Vault work, or Core maintenance work.
+7. Run validation, selected-Vault adapter publishing, runtime refresh, stale-reference checks, and at least one real harvest/review/publish workflow across deployments.
+
+AF-4 exit means the current user can actually operate the split system across deployed machines. It does not require polished blank-Vault onboarding, bootstrap capability packs, optional pack UX, or memory-system records. Those belong to later stages.
 
 Future split options:
 
@@ -317,7 +334,7 @@ Rejected as #7 scope:
 
 ## External-User Setup Boundary
 
-External-user setup is not a current complete quickstart. AF-2 defines the boundary and prerequisites; AF-3 must physically split public Core from the active private User Vault, and AF-4 must define onboarding modes before Agent Foundry can claim a tested external-user start path.
+External-user setup is not a current complete quickstart. AF-2 defines the boundary and prerequisites; AF-3 must physically split public Core from the active private User Vault, AF-4 must prove the current user's existing deployments can operate the split system, and AF-5 must define onboarding modes before Agent Foundry can claim a tested external-user start path.
 
 Current capability:
 
@@ -329,7 +346,7 @@ Current capability:
 - blank Vault initialization design, but no implemented `init-vault` command;
 - locator config that currently writes `core_root`, `vault_root`, and `repo_root` to the same path.
 
-Target setup narrative after AF-3/AF-4:
+Target setup narrative after AF-3 through AF-5:
 
 1. The user obtains the public Core.
 2. The user creates or selects a User Vault location.
@@ -350,19 +367,19 @@ Pre-split boundary for #9:
 | How blank Vault starts | Defined as empty indexes, empty aggregate, no personal practices/assets. | AF-3 `init-vault` implementation and validation. |
 | How Core/Vault are located | `~/.agent-foundry/config.yaml` exists, but current scripts assume one root. | AF-3 separate root support. |
 | How adapters are generated | Current adapters are generated from the active User Vault. | AF-3 arbitrary-vault adapter generation. |
-| How runtimes are installed | Current machine-local manifest installs into selected local runtimes. | AF-3 migration checks for split Core/Vault; AF-4 first-run UX. |
-| How bootstrap capability appears | Blank Vault is created first, then mandatory bootstrap pack is deployed as canonical Vault data. | AF-4 pack deployment and first-run verification. |
-| How optional capability content appears | Optional capability packs and runtime imports are not blank defaults; they are deployed or imported after the Vault exists. | AF-4 pack selection and import workflow. |
-| How existing runtime assets are imported | Existing runtime assets are evidence/candidates first. | AF-4 import workflow. |
+| How runtimes are installed | Current machine-local manifest installs into selected local runtimes. | AF-3 migration checks for split Core/Vault; AF-4 proves current deployments; AF-5 first-run UX. |
+| How bootstrap capability appears | Blank Vault is created first, then mandatory bootstrap pack is deployed as canonical Vault data. | AF-5 pack deployment and first-run verification. |
+| How optional capability content appears | Optional capability packs and runtime imports are not blank defaults; they are deployed or imported after the Vault exists. | AF-5 pack selection and import workflow. |
+| How existing runtime assets are imported | Existing runtime assets are evidence/candidates first. | AF-5 import workflow. |
 | What remains private | Raw evidence, local manifests, adoption state, secrets, User Vault, personal records. | Current policy plus AF-3 migration. |
 
 Docs implications:
 
 - `docs/deployment.md` currently documents maintainer/single-repo deployment and local runtime install.
 - `docs/usage.md` currently documents day-to-day use after Agent Foundry is already installed.
-- Neither file should be read as a tested external-user quickstart until AF-3 and AF-4 are complete.
+- Neither file should be read as a tested external-user quickstart until AF-3, AF-4, and AF-5 are complete.
 - AF-3 should rewrite deployment docs around public Core plus selected Vault.
-- AF-4 should add first-run onboarding sequence: blank Vault creation, mandatory bootstrap pack deployment, optional capability pack selection, runtime-asset import when selected, and unified refresh.
+- AF-5 should add first-run onboarding sequence: blank Vault creation, mandatory bootstrap pack deployment, optional capability pack selection, runtime-asset import when selected, and unified refresh.
 
 Do not promise future memory-system behavior in external-user setup. Memory-system records, `knowledge/`, `research_memos/`, project memory, and MCP memory access remain proposed/future until reviewed architecture implements them.
 
@@ -579,7 +596,7 @@ Example conventions:
 5. Adapter outputs for an external user should be generated from that user's approved vault records, not copied from this repository's personal vault unless explicitly deployed through a reviewed capability pack.
 6. Proposed memory-system material must stay in docs/imports/evidence form until reviewed architecture creates implemented memory directories, schemas, and workflows.
 
-AF-3 implements the Core/Vault split and blank Vault initialization path. AF-4 should build polished onboarding and capability pack deployment on top of that boundary.
+AF-3 implements the Core/Vault split and blank Vault initialization path. AF-4 proves the current user's multi-deployment operation on top of that split. AF-5 should build polished onboarding and capability pack deployment on top of the proven boundary.
 
 ## Practice Types
 

@@ -72,14 +72,15 @@ Agent Foundry should use maturity stages for planning and release versions for d
 | AF-0 | Personal Bootstrap | Early personal repo built through direct iteration before strict planning and multi-agent workflow. | Historical stage; no need to retroactively perfect it. |
 | AF-1 | Governed Foundry | Practices, assets, workflows, review gates, adapter publishing, and current/proposed boundaries are governed explicitly. | Harvest/review/publish lifecycle is coherent; roadmap and hygiene work are tracked. |
 | AF-2 | Productizable Foundry | Repository layers and user/product boundaries are clear enough to support a reusable system. | Core, User Vault, Generated, Runtime, Local Private, and Proposed Design Evidence are separated by policy and implementation plan. |
-| AF-3 | Split Vault Migration | Core and the current account's User Vault are physically separated without breaking existing local runtimes. | Public Core no longer requires current-user vault content; the active User Vault is private by default; existing Codex, Claude Code, Hermes, and ChatGPT setups are migrated or given a tested migration path; clean new-user setup is tested. |
-| AF-4 | Onboarding Ready | New users can install Core, create a blank Vault, deploy the mandatory bootstrap capability pack, optionally deploy additional capability packs, and refresh adapters without confusing pack content with private user history. | Blank Vault creation, bootstrap pack deployment, optional pack selection, runtime-asset import, and first-run refresh are tested. |
-| AF-5 | Memory-System Ready | Future memory-system records, evidence policy, routing, privacy, and MCP boundaries are designed but not necessarily implemented. | Memory-system implementation home can be chosen with clear tradeoffs. |
-| AF-6 | Memory-System Implementation | A reviewed memory/knowledge system is implemented according to the chosen architecture. | MVP validates the main memory lifecycle without bypassing Agent Foundry governance. |
+| AF-3 | Split Vault Migration | Core and the current account's User Vault are physically separated locally without breaking the active local runtime chain. | Public Core no longer requires current-user vault content; the active local User Vault validates separately; existing local Codex, Claude Code, Hermes, and ChatGPT setups have passed the split migration window. |
+| AF-4 | Current-User Multi-Deployment Migration | The only real user, `farmerhunter`, can use the split system reliably across all already-deployed machines and runtime types. | The User Vault has a private remote or equivalent reviewed sync substrate; every existing deployment can locate Core plus Vault, refresh from the selected Vault, run harvest/review/publish workflows, and report sync/runtime state without stale combined-root assumptions. |
+| AF-5 | Onboarding Ready | New users can install Core, create a blank Vault, deploy the mandatory bootstrap capability pack, optionally deploy additional capability packs, and refresh adapters without confusing pack content with private user history. | Blank Vault creation, bootstrap pack deployment, optional pack selection, runtime-asset import, and first-run refresh are tested after the current user's multi-machine migration is proven. |
+| AF-6 | Memory-System Ready | Future memory-system records, evidence policy, routing, privacy, and MCP boundaries are designed but not necessarily implemented. | Memory-system implementation home can be chosen with clear tradeoffs. |
+| AF-7 | Memory-System Implementation | A reviewed memory/knowledge system is implemented according to the chosen architecture. | MVP validates the main memory lifecycle without bypassing Agent Foundry governance. |
 
-Current planning stage: AF-3.
+Current planning stage: AF-4.
 
-AF-0 explains the existing mixed history. AF-1 starts the stricter planning and multi-agent coordination era. AF-2 designs the productization boundary. AF-3 executes the Core/Vault split needed for broad reuse. AF-4 makes onboarding humane and reliable. AF-5 is the decision gate for memory-system architecture. AF-6 is intentionally future work.
+AF-0 explains the existing mixed history. AF-1 starts the stricter planning and multi-agent coordination era. AF-2 designs the productization boundary. AF-3 executes the local Core/Vault split. AF-4 proves the split system works for the current real user across existing deployments. AF-5 makes onboarding humane and reliable for new users. AF-6 is the decision gate for memory-system architecture. AF-7 is intentionally future implementation work.
 
 ## Release Version Mapping
 
@@ -92,10 +93,11 @@ Suggested mapping:
 | AF-1 | `v0.1.0`: governed personal foundry baseline. |
 | AF-2 | `v0.2.0`: productizable architecture and repo hygiene baseline. |
 | AF-3 | `v0.3.0`: split Core/Vault migration baseline. |
-| AF-4 | `v0.4.0`: external-user onboarding baseline. |
-| AF-5 | `v0.5.0`: memory-system-ready design baseline. |
-| AF-6 MVP | `v0.6.0` or later: memory-system MVP, not automatically `v1.0`. |
-| Post-AF-6 | Future: advanced automatic capability pack discovery and lifecycle optimization after the core onboarding path is stable. |
+| AF-4 | `v0.4.0`: current-user multi-deployment migration baseline. |
+| AF-5 | `v0.5.0`: external-user onboarding baseline. |
+| AF-6 | `v0.6.0`: memory-system-ready design baseline. |
+| AF-7 MVP | `v0.7.0` or later: memory-system MVP, not automatically `v1.0`. |
+| Post-AF-7 | Future: advanced automatic capability pack discovery and lifecycle optimization after the core onboarding path is stable. |
 
 `v1.0` should wait until the reusable core, user vault story, generated artifact policy, and runtime adapter behavior are stable enough that external users can rely on them without understanding this repository's personal history.
 
@@ -114,7 +116,7 @@ Minimal fields:
 | Field | Values | Purpose |
 | --- | --- | --- |
 | Status | Inbox, Ready, In Progress, Review, Done, Blocked | Human-visible work state. |
-| Stage | AF-1, AF-2, AF-3, AF-4, AF-5, AF-6 | Maturity stage the item serves. |
+| Stage | AF-1, AF-2, AF-3, AF-4, AF-5, AF-6, AF-7 | Maturity stage the item serves. |
 | Epic | Free text or single-select | Groups issues by roadmap epic. |
 | Owner Role | Architect, Implementer, Reviewer, Harvester | Clarifies expected agent/human role. |
 | Depends On | Issue or PR references | Prevents ready queues from bypassing dependencies. |
@@ -132,7 +134,7 @@ Issue types:
 
 Recommended labels:
 
-- `stage:AF-1` through `stage:AF-6`
+- `stage:AF-1` through `stage:AF-7`
 - `type:epic`, `type:task`, `type:decision`, `type:review`, `type:evidence`
 - `area:core`, `area:vault`, `area:generated`, `area:runtime`, `area:privacy`, `area:memory-readiness`, `area:adapters`
 - `needs:architect`, `needs:implementer`, `needs:reviewer`, `needs:harvester`
@@ -145,7 +147,7 @@ Multi-agent rule:
 - Reviewer checks against the Epic exit criteria and relevant practices.
 - Harvester extracts reusable practices or asset candidates after meaningful work, using the harvest workflow.
 
-For now, create GitHub Project/Epic items only for AF-1 through AF-3 unless a later discussion explicitly opens AF-4 onboarding work. AF-6 implementation issues should remain placeholders until M7 resolves the implementation home.
+For now, create GitHub Project/Epic items for the active stage and its immediate successor. After AF-3 local split work, prioritize AF-4 current-user multi-deployment migration before opening broad AF-5 new-user onboarding work. AF-7 implementation issues should remain placeholders until the implementation-home decision resolves.
 
 ## Milestones
 
@@ -235,7 +237,7 @@ Epics:
   - Identify what a new user would eventually clone, initialize, or install.
   - Document what remains private.
   - Document how adapters are installed and updated.
-  - Identify which parts cannot be completed until AF-3 split migration and AF-4 onboarding.
+  - Identify which parts cannot be completed until AF-3 split migration, AF-4 current-user multi-deployment migration, and AF-5 onboarding.
   - Current design location: `docs/system-design.md` section "External-User Setup Boundary".
 
 Acceptance criteria:
@@ -250,7 +252,7 @@ Execution order:
 2. Use that boundary to design blank vault initialization (#7) and configuration boundary (#8).
 3. Use #6, #7, and #8 together to write the external-user setup boundary design (#9).
 4. Do not claim external-user readiness until AF-3 physically separates the active User Vault from public Core.
-5. Treat onboarding modes such as starter capability packs or runtime-asset imports as AF-4 design work unless needed as constraints for #7/#8.
+5. Treat onboarding modes such as starter capability packs or runtime-asset imports as AF-5 design work unless needed as constraints for #7/#8.
 
 Blank Vault baseline:
 
@@ -259,7 +261,7 @@ Blank Vault baseline:
 - Core owns schemas, templates, workflows, and initialization logic. The Vault owns user records and non-sensitive vault policy.
 - Runtime install is not implied by blank Vault creation. Runtime deployment remains a separate local operation using Core tooling plus the selected Vault.
 - Capability pack deployment happens after blank Vault creation. The mandatory bootstrap pack and optional packs enter the Vault as canonical data before `refresh`.
-- Runtime-asset imports are optional AF-4 onboarding inputs, not AF-2 blank defaults.
+- Runtime-asset imports are optional AF-5 onboarding inputs, not AF-2 blank defaults.
 - Empty indexes and aggregates should pass validation once AF-3 updates checks for separate Core and Vault roots.
 
 ### M3: Physical Core/Vault Split And Migration
@@ -284,7 +286,7 @@ Non-negotiable invariants:
 - Runtime adapters are downstream projections from Core tooling plus the selected Vault; they are not the source of truth.
 - Blank Vault validation must prove that empty indexes and empty aggregate evidence are valid, while missing or corrupt Vault files still fail clearly.
 - AF-3 must not create memory-system storage such as `memory/`, top-level `knowledge/`, `research_memos/`, or `project_memory`.
-- AF-3 must not solve AF-4 onboarding beyond preserving constraints needed for later onboarding modes.
+- AF-3 must not solve AF-4 multi-deployment migration or AF-5 onboarding beyond preserving constraints needed for later stages.
 
 Migration strategy:
 
@@ -293,7 +295,7 @@ Migration strategy:
 3. **Extract the active User Vault only after validation can target an arbitrary Vault**: avoid moving canonical records before scripts know how to find and validate them.
 4. **Regenerate adapters from the selected Vault**: prove runtime outputs come from Core plus Vault selection, not hardcoded repo-relative personal records.
 5. **Migrate local runtimes after generated outputs are split-aware**: inventory, dry-run, install, then verify stale path references and manual ChatGPT steps.
-6. **Gate external-user readiness separately**: AF-3 exits when split migration is reliable; AF-4 handles humane onboarding and starter/import choices.
+6. **Gate current-user and external-user readiness separately**: AF-3 exits when the local split migration is reliable; AF-4 proves the current user's existing deployments can use it; AF-5 handles humane onboarding and starter/import choices for new users.
 
 Migration window:
 
@@ -396,7 +398,7 @@ AF-3 epics and task breakdown:
   - Document where the Vault should live and how agents remember or rediscover it.
   - Test nested usage: running harvest/refresh from inside a product project must locate the correct Core and Vault without confusing the product project with either.
   - Confirm setup docs clearly state what AF-3 does not include: implementing bootstrap pack deployment, optional pack UX, runtime-asset import, or memory-system implementation.
-  - Exit when the project can truthfully say "public Core plus separate Vault works" without claiming AF-4 onboarding polish.
+  - Exit when the project can truthfully say "public Core plus separate Vault works" without claiming AF-4 multi-deployment completion or AF-5 onboarding polish.
 
 Planned GitHub issue sequence:
 
@@ -455,7 +457,7 @@ Stop conditions:
 - Vault validation depends on Core-owned `workflows/` files as Vault markers.
 - Generated adapters include personal paths, raw evidence, inactive records, or future memory-system paths.
 - The current context cannot distinguish product project, Foundry Vault operation, and Foundry Core maintenance.
-- A proposed change collapses AF-3 split migration with AF-4 onboarding or AF-6 memory-system implementation.
+- A proposed change collapses AF-3 split migration with AF-4 current-user multi-deployment migration, AF-5 onboarding, or AF-7 memory-system implementation.
 
 Minimum verification matrix:
 
@@ -489,7 +491,74 @@ Acceptance criteria:
 - Rollback instructions exist for the split migration.
 - No future memory-system storage is introduced as part of the split.
 
-### M4: Onboarding Experience
+### M4: Current-User Multi-Deployment Migration
+
+Goal: make the split Core/Vault system real for the current only production user before optimizing for hypothetical new users.
+
+Current operating reality:
+
+- The only real user is currently `farmerhunter`.
+- Agent Foundry is already deployed across multiple machines and multiple runtime types.
+- The highest-priority risk is not new-user polish; it is that existing deployments diverge, keep writing to stale combined-root assumptions, or cannot reliably find the same User Vault after the split.
+- A local-only User Vault is not enough for this stage. The current user's Vault needs a reviewed private remote or equivalent sync substrate before all deployments can converge.
+
+AF-4 sequence:
+
+1. **Private User Vault remote plan**
+   - Decide the private remote name, owner, visibility, and URL for `~/.agent-foundry/vault/agent-foundry-vault-farmerhunter`.
+   - Define the Vault `.gitignore` and tracked/untracked boundary before initializing git.
+   - Keep raw evidence, secrets, machine-local manifests, and sync state local-only.
+   - Decide whether the first Vault commit preserves history or starts from a clean privacy boundary.
+   - Require explicit approval before creating the private remote or pushing Vault records.
+
+2. **Local Vault git initialization and first push**
+   - Initialize git in the selected User Vault.
+   - Commit canonical Vault records, indexes, sanitized usage aggregate, vault-local docs, and reviewed imports only.
+   - Push to the approved private remote.
+   - Verify the private remote is not public and does not contain local-only evidence.
+
+3. **Deployment inventory**
+   - List every existing deployment machine and runtime surface: Codex, Claude Code, Hermes, ChatGPT manual import, and any disabled or experimental runtime.
+   - For each deployment, record Core path, Vault path, config path, runtime install path, branch/remote state, and whether it can reach the private Vault remote.
+   - Do not assume all deployments share the same Core checkout location; do require the same active Vault path pattern unless explicitly overridden.
+
+4. **Cross-machine migration drill**
+   - On each deployment, pull or clone public Core.
+   - Clone or pull the private User Vault into `~/.agent-foundry/vault/agent-foundry-vault-farmerhunter`.
+   - Write or verify `~/.agent-foundry/config.yaml` with split `core_root` and `vault_root`.
+   - Run root validation, selected-Vault adapter publish dry-run, runtime install dry-run or apply as appropriate, and stale-reference checks.
+   - Verify ChatGPT manual import instructions remain explicit rather than pretending to be automated.
+
+5. **Real workflow verification**
+   - Run at least one ordinary `refresh practices and assets` path from an existing deployment.
+   - Run one representative harvest/review/publish path against the selected Vault without writing to public Core or a product project by accident.
+   - Verify `sync_status.py` output is understandable in split mode and does not misread selected-Vault generated runtime files as stale combined-root regression.
+   - Verify another deployment can pull the Vault updates and refresh adapters.
+
+6. **Close report**
+   - Produce a migration status matrix for all existing deployments.
+   - Document residual gaps, such as manually refreshed ChatGPT projects or machines intentionally left out of scope.
+   - Only after this matrix passes should AF-5 new-user onboarding become the main priority.
+
+Acceptance criteria:
+
+- The current User Vault has a private remote or equivalent reviewed sync substrate.
+- Every in-scope existing deployment can validate public Core plus selected private Vault.
+- Existing deployments can refresh adapters from the selected Vault.
+- At least one real harvest/review/publish workflow has been exercised after the Vault remote is in place.
+- Cross-machine Vault updates can be pulled and used without falling back to the old combined Core.
+- Public Core remains clean and does not regain current-user Vault records.
+- Local-only evidence remains local and untracked.
+
+Stop conditions:
+
+- The Vault remote would be public or ambiguously visible.
+- `.gitignore` would allow raw evidence, secrets, local runtime manifests, sync state, or machine paths into the private Vault remote.
+- Any deployment cannot locate both Core and Vault with actionable diagnostics.
+- A runtime install would overwrite unmanaged files.
+- A workflow writes canonical Vault records into public Core or a product project.
+
+### M5: Onboarding Experience
 
 Goal: make new-user startup useful by separating blank Vault creation from capability pack deployment and adapter refresh.
 
@@ -586,7 +655,7 @@ Acceptance criteria:
 - Pack deployment and freeform practice/asset CRUD share the same Vault records and do not create parallel truth sources.
 - The onboarding flow preserves Core/Vault/context separation.
 
-### M5: Existing Foundry Lifecycle Completion
+### M6: Existing Foundry Lifecycle Completion
 
 Goal: finish the practice/asset/adapter loop before adding memory record types.
 
@@ -618,7 +687,7 @@ Acceptance criteria:
 - Candidate/proposed entries do not publish into default adapters.
 - Active entries have either Activation guidance or explicit asset coverage/reference-only intent.
 
-### M6: Memory-System Readiness Design
+### M7: Memory-System Readiness Design
 
 Goal: define memory as an adjacent future capability without implementing storage yet.
 
@@ -653,9 +722,9 @@ Acceptance criteria:
 - Open questions remain visible.
 - No automatic memory writing exists.
 
-### M7: Fork vs Extension Decision
+### M8: Fork vs Extension Decision
 
-Goal: decide the implementation home for memory-system work using evidence from M1 through M6.
+Goal: decide the implementation home for memory-system work using evidence from M1 through M7.
 
 Decision options:
 
@@ -693,11 +762,11 @@ Acceptance criteria:
 - Decision record names the chosen option and rejected alternatives.
 - Future implementation plan has file boundaries, data flow, validation, privacy policy, and rollback path.
 
-### M8: Advanced Capability Pack Discovery and Lifecycle
+### M9: Advanced Capability Pack Discovery and Lifecycle
 
-Goal: improve whether Agent Foundry can recognize, maintain, and export higher-level capability packs that emerge from repeated work after the basic AF-4 pack deployment path exists.
+Goal: improve whether Agent Foundry can recognize, maintain, and export higher-level capability packs that emerge from repeated work after the basic AF-5 pack deployment path exists.
 
-This is intentionally later than repository hygiene, productization, physical split migration, onboarding, lifecycle completion, memory readiness, and the fork-vs-extension decision. Do not use this milestone to delay AF-1 through AF-7. AF-4 owns the mandatory bootstrap pack, optional pack deployment mechanism, and first optional multi-agent collaboration pack. M8 is for automatic discovery, advanced lifecycle optimization, export polish, and maintenance of emergent packs.
+This is intentionally later than repository hygiene, productization, physical split migration, current-user multi-deployment migration, onboarding, lifecycle completion, memory readiness, and the fork-vs-extension decision. Do not use this milestone to delay AF-1 through AF-8. AF-5 owns the mandatory bootstrap pack, optional pack deployment mechanism, and first optional multi-agent collaboration pack. M9 is for automatic discovery, advanced lifecycle optimization, export polish, and maintenance of emergent packs.
 
 Capability packs are not the same as individual assets. A future capability pack may bundle practices, assets, workflows, templates, adapter snippets, examples, configuration profiles, dependency metadata, and export/install behavior around a recurring user goal such as multi-agent collaboration or technical documentation writing.
 
@@ -709,7 +778,7 @@ Epics:
   - Avoid requiring humans to predefine all future capability categories.
 
 - **Capability pack schema evolution**
-  - Extend the AF-4 manifest only when usage proves more fields are needed.
+  - Extend the AF-5 manifest only when usage proves more fields are needed.
   - Keep schema changes compatible with deployed Vault records and pack membership metadata.
 
 - **Review and activation lifecycle**
@@ -735,13 +804,14 @@ Acceptance criteria:
 - Do not add semantic/vector/graph indexes.
 - Do not add MCP write tools.
 - Do not import raw ChatGPT exports.
-- Do not implement advanced automatic capability pack discovery, export marketplace behavior, or broad pack lifecycle automation before the basic AF-4 pack deployment path is stable.
+- Do not implement advanced automatic capability pack discovery, export marketplace behavior, or broad pack lifecycle automation before the basic AF-5 pack deployment path is stable.
 - Do not refactor adapters or runtime install behavior until repository hygiene policy exists.
 
 ## Immediate Next Planning Tasks
 
-1. Create a repository layer inventory.
-2. Draft repository hygiene and generated artifact policy.
-3. Draft extension policy for optional subsystems.
-4. Create the lightweight GitHub Project and initial AF-1/AF-2 Epics after review.
-5. Revisit fork vs extension only after M1 and M2 are clear.
+1. Open AF-4 issues for private User Vault remote planning, Vault git initialization, deployment inventory, cross-machine migration, real workflow verification, and AF-4 close review.
+2. Review and approve the Vault `.gitignore`, tracked/untracked boundary, remote name, and private visibility before any Vault push.
+3. Create the private User Vault remote and push only after explicit approval.
+4. Migrate each existing deployment against the private Vault remote and record the result in a deployment matrix.
+5. Verify at least one real refresh plus one real harvest/review/publish workflow after cross-machine Vault sync works.
+6. Defer AF-5 new-user onboarding work until AF-4 proves the current user's deployed system is stable.
