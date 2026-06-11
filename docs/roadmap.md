@@ -754,6 +754,32 @@ Stop conditions:
 - A runtime install would execute from pack staging or the canonical Vault without managed install, dependency check, receipt, and rollback semantics.
 - A new-user quickstart requires understanding the maintainer's personal history or private Vault.
 
+Planned GitHub issue sequence:
+
+| Order | GitHub issue | Type | Owner role | Risk | Ready condition | Completion handoff |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | TBD: AF5 onboarding journey contract | Decision / Epic | Architect | Medium | AF-4 close report accepted or explicitly waived for planning only | User or structured Architect review before implementation issues start |
+| 2 | TBD: Pack lifecycle and authority model | Decision | Architect | High | Journey contract defines fresh install, optional pack, import, restore, and rollback paths | Structured review handoff |
+| 3 | #53 Capability-owned executable helpers | Decision | Architect | Medium | Pack authority model names executable payload boundary and runtime receipt expectations | Structured review handoff before helper implementation |
+| 4 | TBD: Minimal capability pack manifest and fixtures | Task batch | Implementer with Architect review | Medium | #53 and pack authority model define fields, lifecycle states, and conflict behavior | Batch checkpoint |
+| 5 | TBD: Blank Vault plus bootstrap deployment path | Task batch | Implementer | Medium | Pack manifest fixtures exist; blank Vault initializer validates selected roots | Batch checkpoint |
+| 6 | TBD: Bootstrap capability pack content | Harvester / Architect | Medium | Deployment path can import pack snapshot into Vault records | Human review of included canonical records before activation |
+| 7 | TBD: Fresh install command and status report | Task batch | Implementer | Medium | Bootstrap pack can deploy into blank Vault | Batch checkpoint with runtime dry-run evidence |
+| 8 | TBD: Optional multi-agent capability pack candidate | Evidence / Task | Architect + Harvester | Medium | Bootstrap path works; #53 defines executable helper payload boundary | Review before packaging Tiny IPA helper evidence |
+| 9 | TBD: Runtime asset import path | Task batch | Implementer with Harvester review | Medium | Import staging and artifact routing model defined | Batch checkpoint |
+| 10 | TBD: Cross-machine restore and rollback onboarding | Review / Task | Reviewer + Architect | High | Fresh install, selected-Vault refresh, and receipts work locally | Structured review handoff |
+| 11 | TBD: AF5 end-to-end onboarding validation | Review | Reviewer | High | Issues 1-10 complete or explicitly deferred with rationale | User acceptance before AF-5 close |
+
+Execution order:
+
+1. Start with Architect-owned journey and authority decisions so implementation does not center on a schema or script before the activation path is clear.
+2. Resolve #53 before packaging Tiny IPA-style helper scripts as reusable capability payloads.
+3. Build pack manifest fixtures before bootstrap content so bootstrap can be validated as one instance of the general deployment mechanism.
+4. Build the mandatory bootstrap path before optional packs.
+5. Treat the multi-agent pack as the first optional validation case, not as a blocker for fresh install.
+6. Keep runtime import and product-project import behind the same staging/review rules so imported material does not bypass harvest discipline.
+7. Close AF-5 only with an end-to-end validation issue that runs the user journey, not merely individual script tests.
+
 ### M6: Existing Foundry Lifecycle Completion
 
 Goal: finish the practice/asset/adapter loop before adding memory record types.
