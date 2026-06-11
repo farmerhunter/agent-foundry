@@ -152,6 +152,7 @@ def check_manifest(path: Path) -> list[str]:
     errors: list[str] = []
     text = read(path)
     rel_manifest = path.relative_to(ROOT)
+    errors.extend(check_no_forbidden_fixture_text(rel_manifest, path))
     manifest = top_level_scalars(text)
     missing = sorted(REQUIRED_MANIFEST_FIELDS - manifest.keys())
     for field in missing:
