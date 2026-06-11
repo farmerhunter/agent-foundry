@@ -572,25 +572,43 @@ Stop conditions:
 
 ### M5: Onboarding Experience
 
-Goal: make new-user startup useful by separating blank Vault creation from capability pack deployment and adapter refresh.
+Goal: make a new Agent Foundry deployment usable through complete onboarding journeys, not through a loose collection of setup scripts, schemas, and docs.
 
-Onboarding sequence:
+AF-5 is scenario-driven. It starts from user activation paths and derives the required schemas, CLI commands, validation checks, runtime install behavior, and documentation from those paths.
+
+The main question is:
 
 ```text
-install Core
-  -> create blank Vault
-  -> deploy mandatory bootstrap capability pack as canonical Vault data
-  -> optionally deploy selected capability packs as canonical Vault data
-  -> optionally import existing runtime assets as reviewed candidates
-  -> refresh
-  -> generate and install adapters from the Vault
+How does a user move from blank or unfamiliar state to a verified usable Agent Foundry workflow?
 ```
 
-The blank Vault remains genuinely blank. It contains structure, metadata, empty indexes, and empty aggregate evidence, but no practices or assets. The mandatory bootstrap pack is deployed immediately after blank Vault creation so the installed system is usable. Optional packs use the same deployment mechanism.
+AF-5 should not start by implementing a marketplace, a broad pack registry, or advanced automatic capability discovery. Those remain later lifecycle work. AF-5 must still define the full lifecycle vocabulary so the MVP does not paint itself into a corner.
 
-Capability packs are canonical data bundles, not runtime-only helpers and not a second CRUD system. Deploying a pack writes normal practices, assets, index entries, and pack metadata into the user's Vault. After deployment, those records are governed by the same create, read, update, deprecate, retire, review, and adapter-publish workflows as manually created records.
+Capability pack lifecycle vocabulary:
 
-Known gap: AF-3 still has only one implemented executable-script home: Core `scripts/`. That is acceptable for platform lifecycle tooling, but it conflicts with the future capability-pack boundary when a helper script belongs to a specific capability, practice, or asset. Until #53 defines capability-owned executable helpers, such scripts should remain in Core `scripts/` as capability-helper candidates rather than being placed directly in the User Vault. This does not block the AF-3 Core/User Vault data split, but it must be resolved before Agent Foundry claims polished capability-pack packaging.
+```text
+incubate
+  -> identify or discover
+  -> package snapshot
+  -> review
+  -> publish or export
+  -> deploy or import into a User Vault
+  -> activate or select
+  -> refresh and install runtime outputs
+  -> use and collect evidence
+  -> update or merge
+  -> deprecate, retire, or archive
+```
+
+AF-5 owns only the basic path through this lifecycle: reviewed snapshot deployment into a selected Vault, activation as ordinary Vault records, refresh into runtimes, status verification, and rollback or disable behavior. Marketplace channels, automatic pack discovery, broad update management, and advanced export polish remain later work.
+
+Layer rule:
+
+- A capability pack is an export/import snapshot and review artifact, not a runtime source of truth.
+- Deploying a pack writes or updates ordinary User Vault records with provenance, pack membership metadata, and conflict history.
+- After deployment, the selected User Vault owns the canonical practices, assets, indexes, and accepted payloads.
+- `refresh` reads the current selected Vault plus Core adapter profiles, not live pack definitions.
+- Runtime copies are installed from generated output or accepted Vault payloads through managed runtime/tool locations with receipts.
 
 Predefined packs and discovered packs are compatible with freeform Vault maintenance:
 
@@ -602,70 +620,139 @@ Predefined packs and discovered packs are compatible with freeform Vault mainten
 - Users and agents can still create, edit, archive, or retire arbitrary practices and assets outside any pack.
 - `refresh` reads current Vault records, not pack definitions, when generating adapters.
 
-Mandatory pack:
+Primary onboarding journeys:
 
-- **Bootstrap capability pack**
-  - Required for normal onboarding.
-  - Contains the minimal canonical data needed for Agent Foundry to run harvest, asset discovery, refresh, review, and adapter publishing.
-  - Must be public, reviewed, private-evidence-free, and small enough not to import the maintainer's whole Vault history.
+1. **Fresh install**
+   - User obtains public Core.
+   - User creates or selects a User Vault.
+   - User initializes a blank but valid Vault.
+   - User deploys the mandatory bootstrap pack into the Vault.
+   - User selects local runtimes or accepts safe detected defaults.
+   - User runs `refresh`.
+   - System reports Core root, Vault root, enabled runtimes, manual targets, installed outputs, receipts, and the first normal workflow command.
 
-Optional early pack:
+2. **Add optional capability pack**
+   - User already has Core plus a selected Vault.
+   - User selects a pack such as multi-agent collaboration or future technical-documentation writing.
+   - System stages the pack as a reviewed snapshot.
+   - User reviews provenance, license, included records, executable payloads, permissions, conflicts, and runtime impact.
+   - Deployment writes ordinary Vault records and payloads.
+   - `refresh` publishes and installs only from the selected Vault.
 
-- **Multi-agent collaboration pack**
-  - Strong first optional pack candidate because the current collaboration practices/assets are mature, repeatedly used, and bounded.
-  - Should not block bootstrap pack completion.
-  - Should be packaged only after the bootstrap deployment path works.
+3. **Import from existing runtime**
+   - User has existing Codex skills, Claude Code instructions, Hermes skills, ChatGPT project materials, or local helper files.
+   - System scans or accepts explicit paths as evidence.
+   - Imported material is staged as candidates with provenance, not activated directly.
+   - User reviews candidate practices/assets or rejected material.
+   - Approved items become ordinary Vault records and are then refreshed into runtime outputs.
 
-- **Import existing runtime assets**
-  - Best for users who already have Codex skills, Claude Code instructions, Hermes skills, or ChatGPT project materials.
-  - Imported materials are evidence/candidates first, not canonical truth.
-  - Imports must preserve provenance and should run through Agent Foundry review before activation.
+4. **Import from a product project**
+   - A product project incubates reusable helper scripts, workflow docs, prompts, or templates.
+   - The product project remains the evidence source.
+   - The reusable subset is packaged as a candidate capability snapshot.
+   - Project-local defaults are separated from reusable behavior and examples.
+   - Deployment into the selected Vault happens only after review.
+   - The source project is not treated as Core, Vault, or runtime truth.
+
+5. **Cross-machine restore**
+   - User clones or updates public Core on another machine.
+   - User clones or pulls the private User Vault or starts from a chosen blank Vault.
+   - Local locator records Core and Vault roots for that machine.
+   - Runtime manifests and receipts are recreated locally.
+   - `refresh` rebuilds runtime outputs from the selected Vault.
+   - No runtime copy, machine-local path, or local adoption decision is inherited as canonical truth.
+
+6. **Disable, rollback, or remove pack-sourced capability**
+   - User can disable or retire pack-sourced records without deleting unrelated user-created records.
+   - Runtime outputs are regenerated from current Vault state.
+   - Receipts and status show whether old runtime files remain, were removed, or require manual cleanup.
+   - Rollback restores runtime state without rewriting canonical Vault history unless explicitly requested.
 
 Epics:
 
-- **Blank Vault creation**
-  - Implement the AF-2 blank Vault baseline as an empty but valid Vault.
-  - Keep runtime install and pack deployment separate from Vault creation.
+- **Onboarding journey contract**
+  - Write the user-visible activation contract for each primary journey.
+  - Define the exact starting state, user intent, required decisions, success report, failure states, rollback path, and first usable command.
+  - Keep docs oriented around user journeys rather than internal implementation sequence.
 
-- **Capability pack deployment**
-  - Define pack manifest, provenance, record copy/merge behavior, pack membership metadata, version compatibility, and conflict handling.
-  - Define mandatory bootstrap pack deployment and optional pack selection using the same mechanism.
-  - Ensure pack deployment writes canonical data into the Vault before refresh.
-  - Resolve #53 by defining where capability-owned executable helpers live, how they are reviewed, what permissions they declare, and how they are installed or updated without polluting Core or turning the User Vault into an executable trust boundary.
+- **Pack lifecycle and authority model**
+  - Define pack states, manifest responsibilities, provenance, membership metadata, record copy/merge behavior, version compatibility, and conflict handling.
+  - Keep pack deployment as snapshot import into ordinary Vault records.
+  - Define same-ID same-version, newer-pack, local-modified, unrelated-ID-collision, deprecated, and retired conflict behavior.
+  - Define update checks as reviewable diffs, not automatic overwrites.
 
-- **Bootstrap capability pack**
-  - Identify the minimal harvest/discover/refresh/review/publish records needed for normal onboarding.
-  - Build the pack from public, reviewed canonical data, not from private user evidence.
-  - Verify that a user can refresh adapters after deploying only the bootstrap pack.
+- **Blank Vault plus bootstrap activation**
+  - Keep blank Vault initialization genuinely blank: structure, metadata, empty indexes, and empty aggregate evidence only.
+  - Deploy the mandatory bootstrap pack after blank Vault creation.
+  - Identify the minimal public, reviewed, private-evidence-free records needed for harvest, asset discovery, refresh, review, and adapter publishing.
+  - Verify a user can run the first normal workflow after deploying only the bootstrap pack and refreshing runtimes.
 
-- **Optional capability pack design**
-  - Define how optional packs relate to assets, practices, templates, examples, generated adapters, and pack membership metadata.
-  - Define how optional packs may include or reference executable helper scripts without bypassing review or runtime install gates.
-  - Ensure packs do not include maintainer-private Vault content.
-  - Keep pack deployment reviewable, reversible, and compatible with user edits.
-  - Package multi-agent collaboration as the first optional pack after bootstrap works.
+- **Optional capability pack path**
+  - Use the same deployment mechanism for optional packs as for bootstrap.
+  - Package multi-agent collaboration as the first optional pack only after bootstrap deployment works.
+  - Use Tiny IPA's role-generic helper work as the validation evidence for a project-incubated optional pack.
+  - Ensure optional packs can include practices, assets, docs, templates, examples, and executable payloads without becoming Core defaults or live runtime authorities.
 
-- **Runtime asset import path**
-  - Define how to scan existing Codex, Claude Code, Hermes, and ChatGPT assets.
-  - Stage imported materials as candidates with provenance.
-  - Avoid overwriting native runtime capabilities.
+- **Executable helper asset boundary**
+  - Resolve #53 by defining where capability-owned executable helpers live, how they are reviewed, what permissions and dependencies they declare, and how they are installed or updated.
+  - Do not run helper scripts directly from pack staging or the canonical Vault by default.
+  - Install accepted executable payloads into managed machine-local runtime/tool locations with receipts.
+  - Keep Core `scripts/` reserved for Agent Foundry platform machinery unless a reviewed exception labels a script as a temporary capability-helper candidate.
 
-- **First-run verification**
-  - Confirm Core and Vault are located.
-  - Confirm blank Vault validates before pack deployment.
-  - Confirm bootstrap pack deploys canonical data into the Vault.
-  - Confirm optional packs, when selected, use the same deployment path.
-  - Confirm runtime targets are detected or intentionally skipped.
-  - Confirm `refresh` generates adapters from Vault canonical records, not Core hidden state.
-  - Confirm the user knows which records are pack-sourced, imported, user-created, proposed, active, deprecated, or retired.
+- **Runtime asset and project evidence import**
+  - Define how to scan or accept explicit paths for existing Codex, Claude Code, Hermes, ChatGPT, product-project helper scripts, prompts, and workflow docs.
+  - Stage imported material as evidence or candidates with provenance, license, security, and sensitivity review.
+  - Route material to practice candidate, asset candidate, pack candidate, project-local decision, design note, discard, or future work before canonical mutation.
+  - Avoid overwriting native runtime capabilities or product-project files.
+
+- **Refresh, install, and status verification**
+  - Confirm Core and Vault are located and validated before every setup or import action.
+  - Confirm pack deployment writes canonical data into the selected Vault before refresh.
+  - Confirm runtime targets are detected, enabled, disabled, or manual with clear reasons.
+  - Confirm `refresh` generates adapters from Vault canonical records, not Core hidden state or live pack definitions.
+  - Report which records are pack-sourced, imported, user-created, proposed, active, deprecated, retired, or skipped.
+  - Report install receipts and manual ChatGPT import requirements.
+
+Use-case derived implementation map:
+
+| Use case | Schema/data needs | CLI/workflow needs | Validation/status needs | Runtime/docs needs |
+| --- | --- | --- | --- | --- |
+| Fresh install | Vault metadata, bootstrap pack manifest, pack membership metadata | first-run setup, `init-vault`, deploy bootstrap, refresh | root validation, blank-vault validation, bootstrap deployed, receipt status | quickstart, first normal command, ChatGPT manual note |
+| Add optional pack | optional pack manifest, provenance, conflicts, permissions | stage pack, review diff, deploy pack, rollback/disable | conflict report, selected records, executable payload safety | optional pack docs, runtime impact report |
+| Import existing runtime assets | import inbox records, candidate practices/assets | scan runtime or import explicit paths, route artifacts, review candidates | sensitivity/provenance/license checks, no direct activation | import guide, native runtime preservation notes |
+| Import product-project capability | source-project evidence manifest, examples vs reusable defaults | package snapshot, separate project-local overlay, deploy reviewed subset | no product project writes, no Core pollution, path leak scan | pack authoring guide, project-overlay guidance |
+| Cross-machine restore | local locator, runtime manifest, install receipt | clone/pull Core and Vault, validate, refresh | selected-output receipt, stale reference scan, manual target report | restore guide, deployment checklist |
+| Disable or rollback | pack membership state, record lifecycle state, receipt history | disable/retire records, regenerate, rollback runtime install | old runtime file detection, rollback report | troubleshooting and cleanup guide |
+
+AF-5 MVP deliverables:
+
+- A journey-oriented onboarding guide that covers fresh install, optional pack deployment, runtime import, product-project import, restore, and rollback at the level currently implemented or explicitly future.
+- A minimal capability pack manifest and deployment workflow that supports bootstrap and one optional pack without creating a third source of truth.
+- A bootstrap pack built from public, reviewed canonical data.
+- A first optional multi-agent collaboration pack candidate, validated against Tiny IPA helper evidence after the helper executable boundary is designed.
+- CLI or workflow support for blank Vault creation, pack staging/deployment, selected-root refresh, and status reporting.
+- Validation fixtures for blank Vault, bootstrap-only Vault, optional-pack Vault, imported-runtime candidate, and product-project evidence source.
+- Runtime install behavior that preserves managed markers, receipts, manual ChatGPT boundaries, and no direct execution from canonical stores.
 
 Acceptance criteria:
 
-- A new user can install Core, create a blank Vault, deploy the mandatory bootstrap pack, optionally deploy selected packs, and run refresh.
-- Bootstrap pack content is never confused with a user's private Vault.
-- Optional packs and imported runtime assets are reviewed or selected before becoming canonical.
+- A new user can complete the Fresh Install journey and see a status report naming Core root, Vault root, deployed bootstrap pack, enabled runtimes, manual targets, receipts, and first usable commands.
+- Bootstrap pack content is never confused with the maintainer's private Vault or with Core platform code.
+- Optional packs and imported runtime/project assets are staged, reviewed, and selected before becoming canonical Vault records.
 - Pack deployment and freeform practice/asset CRUD share the same Vault records and do not create parallel truth sources.
-- The onboarding flow preserves Core/Vault/context separation.
+- Executable helper payloads have a reviewed Vault source, managed runtime/tool install path, dependency/permission declaration, and receipt before use.
+- Cross-machine restore proves runtime state can be regenerated from public Core plus selected Vault rather than copied from another machine.
+- Disable or rollback behavior can remove or supersede runtime outputs without erasing unrelated user-created Vault records.
+- The onboarding flow preserves product project, Foundry Core, Foundry Vault, Generated, Runtime, and Local Private context separation.
+
+Stop conditions:
+
+- A pack design makes the pack a live runtime authority without an explicit live-dependency lifecycle.
+- A bootstrap or optional pack contains private maintainer evidence, machine-local paths, secrets, or current-user-only defaults.
+- A helper script must be copied into Core `scripts/` because no capability-owned executable boundary exists.
+- A setup flow cannot tell the user which layer owns a record or runtime file.
+- A runtime install would execute from pack staging or the canonical Vault without managed install, dependency check, receipt, and rollback semantics.
+- A new-user quickstart requires understanding the maintainer's personal history or private Vault.
 
 ### M6: Existing Foundry Lifecycle Completion
 

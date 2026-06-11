@@ -2,7 +2,7 @@
 
 Agent Foundry is local-first. Core tooling, User Vault records, and installed runtime files are separate layers.
 
-Current scope: this document describes the AF-3 split Core/Vault deployment model. A clean public Core checkout contains workflows, schemas, scripts, templates, docs, and adapter profiles. Canonical practice and asset records live in a selected User Vault, typically outside the Core checkout. AF-4 still owns polished onboarding, bootstrap pack deployment, and optional capability packs.
+Current scope: this document describes the AF-3 split Core/Vault deployment model. A clean public Core checkout contains workflows, schemas, scripts, templates, docs, and adapter profiles. Canonical practice and asset records live in a selected User Vault, typically outside the Core checkout. AF-5 owns polished onboarding, bootstrap pack deployment, and optional capability packs after AF-4 proves current-user deployment and upgrade migration.
 
 ```text
 Agent Foundry Core + selected User Vault

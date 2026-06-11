@@ -511,6 +511,43 @@ Docs implications:
 
 Do not promise future memory-system behavior in external-user setup. Memory-system records, `knowledge/`, `research_memos/`, project memory, and MCP memory access remain proposed/future until reviewed architecture implements them.
 
+## AF-5 Onboarding And Capability Pack Model
+
+AF-5 should be driven by onboarding journeys, not by isolated implementation objects. The product question is whether a user can move from blank or unfamiliar state to a verified usable Agent Foundry workflow.
+
+Primary AF-5 journeys:
+
+1. **Fresh install**: public Core, blank Vault, mandatory bootstrap pack, runtime selection, refresh, receipts, and first normal command.
+2. **Add optional capability pack**: stage, review, deploy, refresh, and verify an optional pack such as multi-agent collaboration.
+3. **Import existing runtime assets**: treat existing Codex, Claude Code, Hermes, or ChatGPT material as evidence/candidates before canonical activation.
+4. **Import product-project capability**: treat project-local helpers, docs, prompts, or templates as evidence before packaging the reusable subset.
+5. **Cross-machine restore**: rebuild runtime state from public Core plus selected Vault instead of copying runtime files from another machine.
+6. **Disable or rollback pack-sourced capability**: update Vault lifecycle state and regenerate runtime outputs without deleting unrelated user-created records.
+
+Capability pack lifecycle vocabulary:
+
+```text
+incubate
+  -> identify or discover
+  -> package snapshot
+  -> review
+  -> publish or export
+  -> deploy or import into a User Vault
+  -> activate or select
+  -> refresh and install runtime outputs
+  -> use and collect evidence
+  -> update or merge
+  -> deprecate, retire, or archive
+```
+
+AF-5 implements only the basic path through this lifecycle: reviewed snapshot deployment into a selected Vault, activation as ordinary Vault records, refresh into runtimes, status verification, and rollback or disable behavior. Marketplace channels, automatic pack discovery, broad update management, and advanced export polish remain later work.
+
+Capability packs are exported or deployable snapshots, not independent runtime truth sources. A pack may contain practice records, asset records, docs, templates, examples, configuration defaults, and executable payloads. Deployment writes or updates normal User Vault records with provenance and pack membership metadata. After deployment, the selected User Vault owns the canonical records; `refresh` reads current Vault state, not live pack definitions.
+
+Executable helper payloads need a runtime boundary. The accepted source may live in the Vault as asset payload, but executable copies, wrappers, chmod state, dependency checks, install receipts, and rollback state belong in managed machine-local runtime/tool locations. Core `scripts/` should remain platform machinery such as validation, initialization, adapter publishing, runtime install, consistency checks, migration planning, and rollback helpers.
+
+The Tiny IPA role-generic GitHub helpers are a validation case for this model. Tiny IPA remains the evidence source. The reusable multi-agent helper subset can become a candidate optional capability pack only after AF-5 defines pack snapshot, provenance, project-local overlay, executable payload, and runtime install boundaries.
+
 ## Operating Context Separation
 
 Agent Foundry must remain safe when it is used inside another software project. Users and agents regularly operate in nested contexts:
