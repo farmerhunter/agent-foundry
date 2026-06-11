@@ -273,8 +273,13 @@ def main() -> int:
     manifest_paths = sorted(PACK_ROOT.glob("*/manifest.yaml"))
     if not manifest_paths:
         errors.append("No capability pack manifest fixtures found")
+    distribution_types: set[str] = set()
     for manifest_path in manifest_paths:
+        distribution_types.add(top_level_scalars(read(manifest_path)).get("distribution_type", ""))
         errors.extend(check_manifest(manifest_path))
+    for required_type in ["mandatory_bootstrap", "optional_capability"]:
+        if required_type not in distribution_types:
+            errors.append(f"Missing capability pack fixture with distribution_type {required_type}")
     errors.extend(check_vault_fixtures())
 
     if errors:
