@@ -96,6 +96,16 @@ def main() -> int:
         ]:
             if not expected.exists():
                 errors.append(f"deploy-bootstrap: expected Vault record missing: {expected}")
+            else:
+                text = expected.read_text(encoding="utf-8")
+                for marker in [
+                    "provenance: \"Deployed from capability pack pack.bootstrap.minimal version 0.1.0",
+                    "pack_membership",
+                    "pack.bootstrap.minimal",
+                    "pack_source_version: \"0.1.0\"",
+                ]:
+                    if marker not in text:
+                        errors.append(f"deploy-bootstrap: {expected} missing deployment metadata marker {marker}")
 
         check = run([str(CHECK), "--core-root", str(ROOT), "--vault-root", str(vault)])
         errors.extend(expect("check-bootstrap-vault", check, True, "Foundry root validation passed."))

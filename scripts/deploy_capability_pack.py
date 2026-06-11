@@ -57,6 +57,8 @@ class PackRecord:
     destination_path: Path
     index_entry: dict[str, str]
     source_sha256: str
+    deployed_text: str
+    deployed_sha256: str
 
 
 def read(path: Path) -> str:
@@ -142,11 +144,19 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def sha256_text(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
 def inline_list(value: str) -> list[str]:
     value = value.strip()
     if not (value.startswith("[") and value.endswith("]")):
         return []
     return [item.strip().strip('"').strip("'") for item in value[1:-1].split(",") if item.strip()]
+
+
+def yaml_string(value: str) -> str:
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
 def destination_for(vault_root: Path, kind: str, source_path: Path) -> tuple[Path, dict[str, str], list[str]]:
@@ -196,7 +206,53 @@ def destination_for(vault_root: Path, kind: str, source_path: Path) -> tuple[Pat
     return vault_root / source_path.name, {}, [f"{source_path}: unsupported record kind {kind}"]
 
 
-def parse_pack_records(pack_root: Path, vault_root: Path, manifest_text: str) -> tuple[list[PackRecord], list[str]]:
+def pack_provenance(manifest: dict[str, str]) -> str:
+    pack_id = manifest.get("pack_id", "")
+    version = manifest.get("version", "")
+    source = manifest.get("source_provenance", "")
+    return f"Deployed from capability pack {pack_id} version {version}; source: {source}"
+
+
+def add_markdown_deployment_metadata(text: str, manifest: dict[str, str]) -> str:
+    if not text.startswith("---\n"):
+        return text
+    marker = "\n---\n"
+    end = text.find(marker, len("---\n"))
+    if end == -1:
+        return text
+    metadata = "\n".join(
+        [
+            f"provenance: {yaml_string(pack_provenance(manifest))}",
+            f"pack_membership: [{manifest.get('pack_id', '')}]",
+            f"pack_source_version: {yaml_string(manifest.get('version', ''))}",
+        ]
+    )
+    return text[:end].rstrip() + "\n" + metadata + text[end:]
+
+
+def add_yaml_deployment_metadata(text: str, manifest: dict[str, str]) -> str:
+    metadata = "\n".join(
+        [
+            f"provenance: {yaml_string(pack_provenance(manifest))}",
+            "pack_membership:",
+            f"  - {manifest.get('pack_id', '')}",
+            f"pack_source_version: {yaml_string(manifest.get('version', ''))}",
+        ]
+    )
+    return text.rstrip() + "\n" + metadata + "\n"
+
+
+def deployed_record_text(kind: str, source_text: str, manifest: dict[str, str]) -> str:
+    if kind == "practice":
+        return add_markdown_deployment_metadata(source_text, manifest)
+    if kind == "asset":
+        return add_yaml_deployment_metadata(source_text, manifest)
+    return source_text
+
+
+def parse_pack_records(
+    pack_root: Path, vault_root: Path, manifest: dict[str, str], manifest_text: str
+) -> tuple[list[PackRecord], list[str]]:
     records: list[PackRecord] = []
     errors: list[str] = []
     seen_ids: set[str] = set()
@@ -225,6 +281,8 @@ def parse_pack_records(pack_root: Path, vault_root: Path, manifest_text: str) ->
         if sha256(source_path) != digest:
             errors.append(f"included_record {item_id} content_sha256 mismatch")
             continue
+        source_text = read(source_path)
+        text = deployed_record_text(entry["kind"], source_text, manifest)
         destination_path, index_entry, destination_errors = destination_for(vault_root, entry["kind"], source_path)
         errors.extend(destination_errors)
         if index_entry.get("id") and index_entry.get("id") != item_id:
@@ -238,6 +296,8 @@ def parse_pack_records(pack_root: Path, vault_root: Path, manifest_text: str) ->
                     destination_path=destination_path,
                     index_entry=index_entry,
                     source_sha256=digest,
+                    deployed_text=text,
+                    deployed_sha256=sha256_text(text),
                 )
             )
     if not records:
@@ -274,7 +334,7 @@ def validate_manifest(core_root: Path, vault_root: Path, pack_root: Path, manife
     if list_entries(text, "executable_payloads"):
         errors.append("bootstrap deployment refuses executable payloads")
 
-    records, record_errors = parse_pack_records(pack_root, vault_root, text)
+    records, record_errors = parse_pack_records(pack_root, vault_root, manifest, text)
     errors.extend(record_errors)
     if not (core_root / "schemas" / "capability-pack-manifest.schema.yaml").exists():
         errors.append("core capability pack manifest schema missing")
@@ -315,7 +375,7 @@ def detect_conflicts(vault_root: Path, records: list[PackRecord]) -> tuple[list[
         if record.destination_path.exists():
             if not indexed:
                 conflicts.append(f"{record.item_id}: record file exists without a matching index entry")
-            elif sha256(record.destination_path) == record.source_sha256:
+            elif sha256(record.destination_path) == record.deployed_sha256:
                 skipped.append(record)
             else:
                 conflicts.append(f"{record.item_id}: local Vault record differs from pack content")
@@ -417,7 +477,7 @@ def deploy(core_root: Path, vault_root: Path, pack_root: Path, apply: bool) -> i
 
     print(f"Deploying pack: {manifest['pack_id']} {manifest['version']}")
     for record in added:
-        write(record.destination_path, read(record.source_path), apply)
+        write(record.destination_path, record.deployed_text, apply)
 
     practice_adds = [record for record in added if record.kind == "practice"]
     asset_adds = [record for record in added if record.kind == "asset"]
