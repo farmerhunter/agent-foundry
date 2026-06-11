@@ -524,6 +524,76 @@ Primary AF-5 journeys:
 5. **Cross-machine restore**: rebuild runtime state from public Core plus selected Vault instead of copying runtime files from another machine.
 6. **Disable or rollback pack-sourced capability**: update Vault lifecycle state and regenerate runtime outputs without deleting unrelated user-created records.
 
+Each journey must have an activation contract before implementation begins. The contract should name the starting state, user intent, required user decisions, success report, failure states, rollback or recovery path, first usable command, and downstream AF-5 issue that owns implementation.
+
+### AF-5 Activation Journey Contracts
+
+#### Fresh install
+
+- Starting state: the user has public Core or can obtain it, but has no selected User Vault on this machine.
+- User intent: get from blank local state to a usable Agent Foundry that can run a first normal workflow.
+- Required decisions: Vault location, local-only versus remote-backed Vault, enabled runtimes, ChatGPT manual import acceptance, and whether optional packs are deferred.
+- Success report: Core root, Vault root, bootstrap pack deployed, enabled/disabled/manual runtimes, generated outputs, install receipts, and first normal command are visible.
+- Failure states: Core missing, Vault invalid, bootstrap pack unavailable, runtime target unsafe or unmanaged, ChatGPT manual import unclear, or setup cannot explain which layer owns a file.
+- Recovery path: stop before runtime write, preserve blank Vault if valid, show exact failed step, and allow rerun after config, pack, or runtime correction.
+- First usable command: `refresh practices and assets` or a bootstrap-provided harvest/review command after bootstrap deployment.
+- Implementation owner: #76, #77, and #78 derive the blank Vault, bootstrap deployment, and first-run status work.
+
+#### Add optional capability pack
+
+- Starting state: Core and selected User Vault validate, bootstrap is already deployed, and the user chooses an optional pack.
+- User intent: add a bounded capability without importing private history or creating a second source of truth.
+- Required decisions: pack source, version, included records, executable payload permissions, dependency acceptance, conflict handling, and runtime targets affected by refresh.
+- Success report: staged pack reviewed, records added/updated/skipped, conflicts or local edits reported, pack membership metadata recorded, and refresh/install impact listed.
+- Failure states: pack provenance unknown, license/security unclear, ID collision unrelated, local modified record would be overwritten, executable payload lacks install boundary, or pack tries to act as live runtime authority.
+- Recovery path: keep the pack in staging, write no canonical records on failed review, and show a merge proposal or rejection reason.
+- First usable command: the pack's published trigger or generated runtime skill after deployment and refresh.
+- Implementation owner: #74 defines authority and conflicts; #75 defines manifest fixtures; #79 validates the first optional multi-agent candidate.
+
+#### Import existing runtime assets
+
+- Starting state: the user already has Codex, Claude Code, Hermes, ChatGPT, or local runtime materials outside the selected Vault.
+- User intent: preserve useful existing work by converting it into reviewed Agent Foundry candidates.
+- Required decisions: explicit source paths, sensitivity boundary, provenance, license/security risk, candidate routing, and whether any item should be discarded.
+- Success report: imported material is classified as evidence, practice candidate, asset candidate, pack candidate, project-local decision, design note, discard, or future work; no item becomes active without review.
+- Failure states: source path is too broad, raw private data appears, executable script would run during import, runtime file ownership is unclear, or imported content duplicates active Vault records.
+- Recovery path: leave material in staging or report-only mode, redact or narrow source scope, and rerun artifact routing before canonical mutation.
+- First usable command: a review/harvest command that presents candidates for approval, not a runtime install command.
+- Implementation owner: #80 owns runtime asset import path and must reuse harvest/import discipline.
+
+#### Import product-project capability
+
+- Starting state: a product project contains reusable helper scripts, docs, prompts, templates, or workflow conventions that may become a capability pack.
+- User intent: promote reusable capability without confusing the product project with Core, Vault, or runtime truth.
+- Required decisions: source project scope, reusable subset, project-local overlay, examples versus defaults, private path handling, executable payload boundary, and whether the capability is optional.
+- Success report: product evidence is inventoried, reusable contents are proposed as a candidate snapshot, project-local defaults are separated from reusable examples, and no files are copied into Core or Vault without review.
+- Failure states: project-specific issue labels or branches become global defaults, private paths leak, helper scripts require Core `scripts/` because no asset payload model exists, or the source project becomes an implicit live dependency.
+- Recovery path: keep the source project as evidence, defer executable payloads until #53 is resolved, and produce rejected-as-pack reasoning for project-local material.
+- First usable command: none until the pack is deployed and refreshed; before that, only review and packaging commands are valid.
+- Implementation owner: #79 validates Tiny IPA's role-generic GitHub helpers as the first optional product-project capability candidate.
+
+#### Cross-machine restore
+
+- Starting state: the user has another machine or deployment with public Core and either a private Vault remote or a chosen blank Vault path.
+- User intent: recreate a working local Agent Foundry without copying runtime files or machine-local state from another deployment.
+- Required decisions: Core path, Vault clone/pull path, locator write, runtime enablement, whether to apply runtime install, and ChatGPT manual import status.
+- Success report: Core/Vault roots validate, selected Vault commit is visible, runtime manifests and receipts are local to this machine, refresh/install status is clear, and stale combined-root references are absent or reported.
+- Failure states: Vault remote unavailable, Core/Vault version incompatible, local config points to old combined root, runtime receipt missing or stale, or machine-local path would be committed.
+- Recovery path: stop before runtime apply, preserve local config backup, report exact stale references, and allow rerun after clone, pull, or locator correction.
+- First usable command: `sync_status` or `refresh practices and assets` after root validation and runtime dry-run.
+- Implementation owner: #81 owns restore and rollback review after #78 proves local first-run status.
+
+#### Disable or rollback pack-sourced capability
+
+- Starting state: the selected Vault contains records with pack membership metadata and runtimes may contain generated outputs from those records.
+- User intent: disable, retire, or roll back a capability without damaging unrelated user-created records.
+- Required decisions: disable versus retire versus archive, runtime cleanup scope, whether canonical history changes, and whether rollback affects only runtime state or also Vault lifecycle state.
+- Success report: affected records, unrelated records, generated outputs, runtime files, receipts, manual targets, and residual cleanup are listed separately.
+- Failure states: rollback deletes user-created records, runtime files remain referenced after disable, pack membership is treated as ownership, or ChatGPT manual imports cannot be represented.
+- Recovery path: prefer lifecycle state changes and regeneration over deletion, back up runtime files before managed cleanup, and preserve audit trail of prior pack membership.
+- First usable command: status/refresh after disable, plus explicit cleanup instructions for manual targets.
+- Implementation owner: #81 and #82 validate rollback behavior before AF-5 closes.
+
 Capability pack lifecycle vocabulary:
 
 ```text
