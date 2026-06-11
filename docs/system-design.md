@@ -594,6 +594,10 @@ Each journey must have an activation contract before implementation begins. The 
 - First usable command: status/refresh after disable, plus explicit cleanup instructions for manual targets.
 - Implementation owner: #81 and #82 validate rollback behavior before AF-5 closes.
 
+### AF-5 Pack Lifecycle And Authority Decision
+
+This decision applies `GOV-007`: before a pack affects canonical records or runtime behavior, classify the layer that has authority. AF-5 adopts a local-first snapshot-import model, not a live pack dependency model.
+
 Capability pack lifecycle vocabulary:
 
 ```text
@@ -612,7 +616,58 @@ incubate
 
 AF-5 implements only the basic path through this lifecycle: reviewed snapshot deployment into a selected Vault, activation as ordinary Vault records, refresh into runtimes, status verification, and rollback or disable behavior. Marketplace channels, automatic pack discovery, broad update management, and advanced export polish remain later work.
 
-Capability packs are exported or deployable snapshots, not independent runtime truth sources. A pack may contain practice records, asset records, docs, templates, examples, configuration defaults, and executable payloads. Deployment writes or updates normal User Vault records with provenance and pack membership metadata. After deployment, the selected User Vault owns the canonical records; `refresh` reads current Vault state, not live pack definitions.
+Authority layers:
+
+| Layer | Examples | Authority in AF-5 |
+| --- | --- | --- |
+| Source evidence | Tiny IPA helpers, existing runtime files, session notes, external repos | Evidence only. It can justify a pack candidate but is not queried by `refresh` or runtime install. |
+| Package snapshot | Bootstrap pack, optional multi-agent pack, exported pack archive | Transfer and review artifact. It is immutable or versioned for comparison, but not the live source after deployment. |
+| Import staging | Unreviewed or reviewed pack staging area | Temporary review surface for provenance, license, security, conflicts, and user decisions. Failed staging writes no canonical records. |
+| Canonical Vault records | Practices, assets, indexes, accepted payloads, pack membership metadata | Source of truth after deployment. Freeform Vault CRUD can create, edit, retire, or archive these records outside pack workflows. |
+| Generated output | Adapter files, runtime skill output, generated helper wrappers | Downstream output from the selected Vault plus Core generator/profile logic. It is reproducible and not canonical. |
+| Runtime copy or dependency | Installed runtime files, managed helper copies, dependency checks, receipts | Machine-local operational state. It must be installed with receipts and rollback semantics where managed. |
+| Live upstream authority | Marketplace, registry, source repo consulted at runtime | Not part of AF-5 MVP. It requires a separate trust, versioning, offline, conflict, and rollback design. |
+
+Capability packs are exported or deployable snapshots, not independent runtime truth sources. A pack may contain practice records, asset records, docs, templates, examples, configuration defaults, and executable payloads. Deployment writes or updates normal User Vault records with provenance, pack membership metadata, and conflict history. After deployment, the selected User Vault owns the canonical records; `refresh` reads current Vault state, not live pack definitions.
+
+Pack deployment is not ownership transfer to a pack controller. A deployed record may belong to no pack, one pack, or multiple packs. Pack membership explains provenance and update comparison; it does not prevent ordinary reviewed edits, deprecation, retirement, or archive decisions. If a user edits a pack-sourced record, later pack updates must treat that local edit as canonical user state and produce a reviewable merge proposal rather than overwriting it.
+
+Minimal manifest responsibilities for #75:
+
+- stable pack id, title, description, lifecycle status, version, exported date, source provenance, and maintainer/source contact when available;
+- compatibility range for Core schema and Vault schema or metadata versions;
+- included practices, assets, docs, templates, examples, configuration defaults, executable payloads, and generated-output expectations;
+- per-item id, path, kind, lifecycle status, source version, content hash, and intended destination layer;
+- provenance, license, sensitivity, security, permission, dependency, and runtime-impact metadata;
+- conflict policy, rollback notes, and whether the pack is mandatory bootstrap, optional user-selected capability, or product-project candidate;
+- checksums for snapshot integrity and enough metadata to compare a later pack version with the user's current Vault records.
+
+Conflict and update behavior:
+
+| Situation | Required behavior |
+| --- | --- |
+| Same id, same pack version, same content hash | Verify or skip as already deployed. |
+| Same id, same pack version, different content hash | Fail closed; require review because the snapshot is not reproducible. |
+| Same id, newer pack version, local record unchanged since prior import | Show a diff and allow reviewed update. Do not silently apply unless the workflow has an explicit low-risk auto-update policy, which AF-5 does not define. |
+| Same id, newer pack version, local record modified after import | Produce a merge proposal or keep local state. Do not overwrite user edits. |
+| Same id, unrelated provenance or incompatible kind | Fail closed as an unrelated id collision. |
+| Missing dependency, incompatible Core/Vault schema, or executable payload without a reviewed install boundary | Fail before canonical write or runtime install. |
+| Pack marks a record deprecated or retired | Propose lifecycle change; do not delete canonical records by default. |
+| User retires or archives a pack-sourced record | Respect the Vault lifecycle state. Later pack refresh may propose reactivation only with explicit review. |
+
+Activation semantics:
+
+- Deploying a pack into the selected Vault is separate from making every included record active. Records still carry their normal lifecycle status, and human review remains required unless the pack has already been reviewed as the mandatory bootstrap distribution.
+- `refresh` uses active or otherwise selected Vault records according to existing adapter publishing rules. It must not activate staged pack content by reading directly from a pack snapshot.
+- Runtime install uses generated output or accepted Vault payloads plus Core platform machinery. It must not execute from pack staging or canonical Vault payloads directly unless #53 defines and validates that boundary.
+- ChatGPT-style manual imports remain manual targets; a pack may provide instructions or generated text, but not a hidden managed install.
+
+Rollback and disable semantics:
+
+- Prefer lifecycle state changes, pack membership metadata updates, and regeneration over deletion.
+- Runtime rollback is separate from Vault history. Managed runtime files can be restored or removed according to receipts without rewriting canonical Vault records.
+- Disabling a pack should identify affected pack-sourced records, user-created records, generated outputs, runtime copies, manual targets, and residual cleanup separately.
+- Removing pack membership metadata must not erase provenance needed for later audit unless a reviewed privacy policy requires redaction.
 
 Executable helper payloads need a runtime boundary. The accepted source may live in the Vault as asset payload, but executable copies, wrappers, chmod state, dependency checks, install receipts, and rollback state belong in managed machine-local runtime/tool locations. Core `scripts/` should remain platform machinery such as validation, initialization, adapter publishing, runtime install, consistency checks, migration planning, and rollback helpers.
 
