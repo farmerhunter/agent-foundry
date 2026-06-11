@@ -1,0 +1,27 @@
+id: ASSET-COLLAB-PACK-001
+title: Review Handoff Summary Helper
+asset_type: skill
+status: candidate
+version: 1
+created: 2026-06-11
+updated: 2026-06-11
+purpose: Draft a concise issue and PR completion handoff from reviewed local evidence.
+responsibility: Summarize scope, verification, residual risks, and reviewer target.
+non_responsibility: Does not post comments, mutate GitHub labels, install helpers, or execute from pack staging.
+inputs:
+  - issue number
+  - PR number
+  - verification results
+process:
+  - Read provided handoff evidence.
+  - Build a concise completion summary.
+  - Leave posting and label changes to Core or GitHub workflow tooling.
+outputs:
+  - Handoff summary draft
+canonical_practices:
+  - COLLAB-PACK-001
+published_to: []
+usage_triggers:
+  - review handoff summary
+success_criteria:
+  - The helper can be reviewed as source without being executed from the pack snapshot.

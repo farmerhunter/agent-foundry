@@ -1,0 +1,7 @@
+schema_version: 1
+layout_kind: vault
+layout_version: 1
+identity: fixture-blank-vault
+supported_modes: [combined, split]
+supported_core_layout_versions: [1]
+privacy_boundary: private_by_default

@@ -1,0 +1,66 @@
+manifest_schema_version: 1
+pack_id: pack.multi-agent.optional
+title: Optional Multi-Agent Collaboration Pack
+description: Minimal optional capability snapshot with inert helper payload metadata.
+lifecycle_status: candidate
+version: 0.1.0
+exported_at: 2026-06-11
+distribution_type: optional_capability
+source_provenance: "Agent Foundry public Core fixture for issue #75"
+maintainer_contact: "https://github.com/farmerhunter/agent-foundry"
+license: "repository license"
+sensitivity: public
+review_state: unreviewed
+
+compatibility:
+  core_schema_version_min: 1
+  core_schema_version_max: 1
+  vault_layout_versions: [1]
+  requires_bootstrap_pack: true
+
+included_records:
+  - id: COLLAB-PACK-001
+    kind: practice
+    lifecycle_status: candidate
+    path: records/practices/COLLAB-PACK-001-review-handoff.md
+    source_version: 1
+    content_sha256: "cff47b12ef1fdda1cc975433226cd4c8d10124b87d71c7feb2659f7d4aaceed9"
+    destination_layer: canonical_vault_record
+    membership_role: optional_member
+    activation_default: manual_review
+    import_action: stage_only
+  - id: ASSET-COLLAB-PACK-001
+    kind: asset
+    lifecycle_status: candidate
+    path: records/assets/ASSET-COLLAB-PACK-001-review-handoff-helper.asset.yaml
+    source_version: 1
+    content_sha256: "aa875a255de4818d07e8f6af38490782a990a403150e83570d006f2e622d5e51"
+    destination_layer: canonical_vault_record
+    membership_role: optional_member
+    activation_default: manual_review
+    import_action: stage_only
+
+executable_payloads:
+  - id: helper.review-handoff-summary
+    title: Review Handoff Summary Helper
+    lifecycle_status: candidate
+    path: payloads/helpers/review_handoff_summary.py
+    source_sha256: "61ebb3b134a4ce82bba92103b8033a4474688057bfbf5be68e908d8322a1b334"
+    interpreter: python3
+    execute_from_pack: false
+    install_boundary: managed_runtime_copy_required
+    permissions: [filesystem-read]
+    dependencies: []
+    runtime_impact: "May read reviewed issue or PR handoff text only after managed install."
+
+conflict_policy:
+  id_collision: fail_closed
+  same_version_hash_mismatch: fail_closed
+  newer_version_update: reviewed_diff_required
+  local_edit_behavior: preserve_vault_and_propose_merge
+  rollback_notes: "Keep local Vault edits canonical; remove generated runtime copies through receipts when later install support exists."
+
+integrity:
+  digest_algorithm: sha256
+  manifest_paths_are_relative: true
+  private_vault_content: excluded

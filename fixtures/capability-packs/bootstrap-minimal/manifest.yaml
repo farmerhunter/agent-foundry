@@ -1,0 +1,55 @@
+manifest_schema_version: 1
+pack_id: pack.bootstrap.minimal
+title: Minimal Agent Foundry Bootstrap Pack
+description: Minimal public bootstrap snapshot for AF-5 fixture validation.
+lifecycle_status: reviewed
+version: 0.1.0
+exported_at: 2026-06-11
+distribution_type: mandatory_bootstrap
+source_provenance: "Agent Foundry public Core fixture for issue #75"
+maintainer_contact: "https://github.com/farmerhunter/agent-foundry"
+license: "repository license"
+sensitivity: public
+review_state: reviewed
+
+compatibility:
+  core_schema_version_min: 1
+  core_schema_version_max: 1
+  vault_layout_versions: [1]
+  requires_bootstrap_pack: false
+
+included_records:
+  - id: BOOT-001
+    kind: practice
+    lifecycle_status: active
+    path: records/practices/BOOT-001-bootstrap-orientation.md
+    source_version: 1
+    content_sha256: "0783a718f8da5215e47932f9039d84bf1ef8c6b59eeecc351a126532e3221764"
+    destination_layer: canonical_vault_record
+    membership_role: bootstrap_required
+    activation_default: active
+    import_action: create_or_review_update
+  - id: ASSET-BOOT-001
+    kind: asset
+    lifecycle_status: active
+    path: records/assets/ASSET-BOOT-001-bootstrap-status.asset.yaml
+    source_version: 1
+    content_sha256: "61cc197353a2564806b5a1f4827b8d732c5c68f0272ce1e04acf2e040d63ad4f"
+    destination_layer: canonical_vault_record
+    membership_role: bootstrap_required
+    activation_default: active
+    import_action: create_or_review_update
+
+executable_payloads: []
+
+conflict_policy:
+  id_collision: fail_closed
+  same_version_hash_mismatch: fail_closed
+  newer_version_update: reviewed_diff_required
+  local_edit_behavior: preserve_vault_and_propose_merge
+  rollback_notes: "Disable pack membership metadata and regenerate outputs; do not delete canonical records by default."
+
+integrity:
+  digest_algorithm: sha256
+  manifest_paths_are_relative: true
+  private_vault_content: excluded

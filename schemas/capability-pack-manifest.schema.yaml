@@ -1,0 +1,64 @@
+# Capability pack manifest schema.
+# This is a human-readable AF-5 MVP schema, not a strict machine validator yet.
+
+required_fields:
+  manifest_schema_version: "Integer schema version for this manifest format."
+  pack_id: "Stable pack id such as pack.bootstrap.minimal or pack.multi-agent.optional."
+  title: "Short human-readable pack title."
+  description: "One sentence describing the pack's reusable capability."
+  lifecycle_status: "candidate | reviewed | active | deprecated | retired | archived"
+  version: "Snapshot version string. Use semantic versioning when practical."
+  exported_at: "UTC timestamp or YYYY-MM-DD for the exported snapshot."
+  distribution_type: "mandatory_bootstrap | optional_capability | product_project_candidate"
+  source_provenance: "Public source, issue, repository, release, or export note for the snapshot."
+  maintainer_contact: "Maintainer or source contact when available."
+  license: "License or review-required when unknown."
+  sensitivity: "public | internal | private | sensitive"
+  review_state: "unreviewed | reviewed | accepted | rejected"
+  compatibility: "Core and Vault schema/layout compatibility requirements."
+  included_records: "Practices, assets, docs, templates, examples, or config defaults included in the snapshot."
+  executable_payloads: "Executable helper source declarations. Payloads are inert in pack staging."
+  conflict_policy: "Required fail-closed, update, local-edit, and rollback behavior."
+  integrity: "Digest algorithm and checksum policy for snapshot contents."
+
+compatibility_fields:
+  core_schema_version_min: "Minimum Core schema version supported by the pack."
+  core_schema_version_max: "Maximum Core schema version supported by the pack."
+  vault_layout_versions: "List of supported Vault layout versions."
+  requires_bootstrap_pack: "Boolean. Optional packs should declare whether bootstrap must already be deployed."
+
+included_record_fields:
+  id: "Stable record id."
+  kind: "practice | asset | doc | template | example | config_default"
+  lifecycle_status: "Record lifecycle state intended after reviewed deployment."
+  path: "Path inside the pack snapshot, relative to the manifest directory."
+  source_version: "Version of this item within the pack."
+  content_sha256: "SHA-256 digest of the referenced snapshot file."
+  destination_layer: "canonical_vault_record | vault_metadata | import_staging_reference"
+  membership_role: "bootstrap_required | optional_member | dependency | example"
+  activation_default: "active | proposed | candidate | manual_review"
+  import_action: "create_or_review_update | stage_only | skip_if_present"
+
+executable_payload_fields:
+  id: "Stable payload id."
+  title: "Short helper title."
+  lifecycle_status: "candidate | reviewed | active | deprecated | retired | archived"
+  path: "Path inside the pack snapshot, relative to the manifest directory."
+  source_sha256: "SHA-256 digest of the referenced helper source."
+  interpreter: "Runtime or interpreter such as python3, node, bash, or none."
+  execute_from_pack: "Must be false for AF-5 staging fixtures."
+  install_boundary: "managed_runtime_copy_required | manual_import_only | no_install"
+  permissions: "Declared filesystem, network, process, or mutation permissions."
+  dependencies: "Declared runtime dependencies."
+  runtime_impact: "Human-readable statement of affected runtime targets after managed install."
+
+rules:
+  - "A pack snapshot is a transfer and review artifact, not a live source of truth after deployment."
+  - "After deployment, selected User Vault records own canonical practice, asset, membership, and provenance state."
+  - "Do not package raw maintainer Vault evidence, local runtime manifests, secrets, or private User Vault content."
+  - "All included files and executable payload sources must have checksums."
+  - "Executable payloads must be declared but must not be executed from pack staging."
+  - "Same id, same version, different hash must fail closed and require review."
+  - "Same id from unrelated provenance or incompatible kind must fail closed."
+  - "Local Vault edits must be treated as canonical user state and handled through a reviewed merge proposal."
+  - "Runtime installation is out of scope for the manifest fixture; generated or managed runtime outputs come later."
