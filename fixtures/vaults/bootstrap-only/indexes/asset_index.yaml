@@ -1,0 +1,12 @@
+schema_version: 1
+updated: 2026-06-11
+
+asset_types:
+  skill: [ASSET-BOOT-001]
+
+assets:
+  - id: ASSET-BOOT-001
+    title: Bootstrap Status Checklist
+    asset_type: skill
+    status: active
+    path: assets/skills/ASSET-BOOT-001-bootstrap-status.asset.yaml

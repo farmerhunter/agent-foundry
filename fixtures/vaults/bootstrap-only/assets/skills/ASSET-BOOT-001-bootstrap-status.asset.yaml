@@ -1,0 +1,28 @@
+id: ASSET-BOOT-001
+title: Bootstrap Status Checklist
+asset_type: skill
+status: active
+version: 1
+created: 2026-06-11
+updated: 2026-06-11
+purpose: Report whether a blank Vault has received the reviewed bootstrap records.
+responsibility: Summarize Core root, Vault root, bootstrap pack membership, and refresh readiness.
+non_responsibility: Does not install runtimes, import optional packs, or mutate private evidence.
+inputs:
+  - Core root
+  - selected Vault root
+  - bootstrap pack membership metadata
+process:
+  - Validate roots.
+  - Check bootstrap membership records.
+  - Report refresh readiness.
+outputs:
+  - Bootstrap status summary
+canonical_practices:
+  - BOOT-001
+published_to:
+  - codex
+usage_triggers:
+  - bootstrap status
+success_criteria:
+  - Blank Vault and bootstrap-only states can be distinguished without reading a pack snapshot as runtime authority.

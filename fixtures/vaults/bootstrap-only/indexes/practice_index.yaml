@@ -1,0 +1,12 @@
+schema_version: 1
+updated: 2026-06-11
+
+domains:
+  meta: [BOOT-001]
+
+practices:
+  - id: BOOT-001
+    title: Bootstrap Orientation
+    domain: meta
+    status: active
+    path: practices/meta/BOOT-001-bootstrap-orientation.md
