@@ -113,9 +113,9 @@ User Vault contains a user's governed capability records and review evidence:
 
 Generated outputs are neither Core nor Vault. They are projections from Core tooling plus Vault records. Runtime copies are installed downstream and are never canonical.
 
-Executable helper scripts expose a remaining boundary gap. AF-3 has an implemented home only for Core platform scripts, so any script that needs to run today must live under Core `scripts/`. That is correct for platform lifecycle tooling such as root validation, Vault initialization, adapter publishing, runtime install, migration planning, consistency checks, and rollback helpers. It is not a complete answer for scripts that belong to a specific capability, practice, or asset, such as multi-agent GitHub Project helpers.
+Executable helper scripts expose a boundary that AF-5 must handle explicitly. AF-3 has an implemented home only for Core platform scripts, so any script that needs to run today must live under Core `scripts/`. That is correct for platform lifecycle tooling such as root validation, Vault initialization, adapter publishing, runtime install, migration planning, consistency checks, and rollback helpers. It is not a complete answer for scripts that belong to a specific capability, practice, or asset, such as multi-agent GitHub Project helpers.
 
-Until capability-owned executable packaging exists, capability-specific helpers may live in Core `scripts/` only as capability-helper candidates. They must avoid personal defaults, avoid treating the User Vault as an executable trust boundary, and remain reviewable as future migration candidates. The follow-up design work is #53: define capability-owned executable helpers, including package location, metadata, permission model, provenance, install/update behavior, and how helpers relate to Vault records without conflicting with freeform practice/asset CRUD.
+Until capability-owned executable packaging exists, capability-specific helpers may live in Core `scripts/` only as capability-helper candidates. They must avoid personal defaults, avoid treating the User Vault as an executable trust boundary, and remain reviewable as future migration candidates. The AF-5 executable helper boundary defines package location, metadata, permission model, provenance, install/update behavior, and how helpers relate to Vault records without conflicting with freeform practice/asset CRUD.
 
 Current repository mapping:
 
@@ -669,7 +669,58 @@ Rollback and disable semantics:
 - Disabling a pack should identify affected pack-sourced records, user-created records, generated outputs, runtime copies, manual targets, and residual cleanup separately.
 - Removing pack membership metadata must not erase provenance needed for later audit unless a reviewed privacy policy requires redaction.
 
-Executable helper payloads need a runtime boundary. The accepted source may live in the Vault as asset payload, but executable copies, wrappers, chmod state, dependency checks, install receipts, and rollback state belong in managed machine-local runtime/tool locations. Core `scripts/` should remain platform machinery such as validation, initialization, adapter publishing, runtime install, consistency checks, migration planning, and rollback helpers.
+### AF-5 Capability-Owned Executable Helper Boundary
+
+Capability-owned helper scripts are executable payloads that support a specific reusable capability, asset, or practice set. They are different from Core platform scripts. Core scripts make Agent Foundry itself work; capability helpers make a selected user capability more ergonomic after that capability has been reviewed and installed.
+
+Layer decision:
+
+| Layer | Helper responsibility |
+| --- | --- |
+| Core `scripts/` | Platform lifecycle tooling: locate and validate roots, initialize Vaults, publish adapters, install runtimes, check consistency, migrate deployments, create backups, roll back managed runtime files, export/import offline snapshots, and record usage evidence. |
+| Capability pack snapshot | Transfer helper source, examples, docs, and metadata for review. It is not executable authority and must not run during staging. |
+| Selected User Vault | Canonical accepted asset record, provenance, lifecycle state, reviewed metadata, and optionally reviewed payload source. The Vault is not a direct execution boundary. |
+| Generated output | Optional wrappers, command manifests, or runtime instructions derived from the accepted Vault record plus Core install logic. |
+| Managed runtime/tool location | Machine-local executable copy, dependency state, permissions, receipts, and rollback metadata. This is where executable use happens. |
+| Product project | Evidence source or project-local overlay. It must not become a hidden dependency after the helper is packaged. |
+
+Trust and install model:
+
+1. Treat every helper as inert while it is in pack staging or import review.
+2. Accept the helper only through an asset or capability-pack review that records provenance, license, sensitivity, permissions, dependencies, and intended runtime impact.
+3. Store the canonical decision in the selected Vault as ordinary asset data. If payload source is stored in the Vault, treat it as reviewed source, not as the path to execute.
+4. Install executable copies into managed machine-local runtime/tool locations through Core platform install logic.
+5. Write receipts that include helper id, asset id, pack id when applicable, source hash, installed path, dependency check result, permissions, install time, Core version, Vault version or commit, and rollback path.
+6. Run helpers only from managed installed locations or from an explicitly approved development path. Do not run helpers from pack staging, imported archives, product projects, or canonical Vault payload paths by default.
+7. Support dry-run/status modes before apply. A helper that cannot explain install impact, dependencies, or rollback is not ready for managed install.
+
+Minimal helper metadata for later schema work:
+
+- helper id, title, capability id, related asset id, related pack id, lifecycle status, version, owner or maintainer;
+- source provenance, source path or archive reference, source hash, license, sensitivity classification, and review date;
+- supported platforms, interpreter/runtime, dependency list, network/filesystem/process permissions, and whether the helper is read-only or mutating;
+- safe dry-run command, status command, install command shape, uninstall or rollback behavior, and expected managed install target;
+- runtime targets affected, adapter exposure, user-visible trigger text, and failure modes;
+- update policy, compatibility range, supersedes/superseded-by metadata, and whether local user edits are allowed.
+
+Current Core script classification:
+
+| Current script group | Classification | Notes |
+| --- | --- | --- |
+| Root/config/install/migration helpers | Core platform-essential | `foundry_config.py`, `check_foundry_roots.py`, `init_vault.py`, `install_foundry.py`, `migrate_deployment.py`, `plan_vault_extraction.py`, `check_deployment_migration.py`, and `collect_deployment_inventory.py` operate on Core/Vault setup and upgrade boundaries. |
+| Adapter publish/install/status helpers | Core platform-essential | `publish_adapters.py`, `sync_adapters.py`, `sync_status.py`, `runtime_manifest.py`, `adapter_install_receipt.py`, `deployment_checks.py`, and `rollback_runtime.py` operate generated/runtime state from Core plus selected Vault. |
+| Review, usage, and consistency helpers | Core platform-essential | `check_consistency.py`, `check_adapter_quality.py`, `check_activation.py`, `review_practices.py`, `review_assets.py`, `record_asset_usage.py`, and `aggregate_usage.py` enforce Agent Foundry governance and evidence handling. |
+| Offline sync helpers | Core platform-essential | `export_snapshot.py`, `import_snapshot.py`, `compare_snapshot.py`, and `sync_state.py` support local-first transfer and recovery. |
+| Test scripts | Core platform-essential test surface | `test_*.py` files validate Core behavior and should remain in Core. |
+| Capability-specific helpers | Capability-helper candidates | No current Core script should be treated as a finished capability helper by default. Future scripts that mainly serve optional multi-agent collaboration, technical writing, or another user capability should be labeled as candidates and migrated once the helper packaging path is implemented. |
+
+Migration path:
+
+1. Keep existing Core scripts in place unless a reviewed classification shows that a script primarily serves an optional capability rather than Agent Foundry platform operation.
+2. For any new capability-specific script needed before packaging exists, mark it as a temporary capability-helper candidate in the issue/PR and avoid personal defaults or hidden Vault assumptions.
+3. When #75 and later implementation provide pack manifests and helper install metadata, move candidate helpers into capability-pack or asset payload source with provenance and checksums.
+4. Install reviewed helpers into managed runtime/tool locations with receipts instead of executing from Core, pack staging, product projects, or Vault payload paths.
+5. Leave Core `scripts/` for platform machinery and tests; do not grow it into a repository of optional user capabilities.
 
 The Tiny IPA role-generic GitHub helpers are a validation case for this model. Tiny IPA remains the evidence source. The reusable multi-agent helper subset can become a candidate optional capability pack only after AF-5 defines pack snapshot, provenance, project-local overlay, executable payload, and runtime install boundaries.
 
