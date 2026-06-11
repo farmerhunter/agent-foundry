@@ -758,17 +758,17 @@ Planned GitHub issue sequence:
 
 | Order | GitHub issue | Type | Owner role | Risk | Ready condition | Completion handoff |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1 | TBD: AF5 onboarding journey contract | Decision / Epic | Architect | Medium | AF-4 close report accepted or explicitly waived for planning only | User or structured Architect review before implementation issues start |
-| 2 | TBD: Pack lifecycle and authority model | Decision | Architect | High | Journey contract defines fresh install, optional pack, import, restore, and rollback paths | Structured review handoff |
-| 3 | #53 Capability-owned executable helpers | Decision | Architect | Medium | Pack authority model names executable payload boundary and runtime receipt expectations | Structured review handoff before helper implementation |
-| 4 | TBD: Minimal capability pack manifest and fixtures | Task batch | Implementer with Architect review | Medium | #53 and pack authority model define fields, lifecycle states, and conflict behavior | Batch checkpoint |
-| 5 | TBD: Blank Vault plus bootstrap deployment path | Task batch | Implementer | Medium | Pack manifest fixtures exist; blank Vault initializer validates selected roots | Batch checkpoint |
-| 6 | TBD: Bootstrap capability pack content | Harvester / Architect | Medium | Deployment path can import pack snapshot into Vault records | Human review of included canonical records before activation |
-| 7 | TBD: Fresh install command and status report | Task batch | Implementer | Medium | Bootstrap pack can deploy into blank Vault | Batch checkpoint with runtime dry-run evidence |
-| 8 | TBD: Optional multi-agent capability pack candidate | Evidence / Task | Architect + Harvester | Medium | Bootstrap path works; #53 defines executable helper payload boundary | Review before packaging Tiny IPA helper evidence |
-| 9 | TBD: Runtime asset import path | Task batch | Implementer with Harvester review | Medium | Import staging and artifact routing model defined | Batch checkpoint |
-| 10 | TBD: Cross-machine restore and rollback onboarding | Review / Task | Reviewer + Architect | High | Fresh install, selected-Vault refresh, and receipts work locally | Structured review handoff |
-| 11 | TBD: AF5 end-to-end onboarding validation | Review | Reviewer | High | Issues 1-10 complete or explicitly deferred with rationale | User acceptance before AF-5 close |
+| 1 | #73 AF5 onboarding journey contract | Decision / Epic | Architect | Medium | AF-4 close report accepted or explicitly waived for planning only | User or structured Architect review before implementation issues start |
+| 2 | #74 Pack lifecycle and authority model | Decision | Architect | High | #73 defines fresh install, optional pack, import, restore, and rollback paths | Structured review handoff |
+| 3 | #53 Capability-owned executable helpers | Decision | Architect | Medium | #74 names executable payload boundary and runtime receipt expectations | Structured review handoff before helper implementation |
+| 4 | #75 Minimal capability pack manifest and fixtures | Task batch | Implementer with Architect review | Medium | #53 and #74 define fields, lifecycle states, and conflict behavior | Batch checkpoint |
+| 5 | #76 Blank Vault plus bootstrap deployment path | Task batch | Implementer | Medium | #75 fixtures exist; blank Vault initializer validates selected roots | Batch checkpoint |
+| 6 | #77 Bootstrap capability pack content | Harvester / Architect | Medium | #76 can import pack snapshot into Vault records | Human review of included canonical records before activation |
+| 7 | #78 Fresh install command and status report | Task batch | Implementer | Medium | #77 can deploy into blank Vault | Batch checkpoint with runtime dry-run evidence |
+| 8 | #79 Optional multi-agent capability pack candidate | Evidence / Task | Architect + Harvester | Medium | #76 works; #53 defines executable helper payload boundary | Review before packaging Tiny IPA helper evidence |
+| 9 | #80 Runtime asset import path | Task batch | Implementer with Harvester review | Medium | #74 import staging and artifact routing model defined | Batch checkpoint |
+| 10 | #81 Cross-machine restore and rollback onboarding | Review / Task | Reviewer + Architect | High | #78 selected-Vault refresh and receipts work locally | Structured review handoff |
+| 11 | #82 AF5 end-to-end onboarding validation | Review | Reviewer | High | #53 and #73-#81 complete or explicitly deferred with rationale | User acceptance before AF-5 close |
 
 Execution order:
 
