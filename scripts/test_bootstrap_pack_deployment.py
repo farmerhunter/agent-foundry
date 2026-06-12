@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import tempfile
@@ -13,15 +14,17 @@ ROOT = Path(__file__).resolve().parents[1]
 CHECK = ROOT / "scripts" / "check_foundry_roots.py"
 DEPLOY = ROOT / "scripts" / "deploy_capability_pack.py"
 INIT = ROOT / "scripts" / "init_vault.py"
+INSTALL = ROOT / "scripts" / "install_foundry.py"
 PUBLISH = ROOT / "scripts" / "publish_adapters.py"
 BOOTSTRAP_PACK = ROOT / "fixtures" / "capability-packs" / "bootstrap-minimal"
 OPTIONAL_PACK = ROOT / "fixtures" / "capability-packs" / "optional-multi-agent"
 
 
-def run(args: list[str]) -> subprocess.CompletedProcess[str]:
+def run(args: list[str], env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, *args],
         cwd=ROOT,
+        env=env,
         check=False,
         text=True,
         stdout=subprocess.PIPE,
@@ -73,6 +76,52 @@ def main() -> int:
             errors.append("init-blank-vault: practice index was not blank")
         if "assets: []" not in blank_asset_index:
             errors.append("init-blank-vault: asset index was not blank")
+
+        fresh_vault = base / "fresh-vault"
+        fresh_generated = base / "fresh-generated-adapters"
+        fake_home = base / "home"
+        fake_home.mkdir()
+        fresh_env = os.environ.copy()
+        fresh_env["HOME"] = str(fake_home)
+        fresh = run(
+            [
+                str(INSTALL),
+                "--fresh-install",
+                "--core-root",
+                str(ROOT),
+                "--vault-root",
+                str(fresh_vault),
+                "--generated-root",
+                str(fresh_generated),
+                "--apply",
+                "--skip-check",
+            ],
+            env=fresh_env,
+        )
+        errors.extend(expect("fresh-install-report", fresh, True, "Agent Foundry setup/status report"))
+        for expected in [
+            "deployed_pack: pack.bootstrap.minimal",
+            f"generated_output: ready path={fresh_generated.resolve()}",
+            "- chatgpt: manual import required",
+            "receipt: missing",
+            "first_usable_command: python3 scripts/sync_status.py",
+            "chatgpt_manual_import: explicit",
+        ]:
+            errors.extend(expect(f"fresh-install-report-{expected}", fresh, True, expected))
+        if not (fresh_generated / "adapter-publish-manifest.yaml").exists():
+            errors.append("fresh-install-report: generated adapter manifest missing")
+        locator = fake_home / ".agent-foundry" / "config.yaml"
+        if not locator.exists():
+            errors.append("fresh-install-report: temp HOME locator was not written")
+        elif str(fresh_vault.resolve()) not in locator.read_text(encoding="utf-8"):
+            errors.append("fresh-install-report: temp HOME locator did not select fresh Vault")
+        for runtime_path in [
+            fake_home / ".codex" / "skills",
+            fake_home / ".claude",
+            fake_home / ".hermes" / "skills",
+        ]:
+            if runtime_path.exists():
+                errors.append(f"fresh-install-report: runtime dry-run unexpectedly wrote {runtime_path}")
 
         optional_result = run(
             [

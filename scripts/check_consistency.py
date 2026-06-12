@@ -593,6 +593,26 @@ def check_capability_pack_fixtures_script() -> list[str]:
     return output.splitlines()
 
 
+def check_bootstrap_pack_deployment_script() -> list[str]:
+    script = ROOT / "scripts" / "test_bootstrap_pack_deployment.py"
+    if not script.exists():
+        return ["Missing scripts/test_bootstrap_pack_deployment.py"]
+    result = subprocess.run(
+        ["python3", str(script)],
+        cwd=ROOT,
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if result.returncode == 0:
+        return []
+    output = (result.stdout + result.stderr).strip()
+    if not output:
+        return ["Bootstrap pack deployment fixture failed without output"]
+    return output.splitlines()
+
+
 def main() -> int:
     errors: list[str] = []
     errors += check_index_paths(VAULT_ROOT / "indexes" / "practice_index.yaml", VAULT_ROOT, "Practice")
@@ -613,6 +633,7 @@ def main() -> int:
     errors += check_adapter_quality_script()
     errors += check_activation_script()
     errors += check_capability_pack_fixtures_script()
+    errors += check_bootstrap_pack_deployment_script()
 
     if errors:
         print("Consistency check failed:")
