@@ -25,6 +25,7 @@ from deploy_capability_pack import (
     inline_list,
     list_entries,
     read,
+    safe_segment,
     section_scalars,
     sha256,
     top_level_scalars,
@@ -105,18 +106,14 @@ def destination_for(vault_root: Path, kind: str, source_path: Path) -> tuple[Pat
         domain = metadata.get("domain", "")
         if not item_id:
             errors.append(f"{source_path}: practice missing id")
-        if not domain:
-            errors.append(f"{source_path}: practice missing domain")
-            domain = "uncategorized"
+        domain = safe_segment(domain, f"{source_path}: practice domain", errors, "uncategorized")
         return vault_root / "practices" / domain / source_path.name, errors
     if kind == "asset":
         item_id = scan_yaml_field(source_path, "id") or ""
         asset_type = scan_yaml_field(source_path, "asset_type") or ""
         if not item_id:
             errors.append(f"{source_path}: asset missing id")
-        if not asset_type:
-            errors.append(f"{source_path}: asset missing asset_type")
-            asset_type = "asset"
+        asset_type = safe_segment(asset_type, f"{source_path}: asset_type", errors, "asset")
         directory = {"skill": "skills", "subagent": "subagents", "automation": "automations"}.get(
             asset_type, f"{asset_type}s"
         )

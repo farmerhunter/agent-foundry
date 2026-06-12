@@ -47,6 +47,7 @@ REQUIRED_RECORD_FIELDS = {
 }
 
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+SAFE_SEGMENT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
 
 
 @dataclass(frozen=True)
@@ -159,6 +160,16 @@ def yaml_string(value: str) -> str:
     return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
+def safe_segment(value: str, label: str, errors: list[str], fallback: str) -> str:
+    if not value:
+        errors.append(f"{label} missing")
+        return fallback
+    if not SAFE_SEGMENT_RE.match(value):
+        errors.append(f"{label} must be a safe single path segment: {value}")
+        return fallback
+    return value
+
+
 def destination_for(vault_root: Path, kind: str, source_path: Path) -> tuple[Path, dict[str, str], list[str]]:
     errors: list[str] = []
     if kind == "practice":
@@ -167,9 +178,7 @@ def destination_for(vault_root: Path, kind: str, source_path: Path) -> tuple[Pat
         domain = metadata.get("domain", "")
         if not item_id:
             errors.append(f"{source_path}: practice missing id")
-        if not domain:
-            errors.append(f"{source_path}: practice missing domain")
-            domain = "uncategorized"
+        domain = safe_segment(domain, f"{source_path}: practice domain", errors, "uncategorized")
         return (
             vault_root / "practices" / domain / source_path.name,
             {
@@ -186,9 +195,7 @@ def destination_for(vault_root: Path, kind: str, source_path: Path) -> tuple[Pat
         asset_type = scan_yaml_field(source_path, "asset_type") or ""
         if not item_id:
             errors.append(f"{source_path}: asset missing id")
-        if not asset_type:
-            errors.append(f"{source_path}: asset missing asset_type")
-            asset_type = "asset"
+        asset_type = safe_segment(asset_type, f"{source_path}: asset_type", errors, "asset")
         directory = {"skill": "skills", "subagent": "subagents", "automation": "automations"}.get(
             asset_type, f"{asset_type}s"
         )
