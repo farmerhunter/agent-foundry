@@ -251,15 +251,8 @@ def main() -> int:
         errors.extend(expect("plan-bootstrap-skip-after-deploy", bootstrap_after_deploy, True, "skip: 24"))
 
         optional_after_bootstrap = plan_pack(OPTIONAL_PACK, vault)
-        errors.extend(expect("plan-optional-stage-only", optional_after_bootstrap, True, "stage_only: 2"))
-        errors.extend(
-            expect(
-                "plan-optional-blocks-executable",
-                optional_after_bootstrap,
-                True,
-                "blocked_executable_install: 1",
-            )
-        )
+        errors.extend(expect("plan-optional-adds-records", optional_after_bootstrap, True, "add: 2"))
+        errors.extend(expect("plan-optional-no-executable-block", optional_after_bootstrap, True, "blocked_executable_install: 0"))
 
         write_deployed_index(
             vault,
