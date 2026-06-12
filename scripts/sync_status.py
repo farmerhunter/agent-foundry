@@ -82,21 +82,28 @@ def parse_runtime_manifest(text: str) -> dict[str, dict[str, str]]:
 
 
 def runtime_manifest_text() -> str:
-    script = ROOT / "scripts" / "runtime_manifest.py"
-    result = subprocess.run(
-        ["python3", str(script), "status"],
-        cwd=ROOT,
-        check=False,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    return result.stdout.strip() or result.stderr.strip() or "none"
+    local_manifest = ROOT / "runtime" / "local" / "runtime_manifest.yaml"
+    template_manifest = ROOT / "runtime" / "templates" / "runtime_manifest.template.yaml"
+    manifest = local_manifest if local_manifest.exists() else template_manifest
+    if not manifest.exists():
+        return f"runtime manifest missing: {local_manifest}; template missing: {template_manifest}"
+    targets = parse_runtime_manifest(manifest.read_text(encoding="utf-8"))
+    lines = [
+        f"local_manifest: {local_manifest}",
+        f"template_manifest: {template_manifest}",
+        f"manifest_source: {'local' if local_manifest.exists() else 'template-read-only'}",
+    ]
+    for name, config in targets.items():
+        path = config.get("install_path", "")
+        exists = "yes" if path and Path(path).expanduser().exists() else "no"
+        lines.append(
+            f"{name}: status={config.get('status', '')} path={path or '<manual>'} "
+            f"exists={exists} ownership={config.get('ownership_mode', '')}"
+        )
+    return "\n".join(lines)
 
 
 def runtime_status() -> str:
-    if not (ROOT / "scripts" / "runtime_manifest.py").exists():
-        return "runtime manifest tooling unavailable"
     return runtime_manifest_text()
 
 
@@ -244,8 +251,7 @@ def default_adapter_root(core_root: Path, vault_root: Path, receipt_path: Path) 
             receipt_root = str(receipt.get("adapter_root", ""))
             if receipt_root:
                 return Path(receipt_root).expanduser().resolve()
-        if DEFAULT_GENERATED_ROOT.exists():
-            return DEFAULT_GENERATED_ROOT.resolve()
+        return DEFAULT_GENERATED_ROOT.resolve()
     return core_root / "adapters"
 
 

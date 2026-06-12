@@ -6,7 +6,8 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from sync_status import ROOT, default_adapter_root, deployed_packs, setup_report
+import sync_status
+from sync_status import ROOT, DEFAULT_GENERATED_ROOT, default_adapter_root, deployed_packs, runtime_status, setup_report
 
 
 def write(path: Path, text: str) -> None:
@@ -63,6 +64,7 @@ def main() -> int:
             "pack.bootstrap.minimal (version=0.1.0, status=deployed, type=mandatory_bootstrap, source=local_path)"
         ], packs
         assert default_adapter_root(ROOT, vault, receipt) == generated.resolve()
+        assert default_adapter_root(ROOT, vault, base / "absent-receipt.json") == DEFAULT_GENERATED_ROOT.resolve()
 
         missing_receipt = base / "missing-receipt.json"
         report = setup_report(ROOT, vault, generated, missing_receipt)
@@ -81,6 +83,39 @@ def main() -> int:
         ]
         for text in expected:
             assert text in report, text
+
+        local_manifest = ROOT / "runtime" / "local" / "runtime_manifest.yaml"
+        before = local_manifest.read_bytes() if local_manifest.exists() else None
+        original_root = sync_status.ROOT
+        try:
+            fake_core = base / "fake-core"
+            write(
+                fake_core / "runtime" / "templates" / "runtime_manifest.template.yaml",
+                "\n".join(
+                    [
+                        "targets:",
+                        "  codex:",
+                        "    status: enabled",
+                        "    install_path: ~/.codex/skills",
+                        "    ownership_mode: managed-directories",
+                        "  chatgpt:",
+                        "    status: manual",
+                        "    install_path: \"\"",
+                        "    ownership_mode: manual-import",
+                        "",
+                    ]
+                ),
+            )
+            sync_status.ROOT = fake_core
+            text = runtime_status()
+            assert "manifest_source: template-read-only" in text, text
+            assert not (fake_core / "runtime" / "local" / "runtime_manifest.yaml").exists()
+        finally:
+            sync_status.ROOT = original_root
+        if before is None:
+            assert not local_manifest.exists()
+        else:
+            assert local_manifest.read_bytes() == before
 
     print("Sync status report tests passed.")
     return 0
