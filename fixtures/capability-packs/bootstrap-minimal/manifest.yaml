@@ -1,12 +1,12 @@
 manifest_schema_version: 1
 pack_id: pack.bootstrap.minimal
 title: Minimal Agent Foundry Bootstrap Pack
-description: Minimal public bootstrap snapshot for AF-5 fixture validation.
+description: Minimal public bootstrap snapshot for first-run harvest, review, refresh, publish, root, and runtime-boundary workflows.
 lifecycle_status: reviewed
-version: 0.1.0
-exported_at: 2026-06-11
+version: 0.2.0
+exported_at: 2026-06-12
 distribution_type: mandatory_bootstrap
-source_provenance: "Agent Foundry public Core fixture for issue #75"
+source_provenance: "Agent Foundry public Core fixture for issue #77"
 maintainer_contact: "https://github.com/farmerhunter/agent-foundry"
 license: "repository license"
 sensitivity: public
@@ -17,6 +17,23 @@ compatibility:
   core_schema_version_max: 1
   vault_layout_versions: [1]
   requires_bootstrap_pack: false
+
+selection_review:
+  rationale: "Provide the smallest usable blank-Vault baseline: bootstrap orientation plus the public Practice Harvester asset and its canonical meta, governance, and runtime practices."
+  included_groups:
+    - bootstrap orientation and status records
+    - Practice Harvester skill asset
+    - meta practices required for harvest, asset discovery, import review, dedupe, and adapter publishing
+    - governance practices required for source-of-truth and maintainability decisions
+    - runtime practices required for root, adapter, sync, and privacy boundaries
+  excluded_groups:
+    - optional multi-agent collaboration records
+    - architecture and provider-integration records
+    - product-project-specific records
+    - raw maintainer usage evidence
+    - private paths, runtime manifests, and local deployment receipts
+  adapter_impact: "After deployment and refresh, generated runtime outputs expose ASSET-META-001, ASSET-BOOT-001, and the included active practices only."
+  runtime_impact: "No runtime files are changed by deploying the pack; runtime installation remains a separate refresh/install step."
 
 included_records:
   - id: BOOT-001
@@ -29,12 +46,232 @@ included_records:
     membership_role: bootstrap_required
     activation_default: active
     import_action: create_or_review_update
+  - id: GOV-001
+    kind: practice
+    lifecycle_status: active
+    path: records/practices/GOV-001-protect-canonical-source-of-truth.md
+    source_version: 1
+    content_sha256: "183be3ddd0347051fb9c07cd89d9741f6cd9a6c09eecbbbc039f2554e3f15e40"
+    destination_layer: canonical_vault_record
+    membership_role: bootstrap_required
+    activation_default: active
+    import_action: create_or_review_update
+  - id: GOV-002
+    kind: practice
+    lifecycle_status: active
+    path: records/practices/GOV-002-prefer-smallest-maintainable-mechanism.md
+    source_version: 2
+    content_sha256: "78dd9283183f02611808087c15ccc0e1f5d70e6c90da82b5bf9b18cee73305e4"
+    destination_layer: canonical_vault_record
+    membership_role: bootstrap_required
+    activation_default: active
+    import_action: create_or_review_update
+  - id: GOV-003
+    kind: practice
+    lifecycle_status: active
+    path: records/practices/GOV-003-treat-transient-context-as-evidence.md
+    source_version: 1
+    content_sha256: "d3d50f436c3a0bb5e255302d1900d46607bca3a64fbafc8f644253b8796f72e0"
+    destination_layer: canonical_vault_record
+    membership_role: bootstrap_required
+    activation_default: active
+    import_action: create_or_review_update
+  - id: GOV-004
+    kind: practice
+    lifecycle_status: active
+    path: records/practices/GOV-004-preserve-runtime-capability.md
+    source_version: 1
+    content_sha256: "4e092ed3616f522d24021dd3e88f51167f4f794bc592417fddb34f44ed9ea0de"
+    destination_layer: canonical_vault_record
+    membership_role: bootstrap_required
+    activation_default: active
+    import_action: create_or_review_update
+  - id: META-001
+    kind: practice
+    lifecycle_status: active
+    path: records/practices/META-001-canonical-practices-source-of-truth.md
+    source_version: 1
+    content_sha256: "bc411c01cbda78f8002bfa3cb51aa8a523f2b7635ae0c1db428befc033a46ae6"
+    destination_layer: canonical_vault_record
+    membership_role: bootstrap_required
+    activation_default: active
+    import_action: create_or_review_update
+  - id: META-002
+    kind: practice
+    lifecycle_status: active
+    path: records/practices/META-002-harvest-before-publishing.md
+    source_version: 1
+    content_sha256: "2b84e5ae40c3430894004ef90315d13a470aa805691ac773b132925aad77014e"
+    destination_layer: canonical_vault_record
+    membership_role: bootstrap_required
+    activation_default: active
+    import_action: create_or_review_update
+  - id: META-003
+    kind: practice
+    lifecycle_status: active
+    path: records/practices/META-003-borrow-external-skills-through-review.md
+    source_version: 1
+    content_sha256: "ee3c7c051f185bc3b7d3747a5dac140effb8284933f30ecb151dd25f1db2f7b7"
+    destination_layer: canonical_vault_record
+    membership_role: bootstrap_required
+    activation_default: active
+    import_action: create_or_review_update
+  - id: META-004
+    kind: practice
+    lifecycle_status: active
+    path: records/practices/META-004-choose-smallest-suitable-asset.md
+    source_version: 1
+    content_sha256: "47fef94b99fb9952239ab681c78c097e7d68d82555139641611cc16ac6e272e2"
+    destination_layer: canonical_vault_record
+    membership_role: bootstrap_required
+    activation_default: active
+    import_action: create_or_review_update
+  - id: META-005
+    kind: practice
+    lifecycle_status: active
+    path: records/practices/META-005-define-asset-boundaries-before-creation.md
+    source_version: 1
+    content_sha256: "187746bd40906ce15a46dc2a8c88db982730935fd5f00e9c9ade5b70c25bf82a"
+    destination_layer: canonical_vault_record
+    membership_role: bootstrap_required
+    activation_default: active
+    import_action: create_or_review_update
+  - id: META-006
+    kind: practice
+    lifecycle_status: active
+    path: records/practices/META-006-memory-is-evidence-not-source-of-truth.md
+    source_version: 1
+    content_sha256: "e7429a6b0904c9268f3f867e83bbf5151d4916075ee9e0bbd88ba48fbf4322fa"
+    destination_layer: canonical_vault_record
+    membership_role: bootstrap_required
+    activation_default: active
+    import_action: create_or_review_update
+  - id: META-007
+    kind: practice
+    lifecycle_status: active
+    path: records/practices/META-007-native-agent-learning-is-candidate-input.md
+    source_version: 1
+    content_sha256: "bd6952ad01cf6b926bb12e71c73b3eeea09359a62e4f7b502b0cc5c2f84d247e"
+    destination_layer: canonical_vault_record
+    membership_role: bootstrap_required
+    activation_default: active
+    import_action: create_or_review_update
+  - id: META-008
+    kind: practice
+    lifecycle_status: active
+    path: records/practices/META-008-route-through-assets-constrain-with-practices.md
+    source_version: 1
+    content_sha256: "b81bca421697152e9ce088bdf082b6e74d3b00d728586c8a760b99e9ded5c992"
+    destination_layer: canonical_vault_record
+    membership_role: bootstrap_required
+    activation_default: active
+    import_action: create_or_review_update
+  - id: META-009
+    kind: practice
+    lifecycle_status: active
+    path: records/practices/META-009-make-adapter-fidelity-executable.md
+    source_version: 2
+    content_sha256: "6f66caf3d0574c9c241b0088009c62c7bd40ff5946d2a2aaffa84fdb9397e4e4"
+    destination_layer: canonical_vault_record
+    membership_role: bootstrap_required
+    activation_default: active
+    import_action: create_or_review_update
+  - id: META-010
+    kind: practice
+    lifecycle_status: active
+    path: records/practices/META-010-review-assets-with-lifecycle-evidence.md
+    source_version: 1
+    content_sha256: "d31a102a8c6b658330f3e7099987126dc232503c2d65b0e64d3022b5df227dc4"
+    destination_layer: canonical_vault_record
+    membership_role: bootstrap_required
+    activation_default: active
+    import_action: create_or_review_update
+  - id: META-011
+    kind: practice
+    lifecycle_status: active
+    path: records/practices/META-011-route-artifacts-before-abstracting-practices.md
+    source_version: 1
+    content_sha256: "a144755298e994ac9be820cd59e588cb73271666416d3bfc514f96f591593344"
+    destination_layer: canonical_vault_record
+    membership_role: bootstrap_required
+    activation_default: active
+    import_action: create_or_review_update
+  - id: META-012
+    kind: practice
+    lifecycle_status: active
+    path: records/practices/META-012-treat-user-corrections-as-process-evidence-before-content-evidence.md
+    source_version: 3
+    content_sha256: "2ec58adada8a3c72dd00629905e2dea3fb4f44c3e11266588b2852b194b467e5"
+    destination_layer: canonical_vault_record
+    membership_role: bootstrap_required
+    activation_default: active
+    import_action: create_or_review_update
+  - id: META-013
+    kind: practice
+    lifecycle_status: active
+    path: records/practices/META-013-apply-generalization-gate-before-promoting-insights-into-practices.md
+    source_version: 1
+    content_sha256: "6c4341cb08f1fac6302223ccabac565f1ec181759d1a9b8ab15a306d772ee81f"
+    destination_layer: canonical_vault_record
+    membership_role: bootstrap_required
+    activation_default: active
+    import_action: create_or_review_update
+  - id: RUNTIME-001
+    kind: practice
+    lifecycle_status: active
+    path: records/practices/RUNTIME-001-treat-agent-runtimes-as-shared-environments.md
+    source_version: 2
+    content_sha256: "381ea45b1bd33f9d175d4ca948fa1df951ee6334451efdbe132402fbd1be2a67"
+    destination_layer: canonical_vault_record
+    membership_role: bootstrap_required
+    activation_default: active
+    import_action: create_or_review_update
+  - id: RUNTIME-002
+    kind: practice
+    lifecycle_status: active
+    path: records/practices/RUNTIME-002-separate-portable-adapter-intent-from-machine-local-state.md
+    source_version: 2
+    content_sha256: "1698103aafbcf8a7f71d37981bd24833bda3e50bee666a35b10c3b27493e7727"
+    destination_layer: canonical_vault_record
+    membership_role: bootstrap_required
+    activation_default: active
+    import_action: create_or_review_update
+  - id: RUNTIME-003
+    kind: practice
+    lifecycle_status: active
+    path: records/practices/RUNTIME-003-sync-operations-must-expose-unambiguous-state.md
+    source_version: 1
+    content_sha256: "e554ca573c6f95dc84b69a1111c90db07ffce9847eec273c8c958fe4ed6fea4b"
+    destination_layer: canonical_vault_record
+    membership_role: bootstrap_required
+    activation_default: active
+    import_action: create_or_review_update
+  - id: RUNTIME-004
+    kind: practice
+    lifecycle_status: active
+    path: records/practices/RUNTIME-004-sync-aggregates-not-raw-evidence.md
+    source_version: 2
+    content_sha256: "0be462345da8b6820243c360e0d3cda96a038991be5ebf4c2f1c6f44a76d73b9"
+    destination_layer: canonical_vault_record
+    membership_role: bootstrap_required
+    activation_default: active
+    import_action: create_or_review_update
   - id: ASSET-BOOT-001
     kind: asset
     lifecycle_status: active
     path: records/assets/ASSET-BOOT-001-bootstrap-status.asset.yaml
     source_version: 1
     content_sha256: "61cc197353a2564806b5a1f4827b8d732c5c68f0272ce1e04acf2e040d63ad4f"
+    destination_layer: canonical_vault_record
+    membership_role: bootstrap_required
+    activation_default: active
+    import_action: create_or_review_update
+  - id: ASSET-META-001
+    kind: asset
+    lifecycle_status: active
+    path: records/assets/ASSET-META-001-practice-harvester.asset.yaml
+    source_version: 3
+    content_sha256: "c69cc0ec3a45a81dfd7d4dd30d0c55448345b736d7c72f978a0b216fd4509427"
     destination_layer: canonical_vault_record
     membership_role: bootstrap_required
     activation_default: active
