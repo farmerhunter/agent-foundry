@@ -736,6 +736,31 @@ Migration path:
 
 The Tiny IPA role-generic GitHub helpers are a validation case for this model. Tiny IPA remains the evidence source. The reusable multi-agent helper subset can become a candidate optional capability pack only after AF-5 defines pack snapshot, provenance, project-local overlay, executable payload, and runtime install boundaries.
 
+#### Optional Multi-Agent Pack Candidate Evidence
+
+Issue #79 uses the Tiny IPA `tools/agents/` helpers and companion design docs as product-project evidence for the first optional capability pack candidate. The evidence is useful because it has already exercised role-generic routing, fast label inboxes, dry-run pickup and handoff, contract parsing, and read-only audit checks in a real multi-agent project. It is not canonical Agent Foundry content by itself, and Tiny IPA must not become a hidden runtime dependency after packaging.
+
+Reusable candidate nucleus:
+
+| Candidate area | Candidate contents | Packaging stance |
+| --- | --- | --- |
+| Practices | role-generic `needs:<role>` routing, durable handoff comments, explicit Execution Contract fields, dependency-gated ready queues, dry-run before mutation, read-only audit first | Candidate or proposed Vault records after review; not active by default merely because the pack is deployed. |
+| Asset | role-generic GitHub scheduler helper set for inbox, ready queue, pickup, handoff, audit, label routing, and context summary | Candidate asset that declares permissions, dependencies, supported roles, dry-run behavior, and install boundary. |
+| Docs/templates | role routing configuration guide, Execution Contract template, pickup/handoff comment templates, reviewer/architect handoff examples | Pack docs or templates copied into the Vault/import surface as examples, not Core defaults. |
+| Scripts | `agent-inbox`, `agent-ready-queue`, `agent-pickup`, `agent-handoff`, `agent-audit`, `agent-issue-context`, `agent-pr-context`, `agent-label`, `agent-role-config`, `gh-retry`, shared role config library, and tests | Executable payload candidates only. They remain inert in the pack snapshot and require managed runtime/tool install before use. |
+| Optional overlay | Project v2 status sync, roadmap status mapping, project ids, status option ids, issue type labels, and cache paths | Project-local overlay, not reusable defaults. Omitted unless a target project explicitly configures them. |
+
+Rejected-as-pack for this candidate:
+
+- Tiny IPA's default `GH_REPO`, GitHub Project id, status field ids, status option ids, `.agent-cache` files, issue numbers, branch names, and current project-specific label/status conventions.
+- Mutating `--apply` behavior before the helper install and permission boundary is implemented.
+- Treating Project v2 as the scheduler source of truth.
+- Copying helper scripts into Core `scripts/` as platform tooling.
+- Executing helpers from Tiny IPA, pack staging, or canonical Vault payload paths after import.
+- Packaging Tiny IPA design notes as active Agent Foundry practices without a separate harvest review.
+
+The candidate pack should therefore be evaluated as a reviewed snapshot: evidence from Tiny IPA, optional public pack fixture, stage-only included records, inert executable payload declarations, no runtime install, and no private path leakage. If later implementation imports the pack, the selected User Vault owns the resulting records and payload metadata; the pack remains provenance and update-comparison evidence, not a live authority.
+
 ## Operating Context Separation
 
 Agent Foundry must remain safe when it is used inside another software project. Users and agents regularly operate in nested contexts:
