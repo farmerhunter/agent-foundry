@@ -23,6 +23,16 @@ Record:
 
 If a staged import file is needed, place it under `imports/inbox/` with a concise provenance header.
 
+For existing runtime or local source material, prefer the Core staging helper with explicit paths:
+
+```text
+python3 scripts/import_runtime_assets.py --source <explicit-path> --source-runtime <codex|claude-code|hermes|chatgpt|prompts|helper-files|other> --vault-root <vault-root>
+```
+
+Default behavior is dry-run. Use `--apply` only after confirming the operation context and target Vault/import inbox. Directories are explicit inputs; recursive directory reads require `--recursive`. Do not scan broad private runtime trees by default.
+
+The staging helper writes review evidence only under `imports/inbox/`. It must preserve source runtime files, avoid adapter writes, avoid canonical practice/asset activation, and never execute imported helper scripts.
+
 ## 2. License and Security Review
 
 Check:

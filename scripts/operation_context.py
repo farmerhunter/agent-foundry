@@ -146,6 +146,27 @@ def operation_routes(operation: str, context: str, cwd: Path, core_root: Path, v
                 "Vault canonical records",
             ],
         }
+    if operation == "import":
+        return {
+            "evidence_root": "explicit runtime/source paths only",
+            "allowed_reads": [
+                "explicit runtime/source paths",
+                str(core_root / "workflows" / "import-external-skills.md"),
+                str(core_root / "workflows" / "discover-assets.md"),
+                str(core_root / "schemas" / "asset-candidate.schema.yaml"),
+                str(vault_root / "indexes"),
+            ],
+            "allowed_writes": [str(vault_root / "imports" / "inbox")],
+            "forbidden_writes": [
+                "runtime source files",
+                "runtime adapter install paths",
+                str(core_root / "adapters"),
+                str(vault_root / "practices"),
+                str(vault_root / "assets"),
+                str(vault_root / "indexes"),
+                "generated adapter output",
+            ],
+        }
     if operation in {"install", "refresh"}:
         return {
             "evidence_root": "",
@@ -206,7 +227,7 @@ def build_context(
     root_errors = validate(core_root, vault_root)
     routes = operation_routes(operation, context, cwd, core_root, vault_root, adapter_root)
     warnings: list[str] = []
-    if context == CONTEXT_PRODUCT and operation not in {"harvest", "status"}:
+    if context == CONTEXT_PRODUCT and operation not in {"harvest", "import", "status"}:
         warnings.append("invoked from product project context; writes must go only to the declared Agent Foundry targets")
     if operation == "publish" and adapter_root == (core_root / "adapters").resolve():
         warnings.append("publish output points at Core adapters; apply should refuse Core template overwrite")
@@ -274,7 +295,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Report Agent Foundry operation context before writes or installs.")
     parser.add_argument(
         "operation",
-        choices=["harvest", "publish", "install", "refresh", "status", "core-maintenance", "vault-maintenance"],
+        choices=["harvest", "import", "publish", "install", "refresh", "status", "core-maintenance", "vault-maintenance"],
         help="Operation type to preflight.",
     )
     parser.add_argument("--cwd", default="", help="Invocation directory. Defaults to current directory.")

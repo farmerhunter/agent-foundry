@@ -144,6 +144,7 @@ def main() -> int:
 
         for name, operation, cwd, expected in [
             ("product-harvest", "harvest", product, "product_project_evidence"),
+            ("runtime-import", "import", runtime, "runtime_install_state"),
             ("core-status", "status", ROOT, "foundry_core_maintenance"),
             ("vault-maintenance", "vault-maintenance", vault, "foundry_vault_operation"),
             ("generated-publish", "publish", generated, "generated_adapter_output"),
