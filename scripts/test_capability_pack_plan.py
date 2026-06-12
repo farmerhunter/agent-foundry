@@ -224,6 +224,44 @@ def write_deployed_index(vault: Path, pack_id: str, version: str, manifest_hash:
     )
 
 
+def write_reordered_deployed_index(
+    vault: Path, pack_id: str, version: str, manifest_hash: str, record_id: str, record_hash: str
+) -> None:
+    packs = vault / "packs"
+    packs.mkdir(parents=True, exist_ok=True)
+    (packs / "deployed-pack-index.yaml").write_text(
+        "\n".join(
+            [
+                "schema_version: 1",
+                "updated: 2026-06-12",
+                "deployed_packs:",
+                f"  - title: Reordered {pack_id}",
+                f"    pack_id: \"{pack_id}\"",
+                "    source:",
+                "      kind: local_path",
+                f"      manifest_sha256: \"{manifest_hash}\"",
+                f"    version: \"{version}\"",
+                "    records:",
+                f"      - kind: practice",
+                f"        path: practices/meta/BOOT-001-bootstrap-orientation.md",
+                f"        deployed_sha256: \"{record_hash}\"",
+                f"        id: \"{record_id}\"",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+
+def write_malformed_deployed_index(vault: Path) -> None:
+    packs = vault / "packs"
+    packs.mkdir(parents=True, exist_ok=True)
+    (packs / "deployed-pack-index.yaml").write_text(
+        "schema_version: 1\nupdated: 2026-06-12\ndeployed_packs:\n  - pack_id: pack.bootstrap.minimal\n   version: 0.2.0\n",
+        encoding="utf-8",
+    )
+
+
 def main() -> int:
     errors: list[str] = []
     with tempfile.TemporaryDirectory(prefix="agent-foundry-pack-plan-") as tmp:
@@ -278,6 +316,30 @@ def main() -> int:
         target.write_text(target.read_text(encoding="utf-8") + "\nLocal user edit fixture.\n", encoding="utf-8")
         local_edit = plan_pack(BOOTSTRAP_PACK, vault)
         errors.extend(expect("plan-local-edit-merge-required", local_edit, True, "merge_required: 1"))
+
+        target.write_text(target.read_text(encoding="utf-8").replace("\nLocal user edit fixture.\n", ""), encoding="utf-8")
+        write_reordered_deployed_index(
+            vault,
+            "pack.bootstrap.minimal",
+            "0.2.0",
+            sha256(BOOTSTRAP_PACK / "manifest.yaml"),
+            "BOOT-001",
+            sha256(target),
+        )
+        reordered = plan_pack(BOOTSTRAP_PACK, vault)
+        errors.extend(expect("plan-reordered-metadata-parses", reordered, True, "skip: 24"))
+
+        write_malformed_deployed_index(vault)
+        malformed_metadata = plan_pack(BOOTSTRAP_PACK, vault)
+        errors.extend(
+            expect(
+                "plan-malformed-deployed-index-fails-closed",
+                malformed_metadata,
+                False,
+                "deployed-pack-index.yaml parse error",
+            )
+        )
+        (vault / "packs" / "deployed-pack-index.yaml").unlink()
 
         missing_pack = write_probe_pack(
             base,

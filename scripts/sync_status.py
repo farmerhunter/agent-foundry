@@ -9,6 +9,7 @@ import subprocess
 import tarfile
 from pathlib import Path
 from adapter_install_receipt import RECEIPT_PATH, read_receipt, receipt_status, receipt_target_statuses
+from deploy_capability_pack import parse_simple_yaml
 from foundry_config import CONFIG_PATH, parse_config, validate as validate_config
 from operation_context import text_report, build_context
 
@@ -157,42 +158,23 @@ def locator_mode() -> tuple[str, str]:
 
 
 def parse_deployed_pack_index(path: Path) -> list[dict[str, str]]:
+    index = parse_simple_yaml(path.read_text(encoding="utf-8"))
+    raw_packs = index.get("deployed_packs", [])
+    if not isinstance(raw_packs, list):
+        raise ValueError("deployed_packs must be a list")
     packs: list[dict[str, str]] = []
-    current: dict[str, str] | None = None
-    in_packs = False
-    in_source = False
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if line == "deployed_packs:":
-            in_packs = True
-            continue
-        if not in_packs:
-            continue
-        stripped = line.strip()
-        if line.startswith("  - "):
-            if current:
-                packs.append(current)
-            current = {}
-            in_source = False
-            rest = stripped[2:]
-            if ":" in rest:
-                key, value = rest.split(":", 1)
-                current[key.strip()] = value.strip().strip('"')
-            continue
-        if current is None:
-            continue
-        if line.startswith("    ") and not line.startswith("      ") and stripped.endswith(":"):
-            in_source = stripped.removesuffix(":") == "source"
-            continue
-        if ":" not in stripped:
-            continue
-        key, value = stripped.split(":", 1)
-        if in_source and line.startswith("      "):
-            current[f"source.{key.strip()}"] = value.strip().strip('"')
-        elif line.startswith("    ") and not line.startswith("      "):
-            current[key.strip()] = value.strip().strip('"')
-            in_source = False
-    if current:
-        packs.append(current)
+    for raw_pack in raw_packs:
+        if not isinstance(raw_pack, dict):
+            raise ValueError("deployed_packs entries must be mappings")
+        pack: dict[str, str] = {}
+        for key, value in raw_pack.items():
+            if isinstance(value, dict):
+                for nested_key, nested_value in value.items():
+                    if not isinstance(nested_value, (dict, list)):
+                        pack[f"{key}.{nested_key}"] = str(nested_value)
+            elif not isinstance(value, list):
+                pack[key] = str(value)
+        packs.append(pack)
     return packs
 
 
@@ -214,7 +196,11 @@ def deployed_packs(vault_root: Path) -> list[str]:
     if index.exists():
         packs = []
         seen: set[str] = set()
-        for entry in parse_deployed_pack_index(index):
+        try:
+            parsed_entries = parse_deployed_pack_index(index)
+        except ValueError as exc:
+            return [f"metadata_parse_error ({exc})"] + legacy_packs
+        for entry in parsed_entries:
             pack_id = entry.get("pack_id", "")
             if not pack_id:
                 continue

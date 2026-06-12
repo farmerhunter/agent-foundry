@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from check_foundry_roots import validate
+from deploy_capability_pack import parse_simple_yaml
 from foundry_config import ROOT
 
 
@@ -67,44 +68,39 @@ def pack_block_bounds(lines: list[str], pack_id: str) -> tuple[int, int]:
     return start, end
 
 
-def deployed_pack_records(vault_root: Path, pack_id: str) -> tuple[list[PackRecord], list[str], int, int]:
+def deployed_pack_records(vault_root: Path, pack_id: str) -> tuple[list[PackRecord], list[str], int, int, list[str]]:
     metadata_path = vault_root / "packs" / "deployed-pack-index.yaml"
     if not metadata_path.exists():
-        return [], [], -1, -1
-    lines = metadata_path.read_text(encoding="utf-8").splitlines()
+        return [], [], -1, -1, []
+    text = metadata_path.read_text(encoding="utf-8")
+    lines = text.splitlines()
+    try:
+        index = parse_simple_yaml(text)
+    except ValueError as exc:
+        return [], lines, -1, -1, [f"deployed-pack-index.yaml parse error: {exc}"]
     start, end = pack_block_bounds(lines, pack_id)
     if start == -1:
-        return [], lines, -1, -1
+        return [], lines, -1, -1, []
     records: list[PackRecord] = []
-    in_records = False
-    current: dict[str, str] | None = None
-    for raw in lines[start:end]:
-        stripped = raw.strip()
-        if raw.startswith("    records:"):
-            in_records = True
+    packs = index.get("deployed_packs", [])
+    if not isinstance(packs, list):
+        return [], lines, -1, -1, ["deployed-pack-index.yaml deployed_packs must be a list"]
+    for pack in packs:
+        if not isinstance(pack, dict) or pack.get("pack_id") != pack_id:
             continue
-        if in_records and raw.startswith("    ") and not raw.startswith("      "):
-            if current and current.get("id"):
-                records.append(PackRecord(current["id"], current.get("kind", ""), current.get("path", "")))
-            current = None
-            if stripped and not stripped.startswith("- "):
-                in_records = False
-            continue
-        if in_records and raw.startswith("      - "):
-            if current and current.get("id"):
-                records.append(PackRecord(current["id"], current.get("kind", ""), current.get("path", "")))
-            current = {}
-            item = stripped[2:].strip()
-            if ":" in item:
-                key, value = item.split(":", 1)
-                current[key.strip()] = value.strip().strip('"')
-            continue
-        if in_records and current is not None and raw.startswith("        ") and ":" in stripped:
-            key, value = stripped.split(":", 1)
-            current[key.strip()] = value.strip().strip('"')
-    if current and current.get("id"):
-        records.append(PackRecord(current["id"], current.get("kind", ""), current.get("path", "")))
-    return records, lines, start, end
+        pack_records = pack.get("records", [])
+        if pack_records in ({}, None):
+            return [], lines, start, end, []
+        if not isinstance(pack_records, list):
+            return [], lines, start, end, [f"deployed pack {pack_id} records must be a list"]
+        for record in pack_records:
+            if not isinstance(record, dict):
+                return [], lines, start, end, [f"deployed pack {pack_id} contains non-mapping record metadata"]
+            item_id = str(record.get("id", ""))
+            if item_id:
+                records.append(PackRecord(item_id, str(record.get("kind", "")), str(record.get("path", ""))))
+        return records, lines, start, end, []
+    return [], lines, -1, -1, []
 
 
 def set_markdown_frontmatter_status(text: str, status: str) -> str:
@@ -285,13 +281,19 @@ def lifecycle(core_root: Path, vault_root: Path, pack_id: str, action: str, appl
         print("writes: none")
         return 1
 
-    records, metadata_lines, start, end = deployed_pack_records(vault_root, pack_id)
+    records, metadata_lines, start, end, metadata_errors = deployed_pack_records(vault_root, pack_id)
     metadata_path = vault_root / "packs" / "deployed-pack-index.yaml"
     print("Capability pack lifecycle report")
     print(f"pack_id: {pack_id}")
     print(f"action: {action}")
     print(f"vault_root: {vault_root}")
     print(f"metadata: {metadata_path}")
+    if metadata_errors:
+        print("status: failed")
+        for error in metadata_errors:
+            print(f"- {error}")
+        print("writes: none")
+        return 1
     if start == -1:
         print("status: not_deployed")
         print("writes: none")

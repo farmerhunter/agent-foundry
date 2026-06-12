@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import re
 import sys
 from pathlib import Path
 
@@ -12,26 +11,21 @@ import plan_capability_pack as planner
 from foundry_config import ROOT
 
 
-def pack_block(vault_root: Path, pack_id: str) -> str:
+def deployed_pack_metadata(vault_root: Path, pack_id: str) -> tuple[dict[str, object], str]:
     path = vault_root / "packs" / "deployed-pack-index.yaml"
     if not path.exists():
-        return ""
-    lines = path.read_text(encoding="utf-8").splitlines()
-    capture = False
-    captured: list[str] = []
-    for line in lines:
-        if line.startswith("  - pack_id:"):
-            if capture:
-                break
-            capture = line.split(":", 1)[1].strip().strip('"') == pack_id
-        if capture:
-            captured.append(line)
-    return "\n".join(captured)
-
-
-def block_scalar(block: str, key: str) -> str:
-    match = re.search(rf"^\s+{re.escape(key)}:\s*\"?([^\"\n]+)\"?", block, re.MULTILINE)
-    return match.group(1).strip() if match else ""
+        return {}, ""
+    try:
+        index = planner.parse_simple_yaml(path.read_text(encoding="utf-8"))
+    except ValueError as exc:
+        return {}, f"deployed-pack-index.yaml parse error: {exc}"
+    packs = index.get("deployed_packs", [])
+    if not isinstance(packs, list):
+        return {}, "deployed-pack-index.yaml deployed_packs must be a list"
+    for pack in packs:
+        if isinstance(pack, dict) and pack.get("pack_id") == pack_id:
+            return pack, ""
+    return {}, ""
 
 
 def compare_versions(current: str, available: str) -> str:
@@ -77,15 +71,21 @@ def compare(core_root: Path, vault_root: Path, pack_root: Path) -> int:
         print("writes: none")
         return 1
 
-    block = pack_block(vault_root, manifest.get("pack_id", ""))
-    if not block:
+    deployed, metadata_error = deployed_pack_metadata(vault_root, manifest.get("pack_id", ""))
+    if metadata_error:
+        print("status: failed")
+        print(f"- {metadata_error}")
+        print("writes: none")
+        return 1
+    if not deployed:
         print("status: not_deployed")
         print("detail: use optional pack apply before update comparison")
         print("writes: none")
         return 1
 
-    current_version = block_scalar(block, "version")
-    current_manifest_sha = block_scalar(block, "manifest_sha256")
+    source = deployed.get("source", {})
+    current_version = str(deployed.get("version", ""))
+    current_manifest_sha = str(source.get("manifest_sha256", "")) if isinstance(source, dict) else ""
     available_manifest_sha = planner.manifest_hash(pack_root)
     relation = compare_versions(current_version, manifest.get("version", ""))
     print(f"current_version: {current_version}")

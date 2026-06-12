@@ -24,6 +24,7 @@ from deploy_capability_pack import (
     deployed_record_text,
     inline_list,
     list_entries,
+    parse_simple_yaml,
     read,
     safe_segment,
     section_scalars,
@@ -138,51 +139,34 @@ def indexed_records(vault_root: Path) -> dict[str, dict[str, str]]:
     return records
 
 
-def deployed_pack_records(vault_root: Path, pack_id: str) -> dict[str, dict[str, str]]:
+def deployed_pack_records(vault_root: Path, pack_id: str) -> tuple[dict[str, dict[str, str]], list[str]]:
     path = vault_root / "packs" / "deployed-pack-index.yaml"
     if not path.exists():
-        return {}
+        return {}, []
+    try:
+        index = parse_simple_yaml(path.read_text(encoding="utf-8"))
+    except ValueError as exc:
+        return {}, [f"deployed-pack-index.yaml parse error: {exc}"]
     records: dict[str, dict[str, str]] = {}
-    lines = path.read_text(encoding="utf-8").splitlines()
-    in_pack = False
-    in_records = False
-    current: dict[str, str] | None = None
-    for raw in lines:
-        stripped = raw.strip()
-        if raw.startswith("  - pack_id:"):
-            if current and in_pack:
-                records[current.get("id", "")] = current
-            current = None
-            in_records = False
-            in_pack = stripped.split(":", 1)[1].strip().strip('"') == pack_id
+    packs = index.get("deployed_packs", [])
+    if not isinstance(packs, list):
+        return {}, ["deployed-pack-index.yaml deployed_packs must be a list"]
+    for pack in packs:
+        if not isinstance(pack, dict) or pack.get("pack_id") != pack_id:
             continue
-        if not in_pack:
-            continue
-        if raw.startswith("    records:"):
-            in_records = True
-            continue
-        if in_records and raw.startswith("    ") and not raw.startswith("      "):
-            if current and current.get("id"):
-                records[current["id"]] = current
-            current = None
-            if stripped and not stripped.startswith("- "):
-                in_records = False
-            continue
-        if in_records and raw.startswith("      - "):
-            if current and current.get("id"):
-                records[current["id"]] = current
-            current = {}
-            item = stripped[2:].strip()
-            if ":" in item:
-                key, value = item.split(":", 1)
-                current[key.strip()] = value.strip().strip('"')
-            continue
-        if in_records and current is not None and raw.startswith("        ") and ":" in stripped:
-            key, value = stripped.split(":", 1)
-            current[key.strip()] = value.strip().strip('"')
-    if current and in_pack and current.get("id"):
-        records[current["id"]] = current
-    return records
+        pack_records = pack.get("records", [])
+        if pack_records in ({}, None):
+            return {}, []
+        if not isinstance(pack_records, list):
+            return {}, [f"deployed pack {pack_id} records must be a list"]
+        for record in pack_records:
+            if not isinstance(record, dict):
+                return {}, [f"deployed pack {pack_id} contains non-mapping record metadata"]
+            item_id = str(record.get("id", ""))
+            if item_id:
+                records[item_id] = {key: str(value) for key, value in record.items() if not isinstance(value, (dict, list))}
+        return records, []
+    return {}, []
 
 
 def vault_mentions_pack(vault_root: Path, pack_id: str) -> bool:
@@ -378,7 +362,8 @@ def plan_records(
     errors: list[str] = []
     planned: list[PlannedRecord] = []
     indexed = indexed_records(vault_root)
-    imported = deployed_pack_records(vault_root, manifest.get("pack_id", ""))
+    imported, metadata_errors = deployed_pack_records(vault_root, manifest.get("pack_id", ""))
+    errors.extend(metadata_errors)
     id_kind = {item_id: entry.get("kind", "") for item_id, entry in indexed.items()}
     planned_destinations: dict[Path, str] = {}
 
@@ -461,23 +446,24 @@ def same_version_hash_mismatch(vault_root: Path, manifest: dict[str, str], curre
     path = vault_root / "packs" / "deployed-pack-index.yaml"
     if not path.exists():
         return False
-    text = path.read_text(encoding="utf-8")
-    pattern = re.compile(
-        rf"  - pack_id:\s*{re.escape(manifest.get('pack_id', ''))}\n(?P<body>(?:    .*\n)*)",
-        re.MULTILINE,
-    )
-    match = pattern.search(text)
-    if not match:
-        return False
-    body = match.group("body")
-    version_match = re.search(r"    version:\s*\"?([^\"\n]+)\"?", body)
-    hash_match = re.search(r"      manifest_sha256:\s*\"?([0-9a-f]{64})\"?", body)
-    return bool(
-        version_match
-        and hash_match
-        and version_match.group(1).strip() == manifest.get("version", "")
-        and hash_match.group(1).strip() != current_manifest_hash
-    )
+    try:
+        index = parse_simple_yaml(path.read_text(encoding="utf-8"))
+    except ValueError:
+        return True
+    packs = index.get("deployed_packs", [])
+    if not isinstance(packs, list):
+        return True
+    for pack in packs:
+        if not isinstance(pack, dict) or pack.get("pack_id") != manifest.get("pack_id", ""):
+            continue
+        source = pack.get("source", {})
+        manifest_sha = source.get("manifest_sha256", "") if isinstance(source, dict) else ""
+        return (
+            str(pack.get("version", "")) == manifest.get("version", "")
+            and bool(manifest_sha)
+            and str(manifest_sha) != current_manifest_hash
+        )
+    return False
 
 
 def print_plan(

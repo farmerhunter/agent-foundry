@@ -52,12 +52,20 @@ def existing_pack_metadata_state(vault_root: Path, pack_id: str, manifest_sha256
     path = vault_root / "packs" / "deployed-pack-index.yaml"
     if not path.exists():
         return "absent"
-    text = path.read_text(encoding="utf-8")
-    if f"  - pack_id: {pack_id}" not in text:
-        return "absent"
-    if manifest_sha256 in text:
-        return "same"
-    return "different"
+    try:
+        index = planner.parse_simple_yaml(path.read_text(encoding="utf-8"))
+    except ValueError:
+        return "different"
+    packs = index.get("deployed_packs", [])
+    if not isinstance(packs, list):
+        return "different"
+    for pack in packs:
+        if not isinstance(pack, dict) or pack.get("pack_id") != pack_id:
+            continue
+        source = pack.get("source", {})
+        current_sha = source.get("manifest_sha256", "") if isinstance(source, dict) else ""
+        return "same" if current_sha == manifest_sha256 else "different"
+    return "absent"
 
 
 def record_entry_by_id(records_raw: list[dict[str, str]]) -> dict[str, dict[str, str]]:
