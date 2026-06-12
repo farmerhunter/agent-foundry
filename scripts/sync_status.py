@@ -210,12 +210,15 @@ def legacy_pack_scan(vault_root: Path) -> list[str]:
 
 def deployed_packs(vault_root: Path) -> list[str]:
     index = vault_root / "packs" / "deployed-pack-index.yaml"
+    legacy_packs = legacy_pack_scan(vault_root)
     if index.exists():
         packs = []
+        seen: set[str] = set()
         for entry in parse_deployed_pack_index(index):
             pack_id = entry.get("pack_id", "")
             if not pack_id:
                 continue
+            seen.add(pack_id)
             version = entry.get("version", "")
             status = entry.get("lifecycle_status", "")
             distribution = entry.get("distribution_type", "")
@@ -230,8 +233,11 @@ def deployed_packs(vault_root: Path) -> list[str]:
             if source:
                 suffix.append(f"source={source}")
             packs.append(f"{pack_id} ({', '.join(suffix)})" if suffix else pack_id)
+        for pack_id in legacy_packs:
+            if pack_id not in seen:
+                packs.append(f"{pack_id} (legacy-detected)")
         return packs
-    return legacy_pack_scan(vault_root)
+    return legacy_packs
 
 
 def generated_output_status(adapter_root: Path) -> tuple[str, int]:

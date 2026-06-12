@@ -287,6 +287,7 @@ def main() -> int:
 
         status = status_report(vault, generated, base / "missing-receipt.json")
         errors.extend(expect("status-reports-optional-pack", status, True, "pack.multi-agent.optional"))
+        errors.extend(expect("status-reports-bootstrap-pack", status, True, "pack.bootstrap.minimal"))
 
     if errors:
         print("Capability pack apply test failed:")

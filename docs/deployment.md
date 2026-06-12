@@ -2,7 +2,7 @@
 
 Agent Foundry is local-first. Core tooling, User Vault records, and installed runtime files are separate layers.
 
-Current scope: this document describes the AF-3 split Core/Vault deployment model. A clean public Core checkout contains workflows, schemas, scripts, templates, docs, and adapter profiles. Canonical practice and asset records live in a selected User Vault, typically outside the Core checkout. AF-5 owns polished onboarding, bootstrap pack deployment, and optional capability packs after AF-4 proves current-user deployment and upgrade migration.
+Current scope: this document describes the AF-6 Core/Vault deployment lifecycle. A clean public Core checkout contains workflows, schemas, scripts, templates, docs, adapter profiles, validation tooling, install orchestration, pack planning/apply/update/lifecycle helpers, and runtime status/rollback helpers. Canonical practice and asset records live in a selected User Vault, typically outside the Core checkout. AF-6 implements the tested baseline for blank-Vault initialization, mandatory bootstrap pack deployment, optional pack deployment, selected generated output, managed runtime status/receipt reporting, and pack disable/retire lifecycle behavior.
 
 ```text
 Agent Foundry Core + selected User Vault
@@ -209,9 +209,9 @@ Fail closed if the private Vault is absent, its `.agent-foundry-vault.yaml` mark
 
 ## External-User Boundary
 
-AF-2 defines the setup boundary but does not implement the public setup path.
+AF-6 provides a tested local-first setup baseline for a new user or machine: clone Core, initialize or select a Vault, deploy the mandatory bootstrap pack, publish selected generated output, inspect status, and then explicitly dry-run or apply managed runtime installs. This is not yet a marketplace, hosted installer, or fully polished product wizard, but it is no longer only maintainer implementation evidence.
 
-A future external-user setup needs:
+The supported public setup baseline expects:
 
 - public Core that does not require current-user Vault content;
 - a user-owned Vault location, private by default;
@@ -219,9 +219,10 @@ A future external-user setup needs:
 - locator support for distinct `core_root` and `vault_root`;
 - adapter generation from the selected user's Vault, not a bundled current-user Vault;
 - runtime install that can verify split Core/Vault state before writing managed runtime files;
-- onboarding choices for empty Vault, starter capability packs, runtime-asset imports, or mixed setup.
+- mandatory bootstrap pack deployment followed by optional capability pack deployment when the user selects a known pack;
+- ChatGPT manual import boundaries and managed runtime receipt/status reporting for Codex, Claude Code, and Hermes.
 
-Until that work is complete, deployment commands in this file are safe for the maintainer workflow and useful as implementation evidence, but they are not a tested new-user onboarding path.
+Remaining productization work includes friendlier command wrapping, broader pack distribution/update UX, remote trust policy, and physical multi-machine onboarding documentation. Final merge from AF-6 integration to `main` remains human-gated.
 
 ## Daily Update
 
