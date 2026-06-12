@@ -14,6 +14,8 @@ ROOT = Path(__file__).resolve().parents[1]
 APPLY = ROOT / "scripts" / "apply_capability_pack.py"
 DEPLOY = ROOT / "scripts" / "deploy_capability_pack.py"
 INIT = ROOT / "scripts" / "init_vault.py"
+PUBLISH = ROOT / "scripts" / "publish_adapters.py"
+STATUS = ROOT / "scripts" / "sync_status.py"
 BOOTSTRAP_PACK = ROOT / "fixtures" / "capability-packs" / "bootstrap-minimal"
 OPTIONAL_PACK = ROOT / "fixtures" / "capability-packs" / "optional-multi-agent"
 
@@ -174,6 +176,37 @@ def apply_pack(pack_root: Path, vault_root: Path, apply: bool) -> subprocess.Com
     return run(args)
 
 
+def publish_adapters(vault_root: Path, output_root: Path) -> subprocess.CompletedProcess[str]:
+    return run(
+        [
+            str(PUBLISH),
+            "--core-root",
+            str(ROOT),
+            "--vault-root",
+            str(vault_root),
+            "--output-root",
+            str(output_root),
+            "--apply",
+        ]
+    )
+
+
+def status_report(vault_root: Path, output_root: Path, receipt_path: Path) -> subprocess.CompletedProcess[str]:
+    return run(
+        [
+            str(STATUS),
+            "--core-root",
+            str(ROOT),
+            "--vault-root",
+            str(vault_root),
+            "--adapter-root",
+            str(output_root),
+            "--receipt-path",
+            str(receipt_path),
+        ]
+    )
+
+
 def main() -> int:
     errors: list[str] = []
     with tempfile.TemporaryDirectory(prefix="agent-foundry-pack-apply-") as tmp:
@@ -229,8 +262,31 @@ def main() -> int:
             errors.append("apply-refuses-unsafe-domain: unsafe destination was written")
 
         errors.extend(expect("deploy-bootstrap", deploy_bootstrap(vault), True, "selected Vault validated"))
-        blocked = apply_pack(OPTIONAL_PACK, vault, apply=True)
-        errors.extend(expect("apply-refuses-executable-block", blocked, False, "blocking payload outcome"))
+        optional = apply_pack(OPTIONAL_PACK, vault, apply=True)
+        errors.extend(expect("apply-optional-multi-agent", optional, True, "metadata: written"))
+        optional_practice = vault / "practices" / "agent-collaboration" / "COLLAB-PACK-001-review-handoff.md"
+        optional_asset = vault / "assets" / "skills" / "ASSET-COLLAB-PACK-001-review-handoff-helper.asset.yaml"
+        if not optional_practice.exists():
+            errors.append("apply-optional-multi-agent: candidate practice missing")
+        if not optional_asset.exists():
+            errors.append("apply-optional-multi-agent: candidate asset missing")
+        vault_text = "\n".join(path.read_text(encoding="utf-8") for path in vault.rglob("*") if path.is_file())
+        for expected in ["pack.multi-agent.optional", "COLLAB-PACK-001", "ASSET-COLLAB-PACK-001"]:
+            if expected not in vault_text:
+                errors.append(f"apply-optional-multi-agent: Vault missing {expected}")
+        if "review_handoff_summary.py" in vault_text:
+            errors.append("apply-optional-multi-agent: deferred helper payload leaked into Vault records")
+
+        generated = base / "generated-after-optional"
+        published = publish_adapters(vault, generated)
+        errors.extend(expect("publish-after-optional", published, True, "Adapter publish wrote"))
+        generated_text = "\n".join(path.read_text(encoding="utf-8") for path in generated.rglob("*") if path.is_file())
+        for candidate_id in ["COLLAB-PACK-001", "ASSET-COLLAB-PACK-001"]:
+            if candidate_id in generated_text:
+                errors.append(f"publish-after-optional: candidate record leaked into generated output: {candidate_id}")
+
+        status = status_report(vault, generated, base / "missing-receipt.json")
+        errors.extend(expect("status-reports-optional-pack", status, True, "pack.multi-agent.optional"))
 
     if errors:
         print("Capability pack apply test failed:")

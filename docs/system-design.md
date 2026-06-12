@@ -759,7 +759,7 @@ Rejected-as-pack for this candidate:
 - Executing helpers from Tiny IPA, pack staging, or canonical Vault payload paths after import.
 - Packaging Tiny IPA design notes as active Agent Foundry practices without a separate harvest review.
 
-The candidate pack should therefore be evaluated as a reviewed snapshot: evidence from Tiny IPA, optional public pack fixture, stage-only included records, inert executable payload declarations, no runtime install, and no private path leakage. If later implementation imports the pack, the selected User Vault owns the resulting records and payload metadata; the pack remains provenance and update-comparison evidence, not a live authority.
+The candidate pack should therefore be evaluated as a reviewed snapshot: evidence from Tiny IPA, optional public pack fixture, deployable candidate practice and asset records, no executable payload metadata in the current manifest, no runtime install, and no private path leakage. If later implementation imports the pack, the selected User Vault owns the resulting records; the pack remains provenance and update-comparison evidence, not a live authority. Helper scripts remain deferred evidence until managed helper install, dependency checks, permissions, receipts, and rollback behavior are implemented.
 
 ### AF-6 Complete Install And Pack Lifecycle Boundary
 
