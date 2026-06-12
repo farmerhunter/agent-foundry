@@ -10,6 +10,7 @@ from pathlib import Path
 
 from check_foundry_roots import validate
 from foundry_config import ROOT
+from operation_context import configured_roots, print_operation_context
 
 
 ACTIVE_STATUSES = {"active", "revised"}
@@ -361,6 +362,7 @@ def write_generated_skill_outputs(
 
 
 def publish(core_root: Path, vault_root: Path, output_root: Path, apply: bool) -> int:
+    print_operation_context("publish", core_root=core_root, vault_root=vault_root, adapter_root=output_root)
     errors = validate(core_root, vault_root)
     if errors:
         print("Adapter publish failed root validation:")
@@ -394,14 +396,13 @@ def publish(core_root: Path, vault_root: Path, output_root: Path, apply: bool) -
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Publish adapters from a selected Agent Foundry Vault.")
-    parser.add_argument("--core-root", default=str(ROOT), help="Agent Foundry Core root.")
-    parser.add_argument("--vault-root", default=str(ROOT), help="Selected Agent Foundry Vault root.")
+    parser.add_argument("--core-root", default="", help="Agent Foundry Core root. Defaults to configured core_root.")
+    parser.add_argument("--vault-root", default="", help="Selected Agent Foundry Vault root. Defaults to configured vault_root.")
     parser.add_argument("--output-root", default="", help="Adapter output directory. Defaults to <core-root>/adapters.")
     parser.add_argument("--apply", action="store_true", help="Write files. Default is dry-run.")
     args = parser.parse_args()
 
-    core_root = Path(args.core_root).expanduser().resolve()
-    vault_root = Path(args.vault_root).expanduser().resolve()
+    core_root, vault_root = configured_roots(args.core_root, args.vault_root)
     output_root = Path(args.output_root).expanduser().resolve() if args.output_root else core_root / "adapters"
     return publish(core_root, vault_root, output_root, args.apply)
 

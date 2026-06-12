@@ -27,6 +27,7 @@ For Core/Vault root selection checks, also run:
 ```bash
 python3 scripts/foundry_config.py status
 python3 scripts/check_foundry_roots.py --core-root . --vault-root ~/.agent-foundry/vault/my-agent-foundry-vault
+python3 scripts/operation_context.py status --core-root . --vault-root ~/.agent-foundry/vault/my-agent-foundry-vault
 ```
 
 This checks:
@@ -39,11 +40,13 @@ This checks:
 - missing or corrupt Vault indexes fail with actionable messages.
 - blank Vault publishing reports nothing to publish;
 - populated Vault publishing can produce adapter outputs in a temporary output root.
+- operation-context status reports Core, selected Vault, allowed reads, and read-only forbidden writes.
 
 To exercise deterministic same-root, blank Vault, maintainer-like Vault, and failure fixtures, run:
 
 ```bash
 python3 scripts/test_foundry_roots.py
+python3 scripts/test_operation_context.py
 ```
 
 ## Manual Fallback

@@ -798,7 +798,7 @@ Locator semantics:
 - `vault_markers`: markers that validate a Vault before canonical writes. Required examples include `indexes/practice_index.yaml`, `indexes/asset_index.yaml`, and `usage/usage-aggregate.yaml`.
 - `canonical_markers`: deprecated compatibility field from the single-root staging state. It may be read for old local configs, but new configs should use `core_markers` and `vault_markers`.
 
-Current capability: `scripts/foundry_config.py` writes `core_root`, `vault_root`, and `repo_root` to the same path for compatibility, but emits separate Core and Vault marker lists. This is still a single-repo staging mode until later AF-3 work teaches all commands to operate on distinct roots.
+Current capability: `scripts/foundry_config.py` records separate `core_root`, `vault_root`, and compatibility `repo_root` values, and emits separate Core and Vault marker lists. Split mode is valid when both roots validate. Same-root operation remains a compatibility path, not proof that Core and Vault are the same authority.
 
 Locator precedence:
 
@@ -813,6 +813,8 @@ Do not treat a single root found through `AGENT_FOUNDRY_HOME` or current directo
 
 Do not use a product project checkout as a Vault merely because the user is working there. Do not use a Vault as Core merely because it contains practices. Do not use Core as a Vault merely because it has templates or examples.
 
+`scripts/operation_context.py` is the current preflight guard for this boundary. It reports invocation cwd, operation type, work context, evidence root, selected Core/Vault roots, generated adapter output route, manual targets, allowed reads, allowed writes, forbidden writes, root validation, and warnings. Harvest, publish, install, refresh, and status workflows should display this context before writes or installs.
+
 Operation-to-config mapping:
 
 | Operation | Required context | Reads | Writes |
@@ -821,6 +823,7 @@ Operation-to-config mapping:
 | `harvest practices` | Product project evidence plus Foundry Core and active Vault | Evidence source, Core workflow/schema, Vault index | Vault canonical records after review |
 | `refresh practices and assets` | Core plus active Vault plus local runtime manifest | Core tooling, Vault records, runtime local manifest | runtime copies and optional sanitized aggregate |
 | `publish adapters` | Core plus active Vault | Core adapter profiles, Vault practices/assets | generated adapter outputs and runtime copies after approval |
+| Operation context preflight | current cwd plus selected Core/Vault | Core/Vault markers, runtime manifest, install receipt when relevant | no writes |
 | Foundry Core maintenance | Core | Core docs/workflows/scripts/schemas | Core repo |
 | Vault maintenance | active Vault | Vault practices/assets/indexes/usage | Vault repo |
 

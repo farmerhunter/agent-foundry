@@ -10,6 +10,7 @@ import tarfile
 from pathlib import Path
 from adapter_install_receipt import RECEIPT_PATH, read_receipt, receipt_status, receipt_target_statuses
 from foundry_config import CONFIG_PATH, parse_config, validate as validate_config
+from operation_context import text_report, build_context
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -213,6 +214,7 @@ def runtime_drift_status() -> str:
 
 
 def main() -> int:
+    print(text_report(build_context("status", core_root=ROOT, vault_root=Path(str(parse_config(CONFIG_PATH).get("vault_root", "") or ROOT)).expanduser().resolve())))
     print(f"root: {ROOT}")
     print(f"git branch: {run_git(['branch', '--show-current'])}")
     print("git remotes:")
