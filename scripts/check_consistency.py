@@ -653,6 +653,26 @@ def check_capability_pack_apply_script() -> list[str]:
     return output.splitlines()
 
 
+def check_capability_pack_update_script() -> list[str]:
+    script = ROOT / "scripts" / "test_capability_pack_update.py"
+    if not script.exists():
+        return ["Missing scripts/test_capability_pack_update.py"]
+    result = subprocess.run(
+        ["python3", str(script)],
+        cwd=ROOT,
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if result.returncode == 0:
+        return []
+    output = (result.stdout + result.stderr).strip()
+    if not output:
+        return ["Capability pack update fixture failed without output"]
+    return output.splitlines()
+
+
 def check_runtime_import_script() -> list[str]:
     script = ROOT / "scripts" / "test_import_runtime_assets.py"
     if not script.exists():
@@ -696,6 +716,7 @@ def main() -> int:
     errors += check_bootstrap_pack_deployment_script()
     errors += check_capability_pack_plan_script()
     errors += check_capability_pack_apply_script()
+    errors += check_capability_pack_update_script()
     errors += check_runtime_import_script()
 
     if errors:
