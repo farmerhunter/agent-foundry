@@ -3,12 +3,15 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
+import rollback_runtime
+import runtime_manifest
 
 ROOT = Path(__file__).resolve().parents[1]
 CHECK = ROOT / "scripts" / "check_foundry_roots.py"
@@ -60,6 +63,118 @@ def deploy_bootstrap(vault_root: Path) -> subprocess.CompletedProcess[str]:
             "--apply",
         ]
     )
+
+
+def tree_digest(root: Path) -> str:
+    digest = hashlib.sha256()
+    for path in sorted(p for p in root.rglob("*") if p.is_file()):
+        digest.update(str(path.relative_to(root)).encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(path.read_bytes())
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
+def exercise_restore_rollback_boundaries(base: Path, vault: Path) -> list[str]:
+    errors: list[str] = []
+    user_record = vault / "practices" / "user" / "USER-001-local-user-record.md"
+    user_record.parent.mkdir(parents=True, exist_ok=True)
+    user_record.write_text(
+        "\n".join(
+            [
+                "---",
+                'id: "USER-001"',
+                'title: "Local user record fixture"',
+                'status: "active"',
+                "---",
+                "",
+                "This fixture must survive runtime disable and rollback simulation.",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    before_vault = tree_digest(vault)
+
+    original_manifest = runtime_manifest.LOCAL_MANIFEST
+    temp_manifest = base / "runtime-local" / "runtime_manifest.yaml"
+    runtime_manifest.LOCAL_MANIFEST = temp_manifest
+    try:
+        runtime_manifest.ensure_local_manifest()
+        runtime_manifest.set_target_status("codex", "enabled")
+        runtime_manifest.set_target_path("codex", str(base / "runtime" / "codex-skills"))
+        runtime_manifest.set_target_status("codex", "disabled")
+        targets = runtime_manifest.parse_targets(runtime_manifest.read_manifest())
+        if targets.get("codex", {}).get("status") != "disabled":
+            errors.append("runtime-disable: temp manifest did not disable codex")
+        if not temp_manifest.exists():
+            errors.append("runtime-disable: temp manifest missing")
+    finally:
+        runtime_manifest.LOCAL_MANIFEST = original_manifest
+
+    fake_claude = base / "runtime" / "claude" / "CLAUDE.md"
+    fake_claude.parent.mkdir(parents=True, exist_ok=True)
+    fake_claude.write_text(
+        "\n".join(
+            [
+                "User-owned Claude notes.",
+                rollback_runtime.CLAUDE_INCLUDE_START,
+                "# Agent Foundry managed instructions",
+                "@managed/CLAUDE.md",
+                rollback_runtime.CLAUDE_INCLUDE_END,
+                "User-owned footer.",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    codex_root = base / "runtime" / "codex-skills"
+    managed_skill = codex_root / "pack-sourced-skill"
+    unmanaged_skill = codex_root / "user-owned-skill"
+    (managed_skill / ".agent-foundry-managed").parent.mkdir(parents=True, exist_ok=True)
+    (managed_skill / ".agent-foundry-managed").write_text("managed-by: agent-foundry\n", encoding="utf-8")
+    (managed_skill / "SKILL.md").write_text("managed runtime copy\n", encoding="utf-8")
+    unmanaged_skill.mkdir(parents=True, exist_ok=True)
+    (unmanaged_skill / "SKILL.md").write_text("user runtime copy\n", encoding="utf-8")
+
+    original_claude = rollback_runtime.CLAUDE_MD
+    original_roots = rollback_runtime.SKILL_ROOTS
+    rollback_runtime.CLAUDE_MD = fake_claude
+    rollback_runtime.SKILL_ROOTS = {"codex": codex_root, "hermes": base / "runtime" / "hermes-skills"}
+    try:
+        rollback_runtime.remove_skill("codex", "pack-sourced-skill", dry_run=True, force=False)
+        if not managed_skill.exists():
+            errors.append("rollback-dry-run: managed skill was removed during dry-run")
+        rollback_runtime.remove_skill("codex", "pack-sourced-skill", dry_run=False, force=False)
+        if managed_skill.exists():
+            errors.append("rollback-managed-skill: managed skill still exists after removal")
+        try:
+            rollback_runtime.remove_skill("codex", "user-owned-skill", dry_run=False, force=False)
+            errors.append("rollback-unmanaged-skill: unmanaged skill removal was not refused")
+        except SystemExit as exc:
+            if "Refusing to remove unmanaged directory" not in str(exc):
+                errors.append(f"rollback-unmanaged-skill: unexpected refusal text {exc}")
+        if not unmanaged_skill.exists():
+            errors.append("rollback-unmanaged-skill: unmanaged skill was removed")
+
+        rollback_runtime.remove_managed_block(dry_run=True)
+        if rollback_runtime.CLAUDE_INCLUDE_START not in fake_claude.read_text(encoding="utf-8"):
+            errors.append("rollback-block-dry-run: managed block was removed during dry-run")
+        rollback_runtime.remove_managed_block(dry_run=False)
+        claude_text = fake_claude.read_text(encoding="utf-8")
+        if rollback_runtime.CLAUDE_INCLUDE_START in claude_text:
+            errors.append("rollback-block: managed block remains after removal")
+        for expected in ["User-owned Claude notes.", "User-owned footer."]:
+            if expected not in claude_text:
+                errors.append(f"rollback-block: user text missing after removal: {expected}")
+    finally:
+        rollback_runtime.CLAUDE_MD = original_claude
+        rollback_runtime.SKILL_ROOTS = original_roots
+
+    after_vault = tree_digest(vault)
+    if before_vault != after_vault:
+        errors.append("restore-rollback-boundary: runtime disable/rollback changed Vault records")
+    return errors
 
 
 def main() -> int:
@@ -184,6 +299,8 @@ def main() -> int:
         rerun = deploy_bootstrap(vault)
         errors.extend(expect("deploy-bootstrap-rerun-skip", rerun, True, "skipped: 24"))
         errors.extend(expect("deploy-bootstrap-rerun-no-add", rerun, True, "added: 0"))
+
+        errors.extend(exercise_restore_rollback_boundaries(base, vault))
 
         record = vault / "practices" / "meta" / "BOOT-001-bootstrap-orientation.md"
         record.write_text(record.read_text(encoding="utf-8") + "\nLocal edit fixture.\n", encoding="utf-8")
