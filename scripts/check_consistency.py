@@ -673,6 +673,26 @@ def check_capability_pack_update_script() -> list[str]:
     return output.splitlines()
 
 
+def check_sync_status_report_script() -> list[str]:
+    script = ROOT / "scripts" / "test_sync_status_report.py"
+    if not script.exists():
+        return ["Missing scripts/test_sync_status_report.py"]
+    result = subprocess.run(
+        ["python3", str(script)],
+        cwd=ROOT,
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if result.returncode == 0:
+        return []
+    output = (result.stdout + result.stderr).strip()
+    if not output:
+        return ["Sync status report fixture failed without output"]
+    return output.splitlines()
+
+
 def check_runtime_import_script() -> list[str]:
     script = ROOT / "scripts" / "test_import_runtime_assets.py"
     if not script.exists():
@@ -717,6 +737,7 @@ def main() -> int:
     errors += check_capability_pack_plan_script()
     errors += check_capability_pack_apply_script()
     errors += check_capability_pack_update_script()
+    errors += check_sync_status_report_script()
     errors += check_runtime_import_script()
 
     if errors:

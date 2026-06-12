@@ -14,6 +14,7 @@ from operation_context import text_report, build_context
 
 
 ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_GENERATED_ROOT = Path.home() / ".agent-foundry" / "generated" / "agent-foundry-adapters"
 
 
 def run_git(args: list[str]) -> str:
@@ -148,7 +149,47 @@ def locator_mode() -> tuple[str, str]:
     )
 
 
-def deployed_packs(vault_root: Path) -> list[str]:
+def parse_deployed_pack_index(path: Path) -> list[dict[str, str]]:
+    packs: list[dict[str, str]] = []
+    current: dict[str, str] | None = None
+    in_packs = False
+    in_source = False
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line == "deployed_packs:":
+            in_packs = True
+            continue
+        if not in_packs:
+            continue
+        stripped = line.strip()
+        if line.startswith("  - "):
+            if current:
+                packs.append(current)
+            current = {}
+            in_source = False
+            rest = stripped[2:]
+            if ":" in rest:
+                key, value = rest.split(":", 1)
+                current[key.strip()] = value.strip().strip('"')
+            continue
+        if current is None:
+            continue
+        if line.startswith("    ") and not line.startswith("      ") and stripped.endswith(":"):
+            in_source = stripped.removesuffix(":") == "source"
+            continue
+        if ":" not in stripped:
+            continue
+        key, value = stripped.split(":", 1)
+        if in_source and line.startswith("      "):
+            current[f"source.{key.strip()}"] = value.strip().strip('"')
+        elif line.startswith("    ") and not line.startswith("      "):
+            current[key.strip()] = value.strip().strip('"')
+            in_source = False
+    if current:
+        packs.append(current)
+    return packs
+
+
+def legacy_pack_scan(vault_root: Path) -> list[str]:
     packs: set[str] = set()
     for base in [vault_root / "practices", vault_root / "assets"]:
         if not base.exists():
@@ -160,6 +201,32 @@ def deployed_packs(vault_root: Path) -> list[str]:
     return sorted(packs)
 
 
+def deployed_packs(vault_root: Path) -> list[str]:
+    index = vault_root / "packs" / "deployed-pack-index.yaml"
+    if index.exists():
+        packs = []
+        for entry in parse_deployed_pack_index(index):
+            pack_id = entry.get("pack_id", "")
+            if not pack_id:
+                continue
+            version = entry.get("version", "")
+            status = entry.get("lifecycle_status", "")
+            distribution = entry.get("distribution_type", "")
+            source = entry.get("source.kind", "")
+            suffix = []
+            if version:
+                suffix.append(f"version={version}")
+            if status:
+                suffix.append(f"status={status}")
+            if distribution:
+                suffix.append(f"type={distribution}")
+            if source:
+                suffix.append(f"source={source}")
+            packs.append(f"{pack_id} ({', '.join(suffix)})" if suffix else pack_id)
+        return packs
+    return legacy_pack_scan(vault_root)
+
+
 def generated_output_status(adapter_root: Path) -> tuple[str, int]:
     manifest = adapter_root / "adapter-publish-manifest.yaml"
     if not adapter_root.exists():
@@ -168,6 +235,18 @@ def generated_output_status(adapter_root: Path) -> tuple[str, int]:
     if not manifest.exists():
         return "missing-manifest", len(files)
     return "ready", len(files)
+
+
+def default_adapter_root(core_root: Path, vault_root: Path, receipt_path: Path) -> Path:
+    if core_root != vault_root:
+        receipt = read_receipt(receipt_path)
+        if isinstance(receipt, dict):
+            receipt_root = str(receipt.get("adapter_root", ""))
+            if receipt_root:
+                return Path(receipt_root).expanduser().resolve()
+        if DEFAULT_GENERATED_ROOT.exists():
+            return DEFAULT_GENERATED_ROOT.resolve()
+    return core_root / "adapters"
 
 
 def receipt_summary(receipt_path: Path) -> list[str]:
@@ -191,6 +270,29 @@ def receipt_summary(receipt_path: Path) -> list[str]:
     return lines
 
 
+def next_safe_actions(
+    core_root: Path,
+    vault_root: Path,
+    adapter_root: Path,
+    receipt_path: Path,
+    output_state: str,
+) -> list[str]:
+    actions: list[str] = ["status-only: no files were written by this report"]
+    config_errors = validate_config(CONFIG_PATH) if CONFIG_PATH.exists() else [f"locator missing: {CONFIG_PATH}"]
+    if config_errors:
+        actions.append("repair locator/root configuration before any publish, install, or pack apply")
+    if not core_root.exists():
+        actions.append("fix core_root before running Core maintenance commands")
+    if not vault_root.exists():
+        actions.append("select or initialize a Vault before harvesting, refreshing, or applying packs")
+    if output_state != "ready":
+        actions.append("regenerate selected Vault adapter output before runtime install or refresh")
+    if read_receipt(receipt_path) is None:
+        actions.append("run runtime install only after generated output dry-run/review; receipt is currently missing")
+    actions.append("treat ChatGPT as manual import unless a future managed target is explicitly implemented")
+    return actions
+
+
 def setup_report(core_root: Path, vault_root: Path, adapter_root: Path, receipt_path: Path = RECEIPT_PATH) -> str:
     manifest_path = ROOT / "runtime" / "local" / "runtime_manifest.yaml"
     targets = parse_runtime_manifest(manifest_path.read_text(encoding="utf-8")) if manifest_path.exists() else {}
@@ -203,6 +305,9 @@ def setup_report(core_root: Path, vault_root: Path, adapter_root: Path, receipt_
         f"core_root: {core_root}",
         f"vault_root: {vault_root}",
         f"deployed_pack: {', '.join(packs) if packs else 'none detected'}",
+        "deployed_packs:",
+        *(f"- {pack}" for pack in packs),
+        *(["- none detected"] if not packs else []),
         f"generated_output: {output_state} path={adapter_root} files={output_count}",
         "runtime targets:",
     ]
@@ -221,6 +326,8 @@ def setup_report(core_root: Path, vault_root: Path, adapter_root: Path, receipt_
     lines.extend(receipt_summary(receipt_path))
     lines.append("first_usable_command: python3 scripts/sync_status.py")
     lines.append("chatgpt_manual_import: explicit; import generated ChatGPT files manually when desired")
+    lines.append("next_safe_actions:")
+    lines.extend(f"- {action}" for action in next_safe_actions(core_root, vault_root, adapter_root, receipt_path, output_state))
     return "\n".join(lines)
 
 
@@ -302,8 +409,12 @@ def main() -> int:
     config = parse_config(CONFIG_PATH)
     core_root = Path(args.core_root or str(config.get("core_root", "") or ROOT)).expanduser().resolve()
     vault_root = Path(args.vault_root or str(config.get("vault_root", "") or core_root)).expanduser().resolve()
-    adapter_root = Path(args.adapter_root).expanduser().resolve() if args.adapter_root else core_root / "adapters"
     receipt_path = Path(args.receipt_path).expanduser().resolve() if args.receipt_path else RECEIPT_PATH
+    adapter_root = (
+        Path(args.adapter_root).expanduser().resolve()
+        if args.adapter_root
+        else default_adapter_root(core_root, vault_root, receipt_path)
+    )
 
     print(setup_report(core_root, vault_root, adapter_root, receipt_path))
     print(f"root: {ROOT}")
