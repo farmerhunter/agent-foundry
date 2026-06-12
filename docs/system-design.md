@@ -761,6 +761,38 @@ Rejected-as-pack for this candidate:
 
 The candidate pack should therefore be evaluated as a reviewed snapshot: evidence from Tiny IPA, optional public pack fixture, stage-only included records, inert executable payload declarations, no runtime install, and no private path leakage. If later implementation imports the pack, the selected User Vault owns the resulting records and payload metadata; the pack remains provenance and update-comparison evidence, not a live authority.
 
+### AF-6 Complete Install And Pack Lifecycle Boundary
+
+AF-6 promotes the AF-5 onboarding model from reviewed design into an end-to-end lifecycle. The scope is not only first install. It also covers existing installations where a user already has Core and a selected Vault and now needs to check state, deploy a known pack, compare an updated pack snapshot, apply reviewed records, refresh generated output, install runtime copies, disable a capability, or restore another machine.
+
+AF-6 keeps these authority rules:
+
+- Core owns platform tooling, validation, generation, install orchestration, status reporting, and rollback helpers.
+- The selected User Vault owns canonical practices, assets, indexes, pack membership metadata, accepted payload metadata, and user edits after deployment.
+- Capability pack snapshots are transfer and comparison artifacts. They are not queried by `refresh` after deployment and are not live runtime authorities.
+- Generated output is derived from Core plus the selected Vault.
+- Runtime copies and helper installs are machine-local and require managed markers, receipts, dependency checks where relevant, and rollback semantics.
+
+Pack lifecycle support should therefore be split into report, plan, apply, refresh/install, and rollback phases:
+
+| Phase | Required behavior |
+| --- | --- |
+| Report | Resolve Core/Vault roots, selected generated output, runtime manifest, installed pack metadata, receipts, manual targets, and stale references without writing. |
+| Plan | Compare a known local or explicitly named remote pack snapshot with current Vault records, pack membership metadata, manifest compatibility, per-record hashes, local edits, executable payload metadata, and runtime impact. |
+| Apply | Write or update selected Vault records only after review, preserving user edits and failing closed for incompatible schema ranges, unknown provenance, same-version hash mismatch, unrelated id collision, or unapproved executable install. |
+| Refresh/install | Regenerate output from current Vault state and install only managed runtime copies or manual-import instructions. Do not install directly from pack staging or canonical Vault payload paths. |
+| Rollback/disable | Prefer Vault lifecycle state changes, pack membership metadata, regeneration, and runtime receipt rollback over deletion. Report manual targets separately. |
+
+Non-new-install pack update checks should answer:
+
+- Is this the same pack id and version with the same manifest/content hash?
+- Is the available snapshot newer, and is the current Vault record unchanged since import?
+- Did the user modify a pack-sourced record after deployment?
+- Did the pack's promised use case, first-run behavior, activation/default behavior, compatibility range, included record set, executable payload metadata, or security/privacy posture change?
+- Does the change belong inside this pack's selected contract, or is it ordinary Vault evolution that should not force a pack version bump?
+
+The first optional pack validation case is the multi-agent collaboration pack. It should prove the generic pack lifecycle without turning Tiny IPA into a hidden dependency, without copying product-project defaults into Core, and without executing helper scripts until the managed helper install boundary is implemented.
+
 ## Operating Context Separation
 
 Agent Foundry must remain safe when it is used inside another software project. Users and agents regularly operate in nested contexts:
@@ -977,7 +1009,7 @@ Example conventions:
 5. Adapter outputs for an external user should be generated from that user's approved vault records, not copied from this repository's personal vault unless explicitly deployed through a reviewed capability pack.
 6. Proposed memory-system material must stay in docs/imports/evidence form until reviewed architecture creates implemented memory directories, schemas, and workflows.
 
-AF-3 implements the Core/Vault split and blank Vault initialization path. AF-4 proves the current user's multi-deployment operation on top of that split. AF-5 should build polished onboarding and capability pack deployment on top of the proven boundary.
+AF-3 implements the Core/Vault split and blank Vault initialization path. AF-4 proves the current user's multi-deployment operation on top of that split. AF-5 establishes onboarding and capability-pack journey contracts on top of the proven boundary. AF-6 completes the install and pack lifecycle as a repeatable product path.
 
 ## Practice Types
 
