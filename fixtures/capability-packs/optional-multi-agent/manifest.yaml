@@ -1,16 +1,67 @@
 manifest_schema_version: 1
 pack_id: pack.multi-agent.optional
 title: Optional Multi-Agent Collaboration Pack
-description: Minimal optional capability snapshot with inert helper payload metadata.
+description: Candidate optional capability snapshot for role-generic GitHub multi-agent coordination helpers.
 lifecycle_status: candidate
-version: 0.1.0
-exported_at: 2026-06-11
+version: 0.2.0
+exported_at: 2026-06-12
 distribution_type: optional_capability
-source_provenance: "Agent Foundry public Core fixture for issue #75"
+source_provenance: "Agent Foundry public Core fixture for issue #79; Tiny IPA helper work used as evidence only."
 maintainer_contact: "https://github.com/farmerhunter/agent-foundry"
 license: "repository license"
 sensitivity: public
 review_state: unreviewed
+
+pack_contract:
+  promised_use_case: "Help a project operate GitHub issues, PRs, labels, comments, and optional Project status as a lightweight multi-agent scheduler."
+  deployment_role: "optional user-selected capability after bootstrap"
+  source_authority_after_deployment: "selected User Vault records and managed runtime/tool install receipts"
+  not_runtime_authority: "pack staging, product project evidence, and Core fixture paths"
+
+evidence_sources:
+  - "Tiny IPA tools/agents helper suite"
+  - "Tiny IPA role-generic agent helper design notes"
+  - "Agent Foundry #53 executable helper boundary"
+
+candidate_contents:
+  practices:
+    - "role-generic needs:<role> routing"
+    - "durable pickup and handoff comments"
+    - "explicit Execution Contract role fields"
+    - "dependency-gated ready queues"
+    - "read-only audit before write automation"
+  assets:
+    - "role-generic GitHub scheduler helper set"
+  docs_templates:
+    - "role routing config example"
+    - "Execution Contract template"
+    - "pickup and handoff comment templates"
+  executable_payload_candidates:
+    - "agent-inbox"
+    - "agent-ready-queue"
+    - "agent-pickup"
+    - "agent-handoff"
+    - "agent-audit"
+    - "agent-issue-context"
+    - "agent-pr-context"
+    - "agent-label"
+    - "agent-role-config"
+    - "gh-retry"
+    - "role routing library and config"
+
+project_local_overlays:
+  - "GH_REPO default repository"
+  - "GitHub Project ids, field ids, and status option ids"
+  - "Roadmap Status mapping"
+  - "issue type labels and project-specific label policy"
+  - "Project cache paths"
+
+rejected_as_pack:
+  - "Tiny IPA issue numbers, branch names, Project ids, and local cache files"
+  - "Project v2 as the scheduler source of truth"
+  - "mutating apply behavior before managed helper install exists"
+  - "execution from product project paths, pack staging, or canonical Vault payload paths"
+  - "active Agent Foundry practices without separate harvest review"
 
 compatibility:
   core_schema_version_min: 1
@@ -23,8 +74,8 @@ included_records:
     kind: practice
     lifecycle_status: candidate
     path: records/practices/COLLAB-PACK-001-review-handoff.md
-    source_version: 1
-    content_sha256: "cff47b12ef1fdda1cc975433226cd4c8d10124b87d71c7feb2659f7d4aaceed9"
+    source_version: 2
+    content_sha256: "3d68186c067db71927fd4861842c8c7f446e435c1dc0f17176cfdc18222a2116"
     destination_layer: canonical_vault_record
     membership_role: optional_member
     activation_default: manual_review
@@ -33,8 +84,8 @@ included_records:
     kind: asset
     lifecycle_status: candidate
     path: records/assets/ASSET-COLLAB-PACK-001-review-handoff-helper.asset.yaml
-    source_version: 1
-    content_sha256: "aa875a255de4818d07e8f6af38490782a990a403150e83570d006f2e622d5e51"
+    source_version: 2
+    content_sha256: "e43c1f9205a51ccf796eba87ec16dc15f9a70255ad83e31322ffdd92f9495eb4"
     destination_layer: canonical_vault_record
     membership_role: optional_member
     activation_default: manual_review
@@ -42,7 +93,7 @@ included_records:
 
 executable_payloads:
   - id: helper.review-handoff-summary
-    title: Review Handoff Summary Helper
+    title: Review Handoff Summary Helper Fixture
     lifecycle_status: candidate
     path: payloads/helpers/review_handoff_summary.py
     source_sha256: "61ebb3b134a4ce82bba92103b8033a4474688057bfbf5be68e908d8322a1b334"
@@ -51,7 +102,7 @@ executable_payloads:
     install_boundary: managed_runtime_copy_required
     permissions: [filesystem-read]
     dependencies: []
-    runtime_impact: "May read reviewed issue or PR handoff text only after managed install."
+    runtime_impact: "Fixture payload stands in for the broader helper set and may read reviewed issue or PR handoff text only after managed install."
 
 conflict_policy:
   id_collision: fail_closed

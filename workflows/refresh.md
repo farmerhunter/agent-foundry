@@ -25,6 +25,14 @@ If the current working directory is inside the agent-foundry repo, use it. Other
 
 Change into the repo root before proceeding.
 
+Run a read-only operation-context preflight and keep the output in the final report:
+
+```bash
+python3 scripts/operation_context.py status
+```
+
+If the report cannot identify Core and the selected Vault, stop before pull, publish, or install. If the command is invoked from a product project, the report must show that project as evidence context only; refresh writes must stay within Core machine-local state, generated adapter output, and managed runtime targets.
+
 ---
 
 ## Step 1: Determine Local State

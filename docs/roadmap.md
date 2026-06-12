@@ -609,6 +609,7 @@ Layer rule:
 - After deployment, the selected User Vault owns the canonical practices, assets, indexes, and accepted payloads.
 - `refresh` reads the current selected Vault plus Core adapter profiles, not live pack definitions.
 - Runtime copies are installed from generated output or accepted Vault payloads through managed runtime/tool locations with receipts.
+- Pack updates are reviewed releases governed by each pack's own contract. Do not regenerate a pack merely because an included canonical record changed unless Pack Relevance Review decides the change belongs inside that pack's promised use case.
 
 Predefined packs and discovered packs are compatible with freeform Vault maintenance:
 
@@ -731,6 +732,7 @@ AF-5 MVP deliverables:
 - A bootstrap pack built from public, reviewed canonical data.
 - A first optional multi-agent collaboration pack candidate, validated against Tiny IPA helper evidence after the helper executable boundary is designed.
 - CLI or workflow support for blank Vault creation, pack staging/deployment, selected-root refresh, and status reporting.
+- An operation-context preflight that lets AF operations invoked from product projects, Core, Vault, generated output, or runtime directories prove their Core/Vault roots, allowed writes, and publish/install route before mutation.
 - Validation fixtures for blank Vault, bootstrap-only Vault, optional-pack Vault, imported-runtime candidate, and product-project evidence source.
 - Runtime install behavior that preserves managed markers, receipts, manual ChatGPT boundaries, and no direct execution from canonical stores.
 
@@ -744,6 +746,7 @@ Acceptance criteria:
 - Cross-machine restore proves runtime state can be regenerated from public Core plus selected Vault rather than copied from another machine.
 - Disable or rollback behavior can remove or supersede runtime outputs without erasing unrelated user-created Vault records.
 - The onboarding flow preserves product project, Foundry Core, Foundry Vault, Generated, Runtime, and Local Private context separation.
+- AF operations invoked from nested contexts display and verify their work context, evidence root, selected Core/Vault roots, allowed writes, forbidden writes, and selected-output publish/install receipt path.
 
 Stop conditions:
 
@@ -764,11 +767,12 @@ Planned GitHub issue sequence:
 | 4 | #75 Minimal capability pack manifest and fixtures | Task batch | Implementer with Architect review | Medium | #53 and #74 define fields, lifecycle states, and conflict behavior | Batch checkpoint |
 | 5 | #76 Blank Vault plus bootstrap deployment path | Task batch | Implementer | Medium | #75 fixtures exist; blank Vault initializer validates selected roots | Batch checkpoint |
 | 6 | #77 Bootstrap capability pack content | Harvester / Architect | Medium | #76 can import pack snapshot into Vault records | Human review of included canonical records before activation |
-| 7 | #78 Fresh install command and status report | Task batch | Implementer | Medium | #77 can deploy into blank Vault | Batch checkpoint with runtime dry-run evidence |
-| 8 | #79 Optional multi-agent capability pack candidate | Evidence / Task | Architect + Harvester | Medium | #76 works; #53 defines executable helper payload boundary | Review before packaging Tiny IPA helper evidence |
-| 9 | #80 Runtime asset import path | Task batch | Implementer with Harvester review | Medium | #74 import staging and artifact routing model defined | Batch checkpoint |
-| 10 | #81 Cross-machine restore and rollback onboarding | Review / Task | Reviewer + Architect | High | #78 selected-Vault refresh and receipts work locally | Structured review handoff |
-| 11 | #82 AF5 end-to-end onboarding validation | Review | Reviewer | High | #53 and #73-#81 complete or explicitly deferred with rationale | User acceptance before AF-5 close |
+| 7 | #89 Operation context preflight and nested-context guard | Task | Architect then Implementer | Medium | #77 can deploy bootstrap content; nested-context confusion has concrete evidence | Reviewer handoff before #78 starts |
+| 8 | #78 Fresh install command and status report | Task batch | Implementer | Medium | #77 can deploy into blank Vault and #89 can prove operation context before mutation | Batch checkpoint with runtime dry-run evidence |
+| 9 | #79 Optional multi-agent capability pack candidate | Evidence / Task | Architect + Harvester | Medium | #76 works; #53 defines executable helper payload boundary | Review before packaging Tiny IPA helper evidence |
+| 10 | #80 Runtime asset import path | Task batch | Implementer with Harvester review | Medium | #74 import staging and artifact routing model defined | Batch checkpoint |
+| 11 | #81 Cross-machine restore and rollback onboarding | Review / Task | Reviewer + Architect | High | #78 selected-Vault refresh and receipts work locally | Structured review handoff |
+| 12 | #82 AF5 end-to-end onboarding validation | Review | Reviewer | High | #53 and #73-#81 plus #89 complete or explicitly deferred with rationale | User acceptance before AF-5 close |
 
 Execution order:
 
@@ -776,9 +780,84 @@ Execution order:
 2. Resolve #53 before packaging Tiny IPA-style helper scripts as reusable capability payloads.
 3. Build pack manifest fixtures before bootstrap content so bootstrap can be validated as one instance of the general deployment mechanism.
 4. Build the mandatory bootstrap path before optional packs.
-5. Treat the multi-agent pack as the first optional validation case, not as a blocker for fresh install.
-6. Keep runtime import and product-project import behind the same staging/review rules so imported material does not bypass harvest discipline.
-7. Close AF-5 only with an end-to-end validation issue that runs the user journey, not merely individual script tests.
+5. Add operation-context preflight before fresh install polish so first-run commands and nested product-project harvests prove which layer owns each read, write, publish, install, and receipt.
+6. Treat the multi-agent pack as the first optional validation case, not as a blocker for fresh install.
+7. Keep runtime import and product-project import behind the same staging/review rules so imported material does not bypass harvest discipline.
+8. Close AF-5 only with an end-to-end validation issue that runs the user journey, not merely individual script tests.
+
+#### AF-5 End-to-End Validation Report (#82)
+
+Status: Reviewer validation completed on 2026-06-12 against `af5/integration`.
+
+Findings first:
+
+- No blocking AF-5 onboarding readiness findings remain for Architect acceptance.
+- AF-5 is ready for Architect acceptance and a human AF-5 close / final `af5/integration` to `main` decision.
+- Final AF-5 close, final integration to `main`, issue closure, and any real selected Vault or runtime apply remain human-gated.
+- Current validation did not mutate the real selected User Vault, real runtime files, local config, private remotes, or ChatGPT project state.
+
+Evidence map:
+
+| Journey / boundary | Evidence | Reviewer conclusion |
+| --- | --- | --- |
+| Fresh install / blank Vault / bootstrap deployment / first usable command | #76, #77, #78, #89; `scripts/install_foundry.py --fresh-install`; `scripts/test_bootstrap_pack_deployment.py`; `scripts/sync_status.py` setup/status report | Temp blank Vault can initialize, deploy `pack.bootstrap.minimal`, publish generated output, report runtime dry-run/receipt status, keep ChatGPT manual, and name `python3 scripts/sync_status.py` as first usable command. |
+| Optional capability pack path | #75 and #79; `fixtures/capability-packs/optional-multi-agent`; `scripts/check_capability_pack_fixtures.py` | Optional pack fixture validates as a candidate/stage-only snapshot with provenance, inert helper payload metadata, no direct runtime install, and no third source of truth. |
+| Runtime asset import path | #80; `scripts/import_runtime_assets.py`; `scripts/test_import_runtime_assets.py` | Explicit runtime/source path import stages review evidence under the selected Vault inbox only after operation-context checks. It does not activate records, overwrite adapters, execute scripts, or scan broad private runtime trees by default. |
+| Product-project capability candidate | #79 / Tiny IPA evidence; operation-context harvest evidence | Tiny IPA remains product-project evidence only. Reusable role-generic helper surfaces are represented as optional pack candidates; project-local defaults, Project ids, cache paths, branch state, and mutating apply behavior are excluded or marked overlay/rejected. |
+| Cross-machine restore and rollback/disable | #81; `workflows/install-adapters.md`; `scripts/test_deployment_helpers.py`; `scripts/test_bootstrap_pack_deployment.py`; `scripts/test_adapter_install_receipt.py` | Restore is documented and tested as recreation from public Core plus selected Vault/generated output, not copying another machine's runtime/local state. Temp rollback/disable regression preserves unrelated Vault records and removes only managed runtime copies/blocks. |
+| Core / Vault / Generated / Runtime / Local Private boundaries | #89 plus `scripts/operation_context.py`, selected-output receipt status, `scripts/sync_status.py`, `scripts/test_operation_context.py`, `scripts/test_foundry_roots.py`, selected-output adapter quality check | Operation context identifies work context, selected Core/Vault roots, generated output route, allowed reads/writes, forbidden writes, manual targets, and receipt state before publish/install/status flows. Selected-output receipt is authoritative in split mode; Core adapters are secondary diagnostics. |
+
+Verification run for #82:
+
+- `python3 scripts/check_consistency.py` passed.
+- `python3 scripts/check_capability_pack_fixtures.py` passed.
+- `python3 scripts/test_bootstrap_pack_deployment.py` passed.
+- `python3 scripts/test_import_runtime_assets.py` passed.
+- `python3 scripts/test_adapter_install_receipt.py` passed.
+- `python3 scripts/test_operation_context.py` passed.
+- `python3 scripts/test_deployment_helpers.py` passed.
+- `python3 scripts/test_foundry_roots.py` passed.
+- `python3 scripts/check_activation.py` passed.
+- `python3 scripts/check_adapter_quality.py --surface selected-output --generated-root '/Users/jinghuliu/.agent-foundry/generated/agent-foundry-adapters'` passed.
+- `python3 scripts/sync_status.py` completed read-only. It reported selected-output receipt in sync for Codex, Claude Code, and Hermes; ChatGPT remains manual. It also reported `deployed_pack: none detected` for the current maintainer Vault, which is expected because the fresh-install bootstrap deployment acceptance is temp/blank-Vault scoped and was not applied to the real selected Vault.
+
+Residual gaps and explicit deferrals:
+
+- Physical second-machine execution remains deferred; #81 covered local temp restore/rollback simulation and documents the physical-machine gap.
+- ChatGPT manual import and cleanup remain manual by design; no live ChatGPT project update was attempted.
+- Optional pack deployment beyond the MVP candidate fixture remains later work; #79 validates the candidate boundary, not real optional-pack rollout.
+- Real capability-owned helper install remains deferred until a reviewed helper install path is selected; helper payloads stay declared/inert in pack fixtures.
+- Advanced capability discovery, marketplace behavior, broad pack registry, automatic update management, and M9-style discovery remain future work.
+- Memory-system implementation remains out of scope for AF-5 and should not be introduced by AF-5 close.
+- Current maintainer Vault bootstrap deployment state is not evidence of new-user onboarding success; temp blank-Vault fixtures are the acceptance evidence for that journey.
+
+Human Decision Contract draft:
+
+Decision needed:
+Authorize whether AF-5 may close and whether `af5/integration` may proceed to final human-gated integration toward `main`.
+
+Why human input is required:
+AF-5 close changes roadmap maturity state, and final `af5/integration` to `main` integration is explicitly human-gated by the AF5 branch contract. Agents may validate and route the issue, but must not close #82/#73 or merge to `main` without explicit authorization.
+
+Agent conclusion:
+Reviewer validation finds AF-5 onboarding MVP ready for Architect acceptance and human close/main-integration decision. Required AF-5 journeys have evidence, checks pass, layer boundaries remain intact, and known gaps are labeled as explicit deferrals rather than hidden blockers.
+
+Options:
+
+1. Approve Architect acceptance and human AF-5 close / final integration planning.
+2. Request additional validation before AF-5 close, such as physical second-machine execution or a live ChatGPT manual import check.
+3. Defer AF-5 close and keep #82/#73 open with the residual gaps named above.
+
+Consequences:
+
+- If approved: Architect may accept #82, prepare the final human-gated `af5/integration` to `main` path, and route AF-5 close decisions without merging or closing until explicitly authorized.
+- If additional validation is requested: keep #82 open or create targeted follow-up issues for the requested evidence.
+- If deferred: AF-6 and later memory-system readiness work should not start from a claimed AF-5 baseline.
+
+Explicit authorization phrases:
+
+- `批准 AF5 close`
+- `批准 af5/integration 合入 main`
 
 ### M6: Existing Foundry Lifecycle Completion
 

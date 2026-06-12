@@ -1,0 +1,88 @@
+id: ASSET-META-001
+title: Practice Harvester
+asset_type: skill
+status: active
+version: 3
+created: 2026-05-26
+updated: 2026-06-09
+purpose: Maintain reusable practices and assets by harvesting lessons, discovering reusable skills/assets, importing external skills, publishing adapters, and reviewing skill rot.
+responsibility: Maintain the Agent Foundry lifecycle of practices, assets, indexes, adapters, usage evidence, and related review reports.
+non_responsibility: Does not perform domain-specific engineering work except to harvest or package reusable lessons from it.
+inputs:
+  - current session context
+  - linked issue, PR, commit, or roadmap history when the user asks to review a whole session or phase
+  - external skill source
+  - existing practice and asset indexes
+  - recent work history when discovering assets
+process:
+  - locate and validate the current Agent Foundry Core and Vault
+  - reconstruct the relevant session or correction
+  - when harvesting skills or assets from a long session, set an explicit evidence window that includes earlier phases, linked issues, PRs, and commits rather than only the latest discussion topic
+  - route artifacts before drafting candidates
+  - apply the generalization gate
+  - classify candidate practices or assets
+  - for asset discovery, choose create, extend, skip, or defer using the smallest suitable asset rule
+  - deduplicate against indexes
+  - present a concise review list before canonical mutation
+  - apply approved items
+  - publish relevant adapters only after approved canonical changes are applied
+outputs:
+  - harvest report or review list
+  - asset discovery review list
+  - proposed or active practice entries
+  - active asset records
+  - updated indexes
+  - updated adapters
+  - review report
+canonical_practices:
+  - META-001
+  - META-002
+  - META-003
+  - META-004
+  - META-005
+  - META-006
+  - META-007
+  - META-008
+  - META-009
+  - META-010
+  - META-011
+  - META-012
+  - META-013
+  - GOV-001
+  - GOV-002
+  - GOV-003
+  - GOV-004
+  - RUNTIME-001
+  - RUNTIME-002
+  - RUNTIME-003
+  - RUNTIME-004
+published_to:
+  - codex
+  - claude-code
+  - hermes
+  - chatgpt
+usage_triggers:
+  - harvest practices
+  - 做一次 harvest practice
+  - harvest skills
+  - harvest assets
+  - import skill
+  - 导入这个 skill
+  - discover assets
+  - 发现可打包资产
+  - publish practices
+  - review practices
+  - 检查 skill rot
+success_criteria:
+  - artifact routing, generalization, rejected-as-practice, canonical impact, adapter impact, and runtime impact are visible before approval
+  - candidates are deduplicated against existing practices and assets
+  - skill or asset harvests review the requested evidence window, not just the most recent subtopic
+  - existing assets are extended when coverage is partial, instead of creating near-duplicate skills
+  - human approval is requested per meaningful new or changed item
+  - broad approval language is not interpreted as permission to skip unshown workflow steps
+  - self-referential workflow changes stop at a review list before canonical mutation
+  - approved items are activated and published to relevant adapters
+  - changed files and deferred items are reported clearly
+review_cadence: monthly
+review_after_days: 90
+evidence_summary: Created as the first core asset for this repository.

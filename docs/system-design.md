@@ -632,6 +632,17 @@ Capability packs are exported or deployable snapshots, not independent runtime t
 
 Pack deployment is not ownership transfer to a pack controller. A deployed record may belong to no pack, one pack, or multiple packs. Pack membership explains provenance and update comparison; it does not prevent ordinary reviewed edits, deprecation, retirement, or archive decisions. If a user edits a pack-sourced record, later pack updates must treat that local edit as canonical user state and produce a reviewable merge proposal rather than overwriting it.
 
+Pack updates are reviewed releases, not automatic mirrors of all canonical record changes. Each pack should carry enough contract metadata to answer what user journey or capability it promises. A changed canonical record triggers a pack update only after a Pack Relevance Review decides the change belongs inside that pack's promised boundary.
+
+Pack Relevance Review asks:
+
+- Did pack membership change?
+- Did the pack's promised use case, first-run behavior, activation/default behavior, compatibility range, or schema expectations change?
+- Does the canonical change fix a bug, privacy issue, security issue, or misleading instruction that is material to this pack's promised use case?
+- Would users receiving the older pack snapshot be materially unsafe, blocked, or misled for this pack's journey?
+
+If yes, propose a new pack version, included-record diff, manifest update, and checksum refresh. If no, record that no pack update is needed. Do not regenerate a pack merely because an included canonical record changed outside the pack's selected contract.
+
 Minimal manifest responsibilities for #75:
 
 - stable pack id, title, description, lifecycle status, version, exported date, source provenance, and maintainer/source contact when available;
@@ -640,7 +651,8 @@ Minimal manifest responsibilities for #75:
 - per-item id, path, kind, lifecycle status, source version, content hash, and intended destination layer;
 - provenance, license, sensitivity, security, permission, dependency, and runtime-impact metadata;
 - conflict policy, rollback notes, and whether the pack is mandatory bootstrap, optional user-selected capability, or product-project candidate;
-- checksums for snapshot integrity and enough metadata to compare a later pack version with the user's current Vault records.
+- checksums for snapshot integrity and enough metadata to compare a later pack version with the user's current Vault records;
+- selection scope, pack contract, or included-rationale metadata that supports later Pack Relevance Review.
 
 Conflict and update behavior:
 
@@ -724,6 +736,31 @@ Migration path:
 
 The Tiny IPA role-generic GitHub helpers are a validation case for this model. Tiny IPA remains the evidence source. The reusable multi-agent helper subset can become a candidate optional capability pack only after AF-5 defines pack snapshot, provenance, project-local overlay, executable payload, and runtime install boundaries.
 
+#### Optional Multi-Agent Pack Candidate Evidence
+
+Issue #79 uses the Tiny IPA `tools/agents/` helpers and companion design docs as product-project evidence for the first optional capability pack candidate. The evidence is useful because it has already exercised role-generic routing, fast label inboxes, dry-run pickup and handoff, contract parsing, and read-only audit checks in a real multi-agent project. It is not canonical Agent Foundry content by itself, and Tiny IPA must not become a hidden runtime dependency after packaging.
+
+Reusable candidate nucleus:
+
+| Candidate area | Candidate contents | Packaging stance |
+| --- | --- | --- |
+| Practices | role-generic `needs:<role>` routing, durable handoff comments, explicit Execution Contract fields, dependency-gated ready queues, dry-run before mutation, read-only audit first | Candidate or proposed Vault records after review; not active by default merely because the pack is deployed. |
+| Asset | role-generic GitHub scheduler helper set for inbox, ready queue, pickup, handoff, audit, label routing, and context summary | Candidate asset that declares permissions, dependencies, supported roles, dry-run behavior, and install boundary. |
+| Docs/templates | role routing configuration guide, Execution Contract template, pickup/handoff comment templates, reviewer/architect handoff examples | Pack docs or templates copied into the Vault/import surface as examples, not Core defaults. |
+| Scripts | `agent-inbox`, `agent-ready-queue`, `agent-pickup`, `agent-handoff`, `agent-audit`, `agent-issue-context`, `agent-pr-context`, `agent-label`, `agent-role-config`, `gh-retry`, shared role config library, and tests | Executable payload candidates only. They remain inert in the pack snapshot and require managed runtime/tool install before use. |
+| Optional overlay | Project v2 status sync, roadmap status mapping, project ids, status option ids, issue type labels, and cache paths | Project-local overlay, not reusable defaults. Omitted unless a target project explicitly configures them. |
+
+Rejected-as-pack for this candidate:
+
+- Tiny IPA's default `GH_REPO`, GitHub Project id, status field ids, status option ids, `.agent-cache` files, issue numbers, branch names, and current project-specific label/status conventions.
+- Mutating `--apply` behavior before the helper install and permission boundary is implemented.
+- Treating Project v2 as the scheduler source of truth.
+- Copying helper scripts into Core `scripts/` as platform tooling.
+- Executing helpers from Tiny IPA, pack staging, or canonical Vault payload paths after import.
+- Packaging Tiny IPA design notes as active Agent Foundry practices without a separate harvest review.
+
+The candidate pack should therefore be evaluated as a reviewed snapshot: evidence from Tiny IPA, optional public pack fixture, stage-only included records, inert executable payload declarations, no runtime install, and no private path leakage. If later implementation imports the pack, the selected User Vault owns the resulting records and payload metadata; the pack remains provenance and update-comparison evidence, not a live authority.
+
 ## Operating Context Separation
 
 Agent Foundry must remain safe when it is used inside another software project. Users and agents regularly operate in nested contexts:
@@ -786,7 +823,7 @@ Locator semantics:
 - `vault_markers`: markers that validate a Vault before canonical writes. Required examples include `indexes/practice_index.yaml`, `indexes/asset_index.yaml`, and `usage/usage-aggregate.yaml`.
 - `canonical_markers`: deprecated compatibility field from the single-root staging state. It may be read for old local configs, but new configs should use `core_markers` and `vault_markers`.
 
-Current capability: `scripts/foundry_config.py` writes `core_root`, `vault_root`, and `repo_root` to the same path for compatibility, but emits separate Core and Vault marker lists. This is still a single-repo staging mode until later AF-3 work teaches all commands to operate on distinct roots.
+Current capability: `scripts/foundry_config.py` records separate `core_root`, `vault_root`, and compatibility `repo_root` values, and emits separate Core and Vault marker lists. Split mode is valid when both roots validate. Same-root operation remains a compatibility path, not proof that Core and Vault are the same authority.
 
 Locator precedence:
 
@@ -801,6 +838,8 @@ Do not treat a single root found through `AGENT_FOUNDRY_HOME` or current directo
 
 Do not use a product project checkout as a Vault merely because the user is working there. Do not use a Vault as Core merely because it contains practices. Do not use Core as a Vault merely because it has templates or examples.
 
+`scripts/operation_context.py` is the current preflight guard for this boundary. It reports invocation cwd, operation type, work context, evidence root, selected Core/Vault roots, generated adapter output route, manual targets, allowed reads, allowed writes, forbidden writes, root validation, and warnings. Harvest, publish, install, refresh, and status workflows should display this context before writes or installs.
+
 Operation-to-config mapping:
 
 | Operation | Required context | Reads | Writes |
@@ -809,6 +848,7 @@ Operation-to-config mapping:
 | `harvest practices` | Product project evidence plus Foundry Core and active Vault | Evidence source, Core workflow/schema, Vault index | Vault canonical records after review |
 | `refresh practices and assets` | Core plus active Vault plus local runtime manifest | Core tooling, Vault records, runtime local manifest | runtime copies and optional sanitized aggregate |
 | `publish adapters` | Core plus active Vault | Core adapter profiles, Vault practices/assets | generated adapter outputs and runtime copies after approval |
+| Operation context preflight | current cwd plus selected Core/Vault | Core/Vault markers, runtime manifest, install receipt when relevant | no writes |
 | Foundry Core maintenance | Core | Core docs/workflows/scripts/schemas | Core repo |
 | Vault maintenance | active Vault | Vault practices/assets/indexes/usage | Vault repo |
 

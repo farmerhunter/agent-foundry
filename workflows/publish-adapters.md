@@ -22,6 +22,14 @@ Example:
 python3 scripts/publish_adapters.py --core-root . --vault-root ~/.agent-foundry/vault/my-agent-foundry-vault --output-root /tmp/agent-foundry-adapters --apply
 ```
 
+The publish script prints an operation-context preflight before writing. If running the workflow manually, verify the report says:
+
+- operation: `publish`;
+- Core is the tooling/profile source;
+- Vault is the selected canonical record source;
+- allowed writes are limited to the generated adapter output root;
+- runtime install paths are forbidden until the install workflow runs.
+
 ## 1. Select Practices
 
 Publish only practices with:

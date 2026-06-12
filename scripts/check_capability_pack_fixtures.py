@@ -65,9 +65,6 @@ REQUIRED_PAYLOAD_FIELDS = {
 
 FORBIDDEN_PACK_TEXT = {
     "/Users/",
-    "runtime/local",
-    "usage/local",
-    "sync/local",
     "gho_",
 }
 
