@@ -16,7 +16,7 @@ This repository is Agent Foundry Core, the public source of truth for reusable w
 - After the user approves a new or changed practice, apply the approved item and publish relevant adapters automatically.
 - Record ordinary asset usage evidence automatically when an active asset is invoked and the note can be kept concise and non-sensitive.
 - Treat memories, session summaries, and activity logs as evidence only. Memory can suggest; Agent Foundry decides.
-- For GitHub issue, branch, and PR work, follow `COLLAB-001`: verified task commits, task-branch pushes, and PR creation are normal workflow steps; direct commits to `main`, merges, issue closure, destructive Git operations, deletion, data migration, and privacy/security boundary changes still require explicit authorization.
+- For GitHub issue, branch, and PR work, follow `COLLAB-001`: verified task commits, task-branch pushes, PR creation, and validated child PR merges into non-`main` Epic integration branches are normal workflow steps when the issue or Epic contract authorizes them. Direct commits to `main`, final merges into `main`, issue closure without delegated Epic readiness authority, destructive Git operations, deletion, data migration, and privacy/security boundary changes still require explicit authorization.
 
 ## Default Workflow
 
