@@ -1,27 +1,41 @@
 id: ASSET-COLLAB-PACK-001
-title: Review Handoff Summary Helper
+title: Role-Generic GitHub Scheduler Helper Set
 asset_type: skill
 status: candidate
-version: 1
+version: 2
 created: 2026-06-11
-updated: 2026-06-11
-purpose: Draft a concise issue and PR completion handoff from reviewed local evidence.
-responsibility: Summarize scope, verification, residual risks, and reviewer target.
-non_responsibility: Does not post comments, mutate GitHub labels, install helpers, or execute from pack staging.
+updated: 2026-06-12
+purpose: Provide reviewed helper surfaces for role-generic GitHub issue and PR coordination.
+responsibility: Support inbox, ready-queue, pickup, handoff, audit, label routing, issue context, PR context, and retry wrappers after managed install.
+non_responsibility: Does not decide product scope, override issue contracts, make Project v2 the scheduler authority, install helpers, or execute from pack staging.
 inputs:
   - issue number
   - PR number
-  - verification results
+  - role name
+  - Execution Contract text
+  - GitHub label and comment state
+  - optional project-local routing config
 process:
-  - Read provided handoff evidence.
-  - Build a concise completion summary.
-  - Leave posting and label changes to Core or GitHub workflow tooling.
+  - Read durable GitHub issue, PR, label, and comment state.
+  - Resolve role labels and completion handoff from explicit configuration and contracts.
+  - Print dry-run plans before any mutating helper behavior is allowed.
+  - Keep Project status updates optional and project-configured.
+  - Leave installation and runtime exposure to managed Agent Foundry tooling.
 outputs:
-  - Handoff summary draft
+  - role inbox report
+  - ready queue report
+  - pickup or handoff dry-run
+  - audit report
+  - issue or PR context summary
 canonical_practices:
   - COLLAB-PACK-001
 published_to: []
 usage_triggers:
-  - review handoff summary
+  - agent inbox
+  - role handoff
+  - GitHub issue scheduler
+  - multi-agent ready queue
 success_criteria:
-  - The helper can be reviewed as source without being executed from the pack snapshot.
+  - The helper set can be reviewed as source without being executed from the pack snapshot.
+  - Project-specific defaults are represented as overlays rather than reusable pack defaults.
+  - Mutating actions remain disabled until managed install, permissions, and receipts exist.
