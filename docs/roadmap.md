@@ -609,6 +609,7 @@ Layer rule:
 - After deployment, the selected User Vault owns the canonical practices, assets, indexes, and accepted payloads.
 - `refresh` reads the current selected Vault plus Core adapter profiles, not live pack definitions.
 - Runtime copies are installed from generated output or accepted Vault payloads through managed runtime/tool locations with receipts.
+- Pack updates are reviewed releases governed by each pack's own contract. Do not regenerate a pack merely because an included canonical record changed unless Pack Relevance Review decides the change belongs inside that pack's promised use case.
 
 Predefined packs and discovered packs are compatible with freeform Vault maintenance:
 

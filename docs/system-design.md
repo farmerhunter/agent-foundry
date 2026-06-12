@@ -632,6 +632,17 @@ Capability packs are exported or deployable snapshots, not independent runtime t
 
 Pack deployment is not ownership transfer to a pack controller. A deployed record may belong to no pack, one pack, or multiple packs. Pack membership explains provenance and update comparison; it does not prevent ordinary reviewed edits, deprecation, retirement, or archive decisions. If a user edits a pack-sourced record, later pack updates must treat that local edit as canonical user state and produce a reviewable merge proposal rather than overwriting it.
 
+Pack updates are reviewed releases, not automatic mirrors of all canonical record changes. Each pack should carry enough contract metadata to answer what user journey or capability it promises. A changed canonical record triggers a pack update only after a Pack Relevance Review decides the change belongs inside that pack's promised boundary.
+
+Pack Relevance Review asks:
+
+- Did pack membership change?
+- Did the pack's promised use case, first-run behavior, activation/default behavior, compatibility range, or schema expectations change?
+- Does the canonical change fix a bug, privacy issue, security issue, or misleading instruction that is material to this pack's promised use case?
+- Would users receiving the older pack snapshot be materially unsafe, blocked, or misled for this pack's journey?
+
+If yes, propose a new pack version, included-record diff, manifest update, and checksum refresh. If no, record that no pack update is needed. Do not regenerate a pack merely because an included canonical record changed outside the pack's selected contract.
+
 Minimal manifest responsibilities for #75:
 
 - stable pack id, title, description, lifecycle status, version, exported date, source provenance, and maintainer/source contact when available;
@@ -640,7 +651,8 @@ Minimal manifest responsibilities for #75:
 - per-item id, path, kind, lifecycle status, source version, content hash, and intended destination layer;
 - provenance, license, sensitivity, security, permission, dependency, and runtime-impact metadata;
 - conflict policy, rollback notes, and whether the pack is mandatory bootstrap, optional user-selected capability, or product-project candidate;
-- checksums for snapshot integrity and enough metadata to compare a later pack version with the user's current Vault records.
+- checksums for snapshot integrity and enough metadata to compare a later pack version with the user's current Vault records;
+- selection scope, pack contract, or included-rationale metadata that supports later Pack Relevance Review.
 
 Conflict and update behavior:
 
