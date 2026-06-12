@@ -1,7 +1,7 @@
 # Agent Foundry Roadmap
 
 Status: planning document  
-Updated: 2026-06-09
+Updated: 2026-06-12
 Scope: Agent Foundry productization, repository hygiene, and memory-system readiness.
 
 ## Purpose
@@ -75,12 +75,15 @@ Agent Foundry should use maturity stages for planning and release versions for d
 | AF-3 | Split Vault Migration | Core and the current account's User Vault are physically separated locally without breaking the active local runtime chain. | Public Core no longer requires current-user vault content; the active local User Vault validates separately; existing local Codex, Claude Code, Hermes, and ChatGPT setups have passed the split migration window. |
 | AF-4 | Current-User Deployment And Upgrade Migration | The only real user, `farmerhunter`, can use the split system reliably across all already-deployed machines and runtime types, and Agent Foundry has a repeatable migration discipline for future major data-schema or program-structure upgrades. | The User Vault has a private remote or equivalent reviewed sync substrate; every existing deployment can locate Core plus Vault, refresh from the selected Vault, run harvest/review/publish workflows, report sync/runtime state without stale combined-root assumptions, and pass a reusable upgrade readiness checklist covering version markers, dry-runs, backups, rollback, compatibility, and cross-machine verification. |
 | AF-5 | Onboarding Ready | New users can install Core, create a blank Vault, deploy the mandatory bootstrap capability pack, optionally deploy additional capability packs, and refresh adapters without confusing pack content with private user history. | Blank Vault creation, bootstrap pack deployment, optional pack selection, runtime-asset import, and first-run refresh are tested after the current user's multi-machine migration is proven. |
-| AF-6 | Memory-System Ready | Future memory-system records, evidence policy, routing, privacy, and MCP boundaries are designed but not necessarily implemented. | Memory-system implementation home can be chosen with clear tradeoffs. |
-| AF-7 | Memory-System Implementation | A reviewed memory/knowledge system is implemented according to the chosen architecture. | MVP validates the main memory lifecycle without bypassing Agent Foundry governance. |
+| AF-6 | Existing Foundry Lifecycle Completion | AF-5 onboarding journeys become a coherent product lifecycle: complete install, blank-vault bootstrap, non-new-install pack status/update/apply, optional pack deployment, runtime refresh/install, and rollback/status reporting. | A user can install or restore Agent Foundry, deploy or update reviewed packs, refresh runtimes, inspect status, and recover from failure through documented commands and validation without mixing Core, Vault, Generated, Runtime, or product-project contexts. |
+| AF-7 | Memory-System Ready | Future memory-system records, evidence policy, routing, privacy, and MCP boundaries are designed but not necessarily implemented. | Memory-system implementation home can be chosen with clear tradeoffs. |
+| AF-8 | Memory Implementation Home Decision | The implementation home for memory-system work is chosen using evidence from completed Foundry lifecycle work. | Decision record names the chosen home, rejected alternatives, file/data boundaries, validation path, privacy policy, and rollback path. |
+| AF-9 | Advanced Capability Pack Discovery and Lifecycle | Capability packs can later be recognized, maintained, exported, and optimized as higher-level reusable bundles after the basic pack lifecycle is stable. | Emergent capability-pack discovery and export/update automation can be designed without weakening Core/Vault authority or reviewed pack deployment. |
+| AF-10 | Memory-System Implementation | A reviewed memory/knowledge system is implemented according to the chosen architecture. | MVP validates the main memory lifecycle without bypassing Agent Foundry governance. |
 
-Current planning stage: AF-4.
+Current planning stage: AF-6 / M6.
 
-AF-0 explains the existing mixed history. AF-1 starts the stricter planning and multi-agent coordination era. AF-2 designs the productization boundary. AF-3 executes the local Core/Vault split. AF-4 proves the split system works for the current real user across existing deployments and establishes the migration discipline needed for later major upgrades. AF-5 makes onboarding humane and reliable for new users. AF-6 is the decision gate for memory-system architecture. AF-7 is intentionally future implementation work.
+AF-0 explains the existing mixed history. AF-1 starts the stricter planning and multi-agent coordination era. AF-2 designs the productization boundary. AF-3 executes the local Core/Vault split. AF-4 proves the split system works for the current real user across existing deployments and establishes the migration discipline needed for later major upgrades. AF-5 makes onboarding humane and reliable for new users. AF-6 closes the current Foundry product lifecycle so install, pack deployment, refresh, status, and rollback are usable beyond a one-off maintainer path. AF-7 is the decision gate for memory-system architecture. AF-8 chooses the implementation home. AF-9 is later advanced capability-pack discovery and export lifecycle work. AF-10 is intentionally future memory implementation work.
 
 ## Release Version Mapping
 
@@ -95,9 +98,11 @@ Suggested mapping:
 | AF-3 | `v0.3.0`: split Core/Vault migration baseline. |
 | AF-4 | `v0.4.0`: current-user deployment and upgrade migration baseline. |
 | AF-5 | `v0.5.0`: external-user onboarding baseline. |
-| AF-6 | `v0.6.0`: memory-system-ready design baseline. |
-| AF-7 MVP | `v0.7.0` or later: memory-system MVP, not automatically `v1.0`. |
-| Post-AF-7 | Future: advanced automatic capability pack discovery and lifecycle optimization after the core onboarding path is stable. |
+| AF-6 | `v0.6.0`: complete Foundry install and basic pack lifecycle baseline. |
+| AF-7 | `v0.7.0`: memory-system-ready design baseline. |
+| AF-8 | `v0.8.0`: memory implementation-home decision baseline. |
+| AF-9 | `v0.9.0`: advanced capability-pack discovery and lifecycle design baseline. |
+| AF-10 MVP | `v0.10.0` or later: memory-system MVP, not automatically `v1.0`. |
 
 `v1.0` should wait until the reusable core, user vault story, generated artifact policy, and runtime adapter behavior are stable enough that external users can rely on them without understanding this repository's personal history.
 
@@ -116,7 +121,7 @@ Minimal fields:
 | Field | Values | Purpose |
 | --- | --- | --- |
 | Status | Inbox, Ready, In Progress, Review, Done, Blocked | Human-visible work state. |
-| Stage | AF-1, AF-2, AF-3, AF-4, AF-5, AF-6, AF-7 | Maturity stage the item serves. |
+| Stage | AF-1 through AF-10 | Maturity stage the item serves. |
 | Epic | Free text or single-select | Groups issues by roadmap epic. |
 | Owner Role | Architect, Implementer, Reviewer, Harvester | Clarifies expected agent/human role. |
 | Depends On | Issue or PR references | Prevents ready queues from bypassing dependencies. |
@@ -134,7 +139,7 @@ Issue types:
 
 Recommended labels:
 
-- `stage:AF-1` through `stage:AF-7`
+- `stage:AF-1` through `stage:AF-10`
 - `type:epic`, `type:task`, `type:decision`, `type:review`, `type:evidence`
 - `area:core`, `area:vault`, `area:generated`, `area:runtime`, `area:privacy`, `area:memory-readiness`, `area:adapters`
 - `needs:architect`, `needs:implementer`, `needs:reviewer`, `needs:harvester`
@@ -600,7 +605,7 @@ incubate
   -> deprecate, retire, or archive
 ```
 
-AF-5 owns only the basic path through this lifecycle: reviewed snapshot deployment into a selected Vault, activation as ordinary Vault records, refresh into runtimes, status verification, and rollback or disable behavior. Marketplace channels, automatic pack discovery, broad update management, and advanced export polish remain later work.
+AF-5 defined and validated the MVP path through this lifecycle: reviewed snapshot deployment into a selected Vault, activation as ordinary Vault records, refresh into runtimes, status verification, and rollback or disable behavior. AF-6 turns that model into a complete install and pack lifecycle. Marketplace channels, automatic pack discovery, broad update management, and advanced export polish remain later work.
 
 Layer rule:
 
@@ -852,46 +857,123 @@ Consequences:
 
 - If approved: Architect may accept #82, prepare the final human-gated `af5/integration` to `main` path, and route AF-5 close decisions without merging or closing until explicitly authorized.
 - If additional validation is requested: keep #82 open or create targeted follow-up issues for the requested evidence.
-- If deferred: AF-6 and later memory-system readiness work should not start from a claimed AF-5 baseline.
+- If deferred: AF-6 and later lifecycle or memory-readiness work should not start from a claimed AF-5 baseline.
 
 Explicit authorization phrases:
 
 - `批准 AF5 close`
 - `批准 af5/integration 合入 main`
 
-### M6: Existing Foundry Lifecycle Completion
+### AF-6 / M6: Existing Foundry Lifecycle Completion
 
-Goal: finish the practice/asset/adapter loop before adding memory record types.
+Goal: turn the AF-5 onboarding model into a complete, repeatable product lifecycle before adding memory record types. AF-6 is not only "new user install"; it also covers already-installed users who need to check, deploy, update, disable, or restore capability packs.
 
-Epics:
+AF-6 starts from user journeys and derives implementation work from them. It should not begin with isolated scripts or schemas.
 
-- **Executable schema validation**
-  - Move from human-readable schema guidance toward deterministic validation where useful.
-  - Validate required frontmatter, index entries, related IDs, lifecycle states, and file paths.
+Primary journeys:
 
-- **Index and dedupe maturity**
-  - Ensure practices and assets can be searched, deduped, reviewed, and routed reliably.
-  - Make duplicate/near-duplicate review explicit.
+1. **Fresh install to first usable workflow**
+   - User obtains public Core, selects or creates a Vault, deploys the mandatory bootstrap pack, configures local runtimes, refreshes generated output, and sees the first normal command.
+   - AF-6 should reduce required manual knowledge, but it does not need a polished marketplace or fully automated ChatGPT import.
 
-- **Promotion paths**
-  - Define and test paths from session evidence to practice candidate, asset candidate, active practice, active asset, adapter, runtime install, usage evidence, and review.
-  - Keep human review gates visible.
+2. **Existing install status and repair**
+   - User already has Core plus Vault and asks whether the installation is coherent.
+   - Status must report Core version, Vault root, Vault validity, deployed packs, generated output, runtime receipts, manual targets, stale references, and next safe actions without writing.
 
-- **Adapter publishing contract**
-  - Define which adapter files are source-maintained versus generated.
-  - Keep adapter fidelity executable.
-  - Preserve target-specific conventions without duplicating long canonical content.
+3. **Known pack deploy or apply**
+   - User has a local or explicitly named remote pack snapshot and wants to deploy it into an existing Vault.
+   - The workflow stages, validates, plans, and applies reviewed records into the Vault; the pack snapshot remains transfer evidence, not live runtime authority.
 
-- **Review operations**
-  - Keep `review practices` and `review assets` useful for lifecycle, stale entries, missed activation, and adapter drift.
+4. **Known pack version check and update**
+   - User has a deployed pack and an available newer snapshot.
+   - The workflow compares pack id, version, manifest compatibility, included record set, per-record hashes, local Vault edits, executable payload metadata, and runtime impact before proposing update, skip, fail, or merge.
 
-Acceptance criteria:
+5. **Optional pack to runtime availability**
+   - User deploys an optional pack, then refreshes and installs generated runtime output.
+   - AF-6 should validate this with the multi-agent collaboration pack as the first real optional capability candidate, while keeping executable helper payloads inert until the helper install boundary is implemented.
 
-- `check_consistency.py`, adapter quality checks, and review scripts cover the lifecycle claims they make.
-- Candidate/proposed entries do not publish into default adapters.
-- Active entries have either Activation guidance or explicit asset coverage/reference-only intent.
+6. **Disable, retire, rollback, and restore**
+   - User disables a pack-sourced capability or restores another machine.
+   - The workflow separates Vault lifecycle state, pack membership metadata, generated output, runtime install receipts, manual targets, and rollback artifacts.
 
-### M7: Memory-System Readiness Design
+AF-6 epics:
+
+- **AF6 lifecycle planning and issue decomposition**
+  - Align AF/M numbering and version mapping.
+  - Create a single AF-6 Epic with dependency-gated child issues.
+  - Keep memory readiness, memory implementation, and advanced pack discovery out of AF-6 unless they are explicit constraints.
+
+- **Complete install experience**
+  - Define and implement the preferred install command path for a normal user.
+  - Preserve explicit Vault location choice and support the reviewed default path policy.
+  - Produce a success report that names Core root, Vault root, deployed bootstrap pack, generated output, runtime receipt state, manual ChatGPT status, and first safe command.
+  - Keep `--dry-run` or report-only behavior available before writes.
+
+- **Pack state and installed-pack metadata**
+  - Record deployed pack identity, version, manifest hash, included record hashes, deployment time, source path or URL, and conflict decisions in the selected Vault.
+  - Do not make pack metadata a second source of truth for active practices or assets.
+  - Keep ordinary Vault CRUD valid after pack deployment.
+
+- **Generic pack plan/check/apply**
+  - Support optional pack staging and validation beyond `mandatory_bootstrap`.
+  - Plan add/update/skip/fail/merge outcomes before canonical writes.
+  - Fail closed for same-version different-hash snapshots, unrelated id collisions, incompatible schema ranges, unknown provenance, and unapproved executable payload install.
+
+- **Pack update and relevance review**
+  - Implement or document how a known pack snapshot is compared with current Vault state.
+  - Require Pack Relevance Review before regenerating or versioning a pack from changed canonical records.
+  - Do not regenerate a pack merely because any included canonical record changed outside the pack's selected contract.
+
+- **Optional multi-agent pack**
+  - Promote the current candidate fixture into the first deployable optional pack only after generic pack plan/apply is available.
+  - Keep Tiny IPA as evidence, not a runtime dependency.
+  - Keep helper scripts inert or metadata-only until managed helper install, dependency checks, permissions, and receipts exist.
+
+- **Runtime refresh, receipts, and status**
+  - Ensure generated output and runtime install read the selected Vault and selected generated output, not stale Core adapter templates.
+  - Preserve managed markers, receipts, manual ChatGPT boundaries, stale-reference scans, and rollback visibility.
+
+- **Review, validation, and documentation**
+  - Validate fresh install with a temp blank Vault.
+  - Validate optional pack apply/update conflict behavior with fixtures.
+  - Validate non-new-install status on the current split setup.
+  - Keep docs journey-oriented: install, status, deploy pack, update pack, disable/rollback, restore.
+
+AF-6 non-goals:
+
+- Marketplace, registry search, or automatic remote discovery.
+- Broad automatic capability-pack discovery from arbitrary work history.
+- Memory-system storage, memory harvest routing, semantic/vector/graph indexes, or MCP memory tools.
+- Executing helper scripts directly from pack staging, product projects, or canonical Vault payload paths.
+- Treating a pack snapshot as live authority after deployment.
+
+AF-6 acceptance criteria:
+
+- A blank or existing installation can report its Core/Vault/runtime/pack state before mutation.
+- Fresh install can initialize a valid Vault, deploy the mandatory bootstrap pack, publish generated output, and dry-run or apply managed runtimes according to the local manifest.
+- A known optional pack can be staged, validated, planned, reviewed, deployed into the selected Vault, refreshed into generated output, and represented in status.
+- Pack update checks distinguish unchanged, newer clean update, newer local-edit merge, same-version hash mismatch, incompatible schema, unknown provenance, and executable-payload block states.
+- Pack disable or rollback does not delete unrelated Vault records and reports Vault lifecycle state, generated output impact, runtime receipt state, and manual targets separately.
+- Core/Vault/Generated/Runtime/Product Project contexts are displayed or validated before writes and installs.
+- Human review gates remain visible for pack activation, privacy/security/trust decisions, destructive changes, runtime apply when unmanaged targets would be touched, and final merges to `main`.
+- `check_consistency.py`, capability pack fixture checks, install/status tests, runtime receipt tests, and operation-context tests cover the lifecycle claims they make.
+
+Suggested AF-6 issue order:
+
+| Order | Work | Type | Owner Role | Risk | Depends On | Handoff |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | #97 AF-6 Epic and stage labels | Epic/Task | Architect | High | AF-5 closed | Human-visible planning checkpoint |
+| 2 | #98 Install UX contract and command map | Decision | Architect | High | #97 | Structured review |
+| 3 | #99 Pack state metadata and installed-pack index | Decision | Architect | High | #97 | Structured review |
+| 4 | #106 Generic pack plan/check for known local snapshots | Task | Implementer | Medium | #98 and #99 | Batch checkpoint |
+| 5 | #100 Optional pack apply into selected Vault | Task | Implementer | High | #99 and #106 | Reviewer + Architect acceptance |
+| 6 | #101 Pack update comparison and conflict handling | Task | Implementer | High | #99 and #100 | Reviewer + Architect acceptance |
+| 7 | #102 Install/status repair for existing deployments | Task | Implementer | Medium | #98 | Batch checkpoint |
+| 8 | #103 Optional multi-agent pack deployment path | Task/Decision | Architect + Implementer | High | #100 and #101 | Structured review |
+| 9 | #104 Disable/retire/rollback pack lifecycle | Task | Implementer | High | #100, #101, and #102 | Reviewer + Architect acceptance |
+| 10 | #105 AF-6 end-to-end validation and close review | Review | Reviewer | High | all AF-6 child issues | Human close/main-integration decision |
+
+### AF-7 / M7: Memory-System Readiness Design
 
 Goal: define memory as an adjacent future capability without implementing storage yet.
 
@@ -926,9 +1008,9 @@ Acceptance criteria:
 - Open questions remain visible.
 - No automatic memory writing exists.
 
-### M8: Fork vs Extension Decision
+### AF-8 / M8: Memory Implementation Home Decision
 
-Goal: decide the implementation home for memory-system work using evidence from M1 through M7.
+Goal: decide the implementation home for memory-system work using evidence from AF-1 through AF-7.
 
 Decision options:
 
@@ -966,11 +1048,11 @@ Acceptance criteria:
 - Decision record names the chosen option and rejected alternatives.
 - Future implementation plan has file boundaries, data flow, validation, privacy policy, and rollback path.
 
-### M9: Advanced Capability Pack Discovery and Lifecycle
+### AF-9 / M9: Advanced Capability Pack Discovery and Lifecycle
 
-Goal: improve whether Agent Foundry can recognize, maintain, and export higher-level capability packs that emerge from repeated work after the basic AF-5 pack deployment path exists.
+Goal: improve whether Agent Foundry can recognize, maintain, and export higher-level capability packs that emerge from repeated work after the basic AF-6 pack lifecycle exists.
 
-This is intentionally later than repository hygiene, productization, physical split migration, current-user deployment and upgrade migration, onboarding, lifecycle completion, memory readiness, and the fork-vs-extension decision. Do not use this milestone to delay AF-1 through AF-8. AF-5 owns the mandatory bootstrap pack, optional pack deployment mechanism, and first optional multi-agent collaboration pack. M9 is for automatic discovery, advanced lifecycle optimization, export polish, and maintenance of emergent packs.
+This is intentionally later than repository hygiene, productization, physical split migration, current-user deployment and upgrade migration, onboarding, lifecycle completion, memory readiness, and the implementation-home decision. Do not use this milestone to delay AF-1 through AF-8. AF-6 owns the complete install experience, basic pack status/plan/apply/update/disable lifecycle, and first optional multi-agent collaboration pack deployment path. AF-9 is for automatic discovery, advanced lifecycle optimization, export polish, and maintenance of emergent packs.
 
 Capability packs are not the same as individual assets. A future capability pack may bundle practices, assets, workflows, templates, adapter snippets, examples, configuration profiles, dependency metadata, and export/install behavior around a recurring user goal such as multi-agent collaboration or technical documentation writing.
 
@@ -1001,6 +1083,12 @@ Acceptance criteria:
 - Exportable packs do not include local-private evidence, personal vault content, or future architecture concepts as current substrate.
 - The design proves at least one existing capability cluster could be packaged without weakening Core/Vault boundaries.
 
+### AF-10 / M10: Memory-System Implementation
+
+Goal: implement a reviewed memory/knowledge MVP only after Foundry lifecycle, memory readiness, and implementation-home decisions are complete.
+
+Expected scope will be defined by AF-7 and AF-8. Until then, AF-10 is a placeholder for future implementation work, not a license to create memory directories, schemas, or MCP write tools now.
+
 ## Work Not To Do Yet
 
 - Do not create `memory/`, `knowledge/`, `research_memos/`, or `project_memory` directories.
@@ -1008,15 +1096,15 @@ Acceptance criteria:
 - Do not add semantic/vector/graph indexes.
 - Do not add MCP write tools.
 - Do not import raw ChatGPT exports.
-- Do not implement advanced automatic capability pack discovery, export marketplace behavior, or broad pack lifecycle automation before the basic AF-5 pack deployment path is stable.
+- Do not implement advanced automatic capability pack discovery, export marketplace behavior, or broad pack lifecycle automation before the basic AF-6 pack lifecycle path is stable.
 - Do not refactor adapters or runtime install behavior until repository hygiene policy exists.
 
 ## Immediate Next Planning Tasks
 
-1. Open AF-4 issues for private User Vault remote planning, Vault git initialization, deployment inventory, cross-machine migration, real workflow verification, major-upgrade readiness, and AF-4 close review.
-2. Review and approve the Vault `.gitignore`, tracked/untracked boundary, remote name, and private visibility before any Vault push.
-3. Create the private User Vault remote and push only after explicit approval.
-4. Migrate each existing deployment against the private Vault remote and record the result in a deployment matrix.
-5. Verify at least one real refresh plus one real harvest/review/publish workflow after cross-machine Vault sync works.
-6. Produce a reusable upgrade checklist for future schema/program migrations and verify this split migration satisfies it.
-7. Defer AF-5 new-user onboarding work until AF-4 proves the current user's deployed system and upgrade discipline are stable.
+1. Review #98 and #99 as the first AF-6 Architect-owned decision pair.
+2. Create `af6/integration` after the initial AF-6 planning PR is accepted, then target child PRs there.
+3. Implement #106 only after #98/#99 have enough accepted contract detail.
+4. Implement #100/#101/#102 as the first dependency-gated Implementer batch after #106.
+5. Use #103 to validate the optional multi-agent pack after generic plan/apply/update behavior is reviewable.
+6. Use #104 to prove disable, retire, rollback, and restore semantics before close review.
+7. Keep memory readiness work in AF-7 until #105 validates complete install, status, pack lifecycle, refresh, and rollback behavior.
