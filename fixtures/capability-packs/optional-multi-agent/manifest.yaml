@@ -10,7 +10,7 @@ source_provenance: "Agent Foundry public Core fixture for issue #79; Tiny IPA he
 maintainer_contact: "https://github.com/farmerhunter/agent-foundry"
 license: "repository license"
 sensitivity: public
-review_state: unreviewed
+review_state: accepted
 
 pack_contract:
   promised_use_case: "Help a project operate GitHub issues, PRs, labels, comments, and optional Project status as a lightweight multi-agent scheduler."
@@ -79,7 +79,7 @@ included_records:
     destination_layer: canonical_vault_record
     membership_role: optional_member
     activation_default: manual_review
-    import_action: stage_only
+    import_action: create_or_review_update
   - id: ASSET-COLLAB-PACK-001
     kind: asset
     lifecycle_status: candidate
@@ -89,20 +89,9 @@ included_records:
     destination_layer: canonical_vault_record
     membership_role: optional_member
     activation_default: manual_review
-    import_action: stage_only
+    import_action: create_or_review_update
 
-executable_payloads:
-  - id: helper.review-handoff-summary
-    title: Review Handoff Summary Helper Fixture
-    lifecycle_status: candidate
-    path: payloads/helpers/review_handoff_summary.py
-    source_sha256: "61ebb3b134a4ce82bba92103b8033a4474688057bfbf5be68e908d8322a1b334"
-    interpreter: python3
-    execute_from_pack: false
-    install_boundary: managed_runtime_copy_required
-    permissions: [filesystem-read]
-    dependencies: []
-    runtime_impact: "Fixture payload stands in for the broader helper set and may read reviewed issue or PR handoff text only after managed install."
+executable_payloads: []
 
 conflict_policy:
   id_collision: fail_closed
