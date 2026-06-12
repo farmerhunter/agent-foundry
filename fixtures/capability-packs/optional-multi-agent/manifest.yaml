@@ -63,12 +63,6 @@ rejected_as_pack:
   - "execution from product project paths, pack staging, or canonical Vault payload paths"
   - "active Agent Foundry practices without separate harvest review"
 
-deferred_executable_payloads:
-  - id: helper.review-handoff-summary
-    title: Review Handoff Summary Helper Fixture
-    reason: "Executable helper install is deferred until managed helper install, permissions, dependency checks, receipts, and rollback behavior exist."
-    evidence_path: payloads/helpers/review_handoff_summary.py
-
 compatibility:
   core_schema_version_min: 1
   core_schema_version_max: 1
