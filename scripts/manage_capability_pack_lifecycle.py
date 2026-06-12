@@ -23,6 +23,12 @@ class PackRecord:
     path: str
 
 
+@dataclass(frozen=True)
+class PlannedWrite:
+    path: Path
+    text: str
+
+
 def read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
@@ -126,6 +132,45 @@ def set_yaml_status(text: str, status: str) -> str:
     raise SystemExit("Asset record missing status")
 
 
+def record_id(kind: str, text: str) -> str:
+    if kind == "practice":
+        if not text.startswith("---\n"):
+            return ""
+        end = text.find("\n---", 4)
+        if end == -1:
+            return ""
+        for line in text[:end].splitlines():
+            if line.startswith("id:"):
+                return line.split(":", 1)[1].strip().strip('"')
+        return ""
+    if kind == "asset":
+        for line in text.splitlines():
+            if line.startswith("id:"):
+                return line.split(":", 1)[1].strip().strip('"')
+        return ""
+    return ""
+
+
+def index_entry_matches(text: str, item_id: str, relative_path: str) -> bool:
+    lines = text.splitlines()
+    in_entry = False
+    found = False
+    path_matches = False
+    status_seen = False
+    for line in lines:
+        if line.startswith("  - id: "):
+            in_entry = line.split(":", 1)[1].strip().strip('"') == item_id
+            found = found or in_entry
+            continue
+        if not in_entry:
+            continue
+        if line.startswith("    path:"):
+            path_matches = line.split(":", 1)[1].strip().strip('"') == relative_path
+        if line.startswith("    status:"):
+            status_seen = True
+    return found and path_matches and status_seen
+
+
 def set_index_status(text: str, item_id: str, status: str) -> str:
     lines = text.splitlines()
     in_entry = False
@@ -167,6 +212,70 @@ def retire_status(kind: str) -> tuple[str, str]:
     raise SystemExit(f"Unsupported pack record kind: {kind}")
 
 
+def plan_lifecycle_writes(
+    vault_root: Path,
+    records: list[PackRecord],
+    metadata_lines: list[str],
+    start: int,
+    end: int,
+    action: str,
+) -> tuple[list[PlannedWrite], dict[str, str], list[str]]:
+    writes: list[PlannedWrite] = []
+    state_by_id: dict[str, str] = {}
+    errors: list[str] = []
+    for record in records:
+        try:
+            path = safe_vault_path(vault_root, record.path)
+        except SystemExit as exc:
+            errors.append(str(exc))
+            continue
+        if not path.exists():
+            errors.append(f"{record.item_id}: record path missing: {record.path}")
+            state_by_id[record.item_id] = "missing"
+            continue
+        text = read(path)
+        actual_id = record_id(record.kind, text)
+        if actual_id != record.item_id:
+            errors.append(f"{record.item_id}: metadata path points to record id {actual_id or '<missing>'}: {record.path}")
+            continue
+        if action == "disable":
+            state_by_id[record.item_id] = "unchanged"
+            continue
+        try:
+            status, state = retire_status(record.kind)
+        except SystemExit as exc:
+            errors.append(str(exc))
+            continue
+        index_path = vault_root / "indexes" / ("practice_index.yaml" if record.kind == "practice" else "asset_index.yaml")
+        if not index_path.exists():
+            errors.append(f"{record.item_id}: index missing: {index_path.relative_to(vault_root)}")
+            continue
+        index_text = read(index_path)
+        if not index_entry_matches(index_text, record.item_id, record.path):
+            errors.append(f"{record.item_id}: index entry missing or path mismatch for {record.path}")
+            continue
+        try:
+            updated_record = (
+                set_markdown_frontmatter_status(text, status)
+                if record.kind == "practice"
+                else set_yaml_status(text, status)
+            )
+            updated_index = set_index_status(index_text, record.item_id, status)
+        except SystemExit as exc:
+            errors.append(f"{record.item_id}: {exc}")
+            continue
+        if updated_record != text:
+            writes.append(PlannedWrite(path, updated_record))
+        if updated_index != index_text:
+            writes.append(PlannedWrite(index_path, updated_index))
+        state_by_id[record.item_id] = state
+
+    updated_metadata = update_metadata(metadata_lines, start, end, action, state_by_id)
+    if updated_metadata != "\n".join(metadata_lines).rstrip() + "\n":
+        writes.append(PlannedWrite(vault_root / "packs" / "deployed-pack-index.yaml", updated_metadata))
+    return writes, state_by_id, errors
+
+
 def lifecycle(core_root: Path, vault_root: Path, pack_id: str, action: str, apply: bool) -> int:
     errors = validate(core_root, vault_root)
     if errors:
@@ -191,30 +300,28 @@ def lifecycle(core_root: Path, vault_root: Path, pack_id: str, action: str, appl
     if not records:
         print("- none")
 
-    state_by_id: dict[str, str] = {}
     for record in records:
         path = safe_vault_path(vault_root, record.path)
         if not path.exists():
             print(f"- {record.item_id} missing: {record.path}")
-            state_by_id[record.item_id] = "missing"
             continue
         if action == "disable":
             print(f"- {record.item_id} metadata_only: {record.path}")
-            state_by_id[record.item_id] = "unchanged"
             continue
         status, state = retire_status(record.kind)
         print(f"- {record.item_id} {record.kind} -> {status}: {record.path}")
-        text = read(path)
-        updated = set_markdown_frontmatter_status(text, status) if record.kind == "practice" else set_yaml_status(text, status)
-        if updated != text:
-            write(path, updated, apply)
-        index_path = vault_root / "indexes" / ("practice_index.yaml" if record.kind == "practice" else "asset_index.yaml")
-        write(index_path, set_index_status(read(index_path), record.item_id, status), apply)
-        state_by_id[record.item_id] = state
 
-    updated_metadata = update_metadata(metadata_lines, start, end, action, state_by_id)
-    if updated_metadata != "\n".join(metadata_lines).rstrip() + "\n":
-        write(metadata_path, updated_metadata, apply)
+    planned_writes, _state_by_id, planning_errors = plan_lifecycle_writes(
+        vault_root, records, metadata_lines, start, end, action
+    )
+    if planning_errors:
+        print("status: failed")
+        for error in planning_errors:
+            print(f"- {error}")
+        print("writes: none")
+        return 1
+    for planned in planned_writes:
+        write(planned.path, planned.text, apply)
     print("runtime_cleanup: use selected generated-output refresh and managed runtime receipt rollback; ChatGPT remains manual")
     print("restore: rebuild from public Core plus selected Vault; do not copy another machine's runtime files")
     print(f"writes: {'applied' if apply else 'none'}")

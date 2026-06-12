@@ -194,6 +194,96 @@ def main() -> int:
         ]:
             errors.extend(expect(f"restore-status-{expected}", restore_status, True, expected))
 
+        wrong_path_vault = base / "wrong-path-vault"
+        errors.extend(expect("init-wrong-path-vault", init_blank(wrong_path_vault), True, "Blank Vault initialized"))
+        errors.extend(expect("deploy-wrong-path-bootstrap", deploy_bootstrap(wrong_path_vault), True, "selected Vault validated"))
+        errors.extend(expect("apply-wrong-path-optional", apply_optional(wrong_path_vault), True, "metadata: written"))
+        wrong_user = wrong_path_vault / "practices" / "user" / "USER-LOCAL-001.md"
+        write(
+            wrong_user,
+            "---\nid: USER-LOCAL-001\ntitle: Local User Record\ndomain: user\nstatus: active\n---\n\nUnrelated.\n",
+        )
+        wrong_user_before = digest(wrong_user)
+        wrong_metadata = wrong_path_vault / "packs" / "deployed-pack-index.yaml"
+        wrong_metadata.write_text(
+            wrong_metadata.read_text(encoding="utf-8").replace(
+                "path: practices/agent-collaboration/COLLAB-PACK-001-review-handoff.md",
+                "path: practices/user/USER-LOCAL-001.md",
+            ),
+            encoding="utf-8",
+        )
+        wrong_path = lifecycle(wrong_path_vault, "retire", apply=True)
+        errors.extend(expect("retire-refuses-wrong-path", wrong_path, False, "metadata path points to record id USER-LOCAL-001"))
+        if digest(wrong_user) != wrong_user_before:
+            errors.append("retire-refuses-wrong-path: unrelated user record changed")
+        original_pack_record = (
+            wrong_path_vault
+            / "practices"
+            / "agent-collaboration"
+            / "COLLAB-PACK-001-review-handoff.md"
+        )
+        if "status: candidate" not in original_pack_record.read_text(encoding="utf-8"):
+            errors.append("retire-refuses-wrong-path: original pack record changed")
+
+        partial_vault = base / "partial-vault"
+        errors.extend(expect("init-partial-vault", init_blank(partial_vault), True, "Blank Vault initialized"))
+        errors.extend(expect("deploy-partial-bootstrap", deploy_bootstrap(partial_vault), True, "selected Vault validated"))
+        errors.extend(expect("apply-partial-optional", apply_optional(partial_vault), True, "metadata: written"))
+        partial_practice = partial_vault / "practices" / "agent-collaboration" / "COLLAB-PACK-001-review-handoff.md"
+        partial_asset = partial_vault / "assets" / "skills" / "ASSET-COLLAB-PACK-001-review-handoff-helper.asset.yaml"
+        partial_metadata = partial_vault / "packs" / "deployed-pack-index.yaml"
+        before_partial = {
+            "practice": digest(partial_practice),
+            "asset": digest(partial_asset),
+            "practice_index": digest(partial_vault / "indexes" / "practice_index.yaml"),
+            "asset_index": digest(partial_vault / "indexes" / "asset_index.yaml"),
+            "metadata": digest(partial_metadata),
+        }
+        asset_index = partial_vault / "indexes" / "asset_index.yaml"
+        other_asset = partial_vault / "assets" / "skills" / "ASSET-OTHER-001.yaml"
+        write(
+            other_asset,
+            "\n".join(
+                [
+                    "id: ASSET-OTHER-001",
+                    "title: Other Asset",
+                    "asset_type: skill",
+                    "status: candidate",
+                    "purpose: Fixture.",
+                    "responsibility: Fixture.",
+                    "non_responsibility: Fixture.",
+                    "inputs: []",
+                    "process: []",
+                    "outputs: []",
+                    "canonical_practices: []",
+                    "published_to: []",
+                    "usage_triggers: []",
+                    "success_criteria: []",
+                    "",
+                ]
+            ),
+        )
+        asset_index.write_text(
+            asset_index.read_text(encoding="utf-8").replace(
+                "path: assets/skills/ASSET-COLLAB-PACK-001-review-handoff-helper.asset.yaml",
+                "path: assets/skills/ASSET-OTHER-001.yaml",
+            ),
+            encoding="utf-8",
+        )
+        expected_asset_index_after_tamper = digest(asset_index)
+        partial = lifecycle(partial_vault, "retire", apply=True)
+        errors.extend(expect("retire-refuses-partial-write", partial, False, "index entry missing or path mismatch"))
+        if digest(partial_practice) != before_partial["practice"]:
+            errors.append("retire-refuses-partial-write: practice changed before failure")
+        if digest(partial_asset) != before_partial["asset"]:
+            errors.append("retire-refuses-partial-write: asset changed before failure")
+        if digest(partial_vault / "indexes" / "practice_index.yaml") != before_partial["practice_index"]:
+            errors.append("retire-refuses-partial-write: practice index changed before failure")
+        if digest(asset_index) != expected_asset_index_after_tamper:
+            errors.append("retire-refuses-partial-write: asset index changed after preflight failure")
+        if digest(partial_metadata) != before_partial["metadata"]:
+            errors.append("retire-refuses-partial-write: metadata changed before failure")
+
     if errors:
         print("Capability pack lifecycle test failed:")
         for error in errors:
