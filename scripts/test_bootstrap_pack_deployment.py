@@ -88,21 +88,24 @@ def main() -> int:
         errors.extend(expect("optional-pack-refused", optional_result, False, "only mandatory_bootstrap packs are supported"))
 
         deploy_result = deploy_bootstrap(vault)
-        errors.extend(expect("deploy-bootstrap", deploy_result, True, "added: 2"))
+        errors.extend(expect("deploy-bootstrap", deploy_result, True, "added: 24"))
         errors.extend(expect("deploy-bootstrap-validates", deploy_result, True, "selected Vault validated"))
         for expected in [
             vault / "practices" / "meta" / "BOOT-001-bootstrap-orientation.md",
+            vault / "practices" / "meta" / "META-001-canonical-practices-source-of-truth.md",
+            vault / "practices" / "runtime" / "RUNTIME-001-treat-agent-runtimes-as-shared-environments.md",
             vault / "assets" / "skills" / "ASSET-BOOT-001-bootstrap-status.asset.yaml",
+            vault / "assets" / "skills" / "ASSET-META-001-practice-harvester.asset.yaml",
         ]:
             if not expected.exists():
                 errors.append(f"deploy-bootstrap: expected Vault record missing: {expected}")
             else:
                 text = expected.read_text(encoding="utf-8")
                 for marker in [
-                    "provenance: \"Deployed from capability pack pack.bootstrap.minimal version 0.1.0",
+                    "provenance: \"Deployed from capability pack pack.bootstrap.minimal version 0.2.0",
                     "pack_membership",
                     "pack.bootstrap.minimal",
-                    "pack_source_version: \"0.1.0\"",
+                    "pack_source_version: \"0.2.0\"",
                 ]:
                     if marker not in text:
                         errors.append(f"deploy-bootstrap: {expected} missing deployment metadata marker {marker}")
@@ -122,15 +125,15 @@ def main() -> int:
                 "--apply",
             ]
         )
-        errors.extend(expect("publish-bootstrap-vault", publish, True, "Active practices selected: 1"))
-        errors.extend(expect("publish-bootstrap-skill", publish, True, "Active assets selected: 1"))
+        errors.extend(expect("publish-bootstrap-vault", publish, True, "Active practices selected: 22"))
+        errors.extend(expect("publish-bootstrap-skill", publish, True, "Active assets selected: 2"))
         generated_text = "\n".join(path.read_text(encoding="utf-8") for path in generated.rglob("*") if path.is_file())
-        for expected in ["BOOT-001", "ASSET-BOOT-001", "Generated from the selected Agent Foundry Vault."]:
+        for expected in ["BOOT-001", "META-001", "ASSET-BOOT-001", "ASSET-META-001", "Generated from the selected Agent Foundry Vault."]:
             if expected not in generated_text:
                 errors.append(f"publish-bootstrap-vault: generated output missing {expected}")
 
         rerun = deploy_bootstrap(vault)
-        errors.extend(expect("deploy-bootstrap-rerun-skip", rerun, True, "skipped: 2"))
+        errors.extend(expect("deploy-bootstrap-rerun-skip", rerun, True, "skipped: 24"))
         errors.extend(expect("deploy-bootstrap-rerun-no-add", rerun, True, "added: 0"))
 
         record = vault / "practices" / "meta" / "BOOT-001-bootstrap-orientation.md"
