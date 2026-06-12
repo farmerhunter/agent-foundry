@@ -731,6 +731,7 @@ AF-5 MVP deliverables:
 - A bootstrap pack built from public, reviewed canonical data.
 - A first optional multi-agent collaboration pack candidate, validated against Tiny IPA helper evidence after the helper executable boundary is designed.
 - CLI or workflow support for blank Vault creation, pack staging/deployment, selected-root refresh, and status reporting.
+- An operation-context preflight that lets AF operations invoked from product projects, Core, Vault, generated output, or runtime directories prove their Core/Vault roots, allowed writes, and publish/install route before mutation.
 - Validation fixtures for blank Vault, bootstrap-only Vault, optional-pack Vault, imported-runtime candidate, and product-project evidence source.
 - Runtime install behavior that preserves managed markers, receipts, manual ChatGPT boundaries, and no direct execution from canonical stores.
 
@@ -744,6 +745,7 @@ Acceptance criteria:
 - Cross-machine restore proves runtime state can be regenerated from public Core plus selected Vault rather than copied from another machine.
 - Disable or rollback behavior can remove or supersede runtime outputs without erasing unrelated user-created Vault records.
 - The onboarding flow preserves product project, Foundry Core, Foundry Vault, Generated, Runtime, and Local Private context separation.
+- AF operations invoked from nested contexts display and verify their work context, evidence root, selected Core/Vault roots, allowed writes, forbidden writes, and selected-output publish/install receipt path.
 
 Stop conditions:
 
@@ -764,11 +766,12 @@ Planned GitHub issue sequence:
 | 4 | #75 Minimal capability pack manifest and fixtures | Task batch | Implementer with Architect review | Medium | #53 and #74 define fields, lifecycle states, and conflict behavior | Batch checkpoint |
 | 5 | #76 Blank Vault plus bootstrap deployment path | Task batch | Implementer | Medium | #75 fixtures exist; blank Vault initializer validates selected roots | Batch checkpoint |
 | 6 | #77 Bootstrap capability pack content | Harvester / Architect | Medium | #76 can import pack snapshot into Vault records | Human review of included canonical records before activation |
-| 7 | #78 Fresh install command and status report | Task batch | Implementer | Medium | #77 can deploy into blank Vault | Batch checkpoint with runtime dry-run evidence |
-| 8 | #79 Optional multi-agent capability pack candidate | Evidence / Task | Architect + Harvester | Medium | #76 works; #53 defines executable helper payload boundary | Review before packaging Tiny IPA helper evidence |
-| 9 | #80 Runtime asset import path | Task batch | Implementer with Harvester review | Medium | #74 import staging and artifact routing model defined | Batch checkpoint |
-| 10 | #81 Cross-machine restore and rollback onboarding | Review / Task | Reviewer + Architect | High | #78 selected-Vault refresh and receipts work locally | Structured review handoff |
-| 11 | #82 AF5 end-to-end onboarding validation | Review | Reviewer | High | #53 and #73-#81 complete or explicitly deferred with rationale | User acceptance before AF-5 close |
+| 7 | #89 Operation context preflight and nested-context guard | Task | Architect then Implementer | Medium | #77 can deploy bootstrap content; nested-context confusion has concrete evidence | Reviewer handoff before #78 starts |
+| 8 | #78 Fresh install command and status report | Task batch | Implementer | Medium | #77 can deploy into blank Vault and #89 can prove operation context before mutation | Batch checkpoint with runtime dry-run evidence |
+| 9 | #79 Optional multi-agent capability pack candidate | Evidence / Task | Architect + Harvester | Medium | #76 works; #53 defines executable helper payload boundary | Review before packaging Tiny IPA helper evidence |
+| 10 | #80 Runtime asset import path | Task batch | Implementer with Harvester review | Medium | #74 import staging and artifact routing model defined | Batch checkpoint |
+| 11 | #81 Cross-machine restore and rollback onboarding | Review / Task | Reviewer + Architect | High | #78 selected-Vault refresh and receipts work locally | Structured review handoff |
+| 12 | #82 AF5 end-to-end onboarding validation | Review | Reviewer | High | #53 and #73-#81 plus #89 complete or explicitly deferred with rationale | User acceptance before AF-5 close |
 
 Execution order:
 
@@ -776,9 +779,10 @@ Execution order:
 2. Resolve #53 before packaging Tiny IPA-style helper scripts as reusable capability payloads.
 3. Build pack manifest fixtures before bootstrap content so bootstrap can be validated as one instance of the general deployment mechanism.
 4. Build the mandatory bootstrap path before optional packs.
-5. Treat the multi-agent pack as the first optional validation case, not as a blocker for fresh install.
-6. Keep runtime import and product-project import behind the same staging/review rules so imported material does not bypass harvest discipline.
-7. Close AF-5 only with an end-to-end validation issue that runs the user journey, not merely individual script tests.
+5. Add operation-context preflight before fresh install polish so first-run commands and nested product-project harvests prove which layer owns each read, write, publish, install, and receipt.
+6. Treat the multi-agent pack as the first optional validation case, not as a blocker for fresh install.
+7. Keep runtime import and product-project import behind the same staging/review rules so imported material does not bypass harvest discipline.
+8. Close AF-5 only with an end-to-end validation issue that runs the user journey, not merely individual script tests.
 
 ### M6: Existing Foundry Lifecycle Completion
 
