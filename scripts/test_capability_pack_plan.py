@@ -45,17 +45,29 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def practice_text(item_id: str, filename: str = "") -> str:
+def practice_text(item_id: str, filename: str = "", domain: str = "meta") -> str:
     return "\n".join(
         [
             "---",
             f'id: "{item_id}"',
             f'title: "{filename or item_id}"',
-            'domain: "meta"',
+            f'domain: "{domain}"',
             'status: "candidate"',
             "---",
             "",
             "Fixture practice.",
+            "",
+        ]
+    )
+
+
+def asset_text(item_id: str, asset_type: str = "skill") -> str:
+    return "\n".join(
+        [
+            f"id: {item_id}",
+            f"title: {item_id}",
+            "status: candidate",
+            f"asset_type: {asset_type}",
             "",
         ]
     )
@@ -101,10 +113,11 @@ def write_probe_pack(
     if include_source_provenance:
         lines.insert(8, "source_provenance: test fixture")
     for record in records:
+        kind = record.get("kind", "practice")
         lines.extend(
             [
                 f"  - id: {record['id']}",
-                "    kind: practice",
+                f"    kind: {kind}",
                 "    lifecycle_status: candidate",
             ]
         )
@@ -428,6 +441,35 @@ def main() -> int:
                 "pack does not support Core schema version",
             )
         )
+
+        unsafe_domain_file = base / "unsafe-domain" / "records" / "UNSAFE.md"
+        unsafe_domain_file.parent.mkdir(parents=True, exist_ok=True)
+        unsafe_domain_file.write_text(practice_text("UNSAFE-DOMAIN-001", domain="../outside"), encoding="utf-8")
+        unsafe_domain_pack = write_probe_pack(
+            base,
+            "unsafe-domain",
+            [{"id": "UNSAFE-DOMAIN-001", "path": "records/UNSAFE.md", "sha": sha256(unsafe_domain_file)}],
+        )
+        unsafe_domain = plan_pack(unsafe_domain_pack, vault)
+        errors.extend(expect("plan-unsafe-domain-fails-closed", unsafe_domain, False, "safe single path segment"))
+
+        unsafe_asset_file = base / "unsafe-asset-type" / "records" / "UNSAFE.asset.yaml"
+        unsafe_asset_file.parent.mkdir(parents=True, exist_ok=True)
+        unsafe_asset_file.write_text(asset_text("UNSAFE-ASSET-001", asset_type="../outside"), encoding="utf-8")
+        unsafe_asset_pack = write_probe_pack(
+            base,
+            "unsafe-asset-type",
+            [
+                {
+                    "id": "UNSAFE-ASSET-001",
+                    "kind": "asset",
+                    "path": "records/UNSAFE.asset.yaml",
+                    "sha": sha256(unsafe_asset_file),
+                }
+            ],
+        )
+        unsafe_asset_type = plan_pack(unsafe_asset_pack, vault)
+        errors.extend(expect("plan-unsafe-asset-type-fails-closed", unsafe_asset_type, False, "safe single path segment"))
 
     if errors:
         print("Capability pack plan test failed:")
