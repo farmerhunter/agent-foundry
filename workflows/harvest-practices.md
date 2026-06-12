@@ -35,6 +35,14 @@ During AF-3 compatibility mode, Core and Vault may share one root. After the phy
 
 If the Vault is locked, dirty in a conflicting way, or unavailable, produce candidate recommendations only and do not write files.
 
+Before any canonical write, display or run the operation-context preflight so nested use cannot confuse the current product project with Agent Foundry Core or the selected Vault:
+
+```bash
+python3 <core-root>/scripts/operation_context.py harvest --cwd . --core-root <core-root> --vault-root <vault-root>
+```
+
+The report must show the current project as evidence source when harvesting from another repository, Core as tooling/schema/workflow source, and the selected Vault as the canonical write target.
+
 ## 1. Current Capability Check
 
 Before routing or drafting, distinguish current repository capability from proposed or future architecture.

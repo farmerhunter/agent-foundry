@@ -59,6 +59,8 @@ runtime/local/runtime_manifest.yaml
    python3 scripts/install_foundry.py
    ```
 
+   The dry run prints an operation-context preflight. Confirm that Core, selected Vault, generated adapter output, managed runtime writes, manual targets, and forbidden writes are visible before applying.
+
 7. Apply only when destinations are correct:
 
    ```bash

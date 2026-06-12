@@ -9,6 +9,7 @@ from pathlib import Path
 
 from adapter_install_receipt import write_receipt
 from foundry_config import CONFIG_PATH, parse_config, write_config
+from operation_context import print_operation_context
 from runtime_manifest import parse_targets, read_manifest
 
 
@@ -54,6 +55,7 @@ def main() -> int:
     args = parser.parse_args()
     core_root, vault_root = configured_roots(args.core_root, args.vault_root)
     adapter_root = Path(args.adapter_root).expanduser().resolve() if args.adapter_root else core_root / "adapters"
+    print_operation_context("install", core_root=core_root, vault_root=vault_root, adapter_root=adapter_root)
 
     if not args.skip_check:
         code = run(["python3", "scripts/check_consistency.py"], execute=True)
