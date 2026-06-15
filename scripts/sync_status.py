@@ -16,6 +16,7 @@ from operation_context import text_report, build_context
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_GENERATED_ROOT = Path.home() / ".agent-foundry" / "generated" / "agent-foundry-adapters"
+SKILL_FOLDER_TARGETS = {"codex", "hermes", "trae"}
 
 
 def run_git(args: list[str]) -> str:
@@ -368,10 +369,8 @@ def runtime_drift_status(receipt_path: Path = RECEIPT_PATH) -> str:
             lines.append(f"{name}: skipped status={config.get('status')}")
             continue
         dest = Path(config.get("install_path", "")).expanduser()
-        if name == "codex":
-            checked, missing, changed = compare_tree(ROOT / "adapters" / "codex" / "skills", dest)
-        elif name == "hermes":
-            checked, missing, changed = compare_tree(ROOT / "adapters" / "hermes" / "skills", dest)
+        if name in SKILL_FOLDER_TARGETS:
+            checked, missing, changed = compare_tree(ROOT / "adapters" / name / "skills", dest)
         elif name == "claude-code":
             managed = dest / "agent-foundry" / "CLAUDE.md"
             commands = dest / "commands" / "agent-foundry"

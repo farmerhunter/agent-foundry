@@ -173,7 +173,8 @@ def main() -> int:
         errors.extend(expect("selected-output-promoted-asset", selected_quality, True, "selected-output surface"))
         codex_skill = generated / "codex" / "skills" / "role-automation-planner" / "SKILL.md"
         hermes_skill = generated / "hermes" / "skills" / "role-automation-planner" / "SKILL.md"
-        for name, path in [("codex", codex_skill), ("hermes", hermes_skill)]:
+        trae_skill = generated / "trae" / "skills" / "role-automation-planner" / "SKILL.md"
+        for name, path in [("codex", codex_skill), ("hermes", hermes_skill), ("trae", trae_skill)]:
             if not path.exists():
                 errors.append(f"selected-output-promoted-asset: {name} generated SKILL.md missing: {path}")
                 continue

@@ -102,6 +102,10 @@ def main() -> int:
                         "    status: manual",
                         "    install_path: \"\"",
                         "    ownership_mode: manual-import",
+                        "  trae:",
+                        "    status: disabled",
+                        "    install_path: ~/.trae-cn/skills",
+                        "    ownership_mode: managed-directories",
                         "",
                     ]
                 ),
@@ -109,6 +113,7 @@ def main() -> int:
             sync_status.ROOT = fake_core
             text = runtime_status()
             assert "manifest_source: template-read-only" in text, text
+            assert "trae: status=disabled path=~/.trae-cn/skills exists=" in text, text
             assert not (fake_core / "runtime" / "local" / "runtime_manifest.yaml").exists()
         finally:
             sync_status.ROOT = original_root

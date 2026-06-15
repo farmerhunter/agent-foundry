@@ -137,7 +137,7 @@ Current repository mapping:
 | `indexes/` | User Vault | Registry for the current vault's records. |
 | `usage/usage-aggregate.yaml` | User Vault shared aggregate | Sanitized, but still specific to this vault. |
 | `imports/` | User Vault staging machinery plus tracked instructions | Directory convention may become Core; staged content is Vault/evidence. |
-| `adapters/codex/`, `adapters/claude-code/`, `adapters/hermes/`, `adapters/chatgpt/` | Generated distribution outputs | Tracked for install/manual import; regenerate from Core plus target Vault. |
+| `adapters/codex/`, `adapters/claude-code/`, `adapters/hermes/`, `adapters/trae/`, `adapters/chatgpt/` | Generated distribution outputs | Tracked for install/manual import; regenerate from Core plus target Vault. |
 | `runtime/local/`, `sync/local/`, `usage/local/` | Local Private | Gitignored machine-local state. |
 | `Agent Foundry.md` | User Vault navigation | Maintainer hub, not required for external users. |
 | `.claude/settings.json` | Maintainer/runtime-specific setting | Boundary-sensitive; should not be product setup guidance without review. |
@@ -1039,8 +1039,8 @@ Use these categories:
 | --- | --- | --- | --- |
 | Core source | `workflows/`, `schemas/`, `templates/`, source scripts, `adapters/adapter_profiles.yaml`, adapter quality rules, product docs | Tracked in public Core | Source-maintained tooling and operating rules |
 | User Vault canonical records | `practices/`, `assets/`, `indexes/`, reviewed imports, `usage/usage-aggregate.yaml` | Tracked in the selected User Vault, not public Core by default | Human-reviewed canonical records and sanitized Vault metadata |
-| Tracked generated distribution output | `adapters/codex/`, `adapters/hermes/`, `adapters/claude-code/`, `adapters/chatgpt/` | Tracked when needed for runtime install, manual import, review, or distribution | Canonical practices/assets plus adapter profiles |
-| Runtime copy | Installed files under `~/.codex`, `~/.claude`, `~/.hermes`, and manual ChatGPT imports | Not tracked here | Regenerated or installed from `adapters/` |
+| Tracked generated distribution output | `adapters/codex/`, `adapters/hermes/`, `adapters/trae/`, `adapters/claude-code/`, `adapters/chatgpt/` | Tracked when needed for runtime install, manual import, review, or distribution | Canonical practices/assets plus adapter profiles |
+| Runtime copy | Installed files under `~/.codex`, `~/.claude`, `~/.hermes`, `~/.trae-cn`, and manual ChatGPT imports | Not tracked here | Regenerated or installed from `adapters/` |
 | Local private/generated operational state | `runtime/local/`, `usage/local/`, `usage/adoption-log.yaml`, `sync/local/`, `sync/imported/`, `sync/pending/`, `sync/applied/`, `sync/conflicts/`, `sync/snapshots/` | Gitignored by default | Local runtime, sync, or evidence workflows |
 | Shared aggregate or derived metadata | Future Core-owned derived indexes if approved | Tracked only when sanitized, reviewable, and Core-owned | Derived metadata, not raw local evidence |
 
@@ -1086,7 +1086,7 @@ Default classifications:
 | Offline sync operational state | `sync/local/`, `sync/imported/`, `sync/pending/`, `sync/applied/`, `sync/conflicts/`, `sync/snapshots/` | Ignored |
 | External skill staging instructions | `imports/*/INSTRUCTIONS.md` in the selected User Vault or future Core templates | Tracked only in the owning layer |
 | Raw external imports or exports | downloaded skills, raw chat exports, transcripts, source dumps, sensitive review packets | Not committed by default; stage only after explicit review |
-| Runtime adapter outputs | `adapters/codex/`, `adapters/claude-code/`, `adapters/hermes/`, `adapters/chatgpt/` | Tracked distribution/manual-import outputs |
+| Runtime adapter outputs | `adapters/codex/`, `adapters/claude-code/`, `adapters/hermes/`, `adapters/trae/`, `adapters/chatgpt/` | Tracked distribution/manual-import outputs |
 | User workspace affordances | `Agent Foundry.md`, Obsidian-oriented metadata, local agent settings | Treat as User Vault or maintainer-local unless promoted into Core by review |
 
 Rules:

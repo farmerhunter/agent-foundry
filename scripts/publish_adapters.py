@@ -14,6 +14,8 @@ from operation_context import configured_roots, print_operation_context
 
 
 ACTIVE_STATUSES = {"active", "revised"}
+SKILL_FOLDER_ADAPTERS = {"codex", "hermes", "trae"}
+TRAE_COMPATIBLE_SKILL_ADAPTERS = {"codex", "hermes"}
 
 
 def read(path: Path) -> str:
@@ -352,8 +354,10 @@ def write_generated_skill_outputs(
         published_to = record.get("published_to", [])
         if not isinstance(published_to, list):
             continue
-        for adapter_id in ("codex", "hermes"):
-            if adapter_id not in published_to:
+        for adapter_id in sorted(SKILL_FOLDER_ADAPTERS):
+            if adapter_id not in published_to and not (
+                adapter_id == "trae" and TRAE_COMPATIBLE_SKILL_ADAPTERS.intersection(published_to)
+            ):
                 continue
             target = output_root / adapter_id / "skills" / str(record["slug"]) / "SKILL.md"
             written.append(target)

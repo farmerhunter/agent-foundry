@@ -1,6 +1,6 @@
 # End-to-End Lifecycle Compatibility
 
-This document defines how the Agent Foundry loop works across Codex, Claude Code, Hermes, and ChatGPT.
+This document defines how the Agent Foundry loop works across Codex, Claude Code, Hermes, Trae CN, and ChatGPT.
 
 It is a design contract, not a user prompt. Daily commands remain in `docs/commands.md` and `docs/usage.md`.
 
@@ -27,21 +27,21 @@ This loop must work across heterogeneous agents without pretending they have ide
 - Human approval is required before activating new or materially changed practices or assets.
 - After approval, adapter publishing should be automatic when the runtime supports it.
 - ChatGPT is manual-import by default; do not design local automation that ChatGPT cannot run.
-- Native agent capabilities must not be degraded. Agent Foundry should augment Codex, Claude Code, Hermes, and ChatGPT rather than replacing their memory, skills, project instructions, hooks, or self-improvement paths.
+- Native agent capabilities must not be degraded. Agent Foundry should augment Codex, Claude Code, Hermes, Trae CN, and ChatGPT rather than replacing their memory, skills, project instructions, hooks, or self-improvement paths.
 - Activation is soft by default. Only runtimes with hook support can add hard pre-tool checks, and those checks must remain optional and reversible.
 
 ## Agent Capability Matrix
 
-| Capability | Codex | Claude Code | Hermes | ChatGPT |
-|---|---|---|---|---|
-| Local repo editing | yes | yes | yes | no direct local runtime |
-| Skill/procedure packaging | `SKILL.md` folders | `CLAUDE.md` plus slash commands | `SKILL.md` folders and native skills | Project instructions plus files |
-| Progressive loading | skills and references | imports, commands, referenced files | skills and references | project files / knowledge |
-| Runtime install | managed copy to `~/.codex/skills` | managed block plus files under `~/.claude` | managed copy to `~/.hermes/skills` | manual import |
-| Local scripts | yes | yes | yes | no |
-| Hard pre-tool guard | no generic Foundry hook assumed | possible with Claude Code hooks | no generic Foundry hook assumed | no |
-| Evidence recording | local script | local script or optional hook | local script | manual/exported summary |
-| Best fit | full local loop | full local loop plus optional hook experiments | full local loop while preserving native learning | soft consumption and manual sync |
+| Capability | Codex | Claude Code | Hermes | Trae CN | ChatGPT |
+|---|---|---|---|---|---|
+| Local repo editing | yes | yes | yes | yes | no direct local runtime |
+| Skill/procedure packaging | `SKILL.md` folders | `CLAUDE.md` plus slash commands | `SKILL.md` folders and native skills | global `SKILL.md` folders plus project instructions | Project instructions plus files |
+| Progressive loading | skills and references | imports, commands, referenced files | skills and references | global skills plus project `AGENTS.md` / `CLAUDE.md` imports | project files / knowledge |
+| Runtime install | managed copy to `~/.codex/skills` | managed block plus files under `~/.claude` | managed copy to `~/.hermes/skills` | managed copy to `~/.trae-cn/skills` | manual import |
+| Local scripts | yes | yes | yes | yes | no |
+| Hard pre-tool guard | no generic Foundry hook assumed | possible with Claude Code hooks | no generic Foundry hook assumed | no generic Foundry hook assumed | no |
+| Evidence recording | local script | local script or optional hook | local script | local script | manual/exported summary |
+| Best fit | full local loop | full local loop plus optional hook experiments | full local loop while preserving native learning | global-skill local loop with optional project overlays | soft consumption and manual sync |
 
 ## Lifecycle Stages
 
@@ -64,6 +64,7 @@ After locating Agent Foundry, validate Core markers such as `workflows/harvest-p
 | Codex | Use `practice-harvester` skill with references. Can edit canonical repo and run scripts. |
 | Claude Code | Use `CLAUDE.md` routing and slash commands. Can edit canonical repo and run scripts. |
 | Hermes | Use managed `practice-harvester` skill. Native Hermes memory or generated skills are candidate inputs, not replacements for canonical records. |
+| Trae CN | Use managed global Skills under `~/.trae-cn/skills`; project `AGENTS.md` / `CLAUDE.md` imports supply project-specific contracts. |
 | ChatGPT | Use project instructions and knowledge files to produce candidates. A local agent or human must apply repo changes. |
 
 Invariant: candidates are not active records until the user approves them.
@@ -89,6 +90,7 @@ Publishing converts active canonical practices and assets into agent-specific do
 | Codex | `adapters/codex/skills/*` then managed copy to `~/.codex/skills`. |
 | Claude Code | `adapters/claude-code/CLAUDE.md` and commands, then managed block/files under `~/.claude`. |
 | Hermes | `adapters/hermes/skills/*` then managed copy to `~/.hermes/skills`. |
+| Trae CN | `adapters/trae/skills/*` then managed copy to `~/.trae-cn/skills`. |
 | ChatGPT | `adapters/chatgpt/custom-instructions.md` and `adapters/chatgpt/knowledge/*`; user manually imports into a Project or Custom GPT. |
 
 Publish checks include `scripts/check_consistency.py`, `scripts/check_adapter_quality.py`, and `scripts/check_activation.py`.
