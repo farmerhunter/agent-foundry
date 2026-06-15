@@ -1013,8 +1013,24 @@ Current GitHub records:
 | Record | Purpose | Status |
 | --- | --- | --- |
 | #134 | AF-7 Epic for runtime adapter framework and Trae support. | In Progress |
-| #135 | Baseline PR for AF-7 planning, Trae adapter support, live Trae apply, and first runtime validation. | Merged |
+| #135 | Historical baseline batch PR. This merged design, implementation, live Trae apply, and first validation before the child-issue plan was reconstructed. Do not use it as the AF-7 planning model. | Merged |
 | #136 | Evidence issue for real Trae global Skill discovery, role UX, project instruction interaction, and project-overlay need. | In Progress |
+| #138 | Corrective planning issue to reconstruct the AF-7 child issue plan and governance record. | In Progress |
+| #139 | Review issue for auditing the merged #135 baseline scope and residual risks. | Ready |
+| #140 | Decision issue for the Trae user-facing role invocation and project-overlay contract. | Ready |
+| #141 | Task issue for runtime adapter profile and selected-output contract hardening. | Inbox |
+| #142 | Task issue for Trae sync, refresh, and repair UX validation. | Inbox |
+| #143 | Task issue for project-overlay compatibility and multi-agent coordination scenarios. | Inbox |
+| #144 | Final AF-7 acceptance gate and Epic readiness review. | Inbox |
+
+Child issue dependency order:
+
+1. #138 repairs the Epic planning surface and records the governance correction.
+2. #139 audits the already-merged #135 baseline before downstream hardening.
+3. #136 supplies Trae runtime and UX evidence; #140 consumes that evidence for the user-facing contract decision.
+4. #141 follows #139 for adapter contract hardening.
+5. #142 and #143 follow #136 plus #140 for sync/repair UX and project-overlay/multi-agent scenarios.
+6. #144 reviews #136 and #138 through #143 before any AF-7 completion or Epic closure decision.
 
 Acceptance criteria:
 
@@ -1023,8 +1039,9 @@ Acceptance criteria:
 - Existing multi-agent assets can project into Trae without duplicating canonical logic.
 - Project overlays remain optional and separated from global setup.
 - Runtime status distinguishes canonical, generated, installed, project, unmanaged, stale, and conflict states.
-- #134 drives AF-7 runtime adapter framework and Trae support.
+- #134 drives AF-7 runtime adapter framework and Trae support through child issues #136 and #138 through #144.
 - Existing former-AF7 capability-hardening records are renumbered to AF-8 and held until AF-7 completes.
+- No additional AF-7 implementation work starts from the Epic or the historical baseline PR alone; every new implementation, evidence, decision, or review step must enter through a scoped child issue.
 - No memory-system directories, schemas, storage, MCP tools, or design work are introduced.
 
 ### AF-8 / M8: Capability System Hardening
@@ -1204,8 +1221,11 @@ Expected scope will be defined by AF-10 and AF-11. Until then, memory-system imp
 1. Treat AF-6 as merged and complete through #116 and #105.
 2. Treat the Trae/runtime adapter framework work as the active AF-7 stage.
 3. Use #134 as the AF-7 runtime adapter framework and Trae support Epic.
-4. Use #136 as the next AF-7 evidence issue for Trae global Skill discovery and role UX.
-5. Keep #119 through #127 held as AF-8 capability-system hardening records.
-6. Keep the existing AF-8 implementation PRs held until AF-7 is complete or the user explicitly resumes them.
-7. Keep AF-9 advanced capability-pack discovery out of implementation until AF-8 hardening evidence is accepted.
-8. Do not begin AF-10/AF-11 memory-system readiness or implementation-home work until explicitly authorized by the user.
+4. Use #138 to complete the AF-7 governance repair and reconstructed child issue plan.
+5. Use #139 and #140 as the next Ready AF-7 review/decision gates before downstream implementation.
+6. Keep #141 through #143 in Inbox until their dependency gates are satisfied.
+7. Use #144 as the final AF-7 readiness review before any Epic completion decision.
+8. Keep #119 through #127 held as AF-8 capability-system hardening records.
+9. Keep the existing AF-8 implementation PRs held until AF-7 is complete or the user explicitly resumes them.
+10. Keep AF-9 advanced capability-pack discovery out of implementation until AF-8 hardening evidence is accepted.
+11. Do not begin AF-10/AF-11 memory-system readiness or implementation-home work until explicitly authorized by the user.
