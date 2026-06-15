@@ -1021,6 +1021,7 @@ Current GitHub records:
 | #141 | Task issue for runtime adapter profile and selected-output contract hardening. | Inbox |
 | #142 | Task issue for Trae sync, refresh, and repair UX validation. | Inbox |
 | #143 | Task issue for project-overlay compatibility and multi-agent coordination scenarios. | Inbox |
+| #145 | Task issue for Trae SOLO mode and role automation planning output. | Inbox |
 | #144 | Final AF-7 acceptance gate and Epic readiness review. | Inbox |
 
 Child issue dependency order:
@@ -1030,7 +1031,8 @@ Child issue dependency order:
 3. #136 supplies Trae runtime and UX evidence; #140 consumes that evidence for the user-facing contract decision.
 4. #141 follows #139 for adapter contract hardening.
 5. #142 and #143 follow #136 plus #140 for sync/repair UX and project-overlay/multi-agent scenarios.
-6. #144 reviews #136 and #138 through #143 before any AF-7 completion or Epic closure decision.
+6. #145 follows #140 and #143 if Trae SOLO is accepted as the complex multi-role orchestration path.
+7. #144 reviews #136 and #138 through #143 plus #145 before any AF-7 completion or Epic closure decision.
 
 Acceptance criteria:
 
@@ -1224,8 +1226,9 @@ Expected scope will be defined by AF-10 and AF-11. Until then, memory-system imp
 4. Use #138 to complete the AF-7 governance repair and reconstructed child issue plan.
 5. Use #139 and #140 as the next Ready AF-7 review/decision gates before downstream implementation.
 6. Keep #141 through #143 in Inbox until their dependency gates are satisfied.
-7. Use #144 as the final AF-7 readiness review before any Epic completion decision.
-8. Keep #119 through #127 held as AF-8 capability-system hardening records.
-9. Keep the existing AF-8 implementation PRs held until AF-7 is complete or the user explicitly resumes them.
-10. Keep AF-9 advanced capability-pack discovery out of implementation until AF-8 hardening evidence is accepted.
-11. Do not begin AF-10/AF-11 memory-system readiness or implementation-home work until explicitly authorized by the user.
+7. Keep #145 in Inbox until #140 accepts the Trae role/overlay contract and #143 validates SOLO versus fallback behavior.
+8. Use #144 as the final AF-7 readiness review before any Epic completion decision.
+9. Keep #119 through #127 held as AF-8 capability-system hardening records.
+10. Keep the existing AF-8 implementation PRs held until AF-7 is complete or the user explicitly resumes them.
+11. Keep AF-9 advanced capability-pack discovery out of implementation until AF-8 hardening evidence is accepted.
+12. Do not begin AF-10/AF-11 memory-system readiness or implementation-home work until explicitly authorized by the user.
