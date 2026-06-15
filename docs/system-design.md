@@ -16,7 +16,7 @@ discover repeated work and reusable lessons
   -> review and improve
 ```
 
-See docs/lifecycle-compatibility.md for how this loop adapts across Codex, Claude Code, Hermes, and ChatGPT from harvest through activation, evidence, and review.
+See docs/lifecycle-compatibility.md for how this loop adapts across Codex, Claude Code, Hermes, and ChatGPT from harvest through activation, evidence, and review. See docs/runtime-adapter-framework-and-trae.md for the proposed AF-7 runtime adapter framework and Trae support model.
 
 ## Core Principle
 
@@ -354,7 +354,7 @@ Standard upgrade checklist:
 - run at least one real workflow smoke test;
 - verify another deployment can pull/sync the result;
 - record residual risks and intentionally deferred deployments;
-- keep AF-5 onboarding, AF-7 capability-system hardening, and later memory-system planning out of the upgrade unless explicitly scoped.
+- keep AF-5 onboarding, AF-7 runtime adapter framework work, AF-8 capability-system hardening, and later memory-system planning out of the upgrade unless explicitly scoped.
 
 Future split options:
 
