@@ -1008,6 +1008,14 @@ Design areas:
   - Show whether canonical records, generated adapters, installed Trae files, and project overlays are fresh.
   - Provide repair actions in user terms: pull, publish adapters, dry-run install, apply install, manual import, or reopen Trae.
 
+Current GitHub records:
+
+| Record | Purpose | Status |
+| --- | --- | --- |
+| #134 | AF-7 Epic for runtime adapter framework and Trae support. | In Progress |
+| #135 | Baseline PR for AF-7 planning, Trae adapter support, live Trae apply, and first runtime validation. | Merged |
+| #136 | Evidence issue for real Trae global Skill discovery, role UX, project instruction interaction, and project-overlay need. | In Progress |
+
 Acceptance criteria:
 
 - Trae is represented as a target runtime in profiles, docs, validation, and status.
@@ -1196,7 +1204,8 @@ Expected scope will be defined by AF-10 and AF-11. Until then, memory-system imp
 1. Treat AF-6 as merged and complete through #116 and #105.
 2. Treat the Trae/runtime adapter framework work as the active AF-7 stage.
 3. Use #134 as the AF-7 runtime adapter framework and Trae support Epic.
-4. Rename and hold #119 through #127 as AF-8 capability-system hardening records.
-5. Keep the existing AF-8 implementation PRs held until AF-7 is complete or the user explicitly resumes them.
-6. Keep AF-9 advanced capability-pack discovery out of implementation until AF-8 hardening evidence is accepted.
-7. Do not begin AF-10/AF-11 memory-system readiness or implementation-home work until explicitly authorized by the user.
+4. Use #136 as the next AF-7 evidence issue for Trae global Skill discovery and role UX.
+5. Keep #119 through #127 held as AF-8 capability-system hardening records.
+6. Keep the existing AF-8 implementation PRs held until AF-7 is complete or the user explicitly resumes them.
+7. Keep AF-9 advanced capability-pack discovery out of implementation until AF-8 hardening evidence is accepted.
+8. Do not begin AF-10/AF-11 memory-system readiness or implementation-home work until explicitly authorized by the user.
