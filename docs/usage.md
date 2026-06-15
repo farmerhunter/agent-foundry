@@ -8,7 +8,7 @@ This guide is for day-to-day use. You do not need to remember the internal workf
 
 ## How It Works
 
-Agent Foundry is a **local-first** system with separate Core, User Vault, and runtime layers. The public Core checkout contains workflows, schemas, scripts, templates, docs, and adapter profiles. Canonical practices, assets, indexes, imports, and shared usage aggregates live in the selected User Vault. Installed agent files under `~/.claude`, `~/.codex`, and `~/.hermes` are downstream copies.
+Agent Foundry is a **local-first** system with separate Core, User Vault, and runtime layers. The public Core checkout contains workflows, schemas, scripts, templates, docs, and adapter profiles. Canonical practices, assets, indexes, imports, and shared usage aggregates live in the selected User Vault. Installed agent files under `~/.claude`, `~/.codex`, `~/.hermes`, and `~/.trae-cn` are downstream copies.
 
 ```text
 work session or external skill
@@ -20,7 +20,7 @@ work session or external skill
   -> use short commands to invoke assets
 ```
 
-工作方式：Agent Foundry 是本地优先的系统，并区分 Core、User Vault、runtime 三层。public Core checkout 保存 workflows、schemas、scripts、templates、docs 和 adapter profiles。canonical practices、assets、indexes、imports 和共享 usage aggregate 存在选中的 User Vault。`~/.claude`、`~/.codex`、`~/.hermes` 下的文件是下游副本。
+工作方式：Agent Foundry 是本地优先的系统，并区分 Core、User Vault、runtime 三层。public Core checkout 保存 workflows、schemas、scripts、templates、docs 和 adapter profiles。canonical practices、assets、indexes、imports 和共享 usage aggregate 存在选中的 User Vault。`~/.claude`、`~/.codex`、`~/.hermes`、`~/.trae-cn` 下的文件是下游副本。
 
 ---
 
@@ -72,7 +72,7 @@ python3 scripts/foundry_config.py write --core-root . --vault-root ~/.agent-foun
 python3 scripts/foundry_config.py status
 python3 scripts/runtime_manifest.py init
 python3 scripts/runtime_manifest.py detect
-python3 scripts/runtime_manifest.py enable claude-code   # or codex, hermes
+python3 scripts/runtime_manifest.py enable claude-code   # or codex, hermes, trae
 python3 scripts/install_foundry.py --apply
 ```
 

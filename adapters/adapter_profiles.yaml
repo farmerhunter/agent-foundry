@@ -90,6 +90,33 @@ adapters:
       references: "Full operational references similar to Codex adapter."
       canonical_mapping_required: true
 
+  trae:
+    target: "Trae CN"
+    direct_programming_agent: true
+    fidelity: full
+    supports:
+      - skill_folder
+      - SKILL.md
+      - global_skills
+      - project_instruction_import
+      - progressive_disclosure
+    outputs:
+      - adapters/trae/skills/agent-foundry/
+    included_domains: [meta, governance, runtime, architecture, agent-collaboration, implementation, testing, debugging, product]
+    command_vocabulary:
+      harvest: ["harvest practices", "做一次 harvest practice", "提炼实践", "沉淀经验"]
+      discover_assets: ["discover assets", "发现可打包资产"]
+      import: ["import skill <source>", "导入这个 skill <source>"]
+      publish: ["publish practices", "发布 practices"]
+      review: ["review practices", "检查 skill rot"]
+      review_assets: ["review assets", "检查 asset rot"]
+      refresh: ["refresh practices and assets", "刷新practices和assets"]
+    transform_policy:
+      skill_body: "Global Trae Skill dispatcher that routes to Agent Foundry canonical practices and assets."
+      global_install_path: "~/.trae-cn/skills"
+      project_overlay: "Use project-level Trae output only when the project needs extra local contract text."
+      canonical_mapping_required: true
+
   chatgpt:
     target: "ChatGPT Projects or Custom GPT"
     direct_programming_agent: true
