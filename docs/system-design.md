@@ -759,7 +759,7 @@ Rejected-as-pack for this candidate:
 - Executing helpers from Tiny IPA, pack staging, or canonical Vault payload paths after import.
 - Packaging Tiny IPA design notes as active Agent Foundry practices without a separate harvest review.
 
-The candidate pack should therefore be evaluated as a reviewed snapshot: evidence from Tiny IPA, optional public pack fixture, stage-only included records, inert executable payload declarations, no runtime install, and no private path leakage. If later implementation imports the pack, the selected User Vault owns the resulting records and payload metadata; the pack remains provenance and update-comparison evidence, not a live authority.
+The candidate pack should therefore be evaluated as a reviewed snapshot: evidence from Tiny IPA, optional public pack fixture, deployable candidate practice and asset records, no executable payload metadata in the current manifest, no runtime install, and no private path leakage. If later implementation imports the pack, the selected User Vault owns the resulting records; the pack remains provenance and update-comparison evidence, not a live authority. Helper scripts remain deferred evidence until managed helper install, dependency checks, permissions, receipts, and rollback behavior are implemented.
 
 ### AF-6 Complete Install And Pack Lifecycle Boundary
 
@@ -792,6 +792,132 @@ Non-new-install pack update checks should answer:
 - Does the change belong inside this pack's selected contract, or is it ordinary Vault evolution that should not force a pack version bump?
 
 The first optional pack validation case is the multi-agent collaboration pack. It should prove the generic pack lifecycle without turning Tiny IPA into a hidden dependency, without copying product-project defaults into Core, and without executing helper scripts until the managed helper install boundary is implemented.
+
+#### AF-6 Install UX Contract (#98)
+
+AF-6 uses a small command map rather than a wizard-first design. Scripts may later be wrapped by a friendlier CLI, but the contract below is the source of truth for implementation.
+
+| User intent | Command shape | Writes allowed | Required report |
+| --- | --- | --- | --- |
+| Inspect an existing install | `python3 scripts/sync_status.py` | None | Core/Vault roots, root validation, generated output, deployed packs, runtime manifest, selected-output receipt, manual targets, stale references, next safe actions. |
+| Dry-run a fresh install | `python3 scripts/install_foundry.py --fresh-install --vault-root <path>` | None | Proposed Core root, Vault root, bootstrap pack, generated output root, runtime targets, manual ChatGPT status, and what `--apply` would write. |
+| Create/select Vault and publish generated output | `python3 scripts/install_foundry.py --fresh-install --vault-root <path> --apply` | Vault initialization when missing, bootstrap deployment, generated adapter output, machine-local locator unless suppressed. | Same as dry-run plus created/skipped Vault markers, bootstrap deployment result, generated output manifest, locator write status, first safe command. |
+| Install managed runtime copies | Add `--runtime-apply` after a successful dry-run | Managed runtime targets declared in `runtime/local/runtime_manifest.yaml`; install receipt. | Per-target managed/skipped/manual state, receipt path, checked files, rollback visibility, ChatGPT manual import note. |
+| Refresh existing generated output | `python3 scripts/publish_adapters.py --output-root <generated-root> --apply` or future wrapper | Generated output only. | Selected Vault, active records included, manifest/hash, output root, no runtime write unless a later install step runs. |
+| Repair or reinstall runtime copies | `python3 scripts/install_foundry.py --adapter-root <generated-root> --apply` after status/review | Managed runtime targets only. | Selected-output receipt, per-target installed files, skipped/manual targets, stale-reference scan result. |
+
+Default path policy:
+
+- Core root is the public Agent Foundry checkout that passes Core markers.
+- Vault root must be explicit for first install until a reviewed account/profile identity exists. A future default may be `~/.agent-foundry/vault/agent-foundry-vault-<account>`, but scripts must display it before writes and allow override.
+- Generated output default for fresh install is machine-local under `~/.agent-foundry/generated/agent-foundry-adapters`; tracked Core `adapters/` remain distribution/reference output, not the selected split runtime authority.
+- `~/.agent-foundry/config.yaml` is written only in apply mode and remains a machine-local locator, not canonical knowledge.
+
+Install preflight must classify writes before mutation:
+
+| Class | Examples | Write rule |
+| --- | --- | --- |
+| Core | public scripts, schemas, templates, docs | Read-only during install/status. |
+| Vault | blank Vault markers, bootstrap records, indexes, pack metadata | Written only by explicit `--apply` after root validation and operation-context report. |
+| Generated | selected generated adapter output | Written by publish/refresh apply; safe to delete/regenerate only under generated-output root. |
+| Runtime | Codex, Claude Code, Hermes managed paths; ChatGPT manual import | Managed targets need dry-run visibility, markers or adoption policy, receipt, and rollback path. ChatGPT remains manual. |
+| Local locator | `~/.agent-foundry/config.yaml` | Written only after explicit apply; backup or report previous value when overwriting. |
+
+Runtime apply requires a stronger gate than generated-output apply. It may proceed without a separate prompt only when the target is enabled in the local runtime manifest, the destination is already managed or safely adoptable according to runtime policy, the dry-run report names every changed path, and rollback receipt behavior is available. If any target is unmanaged, ambiguous, shared without managed block, or missing rollback visibility, the command must stop or route to `needs:human`.
+
+Failure and recovery behavior:
+
+- If Core or Vault root validation fails, stop before any write and print the failing markers.
+- If bootstrap deployment fails, preserve an initialized blank Vault if it is valid and report how to rerun; do not continue to generated output or runtime install.
+- If generated output publish fails, do not install runtimes.
+- If runtime install fails after some managed targets succeed, write or preserve receipts for successful targets when possible and report partial state.
+- Existing install repair must start with report-only status. Repair actions should be explicit follow-up commands, not hidden writes inside status.
+
+Downstream implementation work:
+
+- #102 owns improving existing install status/repair reporting.
+- #106 owns pack plan/check report behavior.
+- #100/#101 own optional pack apply and update behavior.
+- #104 owns disable/rollback/restore behavior.
+
+#### AF-6 Pack State Metadata Contract (#99)
+
+The selected User Vault should record deployed pack state under a Vault-owned metadata area:
+
+```text
+packs/deployed-pack-index.yaml
+```
+
+This file is canonical Vault metadata, but it is not the authority for whether a practice or asset is active. Practice and asset records plus their indexes remain the canonical source for current capability content. Pack metadata exists to support provenance, status, update comparison, conflict detection, disable/retire planning, and rollback reporting.
+
+Minimal `deployed-pack-index.yaml` shape:
+
+```yaml
+schema_version: 1
+updated: YYYY-MM-DD
+deployed_packs:
+  - pack_id: pack.example
+    title: Example Pack
+    version: 0.1.0
+    lifecycle_status: deployed
+    distribution_type: optional_capability
+    deployed_at: YYYY-MM-DDTHH:MM:SSZ
+    source:
+      kind: local_path | git_ref | archive | url
+      locator: "<path-or-url-or-ref>"
+      manifest_sha256: "<sha256>"
+      reviewed_by: human | architect | reviewer
+    compatibility:
+      core_schema_versions: []
+      vault_layout_versions: []
+    records:
+      - id: PRACTICE-001
+        kind: practice
+        path: practices/domain/file.md
+        imported_version: "1"
+        imported_sha256: "<sha256>"
+        deployed_sha256: "<sha256>"
+        lifecycle_status_at_import: candidate
+        current_state: unchanged | locally_modified | missing | retired | archived | unknown
+        membership_role: primary | supporting | optional
+        activation_default: candidate | proposed | active | inactive
+    executable_payloads:
+      - id: helper.example
+        install_boundary: managed_runtime_copy_required
+        source_sha256: "<sha256>"
+        install_state: blocked | not_installed | installed | manual
+    decisions:
+      conflict_policy: fail_closed | merge_required | skip_if_present
+      notes: []
+```
+
+Metadata rules:
+
+1. A deployed pack record is provenance and comparison evidence. It does not override the current lifecycle status inside a practice or asset record.
+2. Ordinary reviewed Vault CRUD remains valid after pack deployment. If a user edits a pack-sourced record, that edited record is canonical user state.
+3. Later pack updates compare against `imported_sha256`, `deployed_sha256`, current file hash, current index entry, and current lifecycle state. Local edits produce a merge proposal, not overwrite.
+4. Same pack id plus same version plus different `manifest_sha256` fails closed because the snapshot is not reproducible.
+5. Same record id with unrelated provenance or incompatible kind fails closed as an id collision.
+6. A record may appear in multiple packs. Membership metadata is many-to-many provenance, not ownership.
+7. Retiring, archiving, or disabling a pack should prefer lifecycle changes and regeneration over deletion. Pack metadata may mark records as disabled or retired by pack operation, but it must not erase user-created records.
+8. Remote source locators are provenance only unless a later trust model makes a registry authoritative. AF-6 supports explicit known sources, not marketplace discovery.
+9. Executable payload metadata must remain blocked or not-installed until managed helper install, dependency, permission, receipt, and rollback behavior exist.
+
+Index and record relationship:
+
+| Surface | Role |
+| --- | --- |
+| `practices/` and `assets/` records | Current canonical content and lifecycle state. |
+| `indexes/practice_index.yaml` and `indexes/asset_index.yaml` | Search and routing indexes for current records. |
+| `packs/deployed-pack-index.yaml` | Pack provenance, imported snapshot comparison, and update/disable planning. |
+| Generated adapters or runtime skills | Downstream output from active or selected Vault records; never read pack snapshots directly. |
+
+Downstream implementation work:
+
+- #106 reads this metadata for generic plan/check.
+- #100 writes this metadata during optional pack apply.
+- #101 uses it for update comparison and local-edit detection.
+- #104 uses it for disable, retire, rollback, and restore reporting.
 
 ## Operating Context Separation
 

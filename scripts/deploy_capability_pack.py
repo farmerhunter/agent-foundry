@@ -47,6 +47,7 @@ REQUIRED_RECORD_FIELDS = {
 }
 
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+SAFE_SEGMENT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
 
 
 @dataclass(frozen=True)
@@ -79,65 +80,150 @@ def unquote(value: str) -> str:
     return value
 
 
-def top_level_scalars(text: str) -> dict[str, str]:
-    data: dict[str, str] = {}
+def parse_inline_list(value: str) -> list[str]:
+    value = value.strip()
+    if value == "[]":
+        return []
+    if not (value.startswith("[") and value.endswith("]")):
+        raise ValueError(f"unsupported inline list: {value}")
+    return [unquote(item.strip()) for item in value[1:-1].split(",") if item.strip()]
+
+
+def parse_scalar(value: str) -> str | list[str]:
+    value = value.strip()
+    if value.startswith("["):
+        return parse_inline_list(value)
+    return unquote(value)
+
+
+def parse_simple_yaml(text: str) -> dict[str, object]:
+    parsed_lines: list[tuple[int, str]] = []
     for raw in text.splitlines():
-        if raw.startswith(" ") or ":" not in raw:
+        if not raw.strip() or raw.lstrip().startswith("#"):
             continue
-        key, value = raw.split(":", 1)
-        value = value.strip()
-        if value:
-            data[key.strip()] = unquote(value)
+        indent = len(raw) - len(raw.lstrip(" "))
+        if indent % 2:
+            raise ValueError(f"unsupported odd indentation: {raw}")
+        parsed_lines.append((indent, raw.strip()))
+
+    def parse_mapping(index: int, indent: int) -> tuple[dict[str, object], int]:
+        data: dict[str, object] = {}
+        while index < len(parsed_lines):
+            line_indent, stripped = parsed_lines[index]
+            if line_indent < indent:
+                break
+            if line_indent > indent:
+                raise ValueError(f"unexpected indentation: {stripped}")
+            if stripped.startswith("- "):
+                break
+            if ":" not in stripped:
+                raise ValueError(f"expected mapping entry: {stripped}")
+            key, value = stripped.split(":", 1)
+            key = key.strip()
+            if not key:
+                raise ValueError("empty mapping key")
+            if key in data:
+                raise ValueError(f"duplicate mapping key: {key}")
+            value = value.strip()
+            index += 1
+            if value:
+                data[key] = parse_scalar(value)
+                continue
+            if index >= len(parsed_lines) or parsed_lines[index][0] <= line_indent:
+                data[key] = {}
+                continue
+            child_indent, child = parsed_lines[index]
+            if child_indent != line_indent + 2:
+                raise ValueError(f"unexpected child indentation for {key}")
+            if child.startswith("- "):
+                child_value, index = parse_sequence(index, child_indent)
+            else:
+                child_value, index = parse_mapping(index, child_indent)
+            data[key] = child_value
+        return data, index
+
+    def parse_sequence(index: int, indent: int) -> tuple[list[object], int]:
+        items: list[object] = []
+        while index < len(parsed_lines):
+            line_indent, stripped = parsed_lines[index]
+            if line_indent < indent:
+                break
+            if line_indent > indent:
+                raise ValueError(f"unexpected sequence indentation: {stripped}")
+            if not stripped.startswith("- "):
+                break
+            rest = stripped[2:].strip()
+            index += 1
+            if not rest:
+                if index >= len(parsed_lines) or parsed_lines[index][0] <= line_indent:
+                    items.append({})
+                    continue
+                if parsed_lines[index][0] != line_indent + 2:
+                    raise ValueError("unexpected list child indentation")
+                if parsed_lines[index][1].startswith("- "):
+                    item, index = parse_sequence(index, line_indent + 2)
+                else:
+                    item, index = parse_mapping(index, line_indent + 2)
+                items.append(item)
+                continue
+            if ":" not in rest:
+                items.append(parse_scalar(rest))
+                continue
+            key, value = rest.split(":", 1)
+            item: dict[str, object] = {key.strip(): parse_scalar(value.strip()) if value.strip() else {}}
+            if index < len(parsed_lines) and parsed_lines[index][0] == line_indent + 2:
+                continuation, index = parse_mapping(index, line_indent + 2)
+                for cont_key, cont_value in continuation.items():
+                    if cont_key in item:
+                        raise ValueError(f"duplicate mapping key: {cont_key}")
+                    item[cont_key] = cont_value
+            items.append(item)
+        return items, index
+
+    data, index = parse_mapping(0, 0)
+    if index != len(parsed_lines):
+        raise ValueError("unexpected trailing YAML structure")
     return data
+
+
+def scalar_string(value: object) -> str:
+    if isinstance(value, str):
+        return value
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, list):
+        return "[" + ", ".join(str(item) for item in value) + "]"
+    return ""
+
+
+def top_level_scalars(text: str) -> dict[str, str]:
+    parsed = parse_simple_yaml(text)
+    return {key: scalar_string(value) for key, value in parsed.items() if not isinstance(value, dict)}
 
 
 def section_scalars(text: str, section: str) -> dict[str, str]:
-    data: dict[str, str] = {}
-    in_section = False
-    for raw in text.splitlines():
-        if raw == f"{section}:":
-            in_section = True
-            continue
-        if in_section and raw and not raw.startswith(" "):
-            break
-        if in_section and raw.startswith("  ") and ":" in raw:
-            key, value = raw.strip().split(":", 1)
-            data[key] = unquote(value)
-    return data
+    parsed = parse_simple_yaml(text)
+    data = parsed.get(section, {})
+    if not isinstance(data, dict):
+        return {}
+    return {key: scalar_string(value) for key, value in data.items() if not isinstance(value, dict)}
 
 
 def list_entries(text: str, section: str) -> list[dict[str, str]]:
-    entries: list[dict[str, str]] = []
-    current: dict[str, str] | None = None
-    in_section = False
-    saw_inline_empty = False
-
-    for raw in text.splitlines():
-        if raw.startswith(f"{section}:"):
-            in_section = True
-            saw_inline_empty = raw.split(":", 1)[1].strip() == "[]"
+    parsed = parse_simple_yaml(text)
+    entries = parsed.get(section, [])
+    if entries == {}:
+        return []
+    if not isinstance(entries, list):
+        return []
+    result: list[dict[str, str]] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
             continue
-        if in_section and raw and not raw.startswith(" "):
-            break
-        if not in_section or saw_inline_empty:
-            continue
-        stripped = raw.strip()
-        if raw.startswith("  - "):
-            if current:
-                entries.append(current)
-            current = {}
-            item = stripped[2:].strip()
-            if ":" in item:
-                key, value = item.split(":", 1)
-                current[key.strip()] = unquote(value)
-            continue
-        if current is not None and raw.startswith("    ") and not raw.startswith("      ") and ":" in stripped:
-            key, value = stripped.split(":", 1)
-            current[key.strip()] = unquote(value)
-
-    if current:
-        entries.append(current)
-    return entries
+        result.append({key: scalar_string(value) for key, value in entry.items() if not isinstance(value, dict)})
+    return result
 
 
 def sha256(path: Path) -> str:
@@ -149,14 +235,24 @@ def sha256_text(text: str) -> str:
 
 
 def inline_list(value: str) -> list[str]:
-    value = value.strip()
-    if not (value.startswith("[") and value.endswith("]")):
+    try:
+        return parse_inline_list(value)
+    except ValueError:
         return []
-    return [item.strip().strip('"').strip("'") for item in value[1:-1].split(",") if item.strip()]
 
 
 def yaml_string(value: str) -> str:
     return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def safe_segment(value: str, label: str, errors: list[str], fallback: str) -> str:
+    if not value:
+        errors.append(f"{label} missing")
+        return fallback
+    if not SAFE_SEGMENT_RE.match(value):
+        errors.append(f"{label} must be a safe single path segment: {value}")
+        return fallback
+    return value
 
 
 def destination_for(vault_root: Path, kind: str, source_path: Path) -> tuple[Path, dict[str, str], list[str]]:
@@ -167,9 +263,7 @@ def destination_for(vault_root: Path, kind: str, source_path: Path) -> tuple[Pat
         domain = metadata.get("domain", "")
         if not item_id:
             errors.append(f"{source_path}: practice missing id")
-        if not domain:
-            errors.append(f"{source_path}: practice missing domain")
-            domain = "uncategorized"
+        domain = safe_segment(domain, f"{source_path}: practice domain", errors, "uncategorized")
         return (
             vault_root / "practices" / domain / source_path.name,
             {
@@ -186,9 +280,7 @@ def destination_for(vault_root: Path, kind: str, source_path: Path) -> tuple[Pat
         asset_type = scan_yaml_field(source_path, "asset_type") or ""
         if not item_id:
             errors.append(f"{source_path}: asset missing id")
-        if not asset_type:
-            errors.append(f"{source_path}: asset missing asset_type")
-            asset_type = "asset"
+        asset_type = safe_segment(asset_type, f"{source_path}: asset_type", errors, "asset")
         directory = {"skill": "skills", "subagent": "subagents", "automation": "automations"}.get(
             asset_type, f"{asset_type}s"
         )
