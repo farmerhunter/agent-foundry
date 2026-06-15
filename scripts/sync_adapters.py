@@ -164,12 +164,14 @@ def sync_chatgpt(adapter_root: Path, dest: Path | None, apply: bool) -> list[tup
     src = adapter_root / "chatgpt"
     if not src.exists():
         raise SystemExit(f"Adapter source missing: {src}")
-    if dest is None:
-        print("ChatGPT has no default local runtime. Use these files manually:")
-        print(f"- {src / 'custom-instructions.md'}")
-        print(f"- {src / 'knowledge'}")
-        return []
-    return copytree_contents(src, dest, apply)
+    print("ChatGPT has no managed local runtime. Import these generated files manually:")
+    print(f"- {src / 'custom-instructions.md'}")
+    print(f"- {src / 'knowledge'}")
+    if dest is not None:
+        print(f"manual target destination ignored: {dest}")
+    if apply and dest is not None:
+        raise SystemExit("Refusing managed ChatGPT runtime write; ChatGPT remains manual-import only.")
+    return []
 
 
 def main() -> int:
