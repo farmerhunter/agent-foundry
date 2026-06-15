@@ -9,6 +9,9 @@ import sys
 import tempfile
 from pathlib import Path
 
+import deploy_capability_pack as deploy_parser
+import plan_capability_pack as planner
+
 
 ROOT = Path(__file__).resolve().parents[1]
 DEPLOY = ROOT / "scripts" / "deploy_capability_pack.py"
@@ -262,10 +265,68 @@ def write_malformed_deployed_index(vault: Path) -> None:
     )
 
 
+def parser_contract_errors(base: Path) -> list[str]:
+    errors: list[str] = []
+    valid = deploy_parser.parse_simple_yaml(
+        "\n".join(
+            [
+                'title: "Quoted title"',
+                "compatibility:",
+                "  vault_layout_versions: [1, 2]",
+                "deployed_packs:",
+                '  - title: "Reordered pack"',
+                '    version: "0.1.0"',
+                "    pack_id: pack.reordered",
+                "    source:",
+                '      manifest_sha256: "' + ("a" * 64) + '"',
+                "    records:",
+                "      - deployed_sha256: " + ("b" * 64),
+                "        id: RECORD-001",
+                "",
+            ]
+        )
+    )
+    if valid.get("title") != "Quoted title":
+        errors.append("parser quoted scalar contract failed")
+    compatibility = valid.get("compatibility", {})
+    if not isinstance(compatibility, dict) or compatibility.get("vault_layout_versions") != ["1", "2"]:
+        errors.append("parser inline list contract failed")
+    packs = valid.get("deployed_packs", [])
+    if not isinstance(packs, list) or not isinstance(packs[0], dict) or packs[0].get("pack_id") != "pack.reordered":
+        errors.append("parser reordered sequence mapping contract failed")
+
+    invalid_cases = [
+        ("duplicate-key", "pack_id: one\npack_id: two\n", "duplicate mapping key"),
+        ("odd-indent", "deployed_packs:\n  - pack_id: one\n   version: 1\n", "unsupported odd indentation"),
+        ("malformed-nesting", "deployed_packs:\n  - pack_id: one\n      version: 1\n", "unexpected"),
+    ]
+    for name, text, expected in invalid_cases:
+        try:
+            deploy_parser.parse_simple_yaml(text)
+        except ValueError as exc:
+            if expected not in str(exc):
+                errors.append(f"{name}: expected error containing {expected!r}, got {exc}")
+        else:
+            errors.append(f"{name}: parser accepted malformed metadata")
+
+    vault = base / "parser-vault"
+    write_reordered_deployed_index(vault, "pack.reordered", "0.1.0", "a" * 64, "RECORD-001", "b" * 64)
+    records, metadata_errors = planner.deployed_pack_records(vault, "pack.reordered")
+    if metadata_errors or records.get("RECORD-001", {}).get("deployed_sha256") != "b" * 64:
+        errors.append(f"deployed index reordered parse failed: {metadata_errors} {records}")
+
+    write_deployed_index(vault, "pack.reordered", "0.1.0", "not-a-sha", "RECORD-001", "b" * 64)
+    records, metadata_errors = planner.deployed_pack_records(vault, "pack.reordered")
+    if records or "source.manifest_sha256 must be sha256" not in "; ".join(metadata_errors):
+        errors.append(f"deployed index invalid manifest hash did not fail closed: {metadata_errors} {records}")
+    return errors
+
+
 def main() -> int:
     errors: list[str] = []
     with tempfile.TemporaryDirectory(prefix="agent-foundry-pack-plan-") as tmp:
         base = Path(tmp)
+        errors.extend(parser_contract_errors(base))
         vault = base / "vault"
         errors.extend(expect("init-blank-vault", init_blank(vault), True, "Blank Vault initialized and validated."))
 
