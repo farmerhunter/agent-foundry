@@ -354,7 +354,7 @@ Standard upgrade checklist:
 - run at least one real workflow smoke test;
 - verify another deployment can pull/sync the result;
 - record residual risks and intentionally deferred deployments;
-- keep AF-5 onboarding and AF-7 memory implementation out of the upgrade unless explicitly scoped.
+- keep AF-5 onboarding, AF-7 capability-system hardening, and later memory-system planning out of the upgrade unless explicitly scoped.
 
 Future split options:
 
