@@ -285,8 +285,15 @@ def next_safe_actions(
         actions.append("select or initialize a Vault before harvesting, refreshing, or applying packs")
     if output_state != "ready":
         actions.append("regenerate selected Vault adapter output before runtime install or refresh")
-    if read_receipt(receipt_path) is None:
+    receipt = read_receipt(receipt_path)
+    if receipt is None:
         actions.append("run runtime install only after generated output dry-run/review; receipt is currently missing")
+    else:
+        receipt_state, _ = receipt_status(receipt)
+        if receipt_state == "selected-output-drift":
+            actions.append("review selected-output drift, regenerate generated output if needed, then dry-run runtime install before apply")
+        elif receipt_state == "selected-output-unknown":
+            actions.append("repair or recreate runtime install receipt only through reviewed install apply after generated output is ready")
     actions.append("treat ChatGPT as manual import unless a future managed target is explicitly implemented")
     return actions
 

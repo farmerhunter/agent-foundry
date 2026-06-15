@@ -129,6 +129,14 @@ def receipt_status(receipt: dict[str, Any]) -> tuple[str, list[str]]:
     if not isinstance(files, list) or not files:
         return "selected-output-unknown", ["receipt has no installed files"]
     problems: list[str] = []
+    manifest_text = str(receipt.get("adapter_manifest", ""))
+    manifest_path = Path(manifest_text).expanduser()
+    manifest_sha256 = str(receipt.get("adapter_manifest_sha256", ""))
+    if manifest_text and manifest_sha256:
+        if not manifest_path.exists():
+            problems.append(f"missing adapter_manifest {manifest_path}")
+        elif file_sha256(manifest_path) != manifest_sha256:
+            problems.append(f"changed adapter_manifest {manifest_path}")
     for entry in files:
         if not isinstance(entry, dict):
             problems.append("receipt has invalid installed file entry")
