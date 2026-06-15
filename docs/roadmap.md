@@ -1017,10 +1017,10 @@ Current GitHub records:
 | #136 | Evidence issue for real Trae global Skill discovery, role UX, project instruction interaction, and project-overlay need. | In Progress |
 | #138 | Corrective planning issue to reconstruct the AF-7 child issue plan and governance record. | In Progress |
 | #139 | Review issue for auditing the merged #135 baseline scope and residual risks. | Ready |
-| #140 | Decision issue for the Trae user-facing role invocation and project-overlay contract. | Ready |
+| #140 | Accepted decision for the Trae user-facing role invocation and project-overlay contract. | Done |
 | #141 | Task issue for runtime adapter profile and selected-output contract hardening. | Inbox |
-| #142 | Task issue for Trae sync, refresh, and repair UX validation. | Inbox |
-| #143 | Task issue for project-overlay compatibility and multi-agent coordination scenarios. | Inbox |
+| #142 | Task issue for Trae sync, refresh, and repair UX validation. | Ready |
+| #143 | Task issue for project-overlay compatibility and multi-agent coordination scenarios. | Ready |
 | #145 | Task issue for Trae SOLO mode and role automation planning output. | Inbox |
 | #144 | Final AF-7 acceptance gate and Epic readiness review. | Inbox |
 
@@ -1028,7 +1028,7 @@ Child issue dependency order:
 
 1. #138 repairs the Epic planning surface and records the governance correction.
 2. #139 audits the already-merged #135 baseline before downstream hardening.
-3. #136 supplies Trae runtime and UX evidence; #140 consumes that evidence for the user-facing contract decision.
+3. #136 supplies Trae runtime and UX evidence; #140 accepted the user-facing contract decision.
 4. #141 follows #139 for adapter contract hardening.
 5. #142 and #143 follow #136 plus #140 for sync/repair UX and project-overlay/multi-agent scenarios.
 6. #145 follows #140 and #143 if Trae SOLO is accepted as the complex multi-role orchestration path.
@@ -1224,9 +1224,9 @@ Expected scope will be defined by AF-10 and AF-11. Until then, memory-system imp
 2. Treat the Trae/runtime adapter framework work as the active AF-7 stage.
 3. Use #134 as the AF-7 runtime adapter framework and Trae support Epic.
 4. Use #138 to complete the AF-7 governance repair and reconstructed child issue plan.
-5. Use #139 and #140 as the next Ready AF-7 review/decision gates before downstream implementation.
-6. Keep #141 through #143 in Inbox until their dependency gates are satisfied.
-7. Keep #145 in Inbox until #140 accepts the Trae role/overlay contract and #143 validates SOLO versus fallback behavior.
+5. Use #139 as the next Review gate before #141 downstream hardening.
+6. Release #142 and #143 as the next Ready AF-7 validation tasks after accepted #140.
+7. Keep #145 in Inbox until #143 validates SOLO versus fallback behavior.
 8. Use #144 as the final AF-7 readiness review before any Epic completion decision.
 9. Keep #119 through #127 held as AF-8 capability-system hardening records.
 10. Keep the existing AF-8 implementation PRs held until AF-7 is complete or the user explicitly resumes them.
