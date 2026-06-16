@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Executable AF7 scenario matrix for capability-system ownership boundaries."""
+"""Executable AF8 scenario matrix for capability-system ownership boundaries."""
 
 from __future__ import annotations
 
@@ -324,7 +324,7 @@ def assert_stale_receipt_is_unknown(base: Path) -> None:
 
 def main() -> int:
     assert_matrix_contract()
-    with tempfile.TemporaryDirectory(prefix="agent-foundry-af7-scenarios.") as raw:
+    with tempfile.TemporaryDirectory(prefix="agent-foundry-af8-scenarios.") as raw:
         base = Path(raw)
         assert_status_baseline(base / "baseline")
         assert_missing_vault_and_output(base / "missing")
@@ -332,7 +332,7 @@ def main() -> int:
         assert_missing_manifest_read_only(base / "missing-manifest")
         assert_generated_output_states(base / "generated-states")
         assert_stale_receipt_is_unknown(base / "stale-receipt")
-    print(f"AF7 capability scenario matrix tests passed ({len(SCENARIOS)} scenarios).")
+    print(f"AF8 capability scenario matrix tests passed ({len(SCENARIOS)} scenarios).")
     return 0
 
 
