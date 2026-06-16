@@ -218,6 +218,48 @@ def main() -> int:
         generated_text = "\n".join(path.read_text(encoding="utf-8") for path in generated.rglob("*") if path.is_file())
         if "ASSET-COLLAB-002" not in generated_text:
             errors.append("selected-output-promoted-asset: generated output missing ASSET-COLLAB-002")
+        manifest_text = (generated / "adapter-publish-manifest.yaml").read_text(encoding="utf-8")
+        for expected in [
+            "generated_skill_artifacts:",
+            "adapter: codex",
+            "adapter: hermes",
+            "adapter: trae",
+            "asset_id: ASSET-COLLAB-002",
+            "path: trae/skills/role-automation-planner/SKILL.md",
+            "source_path: assets/skills/ASSET-COLLAB-002-role-automation-planner.asset.yaml",
+        ]:
+            if expected not in manifest_text:
+                errors.append(f"selected-output-promoted-asset: manifest missing {expected}")
+
+        manifest_path = generated / "adapter-publish-manifest.yaml"
+        manifest_without_artifact = "\n".join(
+            line
+            for line in manifest_text.splitlines()
+            if "role-automation-planner" not in line and "ASSET-COLLAB-002" not in line
+        )
+        manifest_path.write_text(manifest_without_artifact + "\n", encoding="utf-8")
+        missing_manifest_artifact_quality = run(
+            [
+                str(QUALITY),
+                "--core-root",
+                str(ROOT),
+                "--vault-root",
+                str(temp_vault),
+                "--surface",
+                "selected-output",
+                "--generated-root",
+                str(generated),
+            ]
+        )
+        errors.extend(
+            expect(
+                "selected-output-missing-manifest-skill-artifact",
+                missing_manifest_artifact_quality,
+                False,
+                "manifest missing generated skill artifact",
+            )
+        )
+        manifest_path.write_text(manifest_text, encoding="utf-8")
 
         codex_skill.unlink()
         missing_skill_quality = run(

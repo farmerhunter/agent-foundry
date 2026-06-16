@@ -262,6 +262,12 @@ def receipt_summary(receipt_path: Path) -> list[str]:
     ]
     for target, (target_state, target_problems, checked) in sorted(receipt_target_statuses(receipt).items()):
         lines.append(f"receipt target: {target} {target_state} checked={checked} problems={len(target_problems)}")
+        if target_state == "selected-output-drift":
+            lines.append(
+                f"receipt repair: {target} review generated output, run install dry-run, then apply only with runtime-write approval"
+            )
+            if target == "trae":
+                lines.append("receipt repair: trae writes ~/.trae-cn/skills and requires durable human approval before --apply")
     for problem in problems[:10]:
         lines.append(f"receipt detail: {problem}")
     if len(problems) > 10:
@@ -288,6 +294,13 @@ def next_safe_actions(
         actions.append("regenerate selected Vault adapter output before runtime install or refresh")
     if read_receipt(receipt_path) is None:
         actions.append("run runtime install only after generated output dry-run/review; receipt is currently missing")
+    else:
+        receipt = read_receipt(receipt_path)
+        if isinstance(receipt, dict):
+            state, _ = receipt_status(receipt)
+            if state == "selected-output-drift":
+                actions.append("repair selected-output drift by regenerating output, reviewing install dry-run, then applying approved managed runtime sync")
+                actions.append("for Trae, do not write ~/.trae-cn/skills unless durable human approval explicitly authorizes that runtime apply")
     actions.append("treat ChatGPT as manual import unless a future managed target is explicitly implemented")
     return actions
 

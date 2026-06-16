@@ -241,8 +241,37 @@ def expected_skill_path(generated_root: Path, adapter_id: str, slug: str) -> Pat
     return generated_root / adapter_id / "skills" / slug / "SKILL.md"
 
 
-def check_generated_skill_artifacts(generated_root: Path, vault_root: Path) -> list[str]:
+def manifest_skill_artifacts(manifest: Path) -> list[dict[str, str]]:
+    artifacts: list[dict[str, str]] = []
+    current: dict[str, str] | None = None
+    in_list = False
+    for raw in read(manifest).splitlines():
+        line = raw.rstrip()
+        if line.startswith("generated_skill_artifacts:"):
+            in_list = True
+            if line.split(":", 1)[1].strip() == "[]":
+                return []
+            continue
+        if in_list and line and not line.startswith(" "):
+            break
+        if not in_list:
+            continue
+        stripped = line.strip()
+        if stripped.startswith("- adapter:"):
+            if current:
+                artifacts.append(current)
+            current = {"adapter": stripped.split(":", 1)[1].strip().strip('"').strip("'")}
+        elif current is not None and stripped.startswith(("asset_id:", "slug:", "path:", "source_path:")):
+            key, value = stripped.split(":", 1)
+            current[key] = value.strip().strip('"').strip("'")
+    if current:
+        artifacts.append(current)
+    return artifacts
+
+
+def check_generated_skill_artifacts(generated_root: Path, vault_root: Path, manifest: Path) -> list[str]:
     errors: list[str] = []
+    manifest_artifacts = manifest_skill_artifacts(manifest)
     for record in active_skill_assets(vault_root):
         published_to = record.get("published_to", [])
         if not isinstance(published_to, list):
@@ -253,6 +282,27 @@ def check_generated_skill_artifacts(generated_root: Path, vault_root: Path) -> l
             ):
                 continue
             path = expected_skill_path(generated_root, adapter_id, str(record["slug"]))
+            rel_path = str(path.relative_to(generated_root))
+            matching_artifact = next(
+                (
+                    artifact
+                    for artifact in manifest_artifacts
+                    if artifact.get("adapter") == adapter_id
+                    and artifact.get("asset_id") == str(record["id"])
+                    and artifact.get("slug") == str(record["slug"])
+                ),
+                None,
+            )
+            if matching_artifact is None:
+                errors.append(
+                    f"Selected output skill artifact: {adapter_id} manifest missing generated skill artifact "
+                    f"for active skill asset {record['id']}"
+                )
+            elif matching_artifact.get("path") != rel_path:
+                errors.append(
+                    f"Selected output skill artifact: {adapter_id} manifest path mismatch for {record['id']}: "
+                    f"expected {rel_path}, got {matching_artifact.get('path', '')}"
+                )
             if not path.exists():
                 errors.append(
                     f"Selected output skill artifact: {adapter_id} missing generated SKILL.md "
@@ -385,7 +435,7 @@ def check_selected_output_surface(core_root: Path, vault_root: Path, generated_r
                 phrase = phrase.split("<", 1)[0].strip()
             if phrase and phrase not in text:
                 errors.append(f"Selected output coverage: {name} generated output missing command phrase: {phrase}")
-    errors.extend(check_generated_skill_artifacts(generated_root, vault_root))
+    errors.extend(check_generated_skill_artifacts(generated_root, vault_root, manifest))
     return errors
 
 
