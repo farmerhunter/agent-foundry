@@ -1,7 +1,7 @@
 # Runtime Adapter Framework And Trae Support
 
 Status: proposed AF-7 design  
-Updated: 2026-06-15
+Updated: 2026-06-16
 
 ## Purpose
 
@@ -28,6 +28,13 @@ Local experiments on 2026-06-15 verified:
 - Trae CN also scans `.agents/skills` style skill locations, making a portable shared skill layer plausible.
 - Trae CN imports project instruction files such as `AGENTS.md` and `CLAUDE.md` when that feature is enabled.
 - Trae custom agent definitions appear to live in private application state, not a stable public file schema.
+
+Follow-up validation on 2026-06-16 verified:
+
+- Trae SOLO Agent can consume a planning-only Agent Foundry prompt and return a useful Orchestrator -> role-subagent flow without file edits when explicitly constrained.
+- Trae recognizes Agent Foundry global Skill concepts such as `role-automation-planner` and `agent-collaboration`.
+- Trae project `.trae/rules/*.md` files behave as always-applied workspace rules; separate role rule files expose all role contracts to all agents and create authority-mixing risk.
+- `.trae/subagents/*.md` is the better project-specific overlay candidate for isolated role prompts selected per task.
 
 Implication: Agent Foundry should publish Trae support primarily as generated global Skills plus optional project overlays, and should not write Trae private application state until Trae exposes a supported import/export contract.
 
@@ -91,6 +98,8 @@ Trae currently works best as a coordinator runtime rather than as a fully file-b
 
 If Trae later exposes a stable custom-agent file schema or CLI import path, Agent Foundry can add a custom-agent publisher. Until then, generated Skills are the safer integration point.
 
+For complex multi-role work, prefer a SOLO Agent plan that dispatches isolated role prompts from `.trae/subagents` when a project overlay is explicitly approved. Do not generate multiple default `.trae/rules/<role>.md` files. Use `.trae/rules` only for a single dispatcher or project-wide contract reference when ambient always-applied wording is safe and intentional.
+
 ## Asset Compatibility
 
 Existing runtime-neutral multi-agent assets remain useful if they avoid Codex-only assumptions. The Trae adapter should add only the runtime-specific layer needed to activate those assets:
@@ -99,6 +108,7 @@ Existing runtime-neutral multi-agent assets remain useful if they avoid Codex-on
 - launcher instructions that call existing helper scripts;
 - status and repair guidance that names Trae install paths;
 - role-specific prompt packaging for Trae's interaction model.
+- anti-summary-document instructions so Trae does not create summary files unless requested or required by acceptance criteria.
 
 Trae-specific assets are justified only when Trae has unique behavior that cannot be represented by the portable adapter layer, such as Skill discovery, UI activation wording, or future custom-agent import formats.
 

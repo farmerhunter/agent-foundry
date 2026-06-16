@@ -84,6 +84,29 @@ def promote_asset_collab_002(vault_root: Path) -> None:
     asset_text = asset.read_text(encoding="utf-8")
     asset_text = asset_text.replace("status: proposed\n", "status: active\n", 1)
     asset_text = asset_text.replace("published_to: []\n", "published_to: [codex, claude-code, hermes, chatgpt]\n", 1)
+    asset_text = asset_text.replace(
+        "  - hermes\n  - chatgpt\n",
+        "  - hermes\n  - trae\n  - chatgpt\n",
+        1,
+    )
+    if "Trae SOLO orchestration prompt" not in asset_text:
+        asset_text = asset_text.replace(
+            "  - portable fallback prompt for runtimes without live thread APIs\n",
+            "  - portable fallback prompt for runtimes without live thread APIs\n"
+            "  - Trae SOLO orchestration prompt with Orchestrator, Architect, Implementer, Reviewer, Verifier, or Harvester role boundaries\n"
+            "  - Trae .trae/subagents project overlay guidance when explicitly approved\n"
+            "  - Trae Single Chat dispatcher fallback prompt\n",
+            1,
+        )
+        asset_text = asset_text.replace(
+            "  - generated prompts require helper fast paths when repo-local helpers exist\n",
+            "  - generated prompts require helper fast paths when repo-local helpers exist\n"
+            "  - Trae SOLO output keeps global Skills as the default substrate and uses .trae/subagents only for approved project-specific overlays\n"
+            "  - Trae output avoids default multi-role .trae/rules files and explains the always-applied workspace rule conflict\n"
+            "  - Trae output includes no-private-state and anti-summary-document constraints\n"
+            "  - Trae output names GitHub issues, comments, labels, PRs, and explicit requested project artifacts as durable state\n",
+            1,
+        )
     asset.write_text(asset_text, encoding="utf-8")
 
 
@@ -182,6 +205,16 @@ def main() -> int:
             for expected in ["ASSET-COLLAB-002", "Role Dispatch and Automation Planner", "## Responsibility", "## Process"]:
                 if expected not in text:
                     errors.append(f"selected-output-promoted-asset: {name} generated SKILL.md missing {expected}")
+            if name == "trae":
+                for expected in [
+                    "Trae SOLO orchestration prompt",
+                    ".trae/subagents",
+                    ".trae/rules",
+                    "always-applied workspace rule conflict",
+                    "anti-summary-document",
+                ]:
+                    if expected not in text:
+                        errors.append(f"selected-output-promoted-asset: trae generated SKILL.md missing {expected}")
         generated_text = "\n".join(path.read_text(encoding="utf-8") for path in generated.rglob("*") if path.is_file())
         if "ASSET-COLLAB-002" not in generated_text:
             errors.append("selected-output-promoted-asset: generated output missing ASSET-COLLAB-002")
