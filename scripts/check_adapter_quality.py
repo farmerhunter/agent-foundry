@@ -272,6 +272,24 @@ def manifest_skill_artifacts(manifest: Path) -> list[dict[str, str]]:
 def check_generated_skill_artifacts(generated_root: Path, vault_root: Path, manifest: Path) -> list[str]:
     errors: list[str] = []
     manifest_artifacts = manifest_skill_artifacts(manifest)
+    asset_contract_phrases = {
+        "ASSET-COLLAB-001": [
+            "rehydration checkpoint",
+            "risky collaboration transitions",
+            "`needs:*` label changes are backed by transition gate evidence",
+            "reviewer handoff to `needs:reviewer` includes peer-session dispatch evidence",
+            "Human Decision Contract",
+            "explicit authorization phrase",
+            "delegated Architect or acceptance role",
+            "Epic closure",
+            "final `main` integration",
+        ],
+        "ASSET-COLLAB-002": [
+            "rehydration step from durable sources",
+            "transition gate it is satisfying",
+            "target role to rehydrate durable sources",
+        ],
+    }
     for record in active_skill_assets(vault_root):
         published_to = record.get("published_to", [])
         if not isinstance(published_to, list):
@@ -322,6 +340,12 @@ def check_generated_skill_artifacts(generated_root: Path, vault_root: Path, mani
                 if not ok:
                     errors.append(
                         f"Selected output skill artifact: {adapter_id} {record['id']} SKILL.md missing {label}: {path}"
+                    )
+            for phrase in asset_contract_phrases.get(str(record["id"]), []):
+                if phrase not in text:
+                    errors.append(
+                        f"Selected output skill artifact: {adapter_id} {record['id']} "
+                        f"SKILL.md missing contract phrase {phrase!r}: {path}"
                     )
     return errors
 

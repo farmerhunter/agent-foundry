@@ -194,6 +194,29 @@ def main() -> int:
             ]
         )
         errors.extend(expect("selected-output-promoted-asset", selected_quality, True, "selected-output surface"))
+        collaboration_paths = [
+            ("codex", generated / "codex" / "skills" / "agent-collaboration" / "SKILL.md"),
+            ("hermes", generated / "hermes" / "skills" / "agent-collaboration" / "SKILL.md"),
+            ("trae", generated / "trae" / "skills" / "agent-collaboration" / "SKILL.md"),
+        ]
+        for name, path in collaboration_paths:
+            if not path.exists():
+                errors.append(f"selected-output-transition-gates: {name} agent-collaboration SKILL.md missing: {path}")
+                continue
+            text = path.read_text(encoding="utf-8")
+            for expected in [
+                "rehydration checkpoint",
+                "risky collaboration transitions",
+                "`needs:*` label changes are backed by transition gate evidence",
+                "reviewer handoff to `needs:reviewer` includes peer-session dispatch evidence",
+                "Human Decision Contract",
+                "explicit authorization phrase",
+                "delegated Architect or acceptance role",
+                "Epic closure",
+                "final `main` integration",
+            ]:
+                if expected not in text:
+                    errors.append(f"selected-output-transition-gates: {name} agent-collaboration missing {expected}")
         codex_skill = generated / "codex" / "skills" / "role-automation-planner" / "SKILL.md"
         hermes_skill = generated / "hermes" / "skills" / "role-automation-planner" / "SKILL.md"
         trae_skill = generated / "trae" / "skills" / "role-automation-planner" / "SKILL.md"
@@ -215,6 +238,13 @@ def main() -> int:
                 ]:
                     if expected not in text:
                         errors.append(f"selected-output-promoted-asset: trae generated SKILL.md missing {expected}")
+            for expected in [
+                "rehydration step from durable sources",
+                "transition gate it is satisfying",
+                "target role to rehydrate durable sources",
+            ]:
+                if expected not in text:
+                    errors.append(f"selected-output-promoted-asset: {name} generated SKILL.md missing {expected}")
         generated_text = "\n".join(path.read_text(encoding="utf-8") for path in generated.rglob("*") if path.is_file())
         if "ASSET-COLLAB-002" not in generated_text:
             errors.append("selected-output-promoted-asset: generated output missing ASSET-COLLAB-002")
