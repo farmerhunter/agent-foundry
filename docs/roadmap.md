@@ -1,7 +1,7 @@
 # Agent Foundry Roadmap
 
 Status: planning document
-Updated: 2026-06-15
+Updated: 2026-06-16
 Scope: Agent Foundry productization, runtime adapter framework, Trae support, capability-system hardening, repository hygiene, and memory-system readiness.
 
 ## Purpose
@@ -1014,14 +1014,15 @@ Current GitHub records:
 | --- | --- | --- |
 | #134 | AF-7 Epic for runtime adapter framework and Trae support. | In Progress |
 | #135 | Historical baseline batch PR. This merged design, implementation, live Trae apply, and first validation before the child-issue plan was reconstructed. Do not use it as the AF-7 planning model. | Merged |
-| #136 | Evidence issue for real Trae global Skill discovery, role UX, project instruction interaction, and project-overlay need. | In Progress |
-| #138 | Corrective planning issue to reconstruct the AF-7 child issue plan and governance record. | In Progress |
-| #139 | Review issue for auditing the merged #135 baseline scope and residual risks. | Ready |
+| #136 | Evidence issue for real Trae global Skill discovery, role UX, project instruction interaction, and project-overlay need. | Done |
+| #138 | Corrective planning issue to reconstruct the AF-7 child issue plan and governance record. | Review |
+| #139 | Review issue for auditing the merged #135 baseline scope and residual risks. | Done |
 | #140 | Accepted decision for the Trae user-facing role invocation and project-overlay contract. | Done |
 | #141 | Task issue for runtime adapter profile and selected-output contract hardening. | Inbox |
 | #142 | Task issue for Trae sync, refresh, and repair UX validation. | Ready |
-| #143 | Task issue for project-overlay compatibility and multi-agent coordination scenarios. | Ready |
-| #145 | Task issue for Trae SOLO mode and role automation planning output. | Inbox |
+| #143 | Task issue for project-overlay compatibility and multi-agent coordination scenarios. | Done |
+| #145 | Task issue for Trae SOLO mode and role automation planning output. | Done |
+| #147 | Task issue for idle/resume Skill rehydration and collaboration transition gates. | Planning |
 | #144 | Final AF-7 acceptance gate and Epic readiness review. | Inbox |
 
 Child issue dependency order:
@@ -1032,7 +1033,8 @@ Child issue dependency order:
 4. #141 follows #139 for adapter contract hardening.
 5. #142 and #143 follow #136 plus #140 for sync/repair UX and project-overlay/multi-agent scenarios.
 6. #145 follows #140 and #143 if Trae SOLO is accepted as the complex multi-role orchestration path.
-7. #144 reviews #136 and #138 through #143 plus #145 before any AF-7 completion or Epic closure decision.
+7. #147 follows the observed #145/#146 collaboration-state drift and hardens idle/resume rehydration plus `needs:*` transition gates before final readiness review.
+8. #144 reviews #136 and #138 through #143 plus #145 and #147 before any AF-7 completion or Epic closure decision.
 
 Acceptance criteria:
 
@@ -1041,7 +1043,7 @@ Acceptance criteria:
 - Existing multi-agent assets can project into Trae without duplicating canonical logic.
 - Project overlays remain optional and separated from global setup.
 - Runtime status distinguishes canonical, generated, installed, project, unmanaged, stale, and conflict states.
-- #134 drives AF-7 runtime adapter framework and Trae support through child issues #136 and #138 through #144.
+- #134 drives AF-7 runtime adapter framework and Trae support through child issues #136 and #138 through #145 plus #147.
 - Existing former-AF7 capability-hardening records are renumbered to AF-8 and held until AF-7 completes.
 - No additional AF-7 implementation work starts from the Epic or the historical baseline PR alone; every new implementation, evidence, decision, or review step must enter through a scoped child issue.
 - No memory-system directories, schemas, storage, MCP tools, or design work are introduced.
