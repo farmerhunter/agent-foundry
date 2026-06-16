@@ -733,6 +733,26 @@ def check_runtime_import_script() -> list[str]:
     return output.splitlines()
 
 
+def check_first_run_ux_script() -> list[str]:
+    script = ROOT / "scripts" / "test_first_run_ux.py"
+    if not script.exists():
+        return ["Missing scripts/test_first_run_ux.py"]
+    result = subprocess.run(
+        ["python3", str(script)],
+        cwd=ROOT,
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if result.returncode == 0:
+        return []
+    output = (result.stdout + result.stderr).strip()
+    if not output:
+        return ["First-run UX fixture failed without output"]
+    return output.splitlines()
+
+
 def main() -> int:
     errors: list[str] = []
     errors += check_index_paths(VAULT_ROOT / "indexes" / "practice_index.yaml", VAULT_ROOT, "Practice")
@@ -760,6 +780,7 @@ def main() -> int:
     errors += check_capability_pack_lifecycle_script()
     errors += check_sync_status_report_script()
     errors += check_runtime_import_script()
+    errors += check_first_run_ux_script()
 
     if errors:
         print("Consistency check failed:")
