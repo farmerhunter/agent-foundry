@@ -84,6 +84,29 @@ def promote_asset_collab_002(vault_root: Path) -> None:
     asset_text = asset.read_text(encoding="utf-8")
     asset_text = asset_text.replace("status: proposed\n", "status: active\n", 1)
     asset_text = asset_text.replace("published_to: []\n", "published_to: [codex, claude-code, hermes, chatgpt]\n", 1)
+    asset_text = asset_text.replace(
+        "  - hermes\n  - chatgpt\n",
+        "  - hermes\n  - trae\n  - chatgpt\n",
+        1,
+    )
+    if "Trae SOLO orchestration prompt" not in asset_text:
+        asset_text = asset_text.replace(
+            "  - portable fallback prompt for runtimes without live thread APIs\n",
+            "  - portable fallback prompt for runtimes without live thread APIs\n"
+            "  - Trae SOLO orchestration prompt with Orchestrator, Architect, Implementer, Reviewer, Verifier, or Harvester role boundaries\n"
+            "  - Trae .trae/subagents project overlay guidance when explicitly approved\n"
+            "  - Trae Single Chat dispatcher fallback prompt\n",
+            1,
+        )
+        asset_text = asset_text.replace(
+            "  - generated prompts require helper fast paths when repo-local helpers exist\n",
+            "  - generated prompts require helper fast paths when repo-local helpers exist\n"
+            "  - Trae SOLO output keeps global Skills as the default substrate and uses .trae/subagents only for approved project-specific overlays\n"
+            "  - Trae output avoids default multi-role .trae/rules files and explains the always-applied workspace rule conflict\n"
+            "  - Trae output includes no-private-state and anti-summary-document constraints\n"
+            "  - Trae output names GitHub issues, comments, labels, PRs, and explicit requested project artifacts as durable state\n",
+            1,
+        )
     asset.write_text(asset_text, encoding="utf-8")
 
 
@@ -171,9 +194,33 @@ def main() -> int:
             ]
         )
         errors.extend(expect("selected-output-promoted-asset", selected_quality, True, "selected-output surface"))
+        collaboration_paths = [
+            ("codex", generated / "codex" / "skills" / "agent-collaboration" / "SKILL.md"),
+            ("hermes", generated / "hermes" / "skills" / "agent-collaboration" / "SKILL.md"),
+            ("trae", generated / "trae" / "skills" / "agent-collaboration" / "SKILL.md"),
+        ]
+        for name, path in collaboration_paths:
+            if not path.exists():
+                errors.append(f"selected-output-transition-gates: {name} agent-collaboration SKILL.md missing: {path}")
+                continue
+            text = path.read_text(encoding="utf-8")
+            for expected in [
+                "rehydration checkpoint",
+                "risky collaboration transitions",
+                "`needs:*` label changes are backed by transition gate evidence",
+                "reviewer handoff to `needs:reviewer` includes peer-session dispatch evidence",
+                "Human Decision Contract",
+                "explicit authorization phrase",
+                "delegated Architect or acceptance role",
+                "Epic closure",
+                "final `main` integration",
+            ]:
+                if expected not in text:
+                    errors.append(f"selected-output-transition-gates: {name} agent-collaboration missing {expected}")
         codex_skill = generated / "codex" / "skills" / "role-automation-planner" / "SKILL.md"
         hermes_skill = generated / "hermes" / "skills" / "role-automation-planner" / "SKILL.md"
-        for name, path in [("codex", codex_skill), ("hermes", hermes_skill)]:
+        trae_skill = generated / "trae" / "skills" / "role-automation-planner" / "SKILL.md"
+        for name, path in [("codex", codex_skill), ("hermes", hermes_skill), ("trae", trae_skill)]:
             if not path.exists():
                 errors.append(f"selected-output-promoted-asset: {name} generated SKILL.md missing: {path}")
                 continue
@@ -181,9 +228,68 @@ def main() -> int:
             for expected in ["ASSET-COLLAB-002", "Role Dispatch and Automation Planner", "## Responsibility", "## Process"]:
                 if expected not in text:
                     errors.append(f"selected-output-promoted-asset: {name} generated SKILL.md missing {expected}")
+            if name == "trae":
+                for expected in [
+                    "Trae SOLO orchestration prompt",
+                    ".trae/subagents",
+                    ".trae/rules",
+                    "always-applied workspace rule conflict",
+                    "anti-summary-document",
+                ]:
+                    if expected not in text:
+                        errors.append(f"selected-output-promoted-asset: trae generated SKILL.md missing {expected}")
+            for expected in [
+                "rehydration step from durable sources",
+                "transition gate it is satisfying",
+                "target role to rehydrate durable sources",
+            ]:
+                if expected not in text:
+                    errors.append(f"selected-output-promoted-asset: {name} generated SKILL.md missing {expected}")
         generated_text = "\n".join(path.read_text(encoding="utf-8") for path in generated.rglob("*") if path.is_file())
         if "ASSET-COLLAB-002" not in generated_text:
             errors.append("selected-output-promoted-asset: generated output missing ASSET-COLLAB-002")
+        manifest_text = (generated / "adapter-publish-manifest.yaml").read_text(encoding="utf-8")
+        for expected in [
+            "generated_skill_artifacts:",
+            "adapter: codex",
+            "adapter: hermes",
+            "adapter: trae",
+            "asset_id: ASSET-COLLAB-002",
+            "path: trae/skills/role-automation-planner/SKILL.md",
+            "source_path: assets/skills/ASSET-COLLAB-002-role-automation-planner.asset.yaml",
+        ]:
+            if expected not in manifest_text:
+                errors.append(f"selected-output-promoted-asset: manifest missing {expected}")
+
+        manifest_path = generated / "adapter-publish-manifest.yaml"
+        manifest_without_artifact = "\n".join(
+            line
+            for line in manifest_text.splitlines()
+            if "role-automation-planner" not in line and "ASSET-COLLAB-002" not in line
+        )
+        manifest_path.write_text(manifest_without_artifact + "\n", encoding="utf-8")
+        missing_manifest_artifact_quality = run(
+            [
+                str(QUALITY),
+                "--core-root",
+                str(ROOT),
+                "--vault-root",
+                str(temp_vault),
+                "--surface",
+                "selected-output",
+                "--generated-root",
+                str(generated),
+            ]
+        )
+        errors.extend(
+            expect(
+                "selected-output-missing-manifest-skill-artifact",
+                missing_manifest_artifact_quality,
+                False,
+                "manifest missing generated skill artifact",
+            )
+        )
+        manifest_path.write_text(manifest_text, encoding="utf-8")
 
         codex_skill.unlink()
         missing_skill_quality = run(
