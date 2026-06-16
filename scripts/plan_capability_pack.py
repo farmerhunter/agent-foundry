@@ -67,6 +67,7 @@ REQUIRED_INTEGRITY_FIELDS = {
     "manifest_paths_are_relative",
     "private_vault_content",
 }
+REQUIRED_DEPLOYED_PACK_FIELDS = {"pack_id", "version", "source"}
 
 
 @dataclass(frozen=True)
@@ -154,6 +155,9 @@ def deployed_pack_records(vault_root: Path, pack_id: str) -> tuple[dict[str, dic
     for pack in packs:
         if not isinstance(pack, dict) or pack.get("pack_id") != pack_id:
             continue
+        metadata_errors = validate_deployed_pack_metadata(pack, pack_id)
+        if metadata_errors:
+            return {}, metadata_errors
         pack_records = pack.get("records", [])
         if pack_records in ({}, None):
             return {}, []
@@ -167,6 +171,20 @@ def deployed_pack_records(vault_root: Path, pack_id: str) -> tuple[dict[str, dic
                 records[item_id] = {key: str(value) for key, value in record.items() if not isinstance(value, (dict, list))}
         return records, []
     return {}, []
+
+
+def validate_deployed_pack_metadata(pack: dict[object, object], pack_id: str) -> list[str]:
+    errors: list[str] = []
+    for field in sorted(REQUIRED_DEPLOYED_PACK_FIELDS - {str(key) for key in pack}):
+        errors.append(f"deployed pack {pack_id} missing {field}")
+    source = pack.get("source", {})
+    if not isinstance(source, dict):
+        errors.append(f"deployed pack {pack_id} source must be a mapping")
+    else:
+        manifest_sha = str(source.get("manifest_sha256", ""))
+        if not SHA256_RE.match(manifest_sha):
+            errors.append(f"deployed pack {pack_id} source.manifest_sha256 must be sha256")
+    return errors
 
 
 def vault_mentions_pack(vault_root: Path, pack_id: str) -> bool:

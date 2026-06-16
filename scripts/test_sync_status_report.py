@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import tempfile
+import subprocess
+import sys
 from pathlib import Path
 
 import sync_status
@@ -14,6 +16,17 @@ from sync_status import ROOT, DEFAULT_GENERATED_ROOT, default_adapter_root, depl
 def write(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
+
+
+def run(args: list[str]) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, *args],
+        cwd=ROOT,
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
 
 
 def main() -> int:
@@ -153,6 +166,43 @@ def main() -> int:
             assert not local_manifest.exists()
         else:
             assert local_manifest.read_bytes() == before
+
+        chatgpt_generated = base / "chatgpt-generated"
+        chatgpt_dest = base / "chatgpt-runtime"
+        write(chatgpt_generated / "chatgpt" / "custom-instructions.md", "# Manual instructions\n")
+        write(chatgpt_generated / "chatgpt" / "knowledge" / "commands.md", "# Commands\n")
+        dry_run = run(
+            [
+                str(ROOT / "scripts" / "sync_adapters.py"),
+                "--target",
+                "chatgpt",
+                "--adapter-root",
+                str(chatgpt_generated),
+                "--dest",
+                str(chatgpt_dest),
+                "--dry-run",
+            ]
+        )
+        assert dry_run.returncode == 0, dry_run.stdout + dry_run.stderr
+        assert "ChatGPT has no managed local runtime" in dry_run.stdout
+        assert "manual target destination ignored" in dry_run.stdout
+        assert not chatgpt_dest.exists()
+
+        apply = run(
+            [
+                str(ROOT / "scripts" / "sync_adapters.py"),
+                "--target",
+                "chatgpt",
+                "--adapter-root",
+                str(chatgpt_generated),
+                "--dest",
+                str(chatgpt_dest),
+                "--apply",
+            ]
+        )
+        assert apply.returncode != 0
+        assert "Refusing managed ChatGPT runtime write" in apply.stdout + apply.stderr
+        assert not chatgpt_dest.exists()
 
     print("Sync status report tests passed.")
     return 0
