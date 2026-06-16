@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import hashlib
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -66,6 +67,10 @@ def apply_optional(vault: Path) -> subprocess.CompletedProcess[str]:
     return run([str(APPLY), str(OPTIONAL_PACK), "--core-root", str(ROOT), "--vault-root", str(vault), "--apply"])
 
 
+def apply_pack(vault: Path, pack: Path) -> subprocess.CompletedProcess[str]:
+    return run([str(APPLY), str(pack), "--core-root", str(ROOT), "--vault-root", str(vault), "--apply"])
+
+
 def lifecycle(vault: Path, action: str, apply: bool) -> subprocess.CompletedProcess[str]:
     args = [
         str(LIFECYCLE),
@@ -98,6 +103,17 @@ def publish(vault: Path, generated: Path) -> subprocess.CompletedProcess[str]:
     )
 
 
+def copy_optional_variant(base: Path, name: str, replacements: dict[str, str]) -> Path:
+    target = base / name
+    shutil.copytree(OPTIONAL_PACK, target)
+    manifest = target / "manifest.yaml"
+    text = manifest.read_text(encoding="utf-8")
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+    manifest.write_text(text, encoding="utf-8")
+    return target
+
+
 def status(vault: Path, generated: Path, receipt: Path) -> subprocess.CompletedProcess[str]:
     return run(
         [
@@ -123,6 +139,43 @@ def main() -> int:
         errors.extend(expect("init-blank-vault", init_blank(vault), True, "Blank Vault initialized and validated."))
         errors.extend(expect("deploy-bootstrap", deploy_bootstrap(vault), True, "selected Vault validated"))
         errors.extend(expect("apply-optional", apply_optional(vault), True, "metadata: written"))
+        repeat_metadata_before = digest(vault / "packs" / "deployed-pack-index.yaml")
+        errors.extend(expect("apply-optional-repeat", apply_optional(vault), True, "pack metadata already present"))
+        repeat_metadata_after = digest(vault / "packs" / "deployed-pack-index.yaml")
+        if repeat_metadata_after != repeat_metadata_before:
+            errors.append("apply-optional-repeat: same-version same-hash metadata changed")
+
+        same_version_mismatch = copy_optional_variant(
+            base,
+            "same-version-mismatch-pack",
+            {"title: Optional Multi-Agent Collaboration Pack": "title: Optional Multi-Agent Collaboration Pack Changed"},
+        )
+        errors.extend(
+            expect(
+                "apply-same-version-hash-mismatch",
+                apply_pack(vault, same_version_mismatch),
+                False,
+                "different manifest_sha256",
+            )
+        )
+        if digest(vault / "packs" / "deployed-pack-index.yaml") != repeat_metadata_before:
+            errors.append("apply-same-version-hash-mismatch: metadata changed after refusal")
+
+        newer_version = copy_optional_variant(
+            base,
+            "newer-version-pack",
+            {"version: 0.2.0": "version: 0.3.0"},
+        )
+        errors.extend(
+            expect(
+                "apply-newer-version-requires-update-flow",
+                apply_pack(vault, newer_version),
+                False,
+                "blocking record outcome update",
+            )
+        )
+        if digest(vault / "packs" / "deployed-pack-index.yaml") != repeat_metadata_before:
+            errors.append("apply-newer-version-requires-update-flow: metadata changed after refusal")
 
         user_record = vault / "practices" / "user" / "USER-LOCAL-001.md"
         write(
