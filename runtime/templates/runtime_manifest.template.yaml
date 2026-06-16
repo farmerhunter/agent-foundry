@@ -48,6 +48,19 @@ targets:
         - ~/.hermes/skills
     notes: "Hermes native memory and self-growth remain enabled; Agent Foundry skills are managed runtime copies."
 
+  trae:
+    adapter: trae
+    status: disabled
+    install_path: ~/.trae-cn/skills
+    ownership_mode: managed-directories
+    conflict_policy: refuse-unmanaged
+    backup_policy: none
+    detection:
+      default_path: ~/.trae-cn/skills
+      marker_paths:
+        - ~/.trae-cn/skills
+    notes: "Trae CN global Skills are installed as managed skill directories. Project overlays remain optional."
+
   chatgpt:
     adapter: chatgpt
     status: manual

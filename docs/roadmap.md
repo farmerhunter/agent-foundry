@@ -1,8 +1,8 @@
 # Agent Foundry Roadmap
 
-Status: planning document  
-Updated: 2026-06-15
-Scope: Agent Foundry productization, capability-system hardening, repository hygiene, and memory-system readiness.
+Status: planning document
+Updated: 2026-06-16
+Scope: Agent Foundry productization, runtime adapter framework, Trae support, capability-system hardening, repository hygiene, and memory-system readiness.
 
 ## Purpose
 
@@ -76,14 +76,15 @@ Agent Foundry should use maturity stages for planning and release versions for d
 | AF-4 | Current-User Deployment And Upgrade Migration | The only real user, `farmerhunter`, can use the split system reliably across all already-deployed machines and runtime types, and Agent Foundry has a repeatable migration discipline for future major data-schema or program-structure upgrades. | The User Vault has a private remote or equivalent reviewed sync substrate; every existing deployment can locate Core plus Vault, refresh from the selected Vault, run harvest/review/publish workflows, report sync/runtime state without stale combined-root assumptions, and pass a reusable upgrade readiness checklist covering version markers, dry-runs, backups, rollback, compatibility, and cross-machine verification. |
 | AF-5 | Onboarding Ready | New users can install Core, create a blank Vault, deploy the mandatory bootstrap capability pack, optionally deploy additional capability packs, and refresh adapters without confusing pack content with private user history. | Blank Vault creation, bootstrap pack deployment, optional pack selection, runtime-asset import, and first-run refresh are tested after the current user's multi-machine migration is proven. |
 | AF-6 | Existing Foundry Lifecycle Completion | AF-5 onboarding journeys become a coherent product lifecycle: complete install, blank-vault bootstrap, non-new-install pack status/update/apply, optional pack deployment, runtime refresh/install, and rollback/status reporting. | A user can install or restore Agent Foundry, deploy or update reviewed packs, refresh runtimes, inspect status, and recover from failure through documented commands and validation without mixing Core, Vault, Generated, Runtime, or product-project contexts. |
-| AF-7 | Capability System Hardening | The post-AF6 capability system is exercised against realistic multi-user, multi-machine, multi-runtime, long-running-agent, drift, restore, parser/schema, and lifecycle edge cases. | Capability-system boundary scenarios are validated or improved through temp fixtures, status/repair UX, Project scheduler state, and safe runtime/Vault boundaries. |
-| AF-8 | Advanced Capability Pack Discovery and Lifecycle | Capability packs can be recognized, maintained, exported, and optimized as higher-level reusable bundles after the basic pack lifecycle is stable and hardened. | Emergent capability-pack discovery and export/update automation can be designed without weakening Core/Vault authority, runtime freshness, or reviewed pack deployment. |
-| AF-9 | Memory-System Ready | Future memory-system records, evidence policy, routing, privacy, and MCP boundaries are designed but not necessarily implemented. | Memory-system implementation home can be chosen with clear tradeoffs. |
-| AF-10 | Memory Implementation Home Decision | The implementation home for memory-system work is chosen using evidence from completed Foundry lifecycle and capability-system hardening work. | Decision record names the chosen home, rejected alternatives, file/data boundaries, validation path, privacy policy, and rollback path. |
+| AF-7 | Runtime Adapter Framework And Trae Support | Adapter publishing becomes a runtime-aware distribution system, and Trae CN is supported through a verified global Skill path. | Canonical assets can project through a portable adapter model into generated runtime adapters with source metadata, freshness reporting, safe install behavior, and a Trae global Skill publisher validated against `~/.trae-cn/skills`. |
+| AF-8 | Capability System Hardening | The post-AF6 capability system is exercised against realistic multi-user, multi-machine, multi-runtime, long-running-agent, drift, restore, parser/schema, and lifecycle edge cases. | Capability-system boundary scenarios are validated or improved through temp fixtures, status/repair UX, Project scheduler state, and safe runtime/Vault boundaries. |
+| AF-9 | Advanced Capability Pack Discovery and Lifecycle | Capability packs can be recognized, maintained, exported, and optimized as higher-level reusable bundles after the basic pack lifecycle is stable and hardened. | Emergent capability-pack discovery and export/update automation can be designed without weakening Core/Vault authority, runtime freshness, or reviewed pack deployment. |
+| AF-10 | Memory-System Ready | Future memory-system records, evidence policy, routing, privacy, and MCP boundaries are designed but not necessarily implemented. | Memory-system implementation home can be chosen with clear tradeoffs. |
+| AF-11 | Memory Implementation Home Decision | The implementation home for memory-system work is chosen using evidence from completed Foundry lifecycle, runtime adapter framework, and capability-system hardening work. | Decision record names the chosen home, rejected alternatives, file/data boundaries, validation path, privacy policy, and rollback path. |
 
 Current planning stage: AF-7 / M7.
 
-AF-0 explains the existing mixed history. AF-1 starts the stricter planning and multi-agent coordination era. AF-2 designs the productization boundary. AF-3 executes the local Core/Vault split. AF-4 proves the split system works for the current real user across existing deployments and establishes the migration discipline needed for later major upgrades. AF-5 makes onboarding humane and reliable for new users. AF-6 closes the current Foundry product lifecycle so install, pack deployment, refresh, status, and rollback are usable beyond a one-off maintainer path. AF-7 hardens that capability system under realistic multi-user, multi-machine, multi-runtime, long-running-agent, and drift scenarios. AF-8 is later advanced capability-pack discovery and export lifecycle work. AF-9 is the decision gate for memory-system architecture. AF-10 chooses the memory implementation home. Memory-system implementation remains outside this current roadmap until explicitly authorized.
+AF-0 explains the existing mixed history. AF-1 starts the stricter planning and multi-agent coordination era. AF-2 designs the productization boundary. AF-3 executes the local Core/Vault split. AF-4 proves the split system works for the current real user across existing deployments and establishes the migration discipline needed for later major upgrades. AF-5 makes onboarding humane and reliable for new users. AF-6 closes the current Foundry product lifecycle so install, pack deployment, refresh, status, and rollback are usable beyond a one-off maintainer path. AF-7 upgrades runtime adapters and adds Trae CN support around a verified global Skill path. AF-8 hardens the capability system under realistic multi-user, multi-machine, multi-runtime, long-running-agent, and drift scenarios. AF-9 is later advanced capability-pack discovery and export lifecycle work. AF-10 is the decision gate for memory-system architecture. AF-11 chooses the memory implementation home. Memory-system implementation remains outside this current roadmap until explicitly authorized.
 
 ## Release Version Mapping
 
@@ -99,10 +100,11 @@ Suggested mapping:
 | AF-4 | `v0.4.0`: current-user deployment and upgrade migration baseline. |
 | AF-5 | `v0.5.0`: external-user onboarding baseline. |
 | AF-6 | `v0.6.0`: complete Foundry install and basic pack lifecycle baseline. |
-| AF-7 | `v0.7.0`: capability-system hardening baseline. |
-| AF-8 | `v0.8.0`: advanced capability-pack discovery and lifecycle design baseline. |
-| AF-9 | `v0.9.0`: memory-system-ready design baseline. |
-| AF-10 | `v0.10.0`: memory implementation-home decision baseline. |
+| AF-7 | `v0.7.0`: runtime adapter framework and Trae support baseline. |
+| AF-8 | `v0.8.0`: capability-system hardening baseline. |
+| AF-9 | `v0.9.0`: advanced capability-pack discovery and lifecycle design baseline. |
+| AF-10 | `v0.10.0`: memory-system-ready design baseline. |
+| AF-11 | `v0.11.0`: memory implementation-home decision baseline. |
 
 `v1.0` should wait until the reusable core, user vault story, generated artifact policy, and runtime adapter behavior are stable enough that external users can rely on them without understanding this repository's personal history.
 
@@ -121,7 +123,7 @@ Minimal fields:
 | Field | Values | Purpose |
 | --- | --- | --- |
 | Status | Inbox, Ready, In Progress, Review, Done, Blocked | Human-visible work state. |
-| Stage | AF-1 through AF-10 | Maturity stage the item serves. |
+| Stage | AF-1 through AF-11 | Maturity stage the item serves. |
 | Epic | Free text or single-select | Groups issues by roadmap epic. |
 | Owner Role | Architect, Implementer, Reviewer, Harvester | Clarifies expected agent/human role. |
 | Depends On | Issue or PR references | Prevents ready queues from bypassing dependencies. |
@@ -139,7 +141,7 @@ Issue types:
 
 Recommended labels:
 
-- `stage:AF-1` through `stage:AF-10`
+- `stage:AF-1` through `stage:AF-11`
 - `type:epic`, `type:task`, `type:decision`, `type:review`, `type:evidence`
 - `area:core`, `area:vault`, `area:generated`, `area:runtime`, `area:privacy`, `area:memory-readiness`, `area:adapters`
 - `needs:architect`, `needs:implementer`, `needs:reviewer`, `needs:harvester`
@@ -152,7 +154,7 @@ Multi-agent rule:
 - Reviewer checks against the Epic exit criteria and relevant practices.
 - Harvester extracts reusable practices or asset candidates after meaningful work, using the harvest workflow.
 
-For now, create GitHub Project/Epic items for the active stage and its immediate successor. After AF-6 lifecycle completion, prioritize AF-7 capability-system hardening before advanced capability-pack discovery or any memory-system planning. Memory-system issues should remain placeholders until the user explicitly authorizes that work.
+For now, create GitHub Project/Epic items for the active stage and its immediate successor. After AF-6 lifecycle completion, prioritize AF-7 runtime adapter framework and Trae support, then AF-8 capability-system hardening, before advanced capability-pack discovery or any memory-system planning. Memory-system issues should remain placeholders until the user explicitly authorizes that work.
 
 ## Milestones
 
@@ -462,7 +464,7 @@ Stop conditions:
 - Vault validation depends on Core-owned `workflows/` files as Vault markers.
 - Generated adapters include personal paths, raw evidence, inactive records, or future memory-system paths.
 - The current context cannot distinguish product project, Foundry Vault operation, and Foundry Core maintenance.
-- A proposed change collapses AF-3 split migration with AF-4 current-user deployment/upgrade migration, AF-5 onboarding, AF-7 capability-system hardening, or later memory-system planning.
+- A proposed change collapses AF-3 split migration with AF-4 current-user deployment/upgrade migration, AF-5 onboarding, AF-7 runtime adapter framework work, AF-8 capability-system hardening, or later memory-system planning.
 
 Minimum verification matrix:
 
@@ -832,7 +834,7 @@ Residual gaps and explicit deferrals:
 - ChatGPT manual import and cleanup remain manual by design; no live ChatGPT project update was attempted.
 - Optional pack deployment beyond the MVP candidate fixture remains later work; #79 validates the candidate boundary, not real optional-pack rollout.
 - Real capability-owned helper install remains deferred until a reviewed helper install path is selected; helper payloads stay declared/inert in pack fixtures.
-- Advanced capability discovery, marketplace behavior, broad pack registry, automatic update management, and AF-8-style discovery remain future work.
+- Advanced capability discovery, marketplace behavior, broad pack registry, automatic update management, and AF-9-style discovery remain future work.
 - Memory-system implementation remains out of scope for AF-5 and should not be introduced by AF-5 close.
 - Current maintainer Vault bootstrap deployment state is not evidence of new-user onboarding success; temp blank-Vault fixtures are the acceptance evidence for that journey.
 
@@ -973,11 +975,86 @@ Suggested AF-6 issue order:
 | 9 | #104 Disable/retire/rollback pack lifecycle | Task | Implementer | High | #100, #101, and #102 | Reviewer + Architect acceptance |
 | 10 | #105 AF-6 end-to-end validation and close review | Review | Reviewer | High | all AF-6 child issues | Human close/main-integration decision |
 
-### AF-7 / M7: Capability System Hardening
+### AF-7 / M7: Runtime Adapter Framework And Trae Support
+
+Goal: make Agent Foundry adapter publishing runtime-aware and support Trae CN through a verified global Skill path that keeps the user's day-to-day Trae setup simple.
+
+AF-7 is adapter and runtime UX work. It does not start memory-system design or implementation. See `docs/runtime-adapter-framework-and-trae.md` for the current design.
+
+Design areas:
+
+- **Runtime adapter framework**
+  - Define a portable adapter model between canonical practices/assets and runtime-specific outputs.
+  - Track source canonical ids, versions, generator versions, target runtime, activation scope, human gates, and managed-file ownership.
+  - Make generated output and installed runtime state comparable through status, dry-run, diff, and apply flows.
+
+- **Trae CN global-first UX**
+  - Publish Trae global Skills under `~/.trae-cn/skills` as the preferred reusable setup path.
+  - Keep `.agents/skills` as a portable shared-skill option where compatible.
+  - Use project overlays only when behavior is genuinely project-specific.
+  - Do not write Trae private application state without a supported public import/export contract and explicit human approval.
+
+- **Multi-agent role projection**
+  - Project Architect, Implementer, Reviewer, Verifier, and Harvester behavior into Trae Skills or role instructions usable by SOLO Agent.
+  - Keep canonical multi-agent assets runtime-neutral where possible.
+  - Add Trae-specific wrappers only for activation, install path, UI wording, or future public Trae schemas.
+
+- **Canonical update compatibility**
+  - Ensure future canonical asset updates can refresh Trae outputs without forking practice logic.
+  - Detect fresh, stale, drifted, unmanaged, missing, blocked, and unknown runtime states before writes.
+  - Preserve fail-closed behavior for malformed or ambiguous metadata.
+
+- **Long-running use and sync UX**
+  - Show whether canonical records, generated adapters, installed Trae files, and project overlays are fresh.
+  - Provide repair actions in user terms: pull, publish adapters, dry-run install, apply install, manual import, or reopen Trae.
+
+Current GitHub records:
+
+| Record | Purpose | Status |
+| --- | --- | --- |
+| #134 | AF-7 Epic for runtime adapter framework and Trae support. | In Progress |
+| #135 | Historical baseline batch PR. This merged design, implementation, live Trae apply, and first validation before the child-issue plan was reconstructed. Do not use it as the AF-7 planning model. | Merged |
+| #136 | Evidence issue for real Trae global Skill discovery, role UX, project instruction interaction, and project-overlay need. | Done |
+| #138 | Corrective planning issue to reconstruct the AF-7 child issue plan and governance record. | Done |
+| #139 | Review issue for auditing the merged #135 baseline scope and residual risks. | Done |
+| #140 | Accepted decision for the Trae user-facing role invocation and project-overlay contract. | Done |
+| #141 | Task issue for runtime adapter profile and selected-output contract hardening. | Done |
+| #142 | Task issue for Trae sync, refresh, and repair UX validation. | Done |
+| #143 | Task issue for project-overlay compatibility and multi-agent coordination scenarios. | Done |
+| #145 | Task issue for Trae SOLO mode and role automation planning output. | Done |
+| #147 | Task issue for idle/resume Skill rehydration and collaboration transition gates. | Done |
+| #150 | Follow-up issue for explicit Trae publication intent on `ASSET-COLLAB-001`. | Done |
+| #144 | Final AF-7 acceptance gate and Epic readiness review. | Review |
+
+Child issue dependency order:
+
+1. #138 repairs the Epic planning surface and records the governance correction.
+2. #139 audits the already-merged #135 baseline before downstream hardening.
+3. #136 supplies Trae runtime and UX evidence; #140 accepted the user-facing contract decision.
+4. #141 follows #139 for adapter contract hardening.
+5. #142 and #143 follow #136 plus #140 for sync/repair UX and project-overlay/multi-agent scenarios.
+6. #145 follows #140 and #143 if Trae SOLO is accepted as the complex multi-role orchestration path.
+7. #147 follows the observed #145/#146 collaboration-state drift and hardens idle/resume rehydration plus `needs:*` transition gates before final readiness review.
+8. #150 resolves the non-blocking Trae publication-intent residual from #147.
+9. #144 reviews #136 and #138 through #143 plus #145, #147, and #150 before any AF-7 completion or Epic closure decision.
+
+Acceptance criteria:
+
+- Trae is represented as a target runtime in profiles, docs, validation, and status.
+- A generated Trae global Skill can be dry-run, installed, detected, refreshed, and repaired.
+- Existing multi-agent assets can project into Trae without duplicating canonical logic.
+- Project overlays remain optional and separated from global setup.
+- Runtime status distinguishes canonical, generated, installed, project, unmanaged, stale, and conflict states.
+- #134 drives AF-7 runtime adapter framework and Trae support through child issues #136, #138 through #145, #147, and #150.
+- Existing former-AF7 capability-hardening records are renumbered to AF-8 and held until AF-7 completes.
+- No additional AF-7 implementation work starts from the Epic or the historical baseline PR alone; every new implementation, evidence, decision, or review step must enter through a scoped child issue.
+- No memory-system directories, schemas, storage, MCP tools, or design work are introduced.
+
+### AF-8 / M8: Capability System Hardening
 
 Goal: harden the AF-6 capability system under realistic long-running, multi-user, multi-machine, multi-runtime, drift, restore, parser/schema, lifecycle, and scheduler-state scenarios.
 
-AF-7 is capability-system work. It does not start memory-system design or implementation.
+AF-8 is capability-system work. It does not start memory-system design or implementation. Existing GitHub records #119 through #127 were originally created as AF-7 work and are held as AF-8 records after the AF-7 Trae/runtime adapter reorder.
 
 Hardening areas:
 
@@ -1009,17 +1086,17 @@ Hardening areas:
 
 Acceptance criteria:
 
-- #119 through #127 or their successors cover practical boundary scenarios and are synchronized in the GitHub Project.
+- #119 through #127 or their successors cover practical boundary scenarios and are synchronized in the GitHub Project as AF-8 records.
 - Status/install/publish/lifecycle flows distinguish Core, Vault, Generated, Runtime, Local Private, manual target, and Project scheduler state.
 - Temp-root tests or evidence cover stale runtime after remote update, stale generated output after Core/Vault change, second-machine onboarding, receipt drift, manual ChatGPT boundary, and lifecycle rollback behavior.
 - Repair guidance is explicit and safe: fetch/pull, publish generated output, dry-run install, reviewed apply, manual import, or route to human review.
 - No memory-system directories, schemas, storage, MCP tools, or design work are introduced.
 
-### AF-8 / M8: Advanced Capability Pack Discovery and Lifecycle
+### AF-9 / M9: Advanced Capability Pack Discovery and Lifecycle
 
 Goal: improve whether Agent Foundry can recognize, maintain, and export higher-level capability packs that emerge from repeated work after the basic AF-6 pack lifecycle exists.
 
-This is intentionally later than repository hygiene, productization, physical split migration, current-user deployment and upgrade migration, onboarding, lifecycle completion, and capability-system hardening. Do not use this milestone to delay AF-1 through AF-7. AF-6 owns the complete install experience, basic pack status/plan/apply/update/disable lifecycle, and first optional multi-agent collaboration pack deployment path. AF-7 hardens the actual capability system in realistic user/runtime scenarios. AF-8 is for automatic discovery, advanced lifecycle optimization, export polish, and maintenance of emergent packs.
+This is intentionally later than repository hygiene, productization, physical split migration, current-user deployment and upgrade migration, onboarding, lifecycle completion, runtime adapter framework work, and capability-system hardening. Do not use this milestone to delay AF-1 through AF-8. AF-6 owns the complete install experience, basic pack status/plan/apply/update/disable lifecycle, and first optional multi-agent collaboration pack deployment path. AF-7 makes adapters runtime-aware and adds Trae support. AF-8 hardens the actual capability system in realistic user/runtime scenarios. AF-9 is for automatic discovery, advanced lifecycle optimization, export polish, and maintenance of emergent packs.
 
 Capability packs are not the same as individual assets. A future capability pack may bundle practices, assets, workflows, templates, adapter snippets, examples, configuration profiles, dependency metadata, and export/install behavior around a recurring user goal such as multi-agent collaboration or technical documentation writing.
 
@@ -1050,11 +1127,11 @@ Acceptance criteria:
 - Exportable packs do not include local-private evidence, personal vault content, or future architecture concepts as current substrate.
 - The design proves at least one existing capability cluster could be packaged without weakening Core/Vault boundaries.
 
-### AF-9 / M9: Memory-System Readiness Design
+### AF-10 / M10: Memory-System Readiness Design
 
 Goal: define memory as an adjacent future capability without implementing storage yet.
 
-AF-9 does not begin until explicitly authorized. It is intentionally after capability-system hardening and advanced capability-pack lifecycle planning.
+AF-10 does not begin until explicitly authorized. It is intentionally after runtime adapter framework work, capability-system hardening, and advanced capability-pack lifecycle planning.
 
 Epics:
 
@@ -1087,11 +1164,11 @@ Acceptance criteria:
 - Open questions remain visible.
 - No automatic memory writing exists.
 
-### AF-10 / M10: Memory Implementation Home Decision
+### AF-11 / M11: Memory Implementation Home Decision
 
-Goal: decide the implementation home for memory-system work using evidence from AF-1 through AF-9.
+Goal: decide the implementation home for memory-system work using evidence from AF-1 through AF-10.
 
-AF-10 is a decision stage, not implementation. It does not authorize creating memory directories, schemas, MCP write tools, or storage.
+AF-11 is a decision stage, not implementation. It does not authorize creating memory directories, schemas, MCP write tools, or storage.
 
 Decision options:
 
@@ -1131,9 +1208,9 @@ Acceptance criteria:
 
 ## Future Memory-System Implementation
 
-Goal: implement a reviewed memory/knowledge MVP only after Foundry lifecycle, capability-system hardening, memory readiness, and implementation-home decisions are complete, and only after explicit user authorization.
+Goal: implement a reviewed memory/knowledge MVP only after Foundry lifecycle, runtime adapter framework work, capability-system hardening, memory readiness, and implementation-home decisions are complete, and only after explicit user authorization.
 
-Expected scope will be defined by AF-9 and AF-10. Until then, memory-system implementation is a future placeholder, not a license to create memory directories, schemas, or MCP write tools now.
+Expected scope will be defined by AF-10 and AF-11. Until then, memory-system implementation is a future placeholder, not a license to create memory directories, schemas, or MCP write tools now.
 
 ## Work Not To Do Yet
 
@@ -1143,14 +1220,19 @@ Expected scope will be defined by AF-9 and AF-10. Until then, memory-system impl
 - Do not add MCP write tools.
 - Do not import raw ChatGPT exports.
 - Do not implement memory-system design or implementation before explicit user authorization.
-- Do not refactor adapters or runtime install behavior until repository hygiene policy exists.
+- Do not refactor adapters or runtime install behavior outside reviewed AF-7 adapter framework scope.
 
 ## Immediate Next Planning Tasks
 
 1. Treat AF-6 as merged and complete through #116 and #105.
-2. Use #119 as the AF-7 capability-system hardening Epic.
-3. Start #120 first as the scenario matrix and acceptance-gate pass.
-4. Release #121, #122, #125, #126, and #127 against the scenario matrix where possible.
-5. Let #123 and #124 proceed independently when scoped to parser/schema robustness and manual-target policy.
-6. Keep AF-8 advanced capability-pack discovery out of implementation until AF-7 hardening evidence is accepted.
-7. Do not begin AF-9/AF-10 memory-system readiness or implementation-home work until explicitly authorized by the user.
+2. Treat the Trae/runtime adapter framework work as the active AF-7 stage.
+3. Use #134 as the AF-7 runtime adapter framework and Trae support Epic.
+4. Use #138 to complete the AF-7 governance repair and reconstructed child issue plan.
+5. Use #139 as the next Review gate before #141 downstream hardening.
+6. Release #142 and #143 as the next Ready AF-7 validation tasks after accepted #140.
+7. Keep #145 in Inbox until #143 validates SOLO versus fallback behavior.
+8. Use #144 as the final AF-7 readiness review before any Epic completion decision.
+9. Keep #119 through #127 held as AF-8 capability-system hardening records.
+10. Keep the existing AF-8 implementation PRs held until AF-7 is complete or the user explicitly resumes them.
+11. Keep AF-9 advanced capability-pack discovery out of implementation until AF-8 hardening evidence is accepted.
+12. Do not begin AF-10/AF-11 memory-system readiness or implementation-home work until explicitly authorized by the user.
