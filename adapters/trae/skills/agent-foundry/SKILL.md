@@ -47,6 +47,16 @@ Before substantial changes, check:
 - Verifier: status, command, install, and runtime freshness checks.
 - Harvester: candidate extraction only; do not activate canonical records without review.
 
+## Trae Multi-Agent Mode
+
+- Use SOLO Agent for planning-first multi-role orchestration when the task needs Architect -> Implementer -> Reviewer separation.
+- Prefer `.trae/subagents/*.md` for approved project-specific role prompts because they are selected per task.
+- Do not use separate `.trae/rules/architect.md`, `.trae/rules/implementor.md`, and `.trae/rules/reviewer.md` as the default role model; Trae treats project rules as always-applied workspace rules, so all roles can see all role contracts.
+- Use a single dispatcher or project contract reference in `.trae/rules` only when ambient project-wide wording is explicitly intended.
+- Keep Single Chat role dispatch as the fallback when SOLO/SubAgents are unavailable, too costly, or unreliable.
+- Keep durable coordination in GitHub issues, labels, comments, PRs, and explicit requested project artifacts.
+- Do not create summary `.md`, `.txt`, or `.docx` artifacts unless the user asks or the issue acceptance criteria requires a document deliverable.
+
 ## Runtime Rules
 
 - Treat canonical practices and assets in the selected User Vault as the source of truth.
