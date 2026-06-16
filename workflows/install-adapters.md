@@ -45,6 +45,7 @@ runtime/local/runtime_manifest.yaml
    ```bash
    python3 scripts/runtime_manifest.py enable codex
    python3 scripts/runtime_manifest.py configure hermes --path ~/.hermes/skills
+   python3 scripts/runtime_manifest.py enable trae
    ```
 
 5. Review the install plan:
@@ -61,13 +62,21 @@ runtime/local/runtime_manifest.yaml
 
    The dry run prints an operation-context preflight. Confirm that Core, selected Vault, generated adapter output, managed runtime writes, manual targets, and forbidden writes are visible before applying.
 
-7. Apply only when destinations are correct:
+7. Read status before applying:
+
+   ```bash
+   python3 scripts/sync_status.py
+   ```
+
+   Treat this as the safe status gate. It should name the Core root, selected Vault, generated output, enabled runtime targets, manual targets, receipt state, and next safe actions.
+
+8. Apply only when destinations are correct:
 
    ```bash
    python3 scripts/install_foundry.py --apply
    ```
 
-8. For target-specific manual control, use:
+9. For target-specific manual control, use:
 
    ```bash
    python3 scripts/sync_adapters.py --target codex --apply
@@ -75,9 +84,32 @@ runtime/local/runtime_manifest.yaml
    python3 scripts/sync_adapters.py --target hermes --apply --dest <hermes-skills-dir>
    ```
 
-9. If sync refuses to overwrite an unmanaged skill directory, inspect the existing directory first. Use `--force` only when it is known to be an Agent Foundry runtime copy that should be adopted.
+10. If sync refuses to overwrite an unmanaged skill directory, inspect the existing directory first. Use `--force` only when it is known to be an Agent Foundry runtime copy that should be adopted.
 
-10. For ChatGPT, manually upload `adapters/chatgpt/knowledge/` and copy `custom-instructions.md`.
+11. For ChatGPT, manually upload generated ChatGPT knowledge files and copy `custom-instructions.md`. ChatGPT has no managed local runtime install.
+
+12. For Trae, treat writes under `~/.trae-cn` as managed runtime writes. Dry-run and review first; apply only after durable human approval confirms the path and write intent.
+
+## Status And Drift Interpretation
+
+Run this whenever adapters feel stale, after a long idle period, after switching machines, or before applying runtime writes:
+
+```bash
+python3 scripts/sync_status.py
+```
+
+Interpret the report by layer:
+
+- `repo: behind` or `repo: diverged`: fetch/pull or resolve Core repo state before publishing generated output or applying runtime changes.
+- `generated_output: missing` or missing manifest: publish adapters from the selected Vault before install.
+- `activation: stale-generated-output`: active practice or asset IDs in the selected Vault are not represented in generated output; publish adapters, then dry-run install.
+- `receipt: missing`: no runtime install evidence exists yet; review generated output and run install dry-run before apply.
+- `receipt: selected-output-drift`: installed runtime files no longer match selected generated output; review drift, regenerate output if needed, dry-run install, then apply only when the runtime write is expected.
+- `receipt: selected-output-unknown`: repair or recreate the receipt only through a reviewed install apply.
+- `chatgpt: manual import required`: manually update ChatGPT project/custom GPT state from generated ChatGPT output.
+- Trae repair guidance: do not write `~/.trae-cn/skills` unless durable human approval explicitly authorizes that runtime apply.
+
+Do not edit canonical Vault records to hide a runtime drift signal. Fix the selected generated output or local runtime install state instead.
 
 ## Cross-Machine Restore
 
@@ -112,7 +144,7 @@ Use this path when a deployment must recreate runtime state from public Core plu
    python3 scripts/sync_status.py --core-root <core-root> --vault-root <vault-root> --adapter-root <generated-root>
    ```
 
-7. Apply only after the report names the expected Core root, Vault root, generated output, enabled runtimes, manual targets, and receipt status.
+7. Apply only after the report names the expected Core root, Vault root, generated output, enabled runtimes, manual targets, receipt status, and any runtime-write approval requirement.
 
 Do not copy `runtime/local/runtime_manifest.yaml`, `runtime/local/adapter-install-receipt.yaml`, `~/.agent-foundry/config.yaml`, managed runtime directories, or ChatGPT project imports from another machine as canonical truth. Recreate them locally from the selected Vault and generated output.
 

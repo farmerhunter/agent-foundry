@@ -2,7 +2,7 @@
 
 Agent Foundry is local-first. Core tooling, User Vault records, and installed runtime files are separate layers.
 
-Current scope: this document describes the AF-6 Core/Vault deployment lifecycle. A clean public Core checkout contains workflows, schemas, scripts, templates, docs, adapter profiles, validation tooling, install orchestration, pack planning/apply/update/lifecycle helpers, and runtime status/rollback helpers. Canonical practice and asset records live in a selected User Vault, typically outside the Core checkout. AF-6 implements the tested baseline for blank-Vault initialization, mandatory bootstrap pack deployment, optional pack deployment, selected generated output, managed runtime status/receipt reporting, and pack disable/retire lifecycle behavior.
+Current scope: this document describes the AF-8 Core/Vault deployment lifecycle. A clean public Core checkout contains workflows, schemas, scripts, templates, docs, adapter profiles, validation tooling, install orchestration, pack planning/apply/update/lifecycle helpers, and runtime status/rollback helpers. Canonical practice and asset records live in a selected User Vault, typically outside the Core checkout. AF-8 keeps the AF-6 install and pack lifecycle baseline, adds runtime adapter/Trae awareness from AF-7, and hardens multi-machine restore, long-running status, selected-output receipt drift, manual targets, and first-run command UX.
 
 ```text
 Agent Foundry Core + selected User Vault
@@ -24,7 +24,7 @@ Agent Foundry Core + selected User Vault
 - `runtime/templates/runtime_manifest.template.yaml`: portable deployment template, tracked in git.
 - `runtime/local/runtime_manifest.yaml`: this machine's private deployment state, ignored by git and portable snapshots.
 - `~/.agent-foundry/config.yaml`: this machine's private Foundry locator for agents working outside the repo.
-- Installed runtime locations such as `~/.codex`, `~/.claude`, and `~/.hermes`: downstream copies, not source of truth.
+- Installed runtime locations such as `~/.codex`, `~/.claude`, `~/.hermes`, and `~/.trae-cn`: downstream copies, not source of truth.
 
 Run Core scripts from the Agent Foundry Core checkout unless a workflow explicitly says otherwise:
 
@@ -69,6 +69,7 @@ This flow creates or selects a local User Vault. The Vault may be blank, restore
    python3 scripts/runtime_manifest.py enable codex
    python3 scripts/runtime_manifest.py enable claude-code
    python3 scripts/runtime_manifest.py enable hermes
+   python3 scripts/runtime_manifest.py enable trae
    ```
 
 6. If a runtime uses a non-default path, configure it:
@@ -89,13 +90,21 @@ This flow creates or selects a local User Vault. The Vault may be blank, restore
    python3 scripts/install_foundry.py
    ```
 
-9. Apply after reviewing destinations:
+9. Read the status report before applying:
+
+   ```bash
+   python3 scripts/sync_status.py
+   ```
+
+   Confirm that Core, selected Vault, generated output, runtime targets, manual targets, and receipt state match the machine you intend to update.
+
+10. Apply after reviewing destinations:
 
    ```bash
    python3 scripts/install_foundry.py --apply
    ```
 
-10. Verify status:
+11. Verify status:
 
    ```bash
    python3 scripts/sync_status.py
@@ -203,13 +212,46 @@ The public Core cannot fetch, clone, or repair a private Vault automatically. Cl
    python3 scripts/foundry_config.py status
    ```
 
-ChatGPT remains a manual runtime. Refresh it from `/tmp/agent-foundry-adapters/chatgpt/` after selected-Vault adapter publishing has been reviewed.
+ChatGPT remains a manual runtime. Refresh it from `/tmp/agent-foundry-adapters/chatgpt/` after selected-Vault adapter publishing has been reviewed. Do not treat a ChatGPT project or Custom GPT upload as managed local runtime state.
+
+Trae can be represented as a managed local runtime target, but writes under `~/.trae-cn` remain runtime writes. Apply them only after durable human approval confirms the target path and write intent.
 
 Fail closed if the private Vault is absent, its `.agent-foundry-vault.yaml` marker is missing or incompatible with the Core marker, the Core marker is missing, runtime targets are ambiguous, or stale combined-root paths remain in local deployment state. Do not let a public Core checkout infer or fetch private Vault content.
 
+## Status And Drift
+
+`sync_status.py` is the safe first command when a machine may be stale:
+
+```bash
+python3 scripts/sync_status.py
+```
+
+Use it after long idle periods, after switching machines, after pulling Core or Vault changes, before runtime apply, and when a rule appears not to affect an agent.
+
+The report distinguishes:
+
+- Core remote progress: fetch/pull before publishing or applying if this checkout is behind.
+- selected Vault: the canonical practice/asset source.
+- generated output: selected-Vault adapter files that can be reviewed before install.
+- activation freshness: whether active practice/asset IDs are represented in generated output.
+- runtime receipt: which generated output was installed to local runtimes.
+- selected-output drift: installed files no longer match the selected generated output.
+- manual targets: ChatGPT requires manual import.
+- runtime write gates: Trae and other managed runtime writes require explicit approval before apply.
+
+Repair stale state in this order:
+
+1. Bring Core and the selected Vault to the intended versions.
+2. Publish selected-Vault generated output.
+3. Run `install_foundry.py` as a dry-run.
+4. Read `sync_status.py`.
+5. Apply runtime install only after the expected runtime destinations and manual targets are clear.
+
+Do not repair generated-output or runtime drift by editing unrelated Vault records. Do not copy another machine's local runtime receipt, local manifest, agent runtime directories, or ChatGPT project state as canonical truth.
+
 ## External-User Boundary
 
-AF-6 provides a tested local-first setup baseline for a new user or machine: clone Core, initialize or select a Vault, deploy the mandatory bootstrap pack, publish selected generated output, inspect status, and then explicitly dry-run or apply managed runtime installs. This is not yet a marketplace, hosted installer, or fully polished product wizard, but it is no longer only maintainer implementation evidence.
+AF-8 provides a tested local-first setup baseline for a new user or machine: clone Core, initialize or select a Vault, deploy the mandatory bootstrap pack, publish selected generated output, inspect status, and then explicitly dry-run or apply managed runtime installs. It also verifies multi-machine restore, selected-output drift reporting, first-run command UX, and capability pack fail-closed behavior. This is not yet a marketplace, hosted installer, or fully polished product wizard, but it is no longer only maintainer implementation evidence.
 
 The supported public setup baseline expects:
 
@@ -220,9 +262,9 @@ The supported public setup baseline expects:
 - adapter generation from the selected user's Vault, not a bundled current-user Vault;
 - runtime install that can verify split Core/Vault state before writing managed runtime files;
 - mandatory bootstrap pack deployment followed by optional capability pack deployment when the user selects a known pack;
-- ChatGPT manual import boundaries and managed runtime receipt/status reporting for Codex, Claude Code, and Hermes.
+- ChatGPT manual import boundaries and managed runtime receipt/status reporting for Codex, Claude Code, Hermes, and Trae.
 
-Remaining productization work includes friendlier command wrapping, broader pack distribution/update UX, remote trust policy, and physical multi-machine onboarding documentation. Final merge from AF-6 integration to `main` remains human-gated.
+Remaining productization work includes friendlier command wrapping, broader pack distribution/update UX, remote trust policy, and physical multi-machine onboarding evidence.
 
 ## Daily Update
 
