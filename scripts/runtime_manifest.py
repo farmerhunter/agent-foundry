@@ -27,7 +27,53 @@ def ensure_local_manifest() -> None:
 
 def read_manifest() -> list[str]:
     ensure_local_manifest()
-    return LOCAL_MANIFEST.read_text(encoding="utf-8").splitlines()
+    lines = LOCAL_MANIFEST.read_text(encoding="utf-8").splitlines()
+    if TEMPLATE_MANIFEST.exists():
+        return merge_template_targets(lines, TEMPLATE_MANIFEST.read_text(encoding="utf-8").splitlines())
+    return lines
+
+
+def target_blocks(lines: list[str]) -> dict[str, list[str]]:
+    blocks: dict[str, list[str]] = {}
+    current: str | None = None
+    current_lines: list[str] = []
+    in_targets = False
+    for line in lines:
+        if line == "targets:":
+            in_targets = True
+            continue
+        if not in_targets:
+            continue
+        if line.startswith("  ") and not line.startswith("    ") and line.rstrip().endswith(":"):
+            if current is not None:
+                blocks[current] = current_lines
+            current = line.strip().removesuffix(":")
+            current_lines = [line]
+            continue
+        if current is not None:
+            current_lines.append(line)
+    if current is not None:
+        blocks[current] = current_lines
+    return blocks
+
+
+def merge_template_targets(local_lines: list[str], template_lines: list[str]) -> list[str]:
+    if "targets:" not in local_lines:
+        return local_lines
+    local_targets = parse_targets(local_lines)
+    additions = [block for name, block in target_blocks(template_lines).items() if name not in local_targets]
+    if not additions:
+        return local_lines
+    merged = list(local_lines)
+    if merged and merged[-1].strip():
+        merged.append("")
+    for block in additions:
+        merged.extend(block)
+        if merged[-1].strip():
+            merged.append("")
+    while merged and not merged[-1].strip():
+        merged.pop()
+    return merged
 
 
 def write_manifest(lines: list[str]) -> None:

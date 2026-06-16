@@ -288,7 +288,7 @@ Use this after installing a new local agent or deciding to deploy Agent Foundry 
    python3 scripts/install_foundry.py --target <target> --apply
    ```
 
-Supported local targets: `codex`, `claude-code`, `hermes`. `chatgpt` is `manual`.
+Supported local targets: `codex`, `claude-code`, `hermes`, `trae`. `chatgpt` is `manual`.
 
 ## Remove Or Pause An Agent
 
@@ -432,6 +432,14 @@ Hermes:
 ```text
 adapter: adapters/hermes/skills/
 default runtime: ~/.hermes/skills/
+ownership: managed skill directories with .agent-foundry-managed
+```
+
+Trae CN:
+
+```text
+adapter: adapters/trae/skills/
+default runtime: ~/.trae-cn/skills/
 ownership: managed skill directories with .agent-foundry-managed
 ```
 
