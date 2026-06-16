@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Second-machine onboarding and restore fixtures for AF7 capability hardening."""
+"""Second-machine onboarding and restore fixtures for AF8 capability hardening."""
 
 from __future__ import annotations
 
