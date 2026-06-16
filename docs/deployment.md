@@ -282,18 +282,27 @@ Use this after practices, assets, or adapters change.
    python3 scripts/install_foundry.py
    ```
 
-3. Apply to enabled local targets:
+3. Review status before writing runtime files:
+
+   ```bash
+   python3 scripts/sync_status.py
+   ```
+
+   Confirm receipt state, manual targets, selected generated output, and any Trae/runtime write approval requirement.
+
+4. Apply to enabled local targets only after the status report matches the intended machine:
 
    ```bash
    python3 scripts/install_foundry.py --apply
    ```
 
-4. For ChatGPT, manually update project/custom GPT instructions and knowledge files from `adapters/chatgpt/`.
+5. For ChatGPT, manually update project/custom GPT instructions and knowledge files from reviewed selected-Vault generated output, not from Core adapter templates.
 
-5. Verify the locator still points at this repo:
+6. Verify the locator still points at this repo and status remains clean:
 
    ```bash
    python3 scripts/foundry_config.py status
+   python3 scripts/sync_status.py
    ```
 
 ## Add An Agent
@@ -324,7 +333,15 @@ Use this after installing a new local agent or deciding to deploy Agent Foundry 
    python3 scripts/install_foundry.py --target <target>
    ```
 
-5. Apply after review:
+5. Review status for that target before applying:
+
+   ```bash
+   python3 scripts/sync_status.py
+   ```
+
+   For Trae or any managed runtime path, confirm durable human approval exists before writing runtime files.
+
+6. Apply after review:
 
    ```bash
    python3 scripts/install_foundry.py --target <target> --apply
@@ -367,13 +384,21 @@ Use this when a runtime moves, a profile changes, or Hermes/Codex uses a custom 
    python3 scripts/install_foundry.py --target <target>
    ```
 
-3. Apply:
+3. Review status before writing to the new path:
+
+   ```bash
+   python3 scripts/sync_status.py
+   ```
+
+   Confirm the selected generated output, receipt state, manual targets, and any Trae/runtime write approval requirement.
+
+4. Apply:
 
    ```bash
    python3 scripts/install_foundry.py --target <target> --apply
    ```
 
-4. If the old path should be cleaned, do it manually after verifying ownership markers or managed blocks.
+5. If the old path should be cleaned, do it manually after verifying ownership markers or managed blocks.
 
 ## Online Sync
 
@@ -403,6 +428,12 @@ Use GitHub when available. GitHub is an async remote backup and distribution cha
    ```bash
    python3 scripts/runtime_manifest.py status
    python3 scripts/install_foundry.py
+   python3 scripts/sync_status.py
+   ```
+
+5. Apply runtime install only after the dry-run and status report identify the expected selected Vault, generated output, runtime receipt state, manual targets, and any Trae/runtime write approval requirement:
+
+   ```bash
    python3 scripts/install_foundry.py --apply
    ```
 
@@ -446,7 +477,10 @@ Use snapshots when GitHub is unavailable or unreliable.
    python3 scripts/runtime_manifest.py init
    python3 scripts/runtime_manifest.py status
    python3 scripts/install_foundry.py
+   python3 scripts/sync_status.py
    ```
+
+   Apply runtime install only after the dry-run and status report identify the intended selected Vault, generated output, runtime receipt state, manual targets, and any runtime-write approval requirement.
 
 Portable snapshots include `runtime/templates/` but exclude `runtime/local/`, because local runtime deployment state is machine-specific.
 
@@ -455,7 +489,7 @@ Portable snapshots include `runtime/templates/` but exclude `runtime/local/`, be
 Codex:
 
 ```text
-adapter: adapters/codex/skills/
+generated output: <generated-root>/codex/skills/
 default runtime: ~/.codex/skills/
 ownership: managed skill directories with .agent-foundry-managed
 ```
@@ -463,8 +497,8 @@ ownership: managed skill directories with .agent-foundry-managed
 Claude Code:
 
 ```text
-adapter: adapters/claude-code/CLAUDE.md
-adapter: adapters/claude-code/commands/
+generated output: <generated-root>/claude-code/CLAUDE.md
+generated output: <generated-root>/claude-code/commands/
 default runtime: ~/.claude
 ownership: ~/.claude/agent-foundry/ plus managed import block in ~/.claude/CLAUDE.md
 ```
@@ -472,7 +506,7 @@ ownership: ~/.claude/agent-foundry/ plus managed import block in ~/.claude/CLAUD
 Hermes:
 
 ```text
-adapter: adapters/hermes/skills/
+generated output: <generated-root>/hermes/skills/
 default runtime: ~/.hermes/skills/
 ownership: managed skill directories with .agent-foundry-managed
 ```
@@ -480,7 +514,7 @@ ownership: managed skill directories with .agent-foundry-managed
 Trae CN:
 
 ```text
-adapter: adapters/trae/skills/
+generated output: <generated-root>/trae/skills/
 default runtime: ~/.trae-cn/skills/
 ownership: managed skill directories with .agent-foundry-managed
 ```
@@ -488,8 +522,8 @@ ownership: managed skill directories with .agent-foundry-managed
 ChatGPT:
 
 ```text
-adapter: adapters/chatgpt/custom-instructions.md
-adapter: adapters/chatgpt/knowledge/
+generated output: <generated-root>/chatgpt/custom-instructions.md
+generated output: <generated-root>/chatgpt/knowledge/
 runtime: manual project/custom GPT import
 ```
 
