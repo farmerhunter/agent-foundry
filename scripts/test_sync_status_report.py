@@ -3,19 +3,62 @@
 
 from __future__ import annotations
 
-import tempfile
 import subprocess
+import tempfile
 import sys
 from pathlib import Path
 
 import sync_status
 from adapter_install_receipt import file_sha256
-from sync_status import ROOT, DEFAULT_GENERATED_ROOT, default_adapter_root, deployed_packs, runtime_status, setup_report
+from sync_status import ROOT, DEFAULT_GENERATED_ROOT, default_adapter_root, deployed_packs, repo_progress_status, runtime_status, setup_report
 
 
 def write(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
+
+
+def git(args: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(["git", *args], cwd=cwd, check=False, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+
+def assert_git(args: list[str], cwd: Path) -> None:
+    result = git(args, cwd)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def assert_repo_progress_behind(base: Path) -> None:
+    base.mkdir(parents=True)
+    remote = base / "remote.git"
+    work = base / "work"
+    other = base / "other"
+    assert_git(["init", "--bare", str(remote)], base)
+    assert_git(["init", "-b", "main", str(work)], base)
+    assert_git(["config", "user.email", "agent-foundry@example.com"], work)
+    assert_git(["config", "user.name", "Agent Foundry"], work)
+    write(work / "README.md", "one\n")
+    assert_git(["add", "README.md"], work)
+    assert_git(["commit", "-m", "initial"], work)
+    assert_git(["remote", "add", "origin", str(remote)], work)
+    assert_git(["push", "-u", "origin", "main"], work)
+
+    assert_git(["clone", str(remote), str(other)], base)
+    assert_git(["checkout", "main"], other)
+    assert_git(["config", "user.email", "agent-foundry@example.com"], other)
+    assert_git(["config", "user.name", "Agent Foundry"], other)
+    write(other / "README.md", "two\n")
+    assert_git(["commit", "-am", "remote progress"], other)
+    assert_git(["push"], other)
+    assert_git(["fetch"], work)
+
+    original_root = sync_status.ROOT
+    try:
+        sync_status.ROOT = work
+        report = repo_progress_status()
+        assert "repo: behind ahead=0 behind=1" in report, report
+        assert "repair: fetch/pull remote Core progress before publishing generated output or applying runtime changes" in report, report
+    finally:
+        sync_status.ROOT = original_root
 
 
 def run(args: list[str]) -> subprocess.CompletedProcess[str]:
@@ -32,12 +75,39 @@ def run(args: list[str]) -> subprocess.CompletedProcess[str]:
 def main() -> int:
     with tempfile.TemporaryDirectory(prefix="agent-foundry-sync-status.") as raw:
         base = Path(raw)
+        assert_repo_progress_behind(base / "repo-progress")
         vault = base / "vault"
         generated = base / "generated-adapters"
         receipt = base / "adapter-install-receipt.json"
         (vault / "practices").mkdir(parents=True)
         (generated / "codex" / "skills").mkdir(parents=True)
         write(generated / "adapter-publish-manifest.yaml", "active_assets: []\n")
+        write(
+            vault / "indexes" / "practice_index.yaml",
+            "\n".join(
+                [
+                    "schema_version: 1",
+                    "practices:",
+                    "  - id: PRACTICE-ACTIVE-001",
+                    "    status: active",
+                    "    path: practices/example/PRACTICE-ACTIVE-001.md",
+                    "",
+                ]
+            ),
+        )
+        write(
+            vault / "indexes" / "asset_index.yaml",
+            "\n".join(
+                [
+                    "schema_version: 1",
+                    "assets:",
+                    "  - id: ASSET-ACTIVE-001",
+                    "    status: active",
+                    "    path: assets/skills/ASSET-ACTIVE-001.asset.yaml",
+                    "",
+                ]
+            ),
+        )
         write(
             receipt,
             "{\n"
@@ -88,6 +158,10 @@ def main() -> int:
             "deployed_packs:",
             "- pack.bootstrap.minimal (version=0.1.0, status=deployed, type=mandatory_bootstrap, source=local_path)",
             f"generated_output: ready path={generated} files=1",
+            "activation: stale-generated-output missing_active_practices=1 missing_active_assets=1",
+            "activation missing practice: PRACTICE-ACTIVE-001",
+            "activation missing asset: ASSET-ACTIVE-001",
+            "activation repair: publish selected Vault generated output, then dry-run runtime install before apply",
             "receipt: missing",
             "- chatgpt: manual import required",
             "next_safe_actions:",

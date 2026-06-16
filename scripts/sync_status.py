@@ -35,6 +35,63 @@ def run_git(args: list[str]) -> str:
     return text or "none"
 
 
+def run_git_status(args: list[str]) -> subprocess.CompletedProcess[str]:
+    try:
+        return subprocess.run(
+            ["git", *args],
+            cwd=ROOT,
+            check=False,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+    except FileNotFoundError:
+        return subprocess.CompletedProcess(["git", *args], 127, "", "git unavailable")
+
+
+def repo_progress_status() -> str:
+    branch = run_git(["branch", "--show-current"])
+    upstream = run_git_status(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"])
+    if upstream.returncode != 0:
+        return "\n".join(
+            [
+                "repo: upstream-unknown",
+                f"branch: {branch}",
+                "repair: set or fetch the upstream branch before assuming remote Core progress is current",
+            ]
+        )
+    upstream_name = upstream.stdout.strip()
+    counts = run_git_status(["rev-list", "--left-right", "--count", f"{upstream_name}...HEAD"])
+    if counts.returncode != 0:
+        return "\n".join(
+            [
+                "repo: upstream-unavailable",
+                f"branch: {branch}",
+                f"upstream: {upstream_name}",
+                "repair: fetch remote Core progress before publishing or applying runtime changes",
+            ]
+        )
+    left, right = (counts.stdout.strip().split() + ["0", "0"])[:2]
+    behind = int(left)
+    ahead = int(right)
+    if behind and ahead:
+        state = "diverged"
+    elif behind:
+        state = "behind"
+    elif ahead:
+        state = "ahead"
+    else:
+        state = "current"
+    lines = [
+        f"repo: {state} ahead={ahead} behind={behind}",
+        f"branch: {branch}",
+        f"upstream: {upstream_name}",
+    ]
+    if behind:
+        lines.append("repair: fetch/pull remote Core progress before publishing generated output or applying runtime changes")
+    return "\n".join(lines)
+
+
 def latest_snapshot() -> Path | None:
     snapshots = sorted((ROOT / "sync" / "snapshots").glob("*.tar.gz"), key=lambda p: p.stat().st_mtime)
     return snapshots[-1] if snapshots else None
@@ -237,6 +294,70 @@ def generated_output_status(adapter_root: Path) -> tuple[str, int]:
     return "ready", len(files)
 
 
+def index_active_ids(path: Path, list_key: str) -> set[str]:
+    if not path.exists():
+        return set()
+    try:
+        data = parse_simple_yaml(path.read_text(encoding="utf-8"))
+    except ValueError:
+        return set()
+    entries = data.get(list_key, [])
+    if not isinstance(entries, list):
+        return set()
+    ids: set[str] = set()
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        status = str(entry.get("status", ""))
+        item_id = str(entry.get("id", ""))
+        if item_id and status in {"active", "revised"}:
+            ids.add(item_id)
+    return ids
+
+
+def manifest_list_ids(path: Path, list_key: str) -> set[str]:
+    if not path.exists():
+        return set()
+    try:
+        data = parse_simple_yaml(path.read_text(encoding="utf-8"))
+    except ValueError:
+        return set()
+    values = data.get(list_key, [])
+    if not isinstance(values, list):
+        return set()
+    return {str(value) for value in values if not isinstance(value, (dict, list))}
+
+
+def activation_freshness_lines(vault_root: Path, adapter_root: Path) -> list[str]:
+    manifest = adapter_root / "adapter-publish-manifest.yaml"
+    active_practices = index_active_ids(vault_root / "indexes" / "practice_index.yaml", "practices")
+    active_assets = index_active_ids(vault_root / "indexes" / "asset_index.yaml", "assets")
+    generated_practices = manifest_list_ids(manifest, "active_practices")
+    generated_assets = manifest_list_ids(manifest, "active_assets")
+    missing_practices = sorted(active_practices - generated_practices)
+    missing_assets = sorted(active_assets - generated_assets)
+    extra_practices = sorted(generated_practices - active_practices)
+    extra_assets = sorted(generated_assets - active_assets)
+    if not manifest.exists():
+        return [
+            "activation: generated-output-missing",
+            "activation repair: publish selected Vault generated output before runtime install or manual import",
+        ]
+    if missing_practices or missing_assets or extra_practices or extra_assets:
+        lines = [
+            "activation: stale-generated-output "
+            f"missing_active_practices={len(missing_practices)} missing_active_assets={len(missing_assets)} "
+            f"extra_generated_practices={len(extra_practices)} extra_generated_assets={len(extra_assets)}",
+        ]
+        for item_id in missing_practices[:5]:
+            lines.append(f"activation missing practice: {item_id}")
+        for item_id in missing_assets[:5]:
+            lines.append(f"activation missing asset: {item_id}")
+        lines.append("activation repair: publish selected Vault generated output, then dry-run runtime install before apply")
+        return lines
+    return ["activation: generated-output-current"]
+
+
 def default_adapter_root(core_root: Path, vault_root: Path, receipt_path: Path) -> Path:
     if core_root != vault_root:
         receipt = read_receipt(receipt_path)
@@ -329,6 +450,7 @@ def setup_report(core_root: Path, vault_root: Path, adapter_root: Path, receipt_
         *(f"- {pack}" for pack in packs),
         *(["- none detected"] if not packs else []),
         f"generated_output: {output_state} path={adapter_root} files={output_count}",
+        *activation_freshness_lines(vault_root, adapter_root),
         "runtime targets:",
     ]
     if not targets:
@@ -441,6 +563,8 @@ def main() -> int:
     print(run_git(["remote", "-v"]))
     print("git status:")
     print(run_git(["status", "--short"]))
+    print("repo progress:")
+    print(repo_progress_status())
     snapshot = latest_snapshot()
     print(f"latest snapshot: {snapshot_summary(snapshot) if snapshot else 'none'}")
     print("sync state:")
