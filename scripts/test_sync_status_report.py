@@ -7,6 +7,7 @@ import tempfile
 from pathlib import Path
 
 import sync_status
+from adapter_install_receipt import file_sha256
 from sync_status import ROOT, DEFAULT_GENERATED_ROOT, default_adapter_root, deployed_packs, runtime_status, setup_report
 
 
@@ -84,6 +85,37 @@ def main() -> int:
         for text in expected:
             assert text in report, text
 
+        trae_dest = base / "runtime" / "trae"
+        write(generated / "trae" / "skills" / "role-automation-planner" / "SKILL.md", "generated trae skill\n")
+        write(trae_dest / "role-automation-planner" / "SKILL.md", "stale installed skill\n")
+        write(
+            receipt,
+            "{\n"
+            '  "schema_version": 1,\n'
+            f'  "adapter_root": "{generated}",\n'
+            '  "installed_targets": ["trae"],\n'
+            '  "installed_files": [\n'
+            "    {\n"
+            '      "target": "trae",\n'
+            '      "source": "trae/skills/role-automation-planner/SKILL.md",\n'
+            f'      "destination": "{trae_dest / "role-automation-planner" / "SKILL.md"}",\n'
+            f'      "sha256": "{file_sha256(generated / "trae" / "skills" / "role-automation-planner" / "SKILL.md")}"\n'
+            "    }\n"
+            "  ]\n"
+            "}\n",
+        )
+        drift_report = setup_report(ROOT, vault, generated, receipt)
+        drift_expected = [
+            "receipt: selected-output-drift",
+            "receipt target: trae selected-output-drift checked=1 problems=1",
+            "receipt repair: trae review generated output, run install dry-run, then apply only with runtime-write approval",
+            "receipt repair: trae writes ~/.trae-cn/skills and requires durable human approval before --apply",
+            "- repair selected-output drift by regenerating output, reviewing install dry-run, then applying approved managed runtime sync",
+            "- for Trae, do not write ~/.trae-cn/skills unless durable human approval explicitly authorizes that runtime apply",
+        ]
+        for text in drift_expected:
+            assert text in drift_report, text
+
         local_manifest = ROOT / "runtime" / "local" / "runtime_manifest.yaml"
         before = local_manifest.read_bytes() if local_manifest.exists() else None
         original_root = sync_status.ROOT
@@ -102,6 +134,10 @@ def main() -> int:
                         "    status: manual",
                         "    install_path: \"\"",
                         "    ownership_mode: manual-import",
+                        "  trae:",
+                        "    status: disabled",
+                        "    install_path: ~/.trae-cn/skills",
+                        "    ownership_mode: managed-directories",
                         "",
                     ]
                 ),
@@ -109,6 +145,7 @@ def main() -> int:
             sync_status.ROOT = fake_core
             text = runtime_status()
             assert "manifest_source: template-read-only" in text, text
+            assert "trae: status=disabled path=~/.trae-cn/skills exists=" in text, text
             assert not (fake_core / "runtime" / "local" / "runtime_manifest.yaml").exists()
         finally:
             sync_status.ROOT = original_root

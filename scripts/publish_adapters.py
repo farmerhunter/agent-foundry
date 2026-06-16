@@ -14,6 +14,8 @@ from operation_context import configured_roots, print_operation_context
 
 
 ACTIVE_STATUSES = {"active", "revised"}
+SKILL_FOLDER_ADAPTERS = {"codex", "hermes", "trae"}
+TRAE_COMPATIBLE_SKILL_ADAPTERS = {"codex", "hermes"}
 
 
 def read(path: Path) -> str:
@@ -177,7 +179,36 @@ def parse_profiles(core_root: Path) -> dict[str, dict[str, object]]:
     return profiles
 
 
-def manifest_text(active_practices: list[dict[str, str]], active_assets: list[dict[str, str]]) -> str:
+def skill_artifact_records(output_root: Path, skill_assets: list[dict[str, object]]) -> list[dict[str, str]]:
+    records: list[dict[str, str]] = []
+    for record in skill_assets:
+        published_to = record.get("published_to", [])
+        if not isinstance(published_to, list):
+            continue
+        for adapter_id in sorted(SKILL_FOLDER_ADAPTERS):
+            if adapter_id not in published_to and not (
+                adapter_id == "trae" and TRAE_COMPATIBLE_SKILL_ADAPTERS.intersection(published_to)
+            ):
+                continue
+            path = output_root / adapter_id / "skills" / str(record["slug"]) / "SKILL.md"
+            source = str(record.get("source_path", ""))
+            records.append(
+                {
+                    "adapter": adapter_id,
+                    "asset_id": str(record["id"]),
+                    "slug": str(record["slug"]),
+                    "path": str(path.relative_to(output_root)),
+                    "source_path": source,
+                }
+            )
+    return records
+
+
+def manifest_text(
+    active_practices: list[dict[str, str]],
+    active_assets: list[dict[str, str]],
+    skill_artifacts: list[dict[str, str]],
+) -> str:
     lines = [
         "schema_version: 1",
         f"updated: {date.today().isoformat()}",
@@ -198,6 +229,17 @@ def manifest_text(active_practices: list[dict[str, str]], active_assets: list[di
             lines.append(f"  - {entry['id']}")
     else:
         lines.append("active_assets: []")
+    lines.append("")
+    if skill_artifacts:
+        lines.append("generated_skill_artifacts:")
+        for artifact in skill_artifacts:
+            lines.append(f"  - adapter: {artifact['adapter']}")
+            lines.append(f"    asset_id: {artifact['asset_id']}")
+            lines.append(f"    slug: {artifact['slug']}")
+            lines.append(f"    path: {artifact['path']}")
+            lines.append(f"    source_path: {artifact['source_path']}")
+    else:
+        lines.append("generated_skill_artifacts: []")
     lines.append("")
     return "\n".join(lines)
 
@@ -352,8 +394,10 @@ def write_generated_skill_outputs(
         published_to = record.get("published_to", [])
         if not isinstance(published_to, list):
             continue
-        for adapter_id in ("codex", "hermes"):
-            if adapter_id not in published_to:
+        for adapter_id in sorted(SKILL_FOLDER_ADAPTERS):
+            if adapter_id not in published_to and not (
+                adapter_id == "trae" and TRAE_COMPATIBLE_SKILL_ADAPTERS.intersection(published_to)
+            ):
                 continue
             target = output_root / adapter_id / "skills" / str(record["slug"]) / "SKILL.md"
             written.append(target)
@@ -377,7 +421,7 @@ def publish(core_root: Path, vault_root: Path, output_root: Path, apply: bool) -
     active_assets = active_entries(vault_root, "indexes/asset_index.yaml", "assets")
     if not active_practices and not active_assets:
         print("Selected Vault has no active or revised practices/assets. Nothing to publish.")
-        write_manifest(output_root, manifest_text(active_practices, active_assets), apply)
+        write_manifest(output_root, manifest_text(active_practices, active_assets, []), apply)
         return 0
 
     if not (core_root / "adapters" / "adapter_profiles.yaml").exists():
@@ -388,9 +432,11 @@ def publish(core_root: Path, vault_root: Path, output_root: Path, apply: bool) -
         print("Refusing to overwrite Core adapter templates in place. Pass --output-root for generated outputs.")
         return 1
 
+    skill_assets = skill_asset_records(vault_root, active_assets)
+    skill_artifacts = skill_artifact_records(output_root, skill_assets)
     written = write_adapter_outputs(core_root, output_root, active_practices, active_assets, apply)
-    written.extend(write_generated_skill_outputs(output_root, skill_asset_records(vault_root, active_assets), apply))
-    write_manifest(output_root, manifest_text(active_practices, active_assets), apply)
+    written.extend(write_generated_skill_outputs(output_root, skill_assets, apply))
+    write_manifest(output_root, manifest_text(active_practices, active_assets, skill_artifacts), apply)
     print(f"Adapter publish {'wrote' if apply else 'planned'} {len(written)} files.")
     print(f"Active practices selected: {len(active_practices)}")
     print(f"Active assets selected: {len(active_assets)}")
