@@ -123,7 +123,7 @@ def main() -> int:
             "receipt target: trae selected-output-drift checked=1 problems=1",
             "receipt repair: trae review generated output, run install dry-run, then apply only with runtime-write approval",
             "receipt repair: trae writes ~/.trae-cn/skills and requires durable human approval before --apply",
-            "- repair selected-output drift by regenerating output, reviewing install dry-run, then applying approved managed runtime sync",
+            "- review selected-output drift, regenerate generated output if needed, then dry-run runtime install before apply",
             "- for Trae, do not write ~/.trae-cn/skills unless durable human approval explicitly authorizes that runtime apply",
         ]
         for text in drift_expected:
