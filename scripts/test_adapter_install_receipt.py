@@ -22,6 +22,7 @@ def main() -> int:
         adapter = root / "generated"
         codex_dest = root / "runtime" / "codex"
         hermes_dest = root / "runtime" / "hermes"
+        trae_dest = root / "runtime" / "trae"
         receipt = root / "receipt.yaml"
         for repo in (core, vault):
             (repo / ".git").mkdir(parents=True)
@@ -29,14 +30,16 @@ def main() -> int:
         write(adapter / "adapter-publish-manifest.yaml", "active_assets:\n  - ASSET-COLLAB-002\n")
         write(adapter / "codex" / "skills" / "role-automation-planner" / "SKILL.md", "codex skill\n")
         write(adapter / "hermes" / "skills" / "role-automation-planner" / "SKILL.md", "hermes skill\n")
+        write(adapter / "trae" / "skills" / "role-automation-planner" / "SKILL.md", "trae skill\n")
         write(codex_dest / "role-automation-planner" / "SKILL.md", "codex skill\n")
         write(hermes_dest / "role-automation-planner" / "SKILL.md", "hermes skill\n")
+        write(trae_dest / "role-automation-planner" / "SKILL.md", "trae skill\n")
 
         write_receipt(
             core_root=core,
             vault_root=vault,
             adapter_root=adapter,
-            installed_targets={"codex": codex_dest, "hermes": hermes_dest},
+            installed_targets={"codex": codex_dest, "hermes": hermes_dest, "trae": trae_dest},
             receipt_path=receipt,
         )
 
@@ -47,6 +50,7 @@ def main() -> int:
         targets = receipt_target_statuses(loaded)
         assert targets["codex"][0] == "selected-output-in-sync"
         assert targets["hermes"][0] == "selected-output-in-sync"
+        assert targets["trae"][0] == "selected-output-in-sync"
 
         write(adapter / "adapter-publish-manifest.yaml", "active_assets:\n  - ASSET-CHANGED-001\n")
         state, problems = receipt_status(loaded)
@@ -61,6 +65,7 @@ def main() -> int:
         targets = receipt_target_statuses(loaded)
         assert targets["codex"][0] == "selected-output-drift"
         assert targets["hermes"][0] == "selected-output-in-sync"
+        assert targets["trae"][0] == "selected-output-in-sync"
 
     print("Adapter install receipt tests passed.")
     return 0

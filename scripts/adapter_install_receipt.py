@@ -13,6 +13,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 RECEIPT_PATH = ROOT / "runtime" / "local" / "adapter-install-receipt.yaml"
+SKILL_FOLDER_TARGETS = {"codex", "hermes", "trae"}
 
 
 def file_sha256(path: Path) -> str:
@@ -36,7 +37,7 @@ def git_commit(root: Path) -> str:
 
 
 def source_files_for_target(adapter_root: Path, target: str) -> list[tuple[Path, Path]]:
-    if target in {"codex", "hermes"}:
+    if target in SKILL_FOLDER_TARGETS:
         src = adapter_root / target / "skills"
         return [(path, path.relative_to(adapter_root)) for path in sorted(src.rglob("*")) if path.is_file()] if src.exists() else []
     if target == "claude-code":
@@ -53,7 +54,7 @@ def source_files_for_target(adapter_root: Path, target: str) -> list[tuple[Path,
 
 
 def destination_for_source(target: str, source_rel: Path, install_path: Path) -> Path | None:
-    if target in {"codex", "hermes"}:
+    if target in SKILL_FOLDER_TARGETS:
         prefix = Path(target) / "skills"
         rel = source_rel.relative_to(prefix)
         return install_path / rel

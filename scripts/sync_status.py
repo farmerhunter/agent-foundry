@@ -16,6 +16,7 @@ from operation_context import text_report, build_context
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_GENERATED_ROOT = Path.home() / ".agent-foundry" / "generated" / "agent-foundry-adapters"
+SKILL_FOLDER_TARGETS = {"codex", "hermes", "trae"}
 
 
 def run_git(args: list[str]) -> str:
@@ -261,6 +262,12 @@ def receipt_summary(receipt_path: Path) -> list[str]:
     ]
     for target, (target_state, target_problems, checked) in sorted(receipt_target_statuses(receipt).items()):
         lines.append(f"receipt target: {target} {target_state} checked={checked} problems={len(target_problems)}")
+        if target_state == "selected-output-drift":
+            lines.append(
+                f"receipt repair: {target} review generated output, run install dry-run, then apply only with runtime-write approval"
+            )
+            if target == "trae":
+                lines.append("receipt repair: trae writes ~/.trae-cn/skills and requires durable human approval before --apply")
     for problem in problems[:10]:
         lines.append(f"receipt detail: {problem}")
     if len(problems) > 10:
@@ -289,11 +296,13 @@ def next_safe_actions(
     if receipt is None:
         actions.append("run runtime install only after generated output dry-run/review; receipt is currently missing")
     else:
-        receipt_state, _ = receipt_status(receipt)
-        if receipt_state == "selected-output-drift":
-            actions.append("review selected-output drift, regenerate generated output if needed, then dry-run runtime install before apply")
-        elif receipt_state == "selected-output-unknown":
-            actions.append("repair or recreate runtime install receipt only through reviewed install apply after generated output is ready")
+        if isinstance(receipt, dict):
+            receipt_state, _ = receipt_status(receipt)
+            if receipt_state == "selected-output-drift":
+                actions.append("review selected-output drift, regenerate generated output if needed, then dry-run runtime install before apply")
+                actions.append("for Trae, do not write ~/.trae-cn/skills unless durable human approval explicitly authorizes that runtime apply")
+            elif receipt_state == "selected-output-unknown":
+                actions.append("repair or recreate runtime install receipt only through reviewed install apply after generated output is ready")
     actions.append("treat ChatGPT as manual import unless a future managed target is explicitly implemented")
     return actions
 
@@ -375,10 +384,8 @@ def runtime_drift_status(receipt_path: Path = RECEIPT_PATH) -> str:
             lines.append(f"{name}: skipped status={config.get('status')}")
             continue
         dest = Path(config.get("install_path", "")).expanduser()
-        if name == "codex":
-            checked, missing, changed = compare_tree(ROOT / "adapters" / "codex" / "skills", dest)
-        elif name == "hermes":
-            checked, missing, changed = compare_tree(ROOT / "adapters" / "hermes" / "skills", dest)
+        if name in SKILL_FOLDER_TARGETS:
+            checked, missing, changed = compare_tree(ROOT / "adapters" / name / "skills", dest)
         elif name == "claude-code":
             managed = dest / "agent-foundry" / "CLAUDE.md"
             commands = dest / "commands" / "agent-foundry"

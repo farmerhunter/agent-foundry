@@ -21,6 +21,7 @@ DEFAULT_DESTS = {
     "codex": HOME / ".codex" / "skills",
     "claude-code": HOME / ".claude",
     "hermes": HOME / ".hermes" / "skills",
+    "trae": HOME / ".trae-cn" / "skills",
 }
 
 MANAGED_MARKER = ".agent-foundry-managed"
@@ -138,6 +139,11 @@ def sync_hermes(adapter_root: Path, dest: Path, apply: bool, adopt: bool) -> lis
     return copy_skill_dirs(src, dest, apply, adopt)
 
 
+def sync_trae(adapter_root: Path, dest: Path, apply: bool, adopt: bool) -> list[tuple[Action, Path, Path]]:
+    src = adapter_root / "trae" / "skills"
+    return copy_skill_dirs(src, dest, apply, adopt)
+
+
 def sync_claude(adapter_root: Path, dest: Path, apply: bool, backup: bool) -> list[tuple[Action, Path, Path]]:
     copied: list[tuple[Action, Path, Path]] = []
     src_root = adapter_root / "claude-code"
@@ -176,7 +182,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Sync Agent Foundry adapters.")
     parser.add_argument(
         "--target",
-        choices=["all", "codex", "claude-code", "hermes", "chatgpt"],
+        choices=["all", "codex", "claude-code", "hermes", "trae", "chatgpt"],
         default="all",
     )
     parser.add_argument("--dest", help="Override destination for a single target.")
@@ -192,7 +198,7 @@ def main() -> int:
     if args.dry_run:
         apply = False
 
-    targets = ["codex", "claude-code", "hermes", "chatgpt"] if args.target == "all" else [args.target]
+    targets = ["codex", "claude-code", "hermes", "trae", "chatgpt"] if args.target == "all" else [args.target]
     if args.dest and len(targets) != 1:
         raise SystemExit("--dest can only be used with a single --target")
 
@@ -206,6 +212,8 @@ def main() -> int:
             all_copied.extend(sync_claude(adapter_root, dest, apply, not args.no_backup))
         elif target == "hermes":
             all_copied.extend(sync_hermes(adapter_root, dest, apply, args.adopt))
+        elif target == "trae":
+            all_copied.extend(sync_trae(adapter_root, dest, apply, args.adopt))
         elif target == "chatgpt":
             all_copied.extend(sync_chatgpt(adapter_root, Path(args.dest).expanduser() if args.dest else None, apply))
 
