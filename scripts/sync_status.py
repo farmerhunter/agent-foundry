@@ -428,7 +428,13 @@ def next_safe_actions(
 
 def setup_report(core_root: Path, vault_root: Path, adapter_root: Path, receipt_path: Path = RECEIPT_PATH) -> str:
     manifest_path = ROOT / "runtime" / "local" / "runtime_manifest.yaml"
-    targets = parse_runtime_manifest(manifest_path.read_text(encoding="utf-8")) if manifest_path.exists() else {}
+    template_path = ROOT / "runtime" / "templates" / "runtime_manifest.template.yaml"
+    if manifest_path.exists():
+        targets = parse_runtime_manifest(manifest_path.read_text(encoding="utf-8"))
+    elif template_path.exists():
+        targets = parse_runtime_manifest(template_path.read_text(encoding="utf-8"))
+    else:
+        targets = {}
     output_state, output_count = generated_output_status(adapter_root)
     packs = deployed_packs(vault_root)
     lines = [
