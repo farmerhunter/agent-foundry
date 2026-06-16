@@ -713,6 +713,26 @@ def check_sync_status_report_script() -> list[str]:
     return output.splitlines()
 
 
+def check_capability_scenario_matrix_script() -> list[str]:
+    script = ROOT / "scripts" / "test_capability_scenario_matrix.py"
+    if not script.exists():
+        return ["Missing scripts/test_capability_scenario_matrix.py"]
+    result = subprocess.run(
+        ["python3", str(script)],
+        cwd=ROOT,
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if result.returncode == 0:
+        return []
+    output = (result.stdout + result.stderr).strip()
+    if not output:
+        return ["Capability scenario matrix fixture failed without output"]
+    return output.splitlines()
+
+
 def check_runtime_import_script() -> list[str]:
     script = ROOT / "scripts" / "test_import_runtime_assets.py"
     if not script.exists():
@@ -730,6 +750,26 @@ def check_runtime_import_script() -> list[str]:
     output = (result.stdout + result.stderr).strip()
     if not output:
         return ["Runtime import fixture failed without output"]
+    return output.splitlines()
+
+
+def check_second_machine_restore_script() -> list[str]:
+    script = ROOT / "scripts" / "test_second_machine_restore.py"
+    if not script.exists():
+        return ["Missing scripts/test_second_machine_restore.py"]
+    result = subprocess.run(
+        ["python3", str(script)],
+        cwd=ROOT,
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if result.returncode == 0:
+        return []
+    output = (result.stdout + result.stderr).strip()
+    if not output:
+        return ["Second-machine restore fixture failed without output"]
     return output.splitlines()
 
 
@@ -759,7 +799,9 @@ def main() -> int:
     errors += check_capability_pack_update_script()
     errors += check_capability_pack_lifecycle_script()
     errors += check_sync_status_report_script()
+    errors += check_capability_scenario_matrix_script()
     errors += check_runtime_import_script()
+    errors += check_second_machine_restore_script()
 
     if errors:
         print("Consistency check failed:")
