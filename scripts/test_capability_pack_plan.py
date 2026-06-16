@@ -319,6 +319,60 @@ def parser_contract_errors(base: Path) -> list[str]:
     records, metadata_errors = planner.deployed_pack_records(vault, "pack.reordered")
     if records or "source.manifest_sha256 must be sha256" not in "; ".join(metadata_errors):
         errors.append(f"deployed index invalid manifest hash did not fail closed: {metadata_errors} {records}")
+
+    deployed_index = vault / "packs" / "deployed-pack-index.yaml"
+    deployed_index.write_text(
+        "\n".join(
+            [
+                "schema_version: 1",
+                "deployed_packs:",
+                "  - pack_id: pack.reordered",
+                "    source:",
+                '      manifest_sha256: "' + ("a" * 64) + '"',
+                "    records: []",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    records, metadata_errors = planner.deployed_pack_records(vault, "pack.reordered")
+    if records or "missing version" not in "; ".join(metadata_errors):
+        errors.append(f"deployed index missing version did not fail closed: {metadata_errors} {records}")
+
+    deployed_index.write_text(
+        "\n".join(
+            [
+                "schema_version: 1",
+                "deployed_packs:",
+                "  - pack_id: pack.reordered",
+                '    version: "0.1.0"',
+                "    records: []",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    records, metadata_errors = planner.deployed_pack_records(vault, "pack.reordered")
+    if records or "missing source" not in "; ".join(metadata_errors):
+        errors.append(f"deployed index missing source did not fail closed: {metadata_errors} {records}")
+
+    deployed_index.write_text(
+        "\n".join(
+            [
+                "schema_version: 1",
+                "deployed_packs:",
+                "  - pack_id: pack.reordered",
+                '    version: "0.1.0"',
+                "    source: local_path",
+                "    records: []",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    records, metadata_errors = planner.deployed_pack_records(vault, "pack.reordered")
+    if records or "source must be a mapping" not in "; ".join(metadata_errors):
+        errors.append(f"deployed index scalar source did not fail closed: {metadata_errors} {records}")
     return errors
 
 
