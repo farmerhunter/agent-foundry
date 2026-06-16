@@ -773,6 +773,26 @@ def check_first_run_ux_script() -> list[str]:
     return output.splitlines()
 
 
+def check_runtime_drift_repair_script() -> list[str]:
+    script = ROOT / "scripts" / "test_runtime_drift_repair.py"
+    if not script.exists():
+        return ["Missing scripts/test_runtime_drift_repair.py"]
+    result = subprocess.run(
+        ["python3", str(script)],
+        cwd=ROOT,
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if result.returncode == 0:
+        return []
+    output = (result.stdout + result.stderr).strip()
+    if not output:
+        return ["Runtime drift repair fixture failed without output"]
+    return output.splitlines()
+
+
 def check_second_machine_restore_script() -> list[str]:
     script = ROOT / "scripts" / "test_second_machine_restore.py"
     if not script.exists():
@@ -822,6 +842,7 @@ def main() -> int:
     errors += check_capability_scenario_matrix_script()
     errors += check_runtime_import_script()
     errors += check_first_run_ux_script()
+    errors += check_runtime_drift_repair_script()
     errors += check_second_machine_restore_script()
 
     if errors:

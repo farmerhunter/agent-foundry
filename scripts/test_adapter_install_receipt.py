@@ -52,6 +52,12 @@ def main() -> int:
         assert targets["hermes"][0] == "selected-output-in-sync"
         assert targets["trae"][0] == "selected-output-in-sync"
 
+        write(adapter / "adapter-publish-manifest.yaml", "active_assets:\n  - ASSET-CHANGED-001\n")
+        state, problems = receipt_status(loaded)
+        assert state == "selected-output-drift"
+        assert any("changed adapter_manifest" in problem for problem in problems)
+        write(adapter / "adapter-publish-manifest.yaml", "active_assets:\n  - ASSET-COLLAB-002\n")
+
         write(codex_dest / "role-automation-planner" / "SKILL.md", "changed\n")
         state, problems = receipt_status(loaded)
         assert state == "selected-output-drift"
