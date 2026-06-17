@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Plan or apply disable/retire lifecycle transitions for deployed packs."""
+"""Plan or apply safe lifecycle transitions for deployed capability packs."""
 
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -11,11 +12,36 @@ from pathlib import Path
 from check_foundry_roots import validate
 from deploy_capability_pack import parse_simple_yaml
 from foundry_config import ROOT
-from plan_capability_pack import validate_deployed_pack_metadata
+from plan_capability_pack import scalar_texts, validate_deployed_pack_metadata
 
 
 PRACTICE_RETIRE_STATUS = "archived"
 ASSET_RETIRE_STATUS = "retired"
+LIFECYCLE_STATES = {
+    "detected",
+    "candidate",
+    "proposed",
+    "active",
+    "exportable",
+    "deprecated",
+    "split",
+    "merged",
+    "retired",
+    "blocked",
+}
+LEGACY_DEPLOYED_STATES = {"deployed", "disabled"}
+WRITE_ACTIONS = {"disable", "retire"}
+REVIEW_ONLY_ACTIONS = {"activate", "exportable", "deprecate", "split", "merge"}
+LOCAL_PRIVATE_RE = re.compile(
+    r"(^~|/Users/|\.agent-foundry|\.codex|\.trae|raw session|raw log|runtime manifest|"
+    r"local receipt|secret|token)",
+    re.IGNORECASE,
+)
+UNSAFE_CLAIM_RE = re.compile(
+    r"\b(runtime authority|generated authority|canonical runtime|memory-system|memory system|"
+    r"delete records|overwrite records|force merge|destructive)\b",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -51,6 +77,40 @@ def safe_vault_path(vault_root: Path, relative: str) -> Path:
     except ValueError as exc:
         raise SystemExit(f"Refusing Vault record path outside Vault: {relative}") from exc
     return target
+
+
+def lifecycle_metadata_errors(pack: dict[object, object], pack_id: str) -> list[str]:
+    errors = validate_deployed_pack_metadata(pack, pack_id)
+    lifecycle_status = str(pack.get("lifecycle_status", ""))
+    if lifecycle_status and lifecycle_status not in LIFECYCLE_STATES | LEGACY_DEPLOYED_STATES:
+        errors.append(f"deployed pack {pack_id} lifecycle_status is unsupported: {lifecycle_status}")
+
+    pack_records = pack.get("records", [])
+    if isinstance(pack_records, list):
+        for record in pack_records:
+            if not isinstance(record, dict):
+                continue
+            item_id = str(record.get("id", "<unknown>"))
+            if not record.get("deployed_sha256") and not record.get("imported_sha256"):
+                errors.append(f"deployed pack {pack_id} record {item_id} missing deployed/imported hash")
+
+    for section_name in [
+        "lifecycle_policy",
+        "lifecycle_transition",
+        "transition_plan",
+        "evidence_sources",
+        "export_policy",
+        "runtime_projection",
+    ]:
+        if section_name not in pack:
+            continue
+        section = pack.get(section_name)
+        for text in scalar_texts(section):
+            if LOCAL_PRIVATE_RE.search(text):
+                errors.append(f"deployed pack {pack_id} {section_name} contains local-private reference: {text}")
+            if UNSAFE_CLAIM_RE.search(text):
+                errors.append(f"deployed pack {pack_id} {section_name} contains unsafe lifecycle claim: {text}")
+    return errors
 
 
 def pack_block_bounds(lines: list[str], pack_id: str) -> tuple[int, int]:
@@ -89,7 +149,7 @@ def deployed_pack_records(vault_root: Path, pack_id: str) -> tuple[list[PackReco
     for pack in packs:
         if not isinstance(pack, dict) or pack.get("pack_id") != pack_id:
             continue
-        metadata_errors = validate_deployed_pack_metadata(pack, pack_id)
+        metadata_errors = lifecycle_metadata_errors(pack, pack_id)
         if metadata_errors:
             return [], lines, start, end, metadata_errors
         pack_records = pack.get("records", [])
@@ -212,6 +272,40 @@ def retire_status(kind: str) -> tuple[str, str]:
     raise SystemExit(f"Unsupported pack record kind: {kind}")
 
 
+def print_followup_guidance(action: str) -> None:
+    print("governance: practice and asset lifecycle changes still require review-practices/review-assets approval")
+    print("generated_followup: publish selected-Vault generated output only after reviewed Vault state changes")
+    print("runtime_followup: run install dry-run and sync_status; runtime writes require explicit approval")
+    print("rollback: keep selected Vault metadata canonical; revert reviewed metadata or restore from backup if an approved apply was wrong")
+    print("defer: leave pack in blocked/proposed state, gather missing evidence, or route to needs:human for private/destructive decisions")
+    if action in {"activate", "exportable"}:
+        print("review_gate: human approval required; this command does not activate or mark exportable")
+    if action in {"split", "merge"}:
+        print("review_gate: split/merge requires before-after membership diff, conflict handling, rollback plan, and human approval")
+    if action == "deprecate":
+        print("review_gate: deprecation requires replacement or rationale and user-visible warning")
+
+
+def report_review_only_action(records: list[PackRecord], action: str) -> int:
+    target_state = {
+        "activate": "active",
+        "exportable": "exportable",
+        "deprecate": "deprecated",
+        "split": "split",
+        "merge": "merged",
+    }[action]
+    print(f"target_state: {target_state}")
+    print("status: review_required")
+    print("records:")
+    if not records:
+        print("- none")
+    for record in records:
+        print(f"- {record.item_id} {record.kind}: {record.path}")
+    print_followup_guidance(action)
+    print("writes: none")
+    return 1
+
+
 def plan_lifecycle_writes(
     vault_root: Path,
     records: list[PackRecord],
@@ -296,12 +390,21 @@ def lifecycle(core_root: Path, vault_root: Path, pack_id: str, action: str, appl
         print("status: failed")
         for error in metadata_errors:
             print(f"- {error}")
+        print_followup_guidance(action)
         print("writes: none")
         return 1
     if start == -1:
         print("status: not_deployed")
         print("writes: none")
         return 1
+    if action in REVIEW_ONLY_ACTIONS:
+        if apply:
+            print("status: failed")
+            print(f"- {action} is review-only in #175 and cannot be applied")
+            print_followup_guidance(action)
+            print("writes: none")
+            return 1
+        return report_review_only_action(records, action)
     print("records:")
     if not records:
         print("- none")
@@ -324,10 +427,12 @@ def lifecycle(core_root: Path, vault_root: Path, pack_id: str, action: str, appl
         print("status: failed")
         for error in planning_errors:
             print(f"- {error}")
+        print_followup_guidance(action)
         print("writes: none")
         return 1
     for planned in planned_writes:
         write(planned.path, planned.text, apply)
+    print_followup_guidance(action)
     print("runtime_cleanup: use selected generated-output refresh and managed runtime receipt rollback; ChatGPT remains manual")
     print("restore: rebuild from public Core plus selected Vault; do not copy another machine's runtime files")
     print(f"writes: {'applied' if apply else 'none'}")
@@ -337,11 +442,11 @@ def lifecycle(core_root: Path, vault_root: Path, pack_id: str, action: str, appl
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Plan or apply deployed capability pack disable/retire transitions.")
+    parser = argparse.ArgumentParser(description="Plan or apply safe deployed capability pack lifecycle transitions.")
     parser.add_argument("--core-root", default=str(ROOT), help="Agent Foundry Core root.")
     parser.add_argument("--vault-root", required=True, help="Selected Agent Foundry Vault root.")
     parser.add_argument("--pack-id", required=True, help="Deployed capability pack id.")
-    parser.add_argument("--action", choices=["disable", "retire"], required=True)
+    parser.add_argument("--action", choices=sorted(WRITE_ACTIONS | REVIEW_ONLY_ACTIONS), required=True)
     parser.add_argument("--apply", action="store_true", help="Write lifecycle changes. Default is dry-run.")
     args = parser.parse_args()
     return lifecycle(
