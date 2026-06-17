@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 
 from check_foundry_roots import validate as validate_roots
+from plan_capability_pack import validate_advanced_metadata_text
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -150,6 +151,7 @@ def check_manifest(path: Path) -> list[str]:
     text = read(path)
     rel_manifest = path.relative_to(ROOT)
     errors.extend(check_no_forbidden_fixture_text(rel_manifest, path))
+    errors.extend(validate_advanced_metadata_text(text, str(rel_manifest)))
     manifest = top_level_scalars(text)
     missing = sorted(REQUIRED_MANIFEST_FIELDS - manifest.keys())
     for field in missing:

@@ -24,6 +24,9 @@ def deployed_pack_metadata(vault_root: Path, pack_id: str) -> tuple[dict[str, ob
         return {}, "deployed-pack-index.yaml deployed_packs must be a list"
     for pack in packs:
         if isinstance(pack, dict) and pack.get("pack_id") == pack_id:
+            metadata_errors = planner.validate_deployed_pack_metadata(pack, pack_id)
+            if metadata_errors:
+                return {}, "; ".join(metadata_errors)
             return pack, ""
     return {}, ""
 

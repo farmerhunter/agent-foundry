@@ -52,12 +52,47 @@ executable_payload_fields:
   dependencies: "Declared runtime dependencies."
   runtime_impact: "Human-readable statement of affected runtime targets after managed install."
 
+advanced_metadata_sections:
+  pack_contract:
+    promised_use_case: "Human-readable capability promise for reviewers and deployers."
+    deployment_role: "How the reviewed pack is intended to be selected or deployed."
+    source_authority_after_deployment: "Must name selected User Vault records as canonical after deployment."
+    non_authority_boundaries: "Generated adapters, runtime installs, pack staging, Core fixtures, and local private evidence are downstream or non-authoritative."
+  evidence_sources:
+    description: "Public or sanitized evidence references only."
+    allowed_references: "Public Core paths, public GitHub issues/PRs, release notes, record ids, or sanitized aggregate summaries."
+    forbidden_references: "Absolute local paths, raw sessions, raw logs, secrets, local runtime manifests, private Vault evidence, or usage rows."
+  export_policy:
+    exportability: "not_exportable | review_required | exportable_after_review"
+    privacy_class: "public | internal | sanitized"
+    excluded_material: "Private/local/raw evidence that must stay outside the pack."
+    review_required: "Boolean. Must be true before exportable pack use."
+  runtime_projection:
+    downstream_only: "Boolean. Must be true when this section is present."
+    generated_adapter_intent: "none | generated_adapter_projection | review_required"
+    runtime_install: "false | review_required. Runtime apply is never implied by a manifest."
+    authority: "none | false | downstream_only"
+  lifecycle_policy:
+    split_behavior: "review_required | preserve_user_state | reviewed_diff_required | human_review_required | manual_review | not_supported"
+    merge_behavior: "review_required | preserve_user_state | reviewed_diff_required | human_review_required | manual_review | not_supported"
+    deprecation_behavior: "review_required | preserve_user_state | reviewed_diff_required | human_review_required | manual_review | not_supported"
+    update_behavior: "review_required | preserve_user_state | reviewed_diff_required | human_review_required | manual_review | not_supported"
+  candidate_provenance:
+    review_only: "Must be true. Candidate records remain review artifacts."
+    candidate_ids: "Candidate ids or issue references used as provenance only."
+    canonical: "Must not be true."
+    activation_input: "Must not be true."
+    export_input: "Must not be true."
+
 rules:
   - "A pack snapshot is a transfer and review artifact, not a live source of truth after deployment."
   - "After deployment, selected User Vault records own canonical practice, asset, membership, and provenance state."
   - "Do not package raw maintainer Vault evidence, local runtime manifests, secrets, or private User Vault content."
   - "All included files and executable payload sources must have checksums."
   - "Executable payloads must be declared but must not be executed from pack staging."
+  - "AF-9 advanced metadata sections are optional and additive; manifest_schema_version: 1 fixtures without them remain valid."
+  - "Known AF-9 advanced metadata sections must fail closed when malformed, private/local, unsafe, or claiming runtime/generated/Core/pack authority."
+  - "Candidate records remain review-only provenance and must not be treated as active manifests, activation inputs, or export inputs."
   - "Same id, same version, different hash must fail closed and require review."
   - "Same id from unrelated provenance or incompatible kind must fail closed."
   - "Local Vault edits must be treated as canonical user state and handled through a reviewed merge proposal."

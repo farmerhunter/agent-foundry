@@ -88,6 +88,7 @@ def write_probe_pack(
     include_integrity: bool = True,
     core_schema_min: str = "1",
     core_schema_max: str = "1",
+    advanced_metadata: list[str] | None = None,
 ) -> Path:
     pack = base / name
     pack.mkdir(parents=True, exist_ok=True)
@@ -115,6 +116,9 @@ def write_probe_pack(
     ]
     if include_source_provenance:
         lines.insert(8, "source_provenance: test fixture")
+    if advanced_metadata:
+        compatibility_index = lines.index("compatibility:")
+        lines[compatibility_index:compatibility_index] = ["", *advanced_metadata, ""]
     for record in records:
         kind = record.get("kind", "practice")
         lines.extend(
@@ -249,6 +253,36 @@ def write_reordered_deployed_index(
                 f"        path: practices/meta/BOOT-001-bootstrap-orientation.md",
                 f"        deployed_sha256: \"{record_hash}\"",
                 f"        id: \"{record_id}\"",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+
+def write_advanced_deployed_index(
+    vault: Path, pack_id: str, version: str, manifest_hash: str, record_id: str, record_hash: str
+) -> None:
+    packs = vault / "packs"
+    packs.mkdir(parents=True, exist_ok=True)
+    (packs / "deployed-pack-index.yaml").write_text(
+        "\n".join(
+            [
+                "schema_version: 1",
+                "updated: 2026-06-12",
+                "deployed_packs:",
+                f"  - pack_id: {pack_id}",
+                f"    version: {version}",
+                "    source:",
+                f"      manifest_sha256: {manifest_hash}",
+                "    pack_contract:",
+                "      promised_use_case: reviewed deployed metadata fixture",
+                "      deployment_role: optional user-selected capability",
+                "      source_authority_after_deployment: selected User Vault records",
+                "      non_authority_boundaries: [generated adapters are downstream only, runtime installs are downstream only]",
+                "    records:",
+                f"      - id: {record_id}",
+                f"        deployed_sha256: {record_hash}",
                 "",
             ]
         ),
@@ -407,6 +441,141 @@ def main() -> int:
         errors.extend(expect("plan-optional-adds-records", optional_after_bootstrap, True, "add: 2"))
         errors.extend(expect("plan-optional-no-executable-block", optional_after_bootstrap, True, "blocked_executable_install: 0"))
 
+        advanced_record = base / "advanced-metadata" / "records" / "ADV.md"
+        advanced_record.parent.mkdir(parents=True, exist_ok=True)
+        advanced_record.write_text(practice_text("ADV-001"), encoding="utf-8")
+        advanced_pack = write_probe_pack(
+            base,
+            "advanced-metadata",
+            [{"id": "ADV-001", "path": "records/ADV.md", "sha": sha256(advanced_record)}],
+            advanced_metadata=[
+                "pack_contract:",
+                "  promised_use_case: reviewed optional capability fixture",
+                "  deployment_role: optional user-selected capability",
+                "  source_authority_after_deployment: selected User Vault records",
+                "  non_authority_boundaries: [generated adapters are downstream only, runtime installs are downstream only]",
+                "export_policy:",
+                "  exportability: review_required",
+                "  privacy_class: sanitized",
+                "  excluded_material: [private evidence, raw logs]",
+                "  review_required: true",
+                "runtime_projection:",
+                "  downstream_only: true",
+                "  generated_adapter_intent: generated_adapter_projection",
+                "  runtime_install: review_required",
+                "  authority: downstream_only",
+                "lifecycle_policy:",
+                "  split_behavior: review_required",
+                "  merge_behavior: review_required",
+                "  deprecation_behavior: review_required",
+                "  update_behavior: reviewed_diff_required",
+                "candidate_provenance:",
+                "  review_only: true",
+                "  candidate_ids: [candidate.probe.advanced]",
+                "  canonical: false",
+                "  activation_input: false",
+                "  export_input: false",
+            ],
+        )
+        advanced_metadata = plan_pack(advanced_pack, vault)
+        errors.extend(expect("plan-advanced-metadata-valid", advanced_metadata, True, "add: 1"))
+
+        bad_authority_record = base / "bad-advanced-authority" / "records" / "BAD.md"
+        bad_authority_record.parent.mkdir(parents=True, exist_ok=True)
+        bad_authority_record.write_text(practice_text("BAD-AUTH-001"), encoding="utf-8")
+        bad_authority_pack = write_probe_pack(
+            base,
+            "bad-advanced-authority",
+            [{"id": "BAD-AUTH-001", "path": "records/BAD.md", "sha": sha256(bad_authority_record)}],
+            advanced_metadata=[
+                "pack_contract:",
+                "  promised_use_case: unsafe authority fixture",
+                "  deployment_role: optional user-selected capability",
+                "  source_authority_after_deployment: runtime generated adapter is canonical authority",
+                "  non_authority_boundaries: [generated adapters are downstream only, runtime installs are downstream only]",
+            ],
+        )
+        bad_authority = plan_pack(bad_authority_pack, vault)
+        errors.extend(
+            expect(
+                "plan-advanced-runtime-authority-fails-closed",
+                bad_authority,
+                False,
+                "must not claim runtime/generated/Core/pack authority",
+            )
+        )
+
+        bad_evidence_record = base / "bad-advanced-evidence" / "records" / "BAD.md"
+        bad_evidence_record.parent.mkdir(parents=True, exist_ok=True)
+        bad_evidence_record.write_text(practice_text("BAD-EVIDENCE-001"), encoding="utf-8")
+        bad_evidence_pack = write_probe_pack(
+            base,
+            "bad-advanced-evidence",
+            [{"id": "BAD-EVIDENCE-001", "path": "records/BAD.md", "sha": sha256(bad_evidence_record)}],
+            advanced_metadata=[
+                "evidence_sources:",
+                "  - /Users/example/private/raw-session.log",
+            ],
+        )
+        bad_evidence = plan_pack(bad_evidence_pack, vault)
+        errors.extend(
+            expect(
+                "plan-private-evidence-fails-closed",
+                bad_evidence,
+                False,
+                "private/local evidence reference",
+            )
+        )
+
+        candidate_manifest = base / "candidate-schema-as-pack" / "manifest.yaml"
+        candidate_manifest.parent.mkdir(parents=True, exist_ok=True)
+        candidate_manifest.write_text(
+            "\n".join(
+                [
+                    "candidate_schema_version: 1",
+                    "candidate_id: candidate.probe.review-only",
+                    "proposed_pack_id: pack.probe.review-only",
+                    "title: Review-only candidate",
+                    "outcome: candidate",
+                    "confidence: medium",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        candidate_as_manifest = plan_pack(candidate_manifest.parent, vault)
+        errors.extend(
+            expect(
+                "plan-candidate-schema-review-only",
+                candidate_as_manifest,
+                False,
+                "candidate schema records are review-only",
+            )
+        )
+
+        hybrid_record = base / "hybrid-candidate-manifest" / "records" / "HYBRID.md"
+        hybrid_record.parent.mkdir(parents=True, exist_ok=True)
+        hybrid_record.write_text(practice_text("HYBRID-001"), encoding="utf-8")
+        hybrid_pack = write_probe_pack(
+            base,
+            "hybrid-candidate-manifest",
+            [{"id": "HYBRID-001", "path": "records/HYBRID.md", "sha": sha256(hybrid_record)}],
+        )
+        hybrid_manifest = hybrid_pack / "manifest.yaml"
+        hybrid_manifest.write_text(
+            "candidate_schema_version: 1\n" + hybrid_manifest.read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+        hybrid_candidate_as_manifest = plan_pack(hybrid_pack, vault)
+        errors.extend(
+            expect(
+                "plan-hybrid-candidate-manifest-review-only",
+                hybrid_candidate_as_manifest,
+                False,
+                "candidate schema records are review-only",
+            )
+        )
+
         write_deployed_index(
             vault,
             "pack.multi-agent.optional",
@@ -443,6 +612,17 @@ def main() -> int:
         )
         reordered = plan_pack(BOOTSTRAP_PACK, vault)
         errors.extend(expect("plan-reordered-metadata-parses", reordered, True, "skip: 24"))
+
+        write_advanced_deployed_index(
+            vault,
+            "pack.bootstrap.minimal",
+            "0.2.0",
+            sha256(BOOTSTRAP_PACK / "manifest.yaml"),
+            "BOOT-001",
+            sha256(target),
+        )
+        advanced_deployed_index = plan_pack(BOOTSTRAP_PACK, vault)
+        errors.extend(expect("plan-advanced-deployed-index-parses", advanced_deployed_index, True, "skip: 24"))
 
         write_malformed_deployed_index(vault)
         malformed_metadata = plan_pack(BOOTSTRAP_PACK, vault)
