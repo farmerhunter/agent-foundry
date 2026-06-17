@@ -88,6 +88,16 @@ def lifecycle(vault: Path, action: str, apply: bool) -> subprocess.CompletedProc
     return run(args)
 
 
+def add_metadata_section(vault: Path, lines: list[str]) -> None:
+    index = vault / "packs" / "deployed-pack-index.yaml"
+    text = index.read_text(encoding="utf-8")
+    marker = "    records:\n"
+    index.write_text(
+        text.replace(marker, "\n".join([*lines, "    records:", ""]), 1),
+        encoding="utf-8",
+    )
+
+
 def publish(vault: Path, generated: Path) -> subprocess.CompletedProcess[str]:
     return run(
         [
@@ -131,26 +141,15 @@ def status(vault: Path, generated: Path, receipt: Path) -> subprocess.CompletedP
 
 
 def add_deployed_pack_contract(vault: Path, source_authority: str) -> None:
-    index = vault / "packs" / "deployed-pack-index.yaml"
-    text = index.read_text(encoding="utf-8")
-    marker = "    records:\n"
-    index.write_text(
-        text.replace(
-            marker,
-            "\n".join(
-                [
-                    "    pack_contract:",
-                    "      promised_use_case: lifecycle fixture",
-                    "      deployment_role: optional user-selected capability",
-                    f"      source_authority_after_deployment: {source_authority}",
-                    "      non_authority_boundaries: [generated adapters are downstream only, runtime installs are downstream only]",
-                    "    records:",
-                    "",
-                ]
-            ),
-            1,
-        ),
-        encoding="utf-8",
+    add_metadata_section(
+        vault,
+        [
+            "    pack_contract:",
+            "      promised_use_case: lifecycle fixture",
+            "      deployment_role: optional user-selected capability",
+            f"      source_authority_after_deployment: {source_authority}",
+            "      non_authority_boundaries: [generated adapters are downstream only, runtime installs are downstream only]",
+        ],
     )
 
 
@@ -226,8 +225,33 @@ def main() -> int:
 
         dry_disable = lifecycle(vault, "disable", apply=False)
         errors.extend(expect("disable-dry-run", dry_disable, True, "writes: none"))
+        errors.extend(expect("disable-dry-run-rollback-guidance", dry_disable, True, "rollback:"))
+        errors.extend(expect("disable-dry-run-defer-guidance", dry_disable, True, "defer:"))
         if digest(metadata) != metadata_before:
             errors.append("disable-dry-run: metadata changed")
+
+        dry_retire = lifecycle(vault, "retire", apply=False)
+        errors.extend(expect("retire-dry-run", dry_retire, True, "writes: none"))
+        errors.extend(expect("retire-dry-run-reports-records", dry_retire, True, "COLLAB-PACK-001 practice -> archived"))
+
+        activate_plan = lifecycle(vault, "activate", apply=False)
+        errors.extend(expect("activate-review-only", activate_plan, False, "status: review_required"))
+        errors.extend(expect("activate-writes-none", activate_plan, False, "writes: none"))
+        activate_apply = lifecycle(vault, "activate", apply=True)
+        errors.extend(expect("activate-apply-refused", activate_apply, False, "cannot be applied"))
+
+        exportable_plan = lifecycle(vault, "exportable", apply=False)
+        errors.extend(expect("exportable-review-only", exportable_plan, False, "target_state: exportable"))
+        errors.extend(expect("exportable-no-runtime-authority", exportable_plan, False, "runtime_followup:"))
+
+        deprecate_plan = lifecycle(vault, "deprecate", apply=False)
+        errors.extend(expect("deprecate-review-only", deprecate_plan, False, "target_state: deprecated"))
+        errors.extend(expect("deprecate-reports-records", deprecate_plan, False, "ASSET-COLLAB-PACK-001 asset"))
+
+        split_plan = lifecycle(vault, "split", apply=False)
+        errors.extend(expect("split-review-only", split_plan, False, "before-after membership diff"))
+        merge_plan = lifecycle(vault, "merge", apply=False)
+        errors.extend(expect("merge-review-only", merge_plan, False, "split/merge requires"))
 
         metadata_with_valid_contract = metadata.read_text(encoding="utf-8")
         add_deployed_pack_contract(vault, "runtime generated adapter authority")
@@ -240,6 +264,38 @@ def main() -> int:
                 "must not claim runtime/generated/Core/pack authority",
             )
         )
+        metadata.write_text(metadata_with_valid_contract, encoding="utf-8")
+
+        add_metadata_section(
+            vault,
+            [
+                "    lifecycle_transition:",
+                "      evidence: /Users/example/private/raw-session.log",
+            ],
+        )
+        private_metadata = lifecycle(vault, "disable", apply=False)
+        errors.extend(expect("disable-local-private-metadata-fails", private_metadata, False, "local-private reference"))
+        metadata.write_text(metadata_with_valid_contract, encoding="utf-8")
+
+        add_metadata_section(
+            vault,
+            [
+                "    lifecycle_transition:",
+                "      notes: memory-system generated authority with destructive delete records",
+            ],
+        )
+        unsafe_claim = lifecycle(vault, "disable", apply=False)
+        errors.extend(expect("disable-memory-destructive-claim-fails", unsafe_claim, False, "unsafe lifecycle claim"))
+        metadata.write_text(metadata_with_valid_contract, encoding="utf-8")
+
+        missing_hash_text = "\n".join(
+            line
+            for line in metadata_with_valid_contract.splitlines()
+            if not line.strip().startswith(("imported_sha256:", "deployed_sha256:"))
+        ) + "\n"
+        metadata.write_text(missing_hash_text, encoding="utf-8")
+        missing_hash = lifecycle(vault, "disable", apply=False)
+        errors.extend(expect("disable-missing-record-hash-fails", missing_hash, False, "missing deployed/imported hash"))
         metadata.write_text(metadata_with_valid_contract, encoding="utf-8")
 
         apply_disable = lifecycle(vault, "disable", apply=True)
