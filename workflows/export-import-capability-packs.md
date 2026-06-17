@@ -7,6 +7,20 @@ This workflow is privacy-safe and review-first. It plans and validates transfer
 material; it does not export a private Vault, activate a pack, apply runtime
 changes, or write selected Vault records.
 
+## Skill-First Entry Points
+
+For normal agent use, invoke this workflow with natural-language requests such
+as:
+
+- `preview capability pack transfer <pack-path>`
+- `preview capability pack export <pack-path>`
+- `preview capability pack import <pack-path>`
+
+The agent should translate those requests into privacy-safe, writes-none
+validation before any sharing, import acceptance, selected Vault write, or
+runtime follow-up. Raw scripts are implementation details or advanced/debug
+commands, not the primary user surface.
+
 ## Boundaries
 
 - Core owns public schemas, workflows, validators, fixtures, examples, and

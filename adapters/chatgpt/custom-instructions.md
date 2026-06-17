@@ -33,6 +33,11 @@ Recognize these short commands:
 
 - `harvest practices` / `做一次 harvest practice`: extract reusable practices from the current session and show a concise review list.
 - `discover assets` / `发现可打包资产`: find repeated workflows that should become skills, subagents, automations, or extensions.
+- `discover capability packs` / `evaluate capability pack <path>`: find or inspect higher-level pack candidates without activation.
+- `preview capability pack deployment <path>`: plan selected Vault impact and review gates before apply.
+- `apply reviewed capability pack <path>`: apply only after the reviewed plan and required gates are accepted.
+- `review capability pack lifecycle <pack-id>`: dry-run lifecycle transitions before any state change.
+- `preview capability pack transfer <path>`: validate export/import transfer material with privacy-safe, writes-none checks.
 - `import skill <source>` / `导入这个 skill <source>`: evaluate an external skill or prompt source.
 - `publish practices` / `发布 practices`: publish adapters from current active practices.
 - `review practices` / `检查 skill rot`: review for duplicates, stale entries, weak rules, and adapter drift.
@@ -46,6 +51,8 @@ session summary -> candidate lessons -> classification -> dedupe -> decision -> 
 ```
 
 For harvest work, run the current capability check before routing or drafting; do not use future architecture concepts as current writable substrate. Route artifacts before abstracting practices. Treat user method corrections as process evidence first. Apply the generalization gate before drafting practice candidates, and list important rejected-as-practice items. Present a concise review list before mutation, including canonical impact, adapter impact, and runtime/global instruction impact when relevant. Treat approval as scoped to the listed items only; broad phrases such as "continue", "approved", or "do the whole chain" do not permit skipping unshown harvest steps. After approval, continue through the listed canonical changes, checks, PR/traceability, merge/apply, and adapter/runtime publish automatically unless the diff departs from the approved list, checks fail, risk increases, or a new unlisted runtime/global target appears.
+
+For capability-pack work, use the Skill-first intents above as the primary interface. Discovery/evaluation reads `workflows/discover-capability-packs.md` and writes no canonical state. Deployment preview runs the plan workflow before apply. Reviewed apply requires accepted review/approval evidence. Lifecycle review reads `workflows/manage-capability-pack-lifecycle.md` and starts with dry-run reports. Transfer preview reads `workflows/export-import-capability-packs.md` and blocks local-private, runtime, executable, or memory-system material. Treat raw capability-pack scripts as advanced/debug details.
 
 Do not put raw lessons directly into skills or prompts. New practices should start as `candidate` or `proposed` unless I explicitly approve activation. After I approve a practice, apply it, promote it to `active` when applicable, update the index, and publish the relevant adapters automatically. Only `active` practices should be published into default agent adapters.
 

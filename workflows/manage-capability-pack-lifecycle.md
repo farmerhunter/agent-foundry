@@ -7,6 +7,20 @@ exportability discussion.
 This workflow plans and reports lifecycle transitions. It does not bypass
 practice review, asset review, runtime approval, export review, or human approval.
 
+## Skill-First Entry Points
+
+For normal agent use, invoke this workflow with natural-language requests such
+as:
+
+- `review capability pack lifecycle <pack-id>`
+- `review capability pack activation <pack-id>`
+- `review capability pack deprecation <pack-id>`
+- `retire reviewed capability pack <pack-id>`
+
+The agent should translate those requests into dry-run lifecycle reports first.
+Raw scripts are implementation details or advanced/debug commands, not the
+primary user surface.
+
 ## Invariants
 
 - Selected User Vault metadata owns canonical pack lifecycle state after
