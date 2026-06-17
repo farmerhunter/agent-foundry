@@ -553,6 +553,29 @@ def main() -> int:
             )
         )
 
+        hybrid_record = base / "hybrid-candidate-manifest" / "records" / "HYBRID.md"
+        hybrid_record.parent.mkdir(parents=True, exist_ok=True)
+        hybrid_record.write_text(practice_text("HYBRID-001"), encoding="utf-8")
+        hybrid_pack = write_probe_pack(
+            base,
+            "hybrid-candidate-manifest",
+            [{"id": "HYBRID-001", "path": "records/HYBRID.md", "sha": sha256(hybrid_record)}],
+        )
+        hybrid_manifest = hybrid_pack / "manifest.yaml"
+        hybrid_manifest.write_text(
+            "candidate_schema_version: 1\n" + hybrid_manifest.read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+        hybrid_candidate_as_manifest = plan_pack(hybrid_pack, vault)
+        errors.extend(
+            expect(
+                "plan-hybrid-candidate-manifest-review-only",
+                hybrid_candidate_as_manifest,
+                False,
+                "candidate schema records are review-only",
+            )
+        )
+
         write_deployed_index(
             vault,
             "pack.multi-agent.optional",

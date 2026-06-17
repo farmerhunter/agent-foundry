@@ -353,7 +353,7 @@ def validate_advanced_metadata_text(text: str, label: str) -> list[str]:
 
 def validate_advanced_metadata(parsed: dict[object, object], label: str) -> list[str]:
     errors: list[str] = []
-    if "candidate_schema_version" in parsed and "manifest_schema_version" not in parsed:
+    if "candidate_schema_version" in parsed:
         errors.append(f"{label}: candidate schema records are review-only and cannot be used as active pack manifests")
     for section_name in ADVANCED_METADATA_SECTIONS & {str(key) for key in parsed}:
         section = parsed.get(section_name)
