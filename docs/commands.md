@@ -10,6 +10,12 @@ Use these short commands in day-to-day agent work.
 |---|---|---|
 | `harvest practices` | `做一次 harvest practice` | Extract reusable practices from the current session and show a review list.<br>从当前 session 提炼可复用 practice，并展示 review list。 |
 | `discover assets` | `发现可打包资产` | Find repeated workflows that should become skills, subagents, automations, or extensions.<br>发现值得沉淀为 skill、subagent、automation 或扩展项的重复 workflow。 |
+| `discover capability packs` | `发现 capability pack` | Find higher-level reusable capability bundles from repeated practice, asset, workflow, and adapter evidence. Produces candidates only.<br>从重复的 practice、asset、workflow 和 adapter evidence 中发现更高层的 reusable capability bundle；只产出 candidate。 |
+| `evaluate capability pack <path>` | `评估 capability pack <路径>` | Inspect a pack or candidate boundary, false positives, privacy risks, and next reviewer without activating it.<br>检查 pack 或 candidate 的边界、false positive、隐私风险和下一位 reviewer，不激活。 |
+| `preview capability pack deployment <path>` | `预览 capability pack 部署 <路径>` | Plan selected Vault impact and review gates before any apply.<br>在任何 apply 前预览 selected Vault 影响和 review gates。 |
+| `apply reviewed capability pack <path>` | `应用已 review 的 capability pack <路径>` | Apply only after the reviewed plan and required human gates are accepted; generated/runtime follow-up stays separate.<br>仅在 reviewed plan 和必要 human gate 被接受后 apply；generated/runtime 后续步骤保持分离。 |
+| `review capability pack lifecycle <pack-id>` | `review capability pack lifecycle <pack-id>` | Dry-run lifecycle transitions such as activate, exportable, split, merge, deprecate, disable, or retire.<br>dry-run 检查 activate、exportable、split、merge、deprecate、disable、retire 等 lifecycle transition。 |
+| `preview capability pack transfer <path>` | `预览 capability pack transfer <路径>` | Validate export/import transfer material with privacy-safe, writes-none checks.<br>用 privacy-safe、writes-none 检查验证 export/import transfer material。 |
 | `import skill <source>` | `导入这个 skill <source>` | Evaluate an external skill, repo, prompt pack, article, or local folder.<br>评估外部 skill、repo、prompt pack、文章或本地目录。 |
 | `publish practices` | `发布 practices` | Publish adapters from current active practices. Usually not needed manually.<br>从当前 active practices 发布 adapters；通常不需要手动执行。 |
 | `check operation context` | `检查操作上下文` | Show the current Agent Foundry Core/Vault/evidence/runtime context before writes.<br>在写入前显示当前 Agent Foundry Core/Vault/evidence/runtime 上下文。 |

@@ -154,9 +154,26 @@ Capability packs are reviewed bundles that can add or change practices, assets, 
 
 Capability packs 是经过 review 的 bundles，可能新增或改变 practices、assets、generated output 和 runtime-facing behavior。
 
-Use plan commands before apply commands:
+Use Skill-first requests for normal work:
 
-先使用 plan commands，再使用 apply commands：
+正常工作优先使用 Skill-first 请求：
+
+```text
+discover capability packs
+evaluate capability pack <pack-path>
+preview capability pack deployment <pack-path>
+apply reviewed capability pack <pack-path>
+review capability pack lifecycle <pack-id>
+preview capability pack transfer <pack-path>
+```
+
+These requests route through the relevant Agent Foundry workflows, preserve review gates, and keep raw scripts as implementation details or advanced/debug commands.
+
+这些请求会路由到对应的 Agent Foundry workflows，保留 review gates，并把 raw scripts 作为 implementation details 或 advanced/debug commands。
+
+Use plan commands before apply commands when operating manually or debugging:
+
+手动操作或 debug 时，先使用 plan commands，再使用 apply commands：
 
 ```bash
 python3 scripts/plan_capability_pack.py <pack-path> --vault-root <vault-root>

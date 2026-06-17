@@ -103,6 +103,8 @@ def main() -> int:
         require_text(
             ROOT / "workflows" / "discover-capability-packs.md",
             [
+                "Skill-First Entry Points",
+                "discover capability packs",
                 "Advanced Workflow Surface",
                 "Advanced capability discovery is optional",
                 "scripts/manage_capability_pack_lifecycle.py",
@@ -114,15 +116,44 @@ def main() -> int:
     errors.extend(
         require_text(
             ROOT / "workflows" / "manage-capability-pack-lifecycle.md",
-            ["activate", "exportable", "writes: none", "#176"],
+            ["Skill-First Entry Points", "review capability pack lifecycle", "activate", "exportable", "writes: none", "#176"],
         )
     )
     errors.extend(
         require_text(
             ROOT / "workflows" / "export-import-capability-packs.md",
-            ["review-first", "Import States", "writes: none", "private Vault"],
+            ["Skill-First Entry Points", "preview capability pack transfer", "review-first", "Import States", "writes: none", "private Vault"],
         )
     )
+    skill_first_snippets = [
+        "discover capability packs",
+        "preview capability pack deployment",
+        "apply reviewed capability pack",
+        "review capability pack lifecycle",
+        "preview capability pack transfer",
+    ]
+    for path in [
+        ROOT / "docs" / "commands.md",
+        ROOT / "docs" / "usage.md",
+        ROOT / "adapters" / "codex" / "skills" / "practice-harvester" / "SKILL.md",
+        ROOT / "adapters" / "hermes" / "skills" / "practice-harvester" / "SKILL.md",
+        ROOT / "adapters" / "trae" / "skills" / "agent-foundry" / "SKILL.md",
+        ROOT / "adapters" / "claude-code" / "CLAUDE.md",
+        ROOT / "adapters" / "chatgpt" / "custom-instructions.md",
+        ROOT / "adapters" / "chatgpt" / "knowledge" / "commands.md",
+    ]:
+        errors.extend(require_text(path, skill_first_snippets))
+    for path in [
+        ROOT / "docs" / "usage.md",
+        ROOT / "adapters" / "codex" / "skills" / "practice-harvester" / "SKILL.md",
+        ROOT / "adapters" / "trae" / "skills" / "agent-foundry" / "SKILL.md",
+    ]:
+        errors.extend(
+            require_text(
+                path,
+                ["raw scripts", "implementation details", "advanced/debug"],
+            )
+        )
 
     with tempfile.TemporaryDirectory(prefix="agent-foundry-advanced-workflow-") as tmp:
         base = Path(tmp)

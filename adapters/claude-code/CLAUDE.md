@@ -35,6 +35,11 @@ Short commands:
 - `harvest practices` / `做一次 harvest practice`
 - `discover assets` / `harvest skills` / `harvest assets` / `发现可打包资产`
 - `import skill <source>` / `导入这个 skill <source>`
+- `discover capability packs` / `evaluate capability pack <path>`
+- `preview capability pack deployment <path>`
+- `apply reviewed capability pack <path>`
+- `review capability pack lifecycle <pack-id>`
+- `preview capability pack transfer <path>`
 - `publish practices` / `发布 practices`
 - `review practices` / `检查 skill rot`
 - `review assets` / `检查 asset rot`
@@ -58,6 +63,8 @@ When asked to harvest, persist, deduplicate, merge, or publish reusable lessons:
 12. Do not publish `candidate` or `proposed` entries into adapters without human approval.
 
 When asked to discover reusable assets or harvest skills, read `workflows/discover-assets.md`, search `indexes/asset_index.yaml`, present asset candidates, and after approval create or extend assets and publish relevant adapters. For whole-session or phase-level skill harvests, set an explicit evidence window that includes earlier phases, linked issues, PRs, and commits rather than only the latest discussion topic.
+
+When asked to work with capability packs, use the Skill-first intents above as the primary interface. Discovery/evaluation reads `workflows/discover-capability-packs.md` and writes no canonical state. Deployment preview runs the plan workflow before apply. Reviewed apply requires accepted review/approval evidence. Lifecycle review reads `workflows/manage-capability-pack-lifecycle.md` and starts with dry-run reports. Transfer preview reads `workflows/export-import-capability-packs.md` and blocks local-private, runtime, executable, or memory-system material. Treat raw capability-pack scripts as advanced/debug details.
 
 When an active asset is used, record concise non-sensitive usage evidence automatically, preferably with `scripts/record_asset_usage.py`.
 

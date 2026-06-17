@@ -30,6 +30,11 @@ Before substantial changes, check:
 - `discover assets` / `harvest skills` / `harvest assets` / `发现可打包资产`: find repeated workflows that should become skills, subagents, automations, or extensions.
 - `import skill <source>` / `导入这个 skill <source>`: run the external skill import workflow.
 - `publish practices` / `发布 practices`: publish adapters from current active practices.
+- `discover capability packs` / `evaluate capability pack`: read `workflows/discover-capability-packs.md`, gather evidence, and output candidate or false-positive review only.
+- `preview capability pack deployment`: run the capability-pack plan workflow first; report selected Vault impact, review gates, and `writes: none`.
+- `apply reviewed capability pack`: require accepted review/approval evidence, apply through the reviewed pack workflow, then publish or inspect adapters separately.
+- `review capability pack lifecycle`: read `workflows/manage-capability-pack-lifecycle.md` and produce dry-run lifecycle status before any state change.
+- `preview capability pack transfer`: read `workflows/export-import-capability-packs.md` and run privacy-safe transfer validation with no selected Vault writes.
 - `review practices` / `检查 skill rot`: review for duplicates, stale entries, weak rules, and adapter drift.
 - `review assets` / `检查 asset rot`: review reusable assets for usage, overlap, stale triggers, and adapter coverage.
 - `refresh practices and assets` / `刷新practices和assets`: pull remote updates, conditionally regenerate adapters, and install to local runtimes. Read `workflows/refresh.md` from the agent-foundry repo.
@@ -38,7 +43,7 @@ Before substantial changes, check:
 
 1. Locate Agent Foundry Core and Vault. Prefer explicit roots when available, then `AGENT_FOUNDRY_CORE` plus `AGENT_FOUNDRY_VAULT` after commands support them, then `~/.agent-foundry/config.yaml`, then `AGENT_FOUNDRY_HOME` as same-root compatibility, then the current directory only if it validates as the required Core and Vault context. The current project is evidence source, not canonical destination.
 2. Select the workflow from the short command or user intent.
-3. Read `references/harvest-workflow.md` for harvesting, `references/import-policy.md` for imports, `references/asset-policy.md` for assets, `workflows/refresh.md` from the repo for refresh, or the repository workflow file for publish/review.
+3. Read `references/harvest-workflow.md` for harvesting, `references/import-policy.md` for imports, `references/asset-policy.md` for assets, `workflows/refresh.md` from the repo for refresh, `workflows/discover-capability-packs.md` for pack discovery/evaluation, `workflows/manage-capability-pack-lifecycle.md` for lifecycle review, `workflows/export-import-capability-packs.md` for transfer review, or the repository workflow file for publish/review.
 4. Read `references/schema.md`.
 5. When harvesting skills or assets from a long session, set an explicit evidence window that includes earlier phases, linked issues, PRs, and commits rather than only the latest discussion topic.
 6. Run the current capability check before routing or drafting; do not use future architecture concepts as current writable substrate.
@@ -54,12 +59,22 @@ Before substantial changes, check:
 16. After the user approves a practice or asset change, apply the canonical change and publish relevant adapters automatically.
 17. Report candidates, decisions, changed files, and review needs.
 
+## Capability Pack Workflow Intents
+
+- Discovery/evaluation: users may ask to "discover capability packs" or "evaluate capability pack"; output candidate evidence, confidence, false-positive controls, and next review owner without writing canonical records.
+- Deployment preview: users may ask to "preview capability pack deployment"; run `scripts/plan_capability_pack.py` against the selected Vault, report diffs and gates, and stop before apply.
+- Reviewed apply: users may ask to "apply reviewed capability pack"; confirm accepted review/approval evidence, run the existing reviewed apply workflow, and keep generated/runtime follow-up separate.
+- Lifecycle review: users may ask to "review capability pack lifecycle"; run dry-run lifecycle reporting with `writes: none` unless the transition is explicitly supported and approved.
+- Transfer preview: users may ask to "preview capability pack transfer"; use privacy-safe export/import validation and block local-private, runtime, executable, or memory-system material.
+
 ## Guardrails
 
 - Apply governance practices GOV-001 through GOV-006 across all projects, not only inside Agent Foundry: protect canonical source of truth, prefer the smallest maintainable mechanism, treat transient context as evidence, preserve maintainability plus native runtime capability, do not use future architecture as current substrate, and mark current versus proposed capability.
 - Do not add raw session notes directly into agent skills.
 - Do not publish `candidate` or `proposed` entries into default adapters.
 - Do not import external skills directly into active adapters.
+- Do not make raw scripts the primary capability-pack user interface; route user requests through the Skill intents above and treat scripts as implementation details or advanced/debug commands.
+- Do not apply, activate, export, import, split, merge, deprecate, disable, retire, or runtime-install capability packs without the matching review and human gates.
 - Ask for human approval before promoting a practice to `active`; after approval, publish relevant adapters unless the user asks to stage only.
 - Record concise, non-sensitive asset usage evidence automatically when an active asset is invoked.
 - Treat memory as evidence, not source of truth.

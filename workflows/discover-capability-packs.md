@@ -8,6 +8,18 @@ This workflow proposes candidates only. It does not activate, export, deploy,
 install, publish, or mutate any pack, Vault record, generated adapter, runtime
 copy, private state, or memory-system record.
 
+## Skill-First Entry Points
+
+For normal agent use, invoke this workflow with natural-language requests such
+as:
+
+- `discover capability packs`
+- `evaluate capability pack <path>`
+
+The agent should translate those requests into the evidence-gathering sequence
+below. Raw scripts are implementation details or advanced/debug commands, not
+the primary user surface.
+
 ## Invariant
 
 Capability pack discovery outputs reviewable candidate records, not canonical
