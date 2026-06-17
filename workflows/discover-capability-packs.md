@@ -175,7 +175,54 @@ After review, Architect decides whether to:
 - create a follow-up for implementation;
 - close as rejected or deferred.
 
-## 8. AF9 Fixture Expectations
+## 8. Advanced Workflow Surface
+
+Advanced capability discovery is optional. Basic pack deployment, planning,
+update comparison, lifecycle reports, and transfer validation must still work
+when no candidate records exist.
+
+Use this sequence only when an issue or human asks for advanced discovery:
+
+1. Run discovery as evidence gathering. Output candidate records or a review
+   packet only; do not write canonical pack metadata or selected Vault records.
+2. Validate any candidate record against
+   `schemas/capability-pack-candidate.schema.yaml`. Candidate records remain
+   review artifacts and must not be passed to activation, export, or deployment
+   tooling as active pack manifests.
+3. If the candidate becomes a reviewed pack manifest, validate it with
+   `scripts/plan_capability_pack.py` before any deployment flow. Advanced
+   metadata is additive and optional; `manifest_schema_version: 1` packs without
+   advanced sections remain valid.
+4. For lifecycle review, use
+   `scripts/manage_capability_pack_lifecycle.py` in dry-run mode. Review-only
+   actions such as `activate`, `exportable`, `deprecate`, `split`, and `merge`
+   must report status, gates, rollback/defer guidance, and `writes: none`.
+5. For export/import review, use
+   `scripts/plan_capability_pack_transfer.py` before sharing or import
+   acceptance. Transfer reports must be privacy-safe, dry-run first, and
+   `writes: none`.
+6. Route the result to the next owner:
+   - Reviewer for candidate false-positive and boundary review;
+   - Architect for split/merge or lifecycle policy decisions;
+   - human for privacy/export, runtime-write, destructive, or final `main` merge
+     decisions;
+   - Harvester only when a canonical practice or asset change is actually
+     required.
+
+Failure states:
+
+- `candidate_schema_version` appears in a pack manifest path: block as
+  review-only candidate material.
+- Generated or runtime evidence claims canonical authority: reject as
+  false-positive or block policy.
+- Transfer material contains private/local markers, executable install side
+  effects, or missing export policy: block before sharing or import acceptance.
+- Lifecycle metadata is malformed, missing hashes, local-private, or destructive:
+  block and report rollback/defer/downstream guidance.
+- Existing selected Vault edits conflict with imported content: preserve the
+  Vault and route to reviewed merge; do not overwrite.
+
+## 9. AF9 Fixture Expectations
 
 Use these fixtures from AF9 #172 while validating the protocol:
 
