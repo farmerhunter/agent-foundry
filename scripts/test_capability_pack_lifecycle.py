@@ -275,6 +275,8 @@ def main() -> int:
         )
         private_metadata = lifecycle(vault, "disable", apply=False)
         errors.extend(expect("disable-local-private-metadata-fails", private_metadata, False, "local-private reference"))
+        for expected in ["generated_followup:", "runtime_followup:", "rollback:", "defer:", "writes: none"]:
+            errors.extend(expect(f"disable-local-private-metadata-guidance-{expected}", private_metadata, False, expected))
         metadata.write_text(metadata_with_valid_contract, encoding="utf-8")
 
         add_metadata_section(

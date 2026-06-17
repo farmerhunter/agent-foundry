@@ -390,6 +390,7 @@ def lifecycle(core_root: Path, vault_root: Path, pack_id: str, action: str, appl
         print("status: failed")
         for error in metadata_errors:
             print(f"- {error}")
+        print_followup_guidance(action)
         print("writes: none")
         return 1
     if start == -1:
