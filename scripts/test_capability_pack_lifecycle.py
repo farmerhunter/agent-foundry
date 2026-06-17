@@ -130,6 +130,30 @@ def status(vault: Path, generated: Path, receipt: Path) -> subprocess.CompletedP
     )
 
 
+def add_deployed_pack_contract(vault: Path, source_authority: str) -> None:
+    index = vault / "packs" / "deployed-pack-index.yaml"
+    text = index.read_text(encoding="utf-8")
+    marker = "    records:\n"
+    index.write_text(
+        text.replace(
+            marker,
+            "\n".join(
+                [
+                    "    pack_contract:",
+                    "      promised_use_case: lifecycle fixture",
+                    "      deployment_role: optional user-selected capability",
+                    f"      source_authority_after_deployment: {source_authority}",
+                    "      non_authority_boundaries: [generated adapters are downstream only, runtime installs are downstream only]",
+                    "    records:",
+                    "",
+                ]
+            ),
+            1,
+        ),
+        encoding="utf-8",
+    )
+
+
 def main() -> int:
     errors: list[str] = []
     with tempfile.TemporaryDirectory(prefix="agent-foundry-pack-lifecycle-") as tmp:
@@ -204,6 +228,19 @@ def main() -> int:
         errors.extend(expect("disable-dry-run", dry_disable, True, "writes: none"))
         if digest(metadata) != metadata_before:
             errors.append("disable-dry-run: metadata changed")
+
+        metadata_with_valid_contract = metadata.read_text(encoding="utf-8")
+        add_deployed_pack_contract(vault, "runtime generated adapter authority")
+        unsafe_lifecycle_metadata = lifecycle(vault, "disable", apply=False)
+        errors.extend(
+            expect(
+                "disable-unsafe-deployed-metadata-fails",
+                unsafe_lifecycle_metadata,
+                False,
+                "must not claim runtime/generated/Core/pack authority",
+            )
+        )
+        metadata.write_text(metadata_with_valid_contract, encoding="utf-8")
 
         apply_disable = lifecycle(vault, "disable", apply=True)
         errors.extend(expect("disable-apply", apply_disable, True, "writes: applied"))

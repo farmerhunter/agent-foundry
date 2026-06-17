@@ -11,6 +11,7 @@ from pathlib import Path
 from check_foundry_roots import validate
 from deploy_capability_pack import parse_simple_yaml
 from foundry_config import ROOT
+from plan_capability_pack import validate_deployed_pack_metadata
 
 
 PRACTICE_RETIRE_STATUS = "archived"
@@ -88,6 +89,9 @@ def deployed_pack_records(vault_root: Path, pack_id: str) -> tuple[list[PackReco
     for pack in packs:
         if not isinstance(pack, dict) or pack.get("pack_id") != pack_id:
             continue
+        metadata_errors = validate_deployed_pack_metadata(pack, pack_id)
+        if metadata_errors:
+            return [], lines, start, end, metadata_errors
         pack_records = pack.get("records", [])
         if pack_records in ({}, None):
             return [], lines, start, end, []

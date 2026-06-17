@@ -166,6 +166,30 @@ def compare_pack(pack_root: Path, vault_root: Path) -> subprocess.CompletedProce
     return run([str(COMPARE), str(pack_root), "--core-root", str(ROOT), "--vault-root", str(vault_root)])
 
 
+def add_deployed_pack_contract(vault_root: Path, source_authority: str) -> None:
+    index = vault_root / "packs" / "deployed-pack-index.yaml"
+    text = index.read_text(encoding="utf-8")
+    marker = "    records:\n"
+    index.write_text(
+        text.replace(
+            marker,
+            "\n".join(
+                [
+                    "    pack_contract:",
+                    "      promised_use_case: update comparison fixture",
+                    "      deployment_role: optional user-selected capability",
+                    f"      source_authority_after_deployment: {source_authority}",
+                    "      non_authority_boundaries: [generated adapters are downstream only, runtime installs are downstream only]",
+                    "    records:",
+                    "",
+                ]
+            ),
+            1,
+        ),
+        encoding="utf-8",
+    )
+
+
 def main() -> int:
     errors: list[str] = []
     with tempfile.TemporaryDirectory(prefix="agent-foundry-pack-update-") as tmp:
@@ -187,7 +211,21 @@ def main() -> int:
 
         errors.extend(expect("init-blank-vault", init_blank(vault), True, "Blank Vault initialized and validated."))
         errors.extend(expect("apply-v1", apply_pack(v1, vault), True, "metadata: written"))
+        index_after_apply = (vault / "packs" / "deployed-pack-index.yaml").read_text(encoding="utf-8")
         errors.extend(expect("compare-unchanged", compare_pack(v1, vault), True, "status: unchanged"))
+        add_deployed_pack_contract(vault, "selected User Vault records")
+        errors.extend(expect("compare-advanced-deployed-metadata", compare_pack(v1, vault), True, "status: unchanged"))
+        (vault / "packs" / "deployed-pack-index.yaml").write_text(index_after_apply, encoding="utf-8")
+        add_deployed_pack_contract(vault, "runtime generated adapter authority")
+        errors.extend(
+            expect(
+                "compare-unsafe-deployed-metadata-fails",
+                compare_pack(v1, vault),
+                False,
+                "must not claim runtime/generated/Core/pack authority",
+            )
+        )
+        (vault / "packs" / "deployed-pack-index.yaml").write_text(index_after_apply, encoding="utf-8")
         errors.extend(expect("compare-same-version-mismatch", compare_pack(v1_same_version_changed, vault), False, "same pack id and version"))
         errors.extend(expect("compare-clean-update", compare_pack(v2, vault), True, "status: clean_update_available"))
         errors.extend(expect("compare-clean-update-count", compare_pack(v2, vault), True, "clean_update: 1"))

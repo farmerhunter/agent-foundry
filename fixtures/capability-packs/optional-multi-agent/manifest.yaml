@@ -15,13 +15,38 @@ review_state: accepted
 pack_contract:
   promised_use_case: "Help a project operate GitHub issues, PRs, labels, comments, and optional Project status as a lightweight multi-agent scheduler."
   deployment_role: "optional user-selected capability after bootstrap"
-  source_authority_after_deployment: "selected User Vault records and managed runtime/tool install receipts"
-  not_runtime_authority: "pack staging, product project evidence, and Core fixture paths"
+  source_authority_after_deployment: "selected User Vault records"
+  non_authority_boundaries: [generated adapters are downstream only, runtime installs are downstream only, pack staging is transfer evidence only, Core fixtures are schema and test evidence only]
 
 evidence_sources:
   - "Tiny IPA tools/agents helper suite"
   - "Tiny IPA role-generic agent helper design notes"
   - "Agent Foundry #53 executable helper boundary"
+
+export_policy:
+  exportability: review_required
+  privacy_class: sanitized
+  excluded_material: [private project ids, local runtime receipts, raw session history]
+  review_required: true
+
+runtime_projection:
+  downstream_only: true
+  generated_adapter_intent: generated_adapter_projection
+  runtime_install: review_required
+  authority: downstream_only
+
+lifecycle_policy:
+  split_behavior: review_required
+  merge_behavior: review_required
+  deprecation_behavior: review_required
+  update_behavior: reviewed_diff_required
+
+candidate_provenance:
+  review_only: true
+  candidate_ids: [AF9-optional-multi-agent]
+  canonical: false
+  activation_input: false
+  export_input: false
 
 candidate_contents:
   practices:

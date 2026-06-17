@@ -68,6 +68,37 @@ REQUIRED_INTEGRITY_FIELDS = {
     "private_vault_content",
 }
 REQUIRED_DEPLOYED_PACK_FIELDS = {"pack_id", "version", "source"}
+ADVANCED_METADATA_SECTIONS = {
+    "pack_contract",
+    "evidence_sources",
+    "export_policy",
+    "runtime_projection",
+    "lifecycle_policy",
+    "candidate_provenance",
+}
+ADVANCED_AUTHORITY_REJECT_RE = re.compile(
+    r"\b(runtime|generated|adapter|pack snapshot|pack staging|core fixture|local private|private vault|"
+    r"canonical authority|source of truth)\b",
+    re.IGNORECASE,
+)
+PRIVATE_REFERENCE_RE = re.compile(
+    r"(^/|~|/Users/|\.agent-foundry|\.codex|\.trae|private|secret|token|session|transcript|"
+    r"raw log|usage row|runtime manifest|local receipt)",
+    re.IGNORECASE,
+)
+UNSAFE_LIFECYCLE_RE = re.compile(r"\b(automatic|auto|force|overwrite|delete|destructive|runtime apply|install)\b", re.IGNORECASE)
+
+ALLOWED_EXPORTABILITY = {"not_exportable", "review_required", "exportable_after_review"}
+ALLOWED_PRIVACY_CLASSES = {"public", "internal", "sanitized"}
+ALLOWED_RUNTIME_INTENT = {"none", "generated_adapter_projection", "review_required"}
+ALLOWED_LIFECYCLE_VALUES = {
+    "review_required",
+    "preserve_user_state",
+    "reviewed_diff_required",
+    "human_review_required",
+    "manual_review",
+    "not_supported",
+}
 
 
 @dataclass(frozen=True)
@@ -173,6 +204,174 @@ def deployed_pack_records(vault_root: Path, pack_id: str) -> tuple[dict[str, dic
     return {}, []
 
 
+def object_to_scalar_text(value: object) -> str:
+    if isinstance(value, str):
+        return value
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, list):
+        return " ".join(object_to_scalar_text(item) for item in value)
+    return ""
+
+
+def scalar_texts(value: object) -> list[str]:
+    texts: list[str] = []
+    if isinstance(value, dict):
+        for nested in value.values():
+            texts.extend(scalar_texts(nested))
+        return texts
+    if isinstance(value, list):
+        for item in value:
+            texts.extend(scalar_texts(item))
+        return texts
+    text = object_to_scalar_text(value)
+    return [text] if text else []
+
+
+def require_mapping(section: object, section_name: str, label: str) -> tuple[dict[str, object], list[str]]:
+    if section == {}:
+        return {}, [f"{label}: {section_name} must be a mapping with explicit fields"]
+    if not isinstance(section, dict):
+        return {}, [f"{label}: {section_name} must be a mapping"]
+    return section, []
+
+
+def reject_private_references(section_name: str, value: object, label: str) -> list[str]:
+    errors: list[str] = []
+    for text in scalar_texts(value):
+        if PRIVATE_REFERENCE_RE.search(text):
+            errors.append(f"{label}: {section_name} contains private/local evidence reference: {text}")
+    return errors
+
+
+def validate_pack_contract(section: object, label: str) -> list[str]:
+    contract, errors = require_mapping(section, "pack_contract", label)
+    for field in ["promised_use_case", "deployment_role", "source_authority_after_deployment", "non_authority_boundaries"]:
+        if field not in contract:
+            errors.append(f"{label}: pack_contract missing {field}")
+    authority = object_to_scalar_text(contract.get("source_authority_after_deployment", ""))
+    if "selected" not in authority.lower() or "vault" not in authority.lower():
+        errors.append(f"{label}: pack_contract source_authority_after_deployment must name selected Vault authority")
+    if ADVANCED_AUTHORITY_REJECT_RE.search(authority):
+        errors.append(
+            f"{label}: pack_contract source_authority_after_deployment must not claim runtime/generated/Core/pack authority"
+        )
+    boundaries = contract.get("non_authority_boundaries", [])
+    boundary_text = " ".join(scalar_texts(boundaries)).lower()
+    if not boundary_text:
+        errors.append(f"{label}: pack_contract non_authority_boundaries must name excluded authority surfaces")
+    if "runtime" not in boundary_text or "generated" not in boundary_text:
+        errors.append(f"{label}: pack_contract non_authority_boundaries must include generated and runtime as downstream only")
+    return errors
+
+
+def validate_evidence_sources(section: object, label: str) -> list[str]:
+    errors: list[str] = []
+    if section in ({}, None):
+        return [f"{label}: evidence_sources must be a non-empty list"]
+    if not isinstance(section, list):
+        return [f"{label}: evidence_sources must be a list"]
+    for index, source in enumerate(section, start=1):
+        if isinstance(source, dict):
+            ref = object_to_scalar_text(source.get("ref", "")) or object_to_scalar_text(source.get("url", ""))
+            if not ref:
+                errors.append(f"{label}: evidence_sources item {index} missing ref or url")
+        elif not isinstance(source, str) or not source.strip():
+            errors.append(f"{label}: evidence_sources item {index} must be a non-empty string or mapping")
+        errors.extend(reject_private_references(f"evidence_sources item {index}", source, label))
+    return errors
+
+
+def validate_export_policy(section: object, label: str) -> list[str]:
+    policy, errors = require_mapping(section, "export_policy", label)
+    exportability = object_to_scalar_text(policy.get("exportability", ""))
+    privacy_class = object_to_scalar_text(policy.get("privacy_class", ""))
+    review_required = object_to_scalar_text(policy.get("review_required", "")).lower()
+    if exportability not in ALLOWED_EXPORTABILITY:
+        errors.append(f"{label}: export_policy exportability must be one of {sorted(ALLOWED_EXPORTABILITY)}")
+    if privacy_class not in ALLOWED_PRIVACY_CLASSES:
+        errors.append(f"{label}: export_policy privacy_class must be one of {sorted(ALLOWED_PRIVACY_CLASSES)}")
+    if exportability != "not_exportable" and review_required != "true":
+        errors.append(f"{label}: export_policy review_required must be true before exportable pack use")
+    reference_fields = {key: value for key, value in policy.items() if str(key) not in {"excluded_material", "exclusions"}}
+    errors.extend(reject_private_references("export_policy", reference_fields, label))
+    return errors
+
+
+def validate_runtime_projection(section: object, label: str) -> list[str]:
+    projection, errors = require_mapping(section, "runtime_projection", label)
+    downstream_only = object_to_scalar_text(projection.get("downstream_only", "")).lower()
+    runtime_install = object_to_scalar_text(projection.get("runtime_install", "")).lower()
+    intent = object_to_scalar_text(projection.get("generated_adapter_intent", ""))
+    if downstream_only != "true":
+        errors.append(f"{label}: runtime_projection downstream_only must be true")
+    if runtime_install not in {"false", "review_required"}:
+        errors.append(f"{label}: runtime_projection runtime_install must be false or review_required")
+    if intent and intent not in ALLOWED_RUNTIME_INTENT:
+        errors.append(f"{label}: runtime_projection generated_adapter_intent must be one of {sorted(ALLOWED_RUNTIME_INTENT)}")
+    for field in ["authority", "canonical_authority", "source_authority"]:
+        claim = object_to_scalar_text(projection.get(field, ""))
+        if claim and claim.lower() not in {"none", "false", "downstream_only"}:
+            errors.append(f"{label}: runtime_projection {field} must not claim authority")
+    errors.extend(reject_private_references("runtime_projection", projection, label))
+    return errors
+
+
+def validate_lifecycle_policy(section: object, label: str) -> list[str]:
+    policy, errors = require_mapping(section, "lifecycle_policy", label)
+    for field, value in policy.items():
+        text = object_to_scalar_text(value)
+        if text and text not in ALLOWED_LIFECYCLE_VALUES:
+            errors.append(f"{label}: lifecycle_policy {field} must be review-only; got {text}")
+        if UNSAFE_LIFECYCLE_RE.search(text):
+            errors.append(f"{label}: lifecycle_policy {field} contains unsafe lifecycle claim: {text}")
+    return errors
+
+
+def validate_candidate_provenance(section: object, label: str) -> list[str]:
+    provenance, errors = require_mapping(section, "candidate_provenance", label)
+    if object_to_scalar_text(provenance.get("review_only", "")).lower() != "true":
+        errors.append(f"{label}: candidate_provenance review_only must be true")
+    for field in ["canonical", "activation_input", "export_input"]:
+        if object_to_scalar_text(provenance.get(field, "")).lower() == "true":
+            errors.append(f"{label}: candidate_provenance {field} must not be true")
+    errors.extend(reject_private_references("candidate_provenance", provenance, label))
+    return errors
+
+
+def validate_advanced_metadata_text(text: str, label: str) -> list[str]:
+    try:
+        parsed = parse_simple_yaml(text)
+    except ValueError as exc:
+        return [f"{label}: parse error: {exc}"]
+    if not isinstance(parsed, dict):
+        return [f"{label}: manifest metadata must be a mapping"]
+    return validate_advanced_metadata(parsed, label)
+
+
+def validate_advanced_metadata(parsed: dict[object, object], label: str) -> list[str]:
+    errors: list[str] = []
+    if "candidate_schema_version" in parsed and "manifest_schema_version" not in parsed:
+        errors.append(f"{label}: candidate schema records are review-only and cannot be used as active pack manifests")
+    for section_name in ADVANCED_METADATA_SECTIONS & {str(key) for key in parsed}:
+        section = parsed.get(section_name)
+        if section_name == "pack_contract":
+            errors.extend(validate_pack_contract(section, label))
+        elif section_name == "evidence_sources":
+            errors.extend(validate_evidence_sources(section, label))
+        elif section_name == "export_policy":
+            errors.extend(validate_export_policy(section, label))
+        elif section_name == "runtime_projection":
+            errors.extend(validate_runtime_projection(section, label))
+        elif section_name == "lifecycle_policy":
+            errors.extend(validate_lifecycle_policy(section, label))
+        elif section_name == "candidate_provenance":
+            errors.extend(validate_candidate_provenance(section, label))
+    return errors
+
+
 def validate_deployed_pack_metadata(pack: dict[object, object], pack_id: str) -> list[str]:
     errors: list[str] = []
     for field in sorted(REQUIRED_DEPLOYED_PACK_FIELDS - {str(key) for key in pack}):
@@ -184,6 +383,7 @@ def validate_deployed_pack_metadata(pack: dict[object, object], pack_id: str) ->
         manifest_sha = str(source.get("manifest_sha256", ""))
         if not SHA256_RE.match(manifest_sha):
             errors.append(f"deployed pack {pack_id} source.manifest_sha256 must be sha256")
+    errors.extend(validate_advanced_metadata(pack, f"deployed pack {pack_id}"))
     return errors
 
 
@@ -230,6 +430,7 @@ def validate_manifest(core_root: Path, vault_root: Path, pack_root: Path) -> tup
     manifest_text = read(manifest_path)
     manifest = top_level_scalars(manifest_text)
     errors: list[str] = []
+    errors.extend(validate_advanced_metadata_text(manifest_text, str(manifest_path)))
     for field in sorted(REQUIRED_PLAN_MANIFEST_FIELDS - manifest.keys()):
         errors.append(f"manifest missing {field}")
     if manifest.get("manifest_schema_version", "") != SUPPORTED_MANIFEST_SCHEMA_VERSION:
