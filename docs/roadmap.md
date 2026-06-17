@@ -1,8 +1,8 @@
 # Agent Foundry Roadmap
 
 Status: planning document
-Updated: 2026-06-16
-Scope: Agent Foundry productization, runtime adapter framework, Trae support, capability-system hardening, repository hygiene, and memory-system readiness.
+Updated: 2026-06-17
+Scope: Agent Foundry productization, runtime adapter framework, Trae support, capability-system hardening, advanced capability-pack lifecycle, Coordinator orchestration, repository hygiene, and memory-system readiness.
 
 ## Purpose
 
@@ -79,12 +79,13 @@ Agent Foundry should use maturity stages for planning and release versions for d
 | AF-7 | Runtime Adapter Framework And Trae Support | Adapter publishing becomes a runtime-aware distribution system, and Trae CN is supported through a verified global Skill path. | Canonical assets can project through a portable adapter model into generated runtime adapters with source metadata, freshness reporting, safe install behavior, and a Trae global Skill publisher validated against `~/.trae-cn/skills`. |
 | AF-8 | Capability System Hardening | The post-AF6 capability system is exercised against realistic multi-user, multi-machine, multi-runtime, long-running-agent, drift, restore, parser/schema, and lifecycle edge cases. | Capability-system boundary scenarios are validated or improved through temp fixtures, status/repair UX, Project scheduler state, and safe runtime/Vault boundaries. |
 | AF-9 | Advanced Capability Pack Discovery and Lifecycle | Capability packs can be recognized, maintained, exported, and optimized as higher-level reusable bundles after the basic pack lifecycle is stable and hardened. | Emergent capability-pack discovery and export/update automation can be designed without weakening Core/Vault authority, runtime freshness, or reviewed pack deployment. |
-| AF-10 | Memory-System Ready | Future memory-system records, evidence policy, routing, privacy, and MCP boundaries are designed but not necessarily implemented. | Memory-system implementation home can be chosen with clear tradeoffs. |
-| AF-11 | Memory Implementation Home Decision | The implementation home for memory-system work is chosen using evidence from completed Foundry lifecycle, runtime adapter framework, and capability-system hardening work. | Decision record names the chosen home, rejected alternatives, file/data boundaries, validation path, privacy policy, and rollback path. |
+| AF-10 | Coordinator Role And Agent Orchestration | Agent Foundry can optionally use a Coordinator role for goal intake, durable routing, context-economy packets, model-tier-aware dispatch, scheduler-state coherence, and tool-agnostic orchestration. | Coordinator mode is optional and backward-compatible; simple workflows still work without it; durable packet, dispatch, and state-coherence contracts are validated; a user-facing walkthrough or trial round is complete. |
+| AF-11 | Memory-System Ready | Future memory-system records, evidence policy, routing, privacy, and MCP boundaries are designed but not necessarily implemented. | Memory-system implementation home can be chosen with clear tradeoffs. |
+| AF-12 | Memory Implementation Home Decision | The implementation home for memory-system work is chosen using evidence from completed Foundry lifecycle, runtime adapter framework, capability-system hardening, capability-pack lifecycle, and Coordinator orchestration work. | Decision record names the chosen home, rejected alternatives, file/data boundaries, validation path, privacy policy, and rollback path. |
 
-Current planning stage: AF-7 / M7.
+Current planning stage: AF-9 / M9 planning, with AF-10 / M10 planning prepared.
 
-AF-0 explains the existing mixed history. AF-1 starts the stricter planning and multi-agent coordination era. AF-2 designs the productization boundary. AF-3 executes the local Core/Vault split. AF-4 proves the split system works for the current real user across existing deployments and establishes the migration discipline needed for later major upgrades. AF-5 makes onboarding humane and reliable for new users. AF-6 closes the current Foundry product lifecycle so install, pack deployment, refresh, status, and rollback are usable beyond a one-off maintainer path. AF-7 upgrades runtime adapters and adds Trae CN support around a verified global Skill path. AF-8 hardens the capability system under realistic multi-user, multi-machine, multi-runtime, long-running-agent, and drift scenarios. AF-9 is later advanced capability-pack discovery and export lifecycle work. AF-10 is the decision gate for memory-system architecture. AF-11 chooses the memory implementation home. Memory-system implementation remains outside this current roadmap until explicitly authorized.
+AF-0 explains the existing mixed history. AF-1 starts the stricter planning and multi-agent coordination era. AF-2 designs the productization boundary. AF-3 executes the local Core/Vault split. AF-4 proves the split system works for the current real user across existing deployments and establishes the migration discipline needed for later major upgrades. AF-5 makes onboarding humane and reliable for new users. AF-6 closes the current Foundry product lifecycle so install, pack deployment, refresh, status, and rollback are usable beyond a one-off maintainer path. AF-7 upgrades runtime adapters and adds Trae CN support around a verified global Skill path. AF-8 hardens the capability system under realistic multi-user, multi-machine, multi-runtime, long-running-agent, and drift scenarios. AF-9 covers advanced capability-pack discovery and export lifecycle work. AF-10 introduces optional Coordinator orchestration and context economy. AF-11 is the decision gate for memory-system architecture. AF-12 chooses the memory implementation home. Memory-system implementation remains outside this current roadmap until explicitly authorized.
 
 ## Release Version Mapping
 
@@ -103,8 +104,9 @@ Suggested mapping:
 | AF-7 | `v0.7.0`: runtime adapter framework and Trae support baseline. |
 | AF-8 | `v0.8.0`: capability-system hardening baseline. |
 | AF-9 | `v0.9.0`: advanced capability-pack discovery and lifecycle design baseline. |
-| AF-10 | `v0.10.0`: memory-system-ready design baseline. |
-| AF-11 | `v0.11.0`: memory implementation-home decision baseline. |
+| AF-10 | `v0.10.0`: optional Coordinator orchestration and context-economy baseline. |
+| AF-11 | `v0.11.0`: memory-system-ready design baseline. |
+| AF-12 | `v0.12.0`: memory implementation-home decision baseline. |
 
 `v1.0` should wait until the reusable core, user vault story, generated artifact policy, and runtime adapter behavior are stable enough that external users can rely on them without understanding this repository's personal history.
 
@@ -123,9 +125,9 @@ Minimal fields:
 | Field | Values | Purpose |
 | --- | --- | --- |
 | Status | Inbox, Ready, In Progress, Review, Done, Blocked | Human-visible work state. |
-| Stage | AF-1 through AF-11 | Maturity stage the item serves. |
+| Stage | AF-1 through AF-12 | Maturity stage the item serves. |
 | Epic | Free text or single-select | Groups issues by roadmap epic. |
-| Owner Role | Architect, Implementer, Reviewer, Harvester | Clarifies expected agent/human role. |
+| Owner Role | Architect, Implementer, Reviewer, Harvester, Coordinator | Clarifies expected agent/human role. |
 | Depends On | Issue or PR references | Prevents ready queues from bypassing dependencies. |
 | Risk | Low, Medium, High | Makes review depth explicit. |
 
@@ -141,7 +143,7 @@ Issue types:
 
 Recommended labels:
 
-- `stage:AF-1` through `stage:AF-11`
+- `stage:AF-1` through `stage:AF-12`
 - `type:epic`, `type:task`, `type:decision`, `type:review`, `type:evidence`
 - `area:core`, `area:vault`, `area:generated`, `area:runtime`, `area:privacy`, `area:memory-readiness`, `area:adapters`
 - `needs:architect`, `needs:implementer`, `needs:reviewer`, `needs:harvester`
@@ -154,7 +156,13 @@ Multi-agent rule:
 - Reviewer checks against the Epic exit criteria and relevant practices.
 - Harvester extracts reusable practices or asset candidates after meaningful work, using the harvest workflow.
 
-For now, create GitHub Project/Epic items for the active stage and its immediate successor. After AF-6 lifecycle completion, prioritize AF-7 runtime adapter framework and Trae support, then AF-8 capability-system hardening, before advanced capability-pack discovery or any memory-system planning. Memory-system issues should remain placeholders until the user explicitly authorizes that work.
+For now, create GitHub Project/Epic items for the active stage and its immediate successor. AF-9 advanced capability-pack discovery/lifecycle and AF-10 Coordinator orchestration have durable Epic/child issue plans. Memory-system issues should remain placeholders until the user explicitly authorizes that work.
+
+Milestone closure rule from AF-9 onward:
+
+- Every milestone from AF-9 and AF-10 onward must produce a final-user-facing feature introduction, walkthrough, or trial round before Epic closure.
+- The readiness review issue must link that user-facing output and judge whether it explains the value, use flow, commands or user actions, human gates, rollback/defer choices, and any optional mode boundaries.
+- This is a closure gate, not a substitute for tests or review. It exists so the milestone is assessed from the final user's experience, not only from internal architecture or implementation evidence.
 
 ## Milestones
 
@@ -1100,38 +1108,167 @@ This is intentionally later than repository hygiene, productization, physical sp
 
 Capability packs are not the same as individual assets. A future capability pack may bundle practices, assets, workflows, templates, adapter snippets, examples, configuration profiles, dependency metadata, and export/install behavior around a recurring user goal such as multi-agent collaboration or technical documentation writing.
 
-Epics:
+Current GitHub records:
+
+| Record | Purpose | Status |
+| --- | --- | --- |
+| #170 | AF-9 Epic for advanced capability-pack discovery and lifecycle. | In Progress |
+| #171 | Decision issue for capability pack domain model and authority boundary. | Ready |
+| #172 | Evidence issue for existing capability clusters and usage signals. | Inbox |
+| #173 | Task issue for capability candidate detection and scoring protocol. | Inbox |
+| #174 | Task issue for capability pack metadata schema evolution and compatibility gates. | Inbox |
+| #175 | Task issue for review, activation, and maintenance lifecycle. | Inbox |
+| #176 | Task issue for privacy-safe capability pack export and import model. | Inbox |
+| #177 | Task issue for the advanced discovery and lifecycle workflow surface. | Inbox |
+| #178 | Evidence issue to validate candidate packs against existing clusters. | Inbox |
+| #179 | User-facing feature walkthrough or trial round before closure. | Inbox |
+| #180 | Final AF-9 acceptance gate and Epic readiness review. | Inbox |
+
+Child issue dependency order:
+
+1. #171 decides the capability pack domain model and authority boundary.
+2. #172 inventories existing clusters after #171 clarifies the taxonomy.
+3. #173 defines candidate detection and scoring after #171 and #172.
+4. #174 defines metadata/schema evolution after #171 and #173.
+5. #175 defines review, activation, and maintenance lifecycle after #171, #173, and #174.
+6. #176 defines privacy-safe export/import after #171, #174, and #175.
+7. #177 implements or documents workflow surfaces after #173, #174, #175, and #176.
+8. #178 validates candidate packs after #177.
+9. #179 produces the final-user-facing walkthrough/trial round after #178.
+10. #180 performs final readiness review after all AF-9 children are complete or explicitly deferred.
+
+Design areas:
+
+- **Capability pack domain model**
+  - Distinguish capability packs from individual practices, assets, workflows, templates, adapter outputs, generated artifacts, runtime installs, and evidence.
+  - Decide whether advanced capability packs are Core schemas, selected-Vault canonical records, generated outputs, or a hybrid.
+  - Preserve human review before an emergent capability becomes active or exportable.
 
 - **Capability candidate detection**
   - Define when repeated practice/asset/workflow co-activation suggests an emergent capability.
-  - Let agents propose capability candidates during harvest, asset discovery, or lifecycle review.
+  - Let agents propose capability candidates during harvest, asset discovery, lifecycle review, or evidence gathering.
   - Avoid requiring humans to predefine all future capability categories.
+  - Include false-positive controls for overly broad, overly narrow, overlapping, stale, runtime-specific, and private-only candidates.
 
 - **Capability pack schema evolution**
-  - Extend the AF-5 manifest only when usage proves more fields are needed.
-  - Keep schema changes compatible with deployed Vault records and pack membership metadata.
+  - Extend the existing pack manifest only when usage proves more fields are needed.
+  - Keep schema changes compatible with deployed Vault records, installed-pack indexes, and generated outputs.
+  - Preserve fail-closed behavior for malformed or ambiguous advanced metadata.
 
-- **Review and activation lifecycle**
-  - Define states such as detected, candidate, proposed, active, deprecated, split, and merged.
-  - Preserve human review before an emergent capability becomes active or exportable.
-  - Define how capability boundaries are revised when usage evidence shows a pack is too broad, too narrow, or overlapping.
+- **Review, activation, and maintenance lifecycle**
+  - Define states such as detected, candidate, proposed, active, exportable, deprecated, split, merged, retired, and blocked.
+  - Define how capability boundaries are revised when evidence shows a pack is too broad, too narrow, or overlapping.
+  - Keep split/merge/deprecate/retire transitions behind explicit safety gates.
 
-- **Export and install model**
-  - Define how an approved capability pack can be exported, installed, or reused without carrying this user's private vault content.
-  - Reuse Core/Vault split, generated artifact policy, adapter publishing, and runtime install safeguards.
+- **Export and import model**
+  - Define how an approved capability pack can be exported, installed, or reused without carrying this user's private Vault content.
+  - Reuse Core/Vault split, generated artifact policy, adapter publishing, runtime status, dry-run, diff, and apply safeguards.
+  - Require privacy-safe packaging that excludes local-private evidence, raw session logs, secrets, machine paths, and user-specific settings.
+
+- **User-facing closure output**
+  - Before AF-9 closes, #179 must produce a feature introduction, walkthrough, or trial round from the final user's perspective.
+  - The walkthrough must show candidate detection, human review, activation/export decision, status check, dry-run, and rollback/defer choices.
+  - #180 must link and judge that output before any AF-9 Epic closure decision.
 
 Acceptance criteria:
 
 - Capability packs are modeled as emergent, reviewable bundles rather than human-predeclared categories.
 - Agents can propose capability candidates from evidence, but cannot activate or publish them without review.
-- Exportable packs do not include local-private evidence, personal vault content, or future architecture concepts as current substrate.
-- The design proves at least one existing capability cluster could be packaged without weakening Core/Vault boundaries.
+- Exportable packs do not include local-private evidence, personal Vault content, or future architecture concepts as current substrate.
+- The design proves at least one existing capability cluster could be packaged or rejected without weakening Core/Vault boundaries.
+- Basic AF-6 pack flows remain valid without advanced discovery.
+- The user-facing walkthrough/trial round is complete before AF-9 closure.
 
-### AF-10 / M10: Memory-System Readiness Design
+### AF-10 / M10: Coordinator Role And Agent Orchestration
+
+Goal: make Agent Foundry capable of optional Coordinator-led orchestration for long-running goals, context economy, model-tier-aware dispatch, and Project/issue state coherence without making simple workflows heavier.
+
+Coordinator mode is not a replacement for the existing Human, Architect, Implementer, Reviewer, and Harvester roles. Coordinator owns flow; Architect owns technical judgment; Reviewer owns independent quality signal; Implementer owns bounded change; Harvester owns reusable practice/asset extraction; Human owns explicit authorization.
+
+The detailed design discussion is recorded in `docs/coordinator-role-and-agent-orchestration.md`.
+
+Current GitHub records:
+
+| Record | Purpose | Status |
+| --- | --- | --- |
+| #157 | AF-10 Epic for Coordinator role and tool-agnostic agent orchestration. | In Progress |
+| #158 | Decision issue for Coordinator role boundary and optional adoption contract. | Ready |
+| #159 | Task issue to renumber future roadmap stages after AF-10 insertion. | Inbox |
+| #160 | Task issue for Coordinator rehydration packet and durable context schema. | Inbox |
+| #161 | Evidence issue for coordination drift and token-cost baselines. | Inbox |
+| #162 | Task issue for scheduler-state coherence rules. | Inbox |
+| #163 | Evidence issue for tool-agnostic dispatch paths and runtime-native limits. | Inbox |
+| #164 | Task issue for model-tier routing and standard-model guardrails. | Inbox |
+| #165 | Task issue for optional Coordinator mode in collaboration workflow contracts. | Inbox |
+| #166 | Task issue for dispatch packets and callback contracts. | Inbox |
+| #167 | Evidence issue to validate backward-compatible workflow modes. | Inbox |
+| #169 | User-facing Coordinator mode walkthrough or trial round before closure. | Inbox |
+| #168 | Final AF-10 acceptance gate and Epic readiness review. | Inbox |
+
+Child issue dependency order:
+
+1. #158 decides role boundary, optional adoption, and whether a `needs:coordinator` label is needed.
+2. #159 updates roadmap/stage numbering after #158 accepts the insertion model.
+3. #160 defines the packet and rehydration protocol after #158.
+4. #161 collects drift and token-cost evidence in parallel with early design.
+5. #162 defines scheduler-state coherence after #158 and #161.
+6. #163 validates runtime dispatch paths after #158 and #160.
+7. #164 defines model-tier routing after #158 and #161.
+8. #165 updates optional Coordinator workflow contracts after #158, #160, #162, and #164.
+9. #166 adds dispatch/callback templates after #160, #163, and #164.
+10. #167 validates backward-compatible workflow modes after #165 and #166.
+11. #169 produces final-user-facing walkthrough/trial output after #165, #166, and #167.
+12. #168 performs final readiness review after all AF-10 children are complete or explicitly deferred.
+
+Design areas:
+
+- **Optional Coordinator role**
+  - Coordinator owns goal intake, role routing, durable state, context packets, model-tier assignment, workflow closure checks, and state drift repair.
+  - Coordinator does not own architecture decisions, technical acceptance, independent review, harvest activation, or human-only authorization.
+  - Simple one-role tasks should remain valid without explicit Coordinator ceremony.
+
+- **Context economy and rehydration packets**
+  - Define layered context from stable global rules through project architecture, Epic checkpoint, issue contract, PR/head evidence, role ask, and verification evidence.
+  - Reduce repeated rehydration for complex projects without hiding contradictions or stale state.
+  - Distinguish durable facts, inferred conclusions, role instructions, and residual risks.
+
+- **Tool-agnostic orchestration**
+  - Durable GitHub state remains the baseline.
+  - Manual bridge packets remain mandatory fallback for runtimes without native thread control.
+  - Runtime-native dispatch is optional acceleration for Codex, Trae, Claude Code, or future systems.
+  - Codex thread tools can persist `model` and `thinking`, but cannot directly specify or guarantee full-access permissions as tool parameters.
+
+- **Model-tier-aware collaboration**
+  - Leading models handle ambiguity, architecture, high-risk review, privacy/runtime boundaries, and acceptance.
+  - Standard models can do bounded evidence extraction, explicit implementation, checklist review, and local verification when packets are precise.
+  - Standard-model guardrails must include exact role, issue/PR/head, files, checklist, forbidden actions, output schema, and escalation triggers.
+
+- **Scheduler-state coherence**
+  - Keep labels, Project fields, Roadmap Status, issue state, PR state, milestone, and durable comments consistent.
+  - Make human gates visible on GitHub and in live user-facing output.
+  - Treat child issue closure as delegated workflow when contract allows it, while final main merges and Epic closure remain human-gated.
+
+- **User-facing closure output**
+  - Before AF-10 closes, #169 must produce a feature introduction, walkthrough, or trial round from the final user's perspective.
+  - The walkthrough must show when Coordinator mode is useful, when it stays out of the way, how native dispatch and manual bridge behave, and what still requires human approval.
+  - #168 must link and judge that output before any AF-10 Epic closure decision.
+
+Acceptance criteria:
+
+- Coordinator mode is optional and backward-compatible.
+- Architect, Reviewer, Implementer, Harvester, Coordinator, and Human responsibilities are explicitly separated.
+- Context economy is treated as a core requirement, including complex-project maintenance context, not only short summaries.
+- Tool-agnostic fallback is mandatory; runtime-native dispatch is optional.
+- Runtime dispatch plans account for model/reasoning persistence and permission non-control boundaries.
+- Standard-model collaboration gets explicit guardrails and escalation rules.
+- Project fields, labels, Roadmap Status, issue state, and durable comments have a coherent state model.
+- The user-facing walkthrough/trial round is complete before AF-10 closure.
+
+### AF-11 / M11: Memory-System Readiness Design
 
 Goal: define memory as an adjacent future capability without implementing storage yet.
 
-AF-10 does not begin until explicitly authorized. It is intentionally after runtime adapter framework work, capability-system hardening, and advanced capability-pack lifecycle planning.
+AF-11 does not begin until explicitly authorized. It is intentionally after runtime adapter framework work, capability-system hardening, advanced capability-pack lifecycle work, and Coordinator orchestration planning.
 
 Epics:
 
@@ -1164,11 +1301,11 @@ Acceptance criteria:
 - Open questions remain visible.
 - No automatic memory writing exists.
 
-### AF-11 / M11: Memory Implementation Home Decision
+### AF-12 / M12: Memory Implementation Home Decision
 
-Goal: decide the implementation home for memory-system work using evidence from AF-1 through AF-10.
+Goal: decide the implementation home for memory-system work using evidence from AF-1 through AF-11.
 
-AF-11 is a decision stage, not implementation. It does not authorize creating memory directories, schemas, MCP write tools, or storage.
+AF-12 is a decision stage, not implementation. It does not authorize creating memory directories, schemas, MCP write tools, or storage.
 
 Decision options:
 
@@ -1210,7 +1347,7 @@ Acceptance criteria:
 
 Goal: implement a reviewed memory/knowledge MVP only after Foundry lifecycle, runtime adapter framework work, capability-system hardening, memory readiness, and implementation-home decisions are complete, and only after explicit user authorization.
 
-Expected scope will be defined by AF-10 and AF-11. Until then, memory-system implementation is a future placeholder, not a license to create memory directories, schemas, or MCP write tools now.
+Expected scope will be defined by AF-11 and AF-12. Until then, memory-system implementation is a future placeholder, not a license to create memory directories, schemas, or MCP write tools now.
 
 ## Work Not To Do Yet
 
@@ -1224,15 +1361,13 @@ Expected scope will be defined by AF-10 and AF-11. Until then, memory-system imp
 
 ## Immediate Next Planning Tasks
 
-1. Treat AF-6 as merged and complete through #116 and #105.
-2. Treat the Trae/runtime adapter framework work as the active AF-7 stage.
-3. Use #134 as the AF-7 runtime adapter framework and Trae support Epic.
-4. Use #138 to complete the AF-7 governance repair and reconstructed child issue plan.
-5. Use #139 as the next Review gate before #141 downstream hardening.
-6. Release #142 and #143 as the next Ready AF-7 validation tasks after accepted #140.
-7. Keep #145 in Inbox until #143 validates SOLO versus fallback behavior.
-8. Use #144 as the final AF-7 readiness review before any Epic completion decision.
-9. Keep #119 through #127 held as AF-8 capability-system hardening records.
-10. Keep the existing AF-8 implementation PRs held until AF-7 is complete or the user explicitly resumes them.
-11. Keep AF-9 advanced capability-pack discovery out of implementation until AF-8 hardening evidence is accepted.
-12. Do not begin AF-10/AF-11 memory-system readiness or implementation-home work until explicitly authorized by the user.
+1. Treat AF-7 and AF-8 as closed historical stages, with their GitHub records preserved as durable evidence.
+2. Use #170 as the AF-9 advanced capability-pack discovery and lifecycle Epic.
+3. Start AF-9 through #171, the capability pack domain model and authority-boundary decision.
+4. Keep #172 through #180 dependency-gated until their upstream AF-9 decisions/evidence are accepted.
+5. Require #179, the user-facing capability pack walkthrough or trial round, before #180 can recommend AF-9 closure.
+6. Use #157 as the AF-10 Coordinator role and tool-agnostic orchestration Epic.
+7. Start AF-10 through #158, the Coordinator role-boundary and optional-adoption decision.
+8. Keep #159 through #169 dependency-gated until their upstream AF-10 decisions/evidence are accepted.
+9. Require #169, the user-facing Coordinator walkthrough or trial round, before #168 can recommend AF-10 closure.
+10. Do not begin AF-11/AF-12 memory-system readiness or implementation-home work until explicitly authorized by the user.
