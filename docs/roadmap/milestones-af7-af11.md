@@ -180,6 +180,7 @@ AF-10 should not be completed as a paper exercise. It is intentionally split aro
    - Analyze AF11 pilot telemetry and compare it against AF9 historical evidence.
    - Decide which optimizations are policy-only, which need Skill updates, and which need helper/tool implementation.
    - Update `agent-collaboration`, role automation guidance, callback templates, HDC templates, and Project sync rules as needed.
+   - Apply concrete token optimization rules: single-session serial work for low-risk tasks, compact packets before full rehydration, explicit authority-source lists, batch checkpoints only by contract, bundled human gates, and separate role dispatch only when independence or risk justifies the cost.
    - Close AF10 only after the optimized workflow model has been exercised and reviewed.
 
 Evidence baseline:
@@ -243,6 +244,8 @@ Epics:
   - Use AF11 pilot telemetry to classify overhead as necessary review cost, avoidable duplication, state-sync cost, human-gate cost, or correction-value cost.
   - Define compact handoff patterns that reduce repeated context without hiding authority sources.
   - Decide when Coordinator should batch handoffs, keep work in one thread, require independent review, or route to human.
+  - Measure optimization impact with before/after transition counts, compact-versus-full rehydrate counts, duplicated-context levels, correction cycles, human-gate turns, and observed goal-token counters when available.
+  - Keep ledger estimates separate from observed goal-token counters; use observed counters to calibrate estimate bands rather than treating either as billing-grade accounting.
   - Update collaboration practices and generated Skills only after the pilot evidence supports the change.
 
 Acceptance criteria:
