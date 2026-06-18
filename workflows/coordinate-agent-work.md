@@ -1,7 +1,7 @@
 # Coordinate Agent Work
 
-Status: AF10-A foundation
-Scope: Coordinator workflow telemetry, Epic ledger, role handoff measurement, and collaboration overhead reporting.
+Status: AF10-B optimization model
+Scope: Coordinator workflow telemetry, Epic ledger, role handoff measurement, collaboration overhead reporting, and token-cost optimization guidance.
 
 ## Purpose
 
@@ -23,6 +23,7 @@ The goal is not billing-grade token accounting. The goal is to make coordination
 - Treat telemetry as coordination evidence, not as a blocking runtime dependency.
 - Prefer small fields that agents can fill during real handoffs.
 - Mark estimates as estimates; do not imply access to hidden billing telemetry.
+- Keep telemetry layers separate. `workflow_cost_ledger` values are transition-scoped estimates; observed goal or runtime token counters are separate calibration data, not the same accounting field.
 - Preserve authority sources. A compact telemetry block does not replace required issue, PR, Project, roadmap, or Skill reads for risky transitions.
 - Record why full rehydration was needed when it was needed.
 - Treat correction cycles as high-value evidence, not merely waste.
@@ -274,8 +275,20 @@ workflow_cost_ledger:
     input: unknown
     output: unknown
     confidence: low
+  observed_goal_tokens:
+    value: unknown
+    source: null
+    notes: "Optional observed thread/goal counter; do not add to estimate totals."
   overhead_notes: []
 ```
+
+## Telemetry Layer Rules
+
+Use ledger estimates to compare transition shapes, not to claim exact model or billing usage.
+
+Record observed token counters separately when the runtime exposes them. Name the source, scope, and time window, for example `goal tokensUsed` for one Coordinator thread goal. Do not sum observed counters with ledger estimates unless the scopes are proven compatible.
+
+When estimates and observed counters differ, analyze the delta instead of forcing equality. Typical delta sources include repeated durable reads, tool output context, hidden prompt or system overhead, live coordination turns, final closure work, or separate role threads not covered by the observed counter.
 
 ## Overhead Classification
 
@@ -287,6 +300,19 @@ During AF10-B analysis, classify observed overhead into these buckets:
 - `human_gate_cost`: HDC writing, live user-facing decision surfacing, approval wait, and post-approval verification.
 - `correction_value_cost`: extra work that exposed a real readiness gap or prevented incorrect closure.
 - `tool_surface_cost`: work caused by missing, variable, or unreliable thread, Project, GitHub, or automation tools.
+
+## Token Optimization Rules
+
+Use these routing rules after AF10-B when they do not weaken authority reads, review independence, or human gates:
+
+1. Prefer single-session serial work for low-risk, single-issue tasks when no independent review, human gate, closure gate, protected runtime/Vault/generated/memory boundary, stale state, or policy decision is active.
+2. Use compact rehydration packets for ordinary handoffs. The packet should name exact `must_read` and `targeted_read` authority sources so the next role avoids whole-history rereads while still verifying current state.
+3. Escalate to full rehydration for independent review, merge, issue closure, Epic or milestone closure, human gates, privacy/security/runtime/Vault/generated/memory boundaries, stale or conflicting scheduler state, and architecture or policy decisions.
+4. Use batch checkpoints for related low-risk children only when the issue or Epic contract explicitly opts in with `Completion handoff: batch checkpoint` and no high-risk trigger is present.
+5. Dispatch a separate role session only when independence, parallelism, risk isolation, or the issue contract makes the extra rehydration cost valuable. Otherwise, state the current-session role switch and use structured self-review when allowed.
+6. Bundle human-gate review points, options, consequences, verification, residual risks, and the authorization phrase or trial response in one live request. This reduces approval correction loops and makes the gate meaningful.
+7. Sample telemetry for meaningful transitions. Skip trivial comments, typo fixes, and no-state-change updates, or record an explicit skip reason instead of adding noisy ledger entries.
+8. Track expected savings qualitatively until enough comparable before/after flows exist. Use transition count, full rehydrate count, duplicated-context level, correction cycles, and observed goal counters as the first quantitative indicators.
 
 ## Usage Guidance
 
@@ -302,6 +328,8 @@ Prefer telemetry on:
 - Project state repair;
 - AF11 pilot dispatch and callback;
 - final AF10-B analysis.
+
+Prefer compact telemetry for routine handoffs. If filling the telemetry block would cost more than the transition teaches, skip it and state why in the durable comment.
 
 Skip telemetry for:
 
