@@ -123,6 +123,17 @@ The Skill must preserve these rules:
 - runtime/global config, Vault/private state, generated adapters, and
   memory-system records are out of scope.
 
+## Dry-Run Planning Examples
+
+Use `templates/github-dry-run-planning-examples.md` for runtime-neutral preview
+examples covering pickup, handoff, batch accept, release queue, dispatch note,
+and human-gate live response checklist shapes.
+
+Those examples remain inert planning text. They do not authorize live dispatch,
+GitHub comment or label writes, Project v2 mutation, merge, closure, generated
+Skill publish, runtime install, Vault/private-state mutation, generated adapter
+mutation, or memory-system work.
+
 ## Handoff Example
 
 ```yaml
