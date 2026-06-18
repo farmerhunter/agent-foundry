@@ -109,7 +109,143 @@ Use `compact` when the role can work from a durable state packet plus targeted a
 
 Use `full` when the transition needs independent review, merge, closure, privacy/security boundary checks, runtime/global/Vault/private-state boundaries, stale state repair, or human-gated decision support.
 
-AF10-A follow-up work owns the detailed compact rehydration packet and authority-source rules.
+## Compact Rehydration Packet
+
+A compact rehydration packet is a durable pickup aid. It reduces repeated narrative context, but it does not replace authority sources.
+
+Use this shape when a role can safely start from summarized state plus targeted readbacks:
+
+```yaml
+compact_rehydration_packet:
+  packet_version: 1
+  subject:
+    issue: 195
+    pull_request: null
+    parent_issue: 192
+    stage: AF-10
+  current_owner: Architect
+  next_owner: Reviewer
+  routing_state:
+    labels_present:
+      - needs:reviewer
+    labels_removed:
+      - needs:architect
+    project_status: In Progress
+    roadmap_status: Review
+    owner_role: Reviewer
+  authority_sources:
+    must_read:
+      - AGENTS.md
+      - agent-collaboration skill
+      - issue body
+      - latest issue comments since release
+    targeted_read:
+      - PR body and diff
+      - Project fields when state coherence is part of acceptance
+      - changed workflow or script files
+    optional_context:
+      - roadmap milestone summary
+      - parent Epic progress comment
+  dependency_state:
+    satisfied:
+      - "#194 complete after PR #199 merge"
+    blocked: []
+  scope_summary:
+    included:
+      - compact packet field review
+      - authority-source rule review
+    excluded:
+      - permission model decision
+      - runtime or Vault mutation
+      - memory-system work
+  verification_summary:
+    passed:
+      - python3 scripts/check_consistency.py
+    not_run: []
+    blocked: []
+  human_gates:
+    active: false
+    required_phrase: null
+  residual_risks:
+    - "Packet is a pickup aid, not an authority source."
+  workflow_telemetry:
+    transition_type: architect_to_reviewer
+    rehydration_scope: compact
+```
+
+### Packet Fields
+
+Use these fields for AF10 and AF11 dispatches when compact rehydration is allowed:
+
+- `packet_version`: packet schema version. Start with `1`.
+- `subject`: issue, PR, parent issue, stage, branch, head SHA, and base branch when available.
+- `current_owner` and `next_owner`: role names, not necessarily separate sessions.
+- `routing_state`: labels, issue state, PR state, Project Status, Roadmap Status, Owner Role, and any known state repairs.
+- `authority_sources`: the exact sources the next role must read before acting.
+- `dependency_state`: satisfied, pending, blocked, or intentionally deferred dependencies.
+- `scope_summary`: included work, excluded work, and forbidden actions.
+- `verification_summary`: commands or checks already run, with pass/fail/blocked status.
+- `human_gates`: whether a human decision is active and the exact authorization phrase if one exists.
+- `residual_risks`: open risks the next role must preserve.
+- `workflow_telemetry`: optional telemetry block from this workflow.
+
+### Authority Source Rules
+
+Authority sources are not interchangeable with summaries.
+
+Always read these sources before risky transitions:
+
+- repository instructions such as `AGENTS.md`;
+- the applicable generated Skill or workflow instruction;
+- the current issue body and latest issue comments;
+- PR body, diff, head SHA, and review comments when a PR exists;
+- labels and issue/PR state;
+- Project fields when acceptance depends on Project or Roadmap coherence;
+- latest user instruction when a human gate, trial, or approval is active.
+
+Treat the compact packet as sufficient only for orientation when:
+
+- the source thread names the exact issue or PR;
+- dependencies are already satisfied in durable GitHub state;
+- the next role can verify current labels and issue/PR state with targeted reads;
+- no active human gate, merge, closure, privacy/security decision, runtime/global write, live Vault/private-state mutation, generated adapter publish, memory-system action, or destructive operation is required.
+
+### Full Rehydration Triggers
+
+Use `full` rehydration when any of these are true:
+
+- independent review must validate behavior, safety, or acceptance criteria;
+- the action is a main-branch merge, issue closure without already delegated authority, Epic/stage/window closure, or HDC;
+- privacy/security boundaries, runtime/global config, live Vault/private-state, generated adapters, memory-system records, data migration, or destructive operations are involved;
+- issue/PR labels, Project fields, branch state, roadmap state, or comments conflict;
+- the packet is stale, missing required authority sources, or does not name exact issue/PR/head state;
+- the task depends on user-visible behavior acceptance or final-user walkthrough output;
+- the next role is asked to make architecture, policy, taxonomy, or permission decisions not already accepted.
+
+### Fallback Rules
+
+If compact rehydration fails validation, do not guess from memory or thread history.
+
+Fallback order:
+
+1. Re-read the issue, PR, comments, labels, Project fields, relevant workflow files, and repo instructions.
+2. Record the missing or stale packet field in the next durable comment or callback.
+3. Use `rehydration_scope: full` in workflow telemetry.
+4. Route to Architect or Human when the missing information changes authority, permission, acceptance, privacy, or closure state.
+5. Continue with compact mode only after the missing authority source has been read and the contradiction is resolved.
+
+### Source Callback Interaction
+
+Callbacks are transient coordination. Durable state is authoritative.
+
+Use callbacks to carry compact packets and speed pickup, but verify them against:
+
+- GitHub issue or PR state for routing;
+- comments for accepted decisions, handoffs, HDCs, and completion evidence;
+- Project fields only when available and relevant;
+- local files or branch state only after confirming the intended branch/head.
+
+When thread tools are unavailable, post the packet as a GitHub issue or PR comment and identify that GitHub comment as the durable pickup source.
 
 ## Epic Workflow Cost Ledger
 
