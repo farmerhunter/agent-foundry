@@ -52,7 +52,7 @@ Required properties:
 - `needs_labels` lists the labels used as next-owner routing requests.
 - `completion_handoff.required_fields` names the durable evidence expected
   before a `needs:*` label transition.
-- `telemetry.required` remains true for AF11 child handoffs unless the comment
+- `telemetry.required_for_meaningful_transitions` remains true for AF11 child handoffs unless the comment
   explains why telemetry was skipped under `workflows/coordinate-agent-work.md`.
 - `project_v2.mode` defaults to `optional_visual_mirror`.
 
