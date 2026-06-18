@@ -1,0 +1,81 @@
+# Repo-neutral GitHub collaboration role routing template.
+# Copy into a target repository config surface only after that repository chooses
+# to use the collaboration helper workflow. This file is inert documentation.
+
+schema_version: 1
+repository:
+  selection_order:
+    - explicit_owner_repo_argument
+    - AGENT_REPO
+    - current_git_remote_after_confirmation
+  unresolved_behavior: "fail_closed_with_guidance"
+  default_repo: null
+
+roles:
+  architect:
+    inbox_label: "needs:architect"
+    review_target: "architecture, policy, scope, dependency gates"
+  implementer:
+    inbox_label: "needs:implementer"
+    review_target: "scoped implementation and verification"
+  reviewer:
+    inbox_label: "needs:reviewer"
+    review_target: "independent review and acceptance recommendation"
+  harvester:
+    inbox_label: "needs:harvester"
+    review_target: "practice or asset harvest workflow"
+  human:
+    inbox_label: "needs:human"
+    review_target: "human decision contract or manual trial"
+
+needs_labels:
+  - "needs:architect"
+  - "needs:implementer"
+  - "needs:reviewer"
+  - "needs:harvester"
+  - "needs:human"
+
+completion_handoff:
+  required_fields:
+    - scope
+    - changed_files
+    - verification
+    - residual_risks
+    - safety_confirmations
+    - workflow_telemetry
+    - compact_rehydration_packet_when_used
+    - next_owner
+  dispatch_evidence_modes:
+    - live_thread_dispatch
+    - github_comment
+    - generated_note
+    - portable_prompt
+
+github:
+  auth_check: "read target repository before mutation planning"
+  retry_policy: "bounded_retry_for_transient_network_or_rate_limit_only"
+  markdown_comment_mode: "body_file_or_api_safe"
+  mutation_default: "preview"
+
+project_v2:
+  mode: "optional_visual_mirror"
+  source_of_truth: false
+  require_explicit_config_for_reads: true
+  unit_a_writes_allowed: false
+  missing_config_behavior: "continue_with_issue_pr_label_comment_state"
+
+telemetry:
+  required_for_meaningful_transitions: true
+  workflow: "workflows/coordinate-agent-work.md"
+  ledger_parent_issue: "<parent-issue-number>"
+  skip_rule: "only trivial comments may skip telemetry with an explicit reason"
+
+forbidden_defaults:
+  repository: null
+  project_owner: null
+  project_number: null
+  project_field_ids: []
+  project_option_ids: []
+  cache_path: null
+  issue_numbers: []
+  branch_names: []
