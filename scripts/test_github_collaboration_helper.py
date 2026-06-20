@@ -95,6 +95,7 @@ def main() -> int:
             ),
         )
         bad_config = base / "bad-routing.yaml"
+        legacy_config = base / "legacy-routing.yaml"
         write(
             bad_config,
             "\n".join(
@@ -106,6 +107,26 @@ def main() -> int:
                     "needs_labels: []",
                     "project_v2:",
                     "  mode: required_scheduler",
+                ]
+            ),
+        )
+        write(
+            legacy_config,
+            "\n".join(
+                [
+                    "schema_version: 1",
+                    "roles:",
+                    "  reviewer:",
+                    "    inbox_label: needs:reviewer",
+                    "needs_labels:",
+                    "  - needs:reviewer",
+                    "completion_handoff:",
+                    "  required_fields:",
+                    "    - workflow_telemetry",
+                    "telemetry:",
+                    "  required_for_meaningful_transitions: true",
+                    "project_v2:",
+                    "  mode: optional_visual_mirror",
                 ]
             ),
         )
@@ -153,6 +174,13 @@ def main() -> int:
                 "role-config-fails-closed",
                 run(["role-config-check", "--config", str(bad_config)], base),
                 "status: invalid",
+            )
+        )
+        errors.extend(
+            expect_ok(
+                "role-config-legacy-comparison-optional",
+                run(["role-config-check", "--config", str(legacy_config)], base),
+                "status: ok",
             )
         )
         errors.extend(
@@ -207,6 +235,13 @@ def main() -> int:
         )
         errors.extend(
             expect_ok(
+                "permission-comparison-dry-run",
+                run(["permission-smoke", "comparison-draft"], base),
+                "dry_run_allowed",
+            )
+        )
+        errors.extend(
+            expect_ok(
                 "handoff-draft",
                 run(
                     [
@@ -248,6 +283,96 @@ def main() -> int:
                     base,
                 ),
                 "no labels, comments, Project fields",
+            )
+        )
+        errors.extend(
+            expect_ok(
+                "comparison-draft",
+                run(
+                    [
+                        "comparison-draft",
+                        "--subject",
+                        "AF10 #215 telemetry comparison",
+                        "--unit",
+                        "issue_batch",
+                        "--issue-count",
+                        "4",
+                        "--single-agent-transitions",
+                        "2",
+                        "--unoptimized-transitions",
+                        "8",
+                        "--unoptimized-full-rehydrates",
+                        "6",
+                        "--optimized-transitions",
+                        "4",
+                        "--optimized-compact-rehydrates",
+                        "4",
+                        "--optimized-full-rehydrates",
+                        "0",
+                        "--quality-benefit",
+                        "preserved independent review only where useful",
+                    ],
+                    base,
+                ),
+                "workflow_comparison_telemetry:",
+            )
+        )
+        errors.extend(
+            expect_ok(
+                "comparison-draft-three-modes",
+                run(["comparison-draft", "--subject", "AF10 #215"], base),
+                "unoptimized_collaboration_counterfactual:",
+            )
+        )
+        errors.extend(
+            expect_ok(
+                "comparison-draft-no-write",
+                run(["comparison-draft", "--subject", "AF10 #215"], base),
+                "no comments, labels, Project fields",
+            )
+        )
+        errors.extend(
+            expect_ok(
+                "comparison-negative-quality-insufficient",
+                run(
+                    [
+                        "comparison-draft",
+                        "--subject",
+                        "AF10 #215 quality guardrail",
+                        "--human-holds",
+                        "1",
+                        "--unoptimized-transitions",
+                        "8",
+                        "--optimized-transitions",
+                        "4",
+                    ],
+                    base,
+                ),
+                "recommendation: insufficient_data",
+            )
+        )
+        errors.extend(
+            expect_ok(
+                "comparison-unknown-benefit-prefers-single-agent",
+                run(
+                    [
+                        "comparison-draft",
+                        "--subject",
+                        "AF10 #215 unknown benefit",
+                        "--single-agent-transitions",
+                        "1",
+                        "--unoptimized-transitions",
+                        "8",
+                        "--unoptimized-full-rehydrates",
+                        "6",
+                        "--optimized-transitions",
+                        "4",
+                        "--optimized-full-rehydrates",
+                        "0",
+                    ],
+                    base,
+                ),
+                "recommendation: single_agent",
             )
         )
 
