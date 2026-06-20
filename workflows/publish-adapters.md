@@ -12,6 +12,7 @@ Current AF-3 capability:
 
 - use `scripts/publish_adapters.py` for selected Core/Vault root validation and deterministic publishing;
 - pass `--core-root` and `--vault-root` when Core and Vault are split;
+- preserve the same selected adapter root across publish, selected-output quality check, install dry-run/apply, and sync status;
 - blank Vault publishing is valid and reports `nothing to publish`;
 - nonblank Vault publishing currently generates minimal transitional adapter files from Core adapter profiles plus selected active/revised Vault records;
 - full semantic regeneration of every adapter file from canonical sections remains future generator work.
@@ -29,6 +30,8 @@ The publish script prints an operation-context preflight before writing. If runn
 - Vault is the selected canonical record source;
 - allowed writes are limited to the generated adapter output root;
 - runtime install paths are forbidden until the install workflow runs.
+
+After publish, copy the printed follow-up commands rather than retyping defaults. The follow-up commands intentionally pass the same `--output-root` as `--generated-root` or `--adapter-root` so install and status do not inspect stale Core reference adapters.
 
 ## 1. Select Practices
 
@@ -94,6 +97,7 @@ Then run:
 ```bash
 python3 scripts/check_consistency.py
 python3 scripts/test_foundry_roots.py
+python3 scripts/check_adapter_quality.py --surface selected-output --generated-root <same-output-root>
 ```
 
 If unavailable, follow `workflows/check-consistency.md` manually.

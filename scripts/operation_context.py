@@ -231,8 +231,15 @@ def build_context(
         warnings.append("invoked from product project context; writes must go only to the declared Agent Foundry targets")
     if operation == "publish" and adapter_root == (core_root / "adapters").resolve():
         warnings.append("publish output points at Core adapters; apply should refuse Core template overwrite")
+    if operation in {"install", "refresh"} and core_root != vault_root and adapter_root == (core_root / "adapters").resolve():
+        warnings.append(
+            "split-mode install points at Core reference adapters; use the selected generated adapter root from publish output"
+        )
     if operation in {"install", "refresh"} and not (adapter_root / "adapter-publish-manifest.yaml").exists():
-        warnings.append("adapter_root has no adapter-publish-manifest.yaml; selected-output install receipt may be unavailable")
+        warnings.append(
+            "adapter_root has no adapter-publish-manifest.yaml; preserve one selected generated adapter root across "
+            "publish, selected-output quality check, install dry-run/apply, and sync status"
+        )
     return {
         "schema_version": 1,
         "operation": operation,

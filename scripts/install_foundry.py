@@ -50,6 +50,27 @@ def configured_roots(core_root_arg: str, vault_root_arg: str) -> tuple[Path, Pat
     return Path(core_text).expanduser().resolve(), Path(vault_text).expanduser().resolve()
 
 
+def default_adapter_root(core_root: Path, vault_root: Path) -> Path:
+    if core_root != vault_root:
+        return DEFAULT_GENERATED_ROOT.resolve()
+    return core_root / "adapters"
+
+
+def check_adapter_root_guard(core_root: Path, vault_root: Path, adapter_root: Path) -> int:
+    if core_root == vault_root:
+        return 0
+    core_adapters = (core_root / "adapters").resolve()
+    if adapter_root.resolve() != core_adapters:
+        return 0
+    print("Refusing split-mode install from Core reference adapters.")
+    print(f"core_root: {core_root}")
+    print(f"vault_root: {vault_root}")
+    print(f"adapter_root: {adapter_root}")
+    print("Use the selected generated adapter output instead, for example:")
+    print(f"  python3 scripts/install_foundry.py --adapter-root {DEFAULT_GENERATED_ROOT}")
+    return 1
+
+
 def install(
     *,
     core_root: Path,
@@ -61,6 +82,9 @@ def install(
     write_locator: bool = True,
 ) -> int:
     print_operation_context("install", core_root=core_root, vault_root=vault_root, adapter_root=adapter_root)
+    guard_code = check_adapter_root_guard(core_root, vault_root, adapter_root)
+    if guard_code != 0:
+        return guard_code
 
     if not skip_check:
         code = run(["python3", "scripts/check_consistency.py"], execute=True)
@@ -196,7 +220,11 @@ def main() -> int:
     parser.add_argument("--skip-check", action="store_true", help="Skip consistency check.")
     parser.add_argument("--core-root", default="", help="Core root to validate and record in the local locator.")
     parser.add_argument("--vault-root", default="", help="Vault root to validate and record in the local locator.")
-    parser.add_argument("--adapter-root", default="", help="Adapter output root to install from. Defaults to <core-root>/adapters.")
+    parser.add_argument(
+        "--adapter-root",
+        default="",
+        help="Adapter output root to install from. Defaults to selected generated output in split mode, otherwise <core-root>/adapters.",
+    )
     parser.add_argument("--generated-root", dest="adapter_root", default="", help="Fresh Install generated adapter output root.")
     parser.add_argument("--bootstrap-pack", default=str(DEFAULT_BOOTSTRAP_PACK), help="Mandatory bootstrap capability pack root.")
     parser.add_argument("--force", action="store_true", help="Allow blank Vault initialization over existing marker files.")
@@ -206,7 +234,7 @@ def main() -> int:
         return fresh_install(args)
 
     core_root, vault_root = configured_roots(args.core_root, args.vault_root)
-    adapter_root = Path(args.adapter_root).expanduser().resolve() if args.adapter_root else core_root / "adapters"
+    adapter_root = Path(args.adapter_root).expanduser().resolve() if args.adapter_root else default_adapter_root(core_root, vault_root)
     return install(
         core_root=core_root,
         vault_root=vault_root,

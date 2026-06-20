@@ -78,6 +78,10 @@ Use this on a new machine after cloning or unpacking the Agent Foundry Core chec
    python3 scripts/sync_status.py
    ```
 
+   In split Core/Vault mode, `install_foundry.py` defaults to the selected generated adapter root and refuses Core reference adapters as a runtime source. When in doubt, pass the generated root printed by `publish_adapters.py` explicitly with `--adapter-root`.
+
+   在 Core/Vault split 模式下，`install_foundry.py` 默认使用 selected generated adapter root，并拒绝把 Core reference adapters 当作 runtime 来源。不确定时，显式传入 `publish_adapters.py` 打印的 generated root：`--adapter-root`。
+
 6. Apply only after the dry-run and status report identify the expected Core, selected Vault, generated output, manual targets, receipt state, and runtime-write approval needs.
 
    只有当 dry-run 和 status report 明确 expected Core、selected Vault、generated output、manual targets、receipt state 和 runtime-write approval needs 后，才 apply。
@@ -168,6 +172,10 @@ Restore local state from public Core plus the selected Vault. Do not restore by 
 Use this after practices, assets, generated output, or runtime adapters may have changed.
 
 当 practices、assets、generated output 或 runtime adapters 可能变化后，使用此流程。
+
+Preserve the same selected adapter root across publish, selected-output quality check, install dry-run/apply, and sync status. Do not refresh managed runtimes from Core reference adapters in split mode.
+
+在 publish、selected-output quality check、install dry-run/apply 和 sync status 中保持同一个 selected adapter root。split 模式下不要从 Core reference adapters 刷新 managed runtimes。
 
 ```bash
 python3 scripts/check_consistency.py

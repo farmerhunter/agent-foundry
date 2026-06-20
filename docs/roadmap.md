@@ -1,7 +1,7 @@
 # Agent Foundry Roadmap
 
 Status: planning document
-Updated: 2026-06-18
+Updated: 2026-06-20
 Scope: Agent Foundry productization, runtime adapter framework, Trae support, capability-system hardening, repository hygiene, role-orchestration optimization, and memory-system readiness.
 
 ## Purpose
@@ -82,7 +82,7 @@ Agent Foundry should use maturity stages for planning and release versions for d
 | AF-10 | Coordinator Workflow Optimization | Multi-thread role orchestration, rehydration, GitHub state synchronization, Human Decision Contracts, and Project/Roadmap coherence are measured and optimized before memory-system planning expands the workflow surface. AF10 is intentionally phased: foundation and telemetry first, an AF11 pilot in the middle, then analysis, policy, and implementation closeout. | Coordinator and role-thread workflows have measurable overhead, compact handoff patterns, durable state ledgers, and clear guidance for when to use multi-thread orchestration versus single-thread serial work. |
 | AF-11 | GitHub Collaboration Helper Migration | Placeholder for migrating the GitHub-based collaboration workflow helper incubated in Tiny IPA into Agent Foundry as an interleaved pilot after AF10 foundation work and before AF10 final optimization closeout. | Migration scope, ownership boundary, reusable asset shape, user-facing workflow, validation path, and telemetry evidence are defined without importing Tiny IPA project-local assumptions. |
 
-Current planning stage: AF-10 preparation.
+Current planning stage: MS-01 readiness design preparation.
 
 AF-0 explains the existing mixed history. AF-1 starts the stricter planning and multi-agent coordination era. AF-2 designs the productization boundary. AF-3 executes the local Core/Vault split. AF-4 proves the split system works for the current real user across existing deployments and establishes the migration discipline needed for later major upgrades. AF-5 makes onboarding humane and reliable for new users. AF-6 closes the current Foundry product lifecycle so install, pack deployment, refresh, status, and rollback are usable beyond a one-off maintainer path. AF-7 upgrades runtime adapters and adds Trae CN support around a verified global Skill path. AF-8 hardens the capability system under realistic multi-user, multi-machine, multi-runtime, long-running-agent, and drift scenarios. AF-9 adds advanced capability-pack discovery, lifecycle, privacy-safe transfer planning, and user-facing Skill workflow packaging. AF-10 optimizes the Coordinator-driven role workflow using AF9 evidence, then pauses for an AF11 pilot migration, then resumes to analyze real telemetry and harden the workflow model. AF-11 is reserved for the Tiny IPA-incubated GitHub collaboration workflow helper migration pilot. Memory-system planning now uses the separate MS milestone axis.
 
