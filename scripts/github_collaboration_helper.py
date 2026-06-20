@@ -33,7 +33,13 @@ FORBIDDEN_ACTIONS = {
     "memory-write",
 }
 READ_ONLY_ACTIONS = {"repo-resolve", "auth-smoke", "role-config-check", "inbox", "issue-context", "scheduler-audit"}
-DRY_RUN_ACTIONS = {"handoff-draft", "dispatch-evidence-draft", "release-next-draft", "permission-smoke"}
+DRY_RUN_ACTIONS = {
+    "handoff-draft",
+    "dispatch-evidence-draft",
+    "release-next-draft",
+    "permission-smoke",
+    "comparison-draft",
+}
 REMOTE_RE = re.compile(r"(?:github\.com[:/])([^/]+)/([^/.]+)(?:\.git)?$")
 
 
@@ -150,6 +156,8 @@ def parse_simple_yaml(path: Path) -> dict[str, Any]:
         "telemetry": {
             "required_for_meaningful_transitions": scalar_in_block(telemetry, "required_for_meaningful_transitions"),
             "workflow": scalar_in_block(telemetry, "workflow"),
+            "supports_workflow_comparison": scalar_in_block(telemetry, "supports_workflow_comparison"),
+            "comparison_modes": yaml_list(telemetry, "comparison_modes", indent=2),
         },
         "project_v2": {
             "mode": scalar_in_block(project, "mode"),
@@ -178,6 +186,15 @@ def role_config_errors(config: dict[str, Any]) -> list[str]:
         errors.append("completion_handoff.required_fields must include workflow_telemetry")
     if telemetry.get("required_for_meaningful_transitions") not in ("true", True):
         errors.append("telemetry.required_for_meaningful_transitions must be true")
+    comparison_enabled = telemetry.get("supports_workflow_comparison") in ("true", True)
+    modes = telemetry.get("comparison_modes")
+    required_modes = {
+        "single_agent_baseline",
+        "unoptimized_collaboration_counterfactual",
+        "optimized_collaboration_observed",
+    }
+    if comparison_enabled and (not isinstance(modes, list) or not required_modes.issubset(set(modes))):
+        errors.append("telemetry.comparison_modes must include all three workflow comparison modes")
     if project.get("mode") != "optional_visual_mirror":
         errors.append("project_v2.mode must be optional_visual_mirror")
     return errors
@@ -387,6 +404,117 @@ def telemetry_block(transition_type: str, role_from: str, role_to: str, note: st
 """
 
 
+def comparison_telemetry_block(args: argparse.Namespace) -> str:
+    optimized_transitions = args.optimized_transitions
+    unoptimized_transitions = args.unoptimized_transitions
+    single_agent_transitions = args.single_agent_transitions
+    avoided_transitions = max(unoptimized_transitions - optimized_transitions, 0)
+    full_rehydrate_delta = max(args.unoptimized_full_rehydrates - args.optimized_full_rehydrates, 0)
+    optimized_overhead_delta = optimized_transitions - single_agent_transitions
+    quality_benefit_available = args.quality_benefit not in ("", "unknown", "none")
+    negative_quality_signal = any(
+        (
+            args.blocking_findings_missed,
+            args.failed_verification,
+            args.reopened_issues,
+            args.human_holds,
+            args.late_closure_corrections,
+        )
+    )
+    recommendation = args.recommendation
+    if recommendation == "auto":
+        if negative_quality_signal:
+            recommendation = "insufficient_data"
+        elif optimized_transitions <= single_agent_transitions + 1 and not quality_benefit_available:
+            recommendation = "single_agent"
+        elif optimized_overhead_delta > 0 and not quality_benefit_available:
+            recommendation = "single_agent"
+        elif quality_benefit_available and (avoided_transitions > 0 or full_rehydrate_delta > 0):
+            recommendation = "optimized_collaboration"
+        else:
+            recommendation = "insufficient_data"
+    return f"""workflow_comparison_telemetry:
+  subject: "{args.subject}"
+  comparison_scope:
+    unit: {args.unit}
+    issue_count: {args.issue_count}
+    pr_count: {args.pr_count}
+    user_visible_scope: {str(args.user_visible_scope).lower()}
+    risk_class: {args.risk_class}
+    human_gate_count: {args.human_gate_count}
+  single_agent_baseline:
+    source: {args.single_agent_source}
+    transitions: {single_agent_transitions}
+    rehydration:
+      none: {args.single_agent_none_rehydrates}
+      compact: {args.single_agent_compact_rehydrates}
+      full: {args.single_agent_full_rehydrates}
+    role_dispatches: 0
+    correction_cycles: {args.single_agent_correction_cycles}
+    ledger_estimated_tokens:
+      input: "{args.single_agent_estimated_input_tokens}"
+      output: "{args.single_agent_estimated_output_tokens}"
+      confidence: {args.single_agent_confidence}
+    observed_goal_tokens:
+      value: "{args.single_agent_observed_goal_tokens}"
+      source: "{args.single_agent_observed_source}"
+      notes: "Optional observed session or goal counter; not billing-grade."
+  unoptimized_collaboration_counterfactual:
+    source: estimated
+    assumed_agents: {args.assumed_agents}
+    assumed_transitions: {unoptimized_transitions}
+    assumed_full_rehydrates: {args.unoptimized_full_rehydrates}
+    assumed_compact_rehydrates: {args.unoptimized_compact_rehydrates}
+    assumed_role_dispatches: {args.unoptimized_role_dispatches}
+    assumed_human_gates: {args.unoptimized_human_gates}
+    duplicated_context: {args.unoptimized_duplicated_context}
+    ledger_estimated_tokens:
+      input: "{args.unoptimized_estimated_input_tokens}"
+      output: "{args.unoptimized_estimated_output_tokens}"
+      confidence: {args.unoptimized_confidence}
+    assumptions:
+      - "{args.unoptimized_assumption}"
+  optimized_collaboration_observed:
+    source: {args.optimized_source}
+    transitions: {optimized_transitions}
+    rehydration:
+      none: {args.optimized_none_rehydrates}
+      compact: {args.optimized_compact_rehydrates}
+      full: {args.optimized_full_rehydrates}
+    role_dispatches: {args.optimized_role_dispatches}
+    batch_checkpoints: {args.optimized_batch_checkpoints}
+    bundled_human_gates: {args.optimized_bundled_human_gates}
+    correction_cycles: {args.optimized_correction_cycles}
+    avoided_transitions: {avoided_transitions}
+    ledger_estimated_tokens:
+      input: "{args.optimized_estimated_input_tokens}"
+      output: "{args.optimized_estimated_output_tokens}"
+      confidence: {args.optimized_confidence}
+    observed_goal_tokens:
+      value: "{args.optimized_observed_goal_tokens}"
+      source: "{args.optimized_observed_source}"
+      notes: "Keep separate from ledger estimates."
+  quality_guardrails:
+    blocking_findings_missed: {args.blocking_findings_missed}
+    blocking_findings_caught: {args.blocking_findings_caught}
+    failed_verification: {args.failed_verification}
+    reopened_issues: {args.reopened_issues}
+    human_holds: {args.human_holds}
+    late_closure_corrections: {args.late_closure_corrections}
+  savings_analysis:
+    optimized_vs_unoptimized:
+      transition_delta: {optimized_transitions - unoptimized_transitions}
+      full_rehydrate_delta: {args.optimized_full_rehydrates - args.unoptimized_full_rehydrates}
+      estimated_token_delta: "{args.estimated_token_delta}"
+    optimized_vs_single_agent:
+      overhead_delta: {optimized_overhead_delta}
+      quality_or_parallelism_benefit: "{args.quality_benefit}"
+    recommendation: {recommendation}
+    confidence: {args.analysis_confidence}
+    notes: "Decision-support estimate, not billing-grade accounting."
+"""
+
+
 def compact_packet(args: argparse.Namespace, next_owner: str) -> str:
     return f"""compact_rehydration_packet:
   packet_version: 1
@@ -450,6 +578,12 @@ def cmd_release_next_draft(args: argparse.Namespace) -> None:
     print(telemetry_block("release_next_draft", args.current_owner, args.next_owner, "Preview-only release draft."))
 
 
+def cmd_comparison_draft(args: argparse.Namespace) -> None:
+    print("DRY RUN: workflow comparison telemetry only; no comments, labels, Project fields, merge, closure, runtime, Vault, generated, or memory mutation performed.")
+    print()
+    print(comparison_telemetry_block(args))
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", help="Explicit GitHub repository as owner/repo.")
@@ -505,6 +639,10 @@ def build_parser() -> argparse.ArgumentParser:
     release.add_argument("--next-owner", default="Implementer")
     release.add_argument("--dependency", required=True)
     release.set_defaults(func=cmd_release_next_draft)
+
+    comparison = sub.add_parser("comparison-draft")
+    add_comparison_args(comparison)
+    comparison.set_defaults(func=cmd_comparison_draft)
     return parser
 
 
@@ -516,6 +654,70 @@ def add_draft_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--current-owner", default="Implementer")
     parser.add_argument("--scope", default="bounded helper work")
     parser.add_argument("--risk", default="Preview output must be verified against authority sources.")
+
+
+def add_comparison_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--subject", required=True)
+    parser.add_argument(
+        "--unit",
+        choices=["issue", "issue_batch", "pr", "epic", "milestone", "pilot", "session_goal"],
+        default="issue",
+    )
+    parser.add_argument("--issue-count", type=int, default=1)
+    parser.add_argument("--pr-count", type=int, default=0)
+    parser.add_argument("--user-visible-scope", action="store_true")
+    parser.add_argument("--risk-class", choices=["low", "medium", "high", "mixed"], default="medium")
+    parser.add_argument("--human-gate-count", type=int, default=0)
+    parser.add_argument("--single-agent-source", choices=["observed", "estimated", "unavailable"], default="estimated")
+    parser.add_argument("--single-agent-transitions", type=int, default=1)
+    parser.add_argument("--single-agent-none-rehydrates", type=int, default=1)
+    parser.add_argument("--single-agent-compact-rehydrates", type=int, default=0)
+    parser.add_argument("--single-agent-full-rehydrates", type=int, default=0)
+    parser.add_argument("--single-agent-correction-cycles", type=int, default=0)
+    parser.add_argument("--single-agent-estimated-input-tokens", default="unknown")
+    parser.add_argument("--single-agent-estimated-output-tokens", default="unknown")
+    parser.add_argument("--single-agent-confidence", choices=["low", "medium", "high"], default="low")
+    parser.add_argument("--single-agent-observed-goal-tokens", default="unknown")
+    parser.add_argument("--single-agent-observed-source", default="null")
+    parser.add_argument("--assumed-agents", type=int, choices=[3, 4], default=3)
+    parser.add_argument("--unoptimized-transitions", type=int, default=4)
+    parser.add_argument("--unoptimized-full-rehydrates", type=int, default=4)
+    parser.add_argument("--unoptimized-compact-rehydrates", type=int, default=0)
+    parser.add_argument("--unoptimized-role-dispatches", type=int, default=3)
+    parser.add_argument("--unoptimized-human-gates", type=int, default=0)
+    parser.add_argument("--unoptimized-duplicated-context", choices=["low", "medium", "high"], default="high")
+    parser.add_argument("--unoptimized-estimated-input-tokens", default="unknown")
+    parser.add_argument("--unoptimized-estimated-output-tokens", default="unknown")
+    parser.add_argument("--unoptimized-confidence", choices=["low", "medium", "high"], default="low")
+    parser.add_argument("--unoptimized-assumption", default="Each role handoff performs full rehydration.")
+    parser.add_argument("--optimized-source", choices=["observed", "estimated", "mixed"], default="observed")
+    parser.add_argument("--optimized-transitions", type=int, default=1)
+    parser.add_argument("--optimized-none-rehydrates", type=int, default=0)
+    parser.add_argument("--optimized-compact-rehydrates", type=int, default=1)
+    parser.add_argument("--optimized-full-rehydrates", type=int, default=0)
+    parser.add_argument("--optimized-role-dispatches", type=int, default=0)
+    parser.add_argument("--optimized-batch-checkpoints", type=int, default=0)
+    parser.add_argument("--optimized-bundled-human-gates", type=int, default=0)
+    parser.add_argument("--optimized-correction-cycles", type=int, default=0)
+    parser.add_argument("--optimized-estimated-input-tokens", default="unknown")
+    parser.add_argument("--optimized-estimated-output-tokens", default="unknown")
+    parser.add_argument("--optimized-confidence", choices=["low", "medium", "high"], default="low")
+    parser.add_argument("--optimized-observed-goal-tokens", default="unknown")
+    parser.add_argument("--optimized-observed-source", default="null")
+    parser.add_argument("--blocking-findings-missed", type=int, default=0)
+    parser.add_argument("--blocking-findings-caught", type=int, default=0)
+    parser.add_argument("--failed-verification", type=int, default=0)
+    parser.add_argument("--reopened-issues", type=int, default=0)
+    parser.add_argument("--human-holds", type=int, default=0)
+    parser.add_argument("--late-closure-corrections", type=int, default=0)
+    parser.add_argument("--estimated-token-delta", default="unknown")
+    parser.add_argument("--quality-benefit", default="unknown")
+    parser.add_argument(
+        "--recommendation",
+        choices=["auto", "single_agent", "optimized_collaboration", "full_collaboration", "insufficient_data"],
+        default="auto",
+    )
+    parser.add_argument("--analysis-confidence", choices=["low", "medium", "high"], default="low")
 
 
 def main() -> int:

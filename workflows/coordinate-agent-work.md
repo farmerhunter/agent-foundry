@@ -9,6 +9,14 @@ This workflow defines the minimum telemetry that Coordinator-led role orchestrat
 
 The goal is not billing-grade token accounting. The goal is to make coordination overhead visible enough to decide when multi-thread role orchestration is worth its cost, when a compact handoff is enough, and when a single-thread or batch checkpoint is safer and cheaper.
 
+AF10-B telemetry should support three-way comparison:
+
+1. Single-agent baseline: what happened, or what is expected to happen, when one session owns the whole task.
+2. Unoptimized collaboration counterfactual: what a full three- or four-agent workflow would likely cost if every role handoff used full rehydration and separate review by default.
+3. Optimized collaboration observed result: what happened after compact packets, batch checkpoints, bundled human gates, and selective role dispatch were applied.
+
+Use this comparison as decision support for workflow routing. It should help answer whether collaboration was worth its coordination cost, whether optimization reduced avoidable overhead, and when a future task should stay single-agent.
+
 ## Non-Scope
 
 - No memory-system implementation.
@@ -282,6 +290,104 @@ workflow_cost_ledger:
   overhead_notes: []
 ```
 
+## Workflow Comparison Telemetry
+
+Use this optional block when AF10 needs to compare a task, issue batch, Epic, milestone, or pilot across the three routing modes. It can be recorded in an issue comment, parent Epic comment, PR summary, or final Coordinator analysis.
+
+```yaml
+workflow_comparison_telemetry:
+  subject: "AF10 follow-up #215"
+  comparison_scope:
+    unit: issue | issue_batch | pr | epic | milestone | pilot | session_goal
+    issue_count: 1
+    pr_count: 0
+    user_visible_scope: false
+    risk_class: low | medium | high | mixed
+    human_gate_count: 0
+  single_agent_baseline:
+    source: observed | estimated | unavailable
+    transitions: 0
+    rehydration:
+      none: 1
+      compact: 0
+      full: 0
+    role_dispatches: 0
+    correction_cycles: 0
+    elapsed_time: unknown
+    ledger_estimated_tokens:
+      input: unknown
+      output: unknown
+      confidence: low | medium | high
+    observed_goal_tokens:
+      value: unknown
+      source: null
+      notes: "Optional observed session or goal counter; not billing-grade."
+  unoptimized_collaboration_counterfactual:
+    source: estimated
+    assumed_agents: 3 | 4
+    assumed_transitions: 0
+    assumed_full_rehydrates: 0
+    assumed_compact_rehydrates: 0
+    assumed_role_dispatches: 0
+    assumed_human_gates: 0
+    duplicated_context: low | medium | high
+    ledger_estimated_tokens:
+      input: unknown
+      output: unknown
+      confidence: low | medium | high
+    assumptions:
+      - "Each role handoff performs full rehydration."
+  optimized_collaboration_observed:
+    source: observed | estimated | mixed
+    transitions: 0
+    rehydration:
+      none: 0
+      compact: 0
+      full: 0
+    role_dispatches: 0
+    batch_checkpoints: 0
+    bundled_human_gates: 0
+    correction_cycles: 0
+    avoided_transitions: 0
+    ledger_estimated_tokens:
+      input: unknown
+      output: unknown
+      confidence: low | medium | high
+    observed_goal_tokens:
+      value: unknown
+      source: null
+      notes: "Keep separate from ledger estimates."
+  quality_guardrails:
+    blocking_findings_missed: 0
+    blocking_findings_caught: 0
+    failed_verification: 0
+    reopened_issues: 0
+    human_holds: 0
+    late_closure_corrections: 0
+  savings_analysis:
+    optimized_vs_unoptimized:
+      transition_delta: unknown
+      full_rehydrate_delta: unknown
+      estimated_token_delta: unknown
+    optimized_vs_single_agent:
+      overhead_delta: unknown
+      quality_or_parallelism_benefit: unknown
+    recommendation: single_agent | optimized_collaboration | full_collaboration | insufficient_data
+    confidence: low | medium | high
+    notes: "Decision-support estimate, not billing-grade accounting."
+```
+
+### Comparison Rules
+
+- Use `single_agent_baseline` for the one-session route. Prefer observed data when a comparable task was actually done by one session; otherwise mark it as `estimated` or `unavailable`.
+- Use `unoptimized_collaboration_counterfactual` for the three- or four-agent route without AF10-B optimization. This is usually estimated, not actually executed. State assumptions explicitly.
+- Use `optimized_collaboration_observed` for the real optimized workflow when compact packets, batch checkpoints, bundled human gates, or selective role dispatch were used.
+- Keep `ledger_estimated_tokens` separate from `observed_goal_tokens` in every mode. Observed counters can calibrate estimate bands only when scope and time window are named.
+- Keep quality guardrails beside savings. Lower token or transition cost is not a win if blocking findings are missed, verification fails, issues reopen, or the human needs corrective holds.
+- Prefer normalized comparisons for similar task classes: risk class, issue count, PR count, user-visible scope, and human-gate count.
+- Mark confidence as `low` until at least three comparable flows exist for the same class.
+- Do not close a telemetry enhancement issue with only one ad hoc report when the intended deliverable is reusable measurement support.
+
 ## Telemetry Layer Rules
 
 Use ledger estimates to compare transition shapes, not to claim exact model or billing usage.
@@ -289,6 +395,8 @@ Use ledger estimates to compare transition shapes, not to claim exact model or b
 Record observed token counters separately when the runtime exposes them. Name the source, scope, and time window, for example `goal tokensUsed` for one Coordinator thread goal. Do not sum observed counters with ledger estimates unless the scopes are proven compatible.
 
 When estimates and observed counters differ, analyze the delta instead of forcing equality. Typical delta sources include repeated durable reads, tool output context, hidden prompt or system overhead, live coordination turns, final closure work, or separate role threads not covered by the observed counter.
+
+Use workflow comparison telemetry when the question is about route selection, not just one transition. The comparison layer may include observed single-agent data, estimated unoptimized collaboration data, and observed optimized collaboration data in the same block, but it must label each source separately.
 
 ## Overhead Classification
 
@@ -313,6 +421,7 @@ Use these routing rules after AF10-B when they do not weaken authority reads, re
 6. Bundle human-gate review points, options, consequences, verification, residual risks, and the authorization phrase or trial response in one live request. This reduces approval correction loops and makes the gate meaningful.
 7. Sample telemetry for meaningful transitions. Skip trivial comments, typo fixes, and no-state-change updates, or record an explicit skip reason instead of adding noisy ledger entries.
 8. Track expected savings qualitatively until enough comparable before/after flows exist. Use transition count, full rehydrate count, duplicated-context level, correction cycles, and observed goal counters as the first quantitative indicators.
+9. When comparing routing options, use the three-way comparison shape: single-agent baseline, unoptimized collaboration counterfactual, and optimized collaboration observed result.
 
 ## Usage Guidance
 
@@ -328,6 +437,7 @@ Prefer telemetry on:
 - Project state repair;
 - AF11 pilot dispatch and callback;
 - final AF10-B analysis.
+- route-choice comparisons between single-agent, unoptimized collaboration, and optimized collaboration.
 
 Prefer compact telemetry for routine handoffs. If filling the telemetry block would cost more than the transition teaches, skip it and state why in the durable comment.
 

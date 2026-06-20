@@ -67,6 +67,11 @@ project_v2:
 telemetry:
   required_for_meaningful_transitions: true
   workflow: "workflows/coordinate-agent-work.md"
+  supports_workflow_comparison: true
+  comparison_modes:
+    - single_agent_baseline
+    - unoptimized_collaboration_counterfactual
+    - optimized_collaboration_observed
   ledger_parent_issue: "<parent-issue-number>"
   skip_rule: "only trivial comments may skip telemetry with an explicit reason"
 
