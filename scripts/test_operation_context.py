@@ -142,6 +142,14 @@ def main() -> int:
         finally:
             operation_context.LOCAL_MANIFEST = original_manifest
 
+        direct_default = operation_context.build_context("install", product, ROOT.resolve(), vault.resolve())
+        expected_default_root = operation_context.DEFAULT_GENERATED_ROOT.resolve()
+        if direct_default.get("adapter_root") != str(expected_default_root):
+            errors.append(
+                "build-context-default-generated-root: expected split-mode generated root, got "
+                f"{direct_default.get('adapter_root')}"
+            )
+
         for name, operation, cwd, expected in [
             ("product-harvest", "harvest", product, "product_project_evidence"),
             ("runtime-import", "import", runtime, "runtime_install_state"),

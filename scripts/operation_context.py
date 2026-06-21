@@ -229,7 +229,7 @@ def build_context(
     cwd = (cwd or Path.cwd()).expanduser().resolve()
     core_root = (core_root or ROOT).expanduser().resolve()
     vault_root = (vault_root or core_root).expanduser().resolve()
-    adapter_root = (adapter_root or (core_root / "adapters")).expanduser().resolve()
+    adapter_root = (adapter_root or default_adapter_root(core_root, vault_root)).expanduser().resolve()
     context = classify_context(cwd, core_root, vault_root, adapter_root)
     root_errors = validate(core_root, vault_root)
     routes = operation_routes(operation, context, cwd, core_root, vault_root, adapter_root)
