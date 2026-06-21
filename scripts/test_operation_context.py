@@ -186,6 +186,19 @@ def main() -> int:
         default_install_root = fake_home / ".agent-foundry" / "generated" / "agent-foundry-adapters"
         (default_install_root / "adapter-publish-manifest.yaml").parent.mkdir(parents=True, exist_ok=True)
         (default_install_root / "adapter-publish-manifest.yaml").write_text("schema_version: 1\n", encoding="utf-8")
+        default_context = run(
+            [
+                str(CONTEXT),
+                "install",
+                "--cwd",
+                str(product),
+                "--json",
+            ],
+            product,
+            env=default_env,
+        )
+        errors.extend(expect_text("context-default-generated-root", default_context, f'"adapter_root": "{default_install_root.resolve()}"'))
+
         default_install = run(
             [
                 str(INSTALL),
