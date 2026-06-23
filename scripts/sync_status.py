@@ -449,6 +449,7 @@ def setup_report(core_root: Path, vault_root: Path, adapter_root: Path, receipt_
         "deployed_packs:",
         *(f"- {pack}" for pack in packs),
         *(["- none detected"] if not packs else []),
+        "adapter_root_rule: preserve this selected adapter root across publish, selected-output quality, install, and status",
         f"generated_output: {output_state} path={adapter_root} files={output_count}",
         *activation_freshness_lines(vault_root, adapter_root),
         "runtime targets:",
@@ -542,7 +543,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Print local Agent Foundry sync status for offline and remote workflows.")
     parser.add_argument("--core-root", default="", help="Agent Foundry Core root. Defaults to configured core_root.")
     parser.add_argument("--vault-root", default="", help="Selected Agent Foundry Vault root. Defaults to configured vault_root.")
-    parser.add_argument("--adapter-root", default="", help="Generated adapter output root. Defaults to <core-root>/adapters.")
+    parser.add_argument(
+        "--adapter-root",
+        default="",
+        help="Generated adapter output root. Defaults to receipt/default generated root in split mode, otherwise <core-root>/adapters.",
+    )
     parser.add_argument("--receipt-path", default="", help="Adapter install receipt path. Defaults to runtime/local receipt.")
     args = parser.parse_args()
 

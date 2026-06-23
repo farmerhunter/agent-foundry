@@ -157,6 +157,7 @@ def main() -> int:
             "deployed_pack: pack.bootstrap.minimal",
             "deployed_packs:",
             "- pack.bootstrap.minimal (version=0.1.0, status=deployed, type=mandatory_bootstrap, source=local_path)",
+            "adapter_root_rule: preserve this selected adapter root across publish, selected-output quality, install, and status",
             f"generated_output: ready path={generated} files=1",
             "activation: stale-generated-output missing_active_practices=1 missing_active_assets=1",
             "activation missing practice: PRACTICE-ACTIVE-001",

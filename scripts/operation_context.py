@@ -13,6 +13,7 @@ from foundry_config import CONFIG_PATH, ROOT, parse_config
 from runtime_manifest import LOCAL_MANIFEST, parse_targets
 
 
+DEFAULT_GENERATED_ROOT = Path.home() / ".agent-foundry" / "generated" / "agent-foundry-adapters"
 CONTEXT_PRODUCT = "product_project_evidence"
 CONTEXT_CORE = "foundry_core_maintenance"
 CONTEXT_VAULT = "foundry_vault_operation"
@@ -36,6 +37,12 @@ def configured_roots(core_root_arg: str = "", vault_root_arg: str = "") -> tuple
     core_root = Path(core_text).expanduser().resolve()
     vault_root = Path(vault_text).expanduser().resolve() if vault_text else core_root
     return core_root, vault_root
+
+
+def default_adapter_root(core_root: Path, vault_root: Path) -> Path:
+    if core_root != vault_root:
+        return DEFAULT_GENERATED_ROOT.resolve()
+    return core_root / "adapters"
 
 
 def runtime_paths() -> list[Path]:
@@ -222,7 +229,7 @@ def build_context(
     cwd = (cwd or Path.cwd()).expanduser().resolve()
     core_root = (core_root or ROOT).expanduser().resolve()
     vault_root = (vault_root or core_root).expanduser().resolve()
-    adapter_root = (adapter_root or (core_root / "adapters")).expanduser().resolve()
+    adapter_root = (adapter_root or default_adapter_root(core_root, vault_root)).expanduser().resolve()
     context = classify_context(cwd, core_root, vault_root, adapter_root)
     root_errors = validate(core_root, vault_root)
     routes = operation_routes(operation, context, cwd, core_root, vault_root, adapter_root)
@@ -231,8 +238,15 @@ def build_context(
         warnings.append("invoked from product project context; writes must go only to the declared Agent Foundry targets")
     if operation == "publish" and adapter_root == (core_root / "adapters").resolve():
         warnings.append("publish output points at Core adapters; apply should refuse Core template overwrite")
+    if operation in {"install", "refresh"} and core_root != vault_root and adapter_root == (core_root / "adapters").resolve():
+        warnings.append(
+            "split-mode install points at Core reference adapters; use the selected generated adapter root from publish output"
+        )
     if operation in {"install", "refresh"} and not (adapter_root / "adapter-publish-manifest.yaml").exists():
-        warnings.append("adapter_root has no adapter-publish-manifest.yaml; selected-output install receipt may be unavailable")
+        warnings.append(
+            "adapter_root has no adapter-publish-manifest.yaml; preserve one selected generated adapter root across "
+            "publish, selected-output quality check, install dry-run/apply, and sync status"
+        )
     return {
         "schema_version": 1,
         "operation": operation,
@@ -306,7 +320,7 @@ def main() -> int:
     args = parser.parse_args()
 
     core_root, vault_root = configured_roots(args.core_root, args.vault_root)
-    adapter_root = Path(args.adapter_root).expanduser().resolve() if args.adapter_root else core_root / "adapters"
+    adapter_root = Path(args.adapter_root).expanduser().resolve() if args.adapter_root else default_adapter_root(core_root, vault_root)
     cwd = Path(args.cwd).expanduser().resolve() if args.cwd else Path.cwd()
     report = build_context(args.operation, cwd, core_root, vault_root, adapter_root)
     if args.json:

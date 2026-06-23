@@ -408,6 +408,18 @@ def write_generated_skill_outputs(
     return written
 
 
+def print_follow_up_commands(core_root: Path, vault_root: Path, output_root: Path) -> None:
+    print("Next commands using the same selected adapter root:")
+    print(
+        "  python3 scripts/check_adapter_quality.py "
+        f"--core-root {core_root} --vault-root {vault_root} "
+        f"--surface selected-output --generated-root {output_root}"
+    )
+    print(f"  python3 scripts/install_foundry.py --core-root {core_root} --vault-root {vault_root} --adapter-root {output_root}")
+    print(f"  python3 scripts/sync_status.py --core-root {core_root} --vault-root {vault_root} --adapter-root {output_root}")
+    print("Runtime apply remains a separate reviewed action: re-run install_foundry.py with --apply only when runtime writes are authorized.")
+
+
 def publish(core_root: Path, vault_root: Path, output_root: Path, apply: bool) -> int:
     print_operation_context("publish", core_root=core_root, vault_root=vault_root, adapter_root=output_root)
     errors = validate(core_root, vault_root)
@@ -422,6 +434,7 @@ def publish(core_root: Path, vault_root: Path, output_root: Path, apply: bool) -
     if not active_practices and not active_assets:
         print("Selected Vault has no active or revised practices/assets. Nothing to publish.")
         write_manifest(output_root, manifest_text(active_practices, active_assets, []), apply)
+        print_follow_up_commands(core_root, vault_root, output_root)
         return 0
 
     if not (core_root / "adapters" / "adapter_profiles.yaml").exists():
@@ -440,6 +453,7 @@ def publish(core_root: Path, vault_root: Path, output_root: Path, apply: bool) -
     print(f"Adapter publish {'wrote' if apply else 'planned'} {len(written)} files.")
     print(f"Active practices selected: {len(active_practices)}")
     print(f"Active assets selected: {len(active_assets)}")
+    print_follow_up_commands(core_root, vault_root, output_root)
     return 0
 
 

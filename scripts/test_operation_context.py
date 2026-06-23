@@ -142,6 +142,14 @@ def main() -> int:
         finally:
             operation_context.LOCAL_MANIFEST = original_manifest
 
+        direct_default = operation_context.build_context("install", product, ROOT.resolve(), vault.resolve())
+        expected_default_root = operation_context.DEFAULT_GENERATED_ROOT.resolve()
+        if direct_default.get("adapter_root") != str(expected_default_root):
+            errors.append(
+                "build-context-default-generated-root: expected split-mode generated root, got "
+                f"{direct_default.get('adapter_root')}"
+            )
+
         for name, operation, cwd, expected in [
             ("product-harvest", "harvest", product, "product_project_evidence"),
             ("runtime-import", "import", runtime, "runtime_install_state"),
@@ -167,6 +175,7 @@ def main() -> int:
         )
         errors.extend(expect_text("publish-context-banner", publish, "work_context: product_project_evidence"))
         errors.extend(expect_text("publish-context-route", publish, f"allowed_writes:\n  - {generated.resolve()}"))
+        errors.extend(expect_text("publish-followup-root", publish, f"--adapter-root {generated.resolve()}"))
 
         default_generated = base / "default-locator-generated"
         default_env = write_locator(fake_home, ROOT.resolve(), vault.resolve())
@@ -181,6 +190,56 @@ def main() -> int:
         )
         errors.extend(expect_text("publish-default-locator-context", default_publish, "work_context: product_project_evidence"))
         errors.extend(expect_text("publish-default-locator-vault", default_publish, f"vault_root: {vault.resolve()}"))
+
+        default_install_root = fake_home / ".agent-foundry" / "generated" / "agent-foundry-adapters"
+        (default_install_root / "adapter-publish-manifest.yaml").parent.mkdir(parents=True, exist_ok=True)
+        (default_install_root / "adapter-publish-manifest.yaml").write_text("schema_version: 1\n", encoding="utf-8")
+        default_context = run(
+            [
+                str(CONTEXT),
+                "install",
+                "--cwd",
+                str(product),
+                "--json",
+            ],
+            product,
+            env=default_env,
+        )
+        errors.extend(expect_text("context-default-generated-root", default_context, f'"adapter_root": "{default_install_root.resolve()}"'))
+
+        default_install = run(
+            [
+                str(INSTALL),
+                "--skip-check",
+                "--target",
+                "chatgpt",
+            ],
+            product,
+            env=default_env,
+        )
+        errors.extend(expect_text("install-default-generated-root", default_install, f"adapter_root: {default_install_root.resolve()}"))
+
+        core_adapter_install = run(
+            [
+                str(INSTALL),
+                "--core-root",
+                str(ROOT),
+                "--vault-root",
+                str(vault),
+                "--adapter-root",
+                str(ROOT / "adapters"),
+                "--skip-check",
+                "--target",
+                "chatgpt",
+            ],
+            product,
+        )
+        output = core_adapter_install.stdout + core_adapter_install.stderr
+        if core_adapter_install.returncode == 0 or "Refusing split-mode install from Core reference adapters." not in output:
+            errors.append(
+                "install-refuses-core-adapters: expected split-mode refusal for Core adapters\n"
+                f"{core_adapter_install.returncode}\n{output}"
+            )
 
         install = run(
             [
