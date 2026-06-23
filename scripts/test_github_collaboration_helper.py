@@ -59,7 +59,19 @@ def main() -> int:
         fixture = base / "issue.json"
         inbox = base / "inbox.json"
         auth = base / "auth.json"
+        runtime_skill = base / "runtime-skill.md"
+        generated_skill = base / "generated-skill.md"
+        launcher = base / "bin" / "agent-foundry-github-collab"
         write(auth, json.dumps({"status": "ok", "nameWithOwner": "farmerhunter/agent-foundry"}))
+        write(
+            runtime_skill,
+            "activation evidence\n target runtime\n user-facing activation instructions\n",
+        )
+        write(
+            generated_skill,
+            "activation evidence\n target runtime\n user-facing activation instructions\n",
+        )
+        write(launcher, "#!/bin/sh\nexit 0\n")
         write(
             fixture,
             json.dumps(
@@ -224,6 +236,24 @@ def main() -> int:
                     base,
                 ),
                 "mutation_performed: False",
+            )
+        )
+        errors.extend(
+            expect_ok(
+                "activation-report-fixture",
+                run(
+                    [
+                        "activation-report",
+                        "--launcher",
+                        str(launcher),
+                        "--runtime-skill",
+                        str(runtime_skill),
+                        "--generated-skill",
+                        str(generated_skill),
+                    ],
+                    base,
+                ),
+                "user_entrypoint:",
             )
         )
         errors.extend(

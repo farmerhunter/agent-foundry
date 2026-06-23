@@ -8,6 +8,50 @@ configuration shape, evidence requirements, and safety boundaries before helper
 scripts exist. It does not publish generated Skills, install runtime adapters,
 mutate GitHub state, or write Vault/private state.
 
+## Codex Target Activation
+
+Codex users should have one stable helper entry point across projects and
+threads:
+
+```text
+~/.agent-foundry/bin/agent-foundry-github-collab
+```
+
+That file is a launcher, not a deployed copy of the helper implementation. It
+reads the machine-local locator at `~/.agent-foundry/config.yaml`, resolves the
+selected Agent Foundry Core checkout, and then executes:
+
+```text
+<core_root>/scripts/github_collaboration_helper.py
+```
+
+This keeps the Core helper source canonical while avoiding project-specific
+paths in user-facing instructions. A user working in another repository or a
+new Codex thread should not need to know where the Core checkout lives.
+
+Activation evidence for this helper must include:
+
+- the launcher exists at `~/.agent-foundry/bin/agent-foundry-github-collab`;
+- the launcher resolves `core_root` through `~/.agent-foundry/config.yaml`;
+- read-only or dry-run commands work from a non-Core working directory;
+- installed generated runtime guidance, such as the Codex
+  `agent-collaboration` Skill, describes the activation gate or points to this
+  workflow clearly enough that a new thread can discover the safe path;
+- any missing new-thread or manual trial evidence is recorded as an explicit
+  blocker or follow-up, not silently treated as complete.
+
+Useful smoke commands:
+
+```text
+~/.agent-foundry/bin/agent-foundry-github-collab activation-report
+~/.agent-foundry/bin/agent-foundry-github-collab role-config-check --config <core_root>/templates/github-role-routing.template.yaml
+~/.agent-foundry/bin/agent-foundry-github-collab --repo farmerhunter/agent-foundry issue-context 222 --comment-limit 3
+~/.agent-foundry/bin/agent-foundry-github-collab permission-smoke agent-label
+```
+
+The last command must fail closed because `agent-label` mutates scheduler
+ownership and is outside AF11 activation scope.
+
 ## User-Facing Entry Points
 
 Agents should expose these as natural-language workflows rather than requiring

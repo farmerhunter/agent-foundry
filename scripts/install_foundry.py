@@ -11,6 +11,7 @@ from adapter_install_receipt import write_receipt
 from deploy_capability_pack import deploy as deploy_capability_pack, top_level_scalars
 from foundry_config import CONFIG_PATH, parse_config, write_config
 from init_vault import initialize
+from install_helper_launchers import install_launchers
 from operation_context import print_operation_context
 from publish_adapters import publish as publish_adapters
 from runtime_manifest import parse_targets, read_manifest
@@ -106,6 +107,9 @@ def install(
 
     if apply and write_locator:
         write_config(CONFIG_PATH, core_root, core_root, vault_root)
+
+    print(f"\n## helper launchers: {'apply' if apply else 'dry-run'}", flush=True)
+    install_launchers(apply=apply)
 
     targets = parse_targets(read_manifest())
     selected = [target] if target else list(targets)
