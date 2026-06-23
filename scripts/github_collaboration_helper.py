@@ -32,7 +32,15 @@ FORBIDDEN_ACTIONS = {
     "vault-write",
     "memory-write",
 }
-READ_ONLY_ACTIONS = {"repo-resolve", "auth-smoke", "role-config-check", "inbox", "issue-context", "scheduler-audit"}
+READ_ONLY_ACTIONS = {
+    "repo-resolve",
+    "auth-smoke",
+    "role-config-check",
+    "inbox",
+    "issue-context",
+    "scheduler-audit",
+    "activation-report",
+}
 DRY_RUN_ACTIONS = {
     "handoff-draft",
     "dispatch-evidence-draft",
@@ -73,6 +81,21 @@ def run_gh(args: list[str]) -> Any:
         return json.loads(result.stdout)
     except json.JSONDecodeError:
         return result.stdout
+
+
+def default_core_root() -> Path:
+    return Path(__file__).resolve().parents[1]
+
+
+def path_status(path: Path, required_text: list[str] | None = None) -> dict[str, Any]:
+    exists = path.exists()
+    payload: dict[str, Any] = {"path": str(path), "exists": exists}
+    if not exists or required_text is None:
+        return payload
+    text = path.read_text(encoding="utf-8")
+    payload["required_text_present"] = {item: item in text for item in required_text}
+    payload["ok"] = all(payload["required_text_present"].values())
+    return payload
 
 
 def repo_from_remote(cwd: Path) -> str | None:
@@ -382,6 +405,71 @@ def cmd_permission_smoke(args: argparse.Namespace) -> None:
         raise SystemExit(7)
 
 
+def cmd_activation_report(args: argparse.Namespace) -> None:
+    core_root = Path(args.core_root).expanduser().resolve() if args.core_root else default_core_root()
+    workflow = core_root / "workflows" / "github-collaboration-helper.md"
+    helper = core_root / "scripts" / "github_collaboration_helper.py"
+    routing = core_root / "templates" / "github-role-routing.template.yaml"
+    launcher = (
+        Path(args.launcher).expanduser()
+        if args.launcher
+        else Path.home() / ".agent-foundry" / "bin" / "agent-foundry-github-collab"
+    )
+    runtime_skill = Path(args.runtime_skill).expanduser() if args.runtime_skill else Path.home() / ".codex" / "skills" / "agent-collaboration" / "SKILL.md"
+    generated_skill = (
+        Path(args.generated_skill).expanduser()
+        if args.generated_skill
+        else Path.home()
+        / ".agent-foundry"
+        / "generated"
+        / "agent-foundry-adapters"
+        / "codex"
+        / "skills"
+        / "agent-collaboration"
+        / "SKILL.md"
+    )
+    activation_terms = [
+        "activation evidence",
+        "target runtime",
+        "user-facing activation instructions",
+    ]
+    helper_terms = [
+        "activation-report",
+        "GitHub collaboration helper",
+    ]
+    payload = {
+        "core_root": str(core_root),
+        "target_runtime": args.target_runtime,
+        "launcher": path_status(launcher),
+        "user_entrypoint": str(launcher),
+        "helper": path_status(helper, ["Read-only and dry-run GitHub collaboration helper pilot"]),
+        "workflow_contract": path_status(workflow, helper_terms),
+        "routing_template": path_status(routing, ["needs_labels", "optional_visual_mirror"]),
+        "installed_runtime_skill": path_status(runtime_skill, activation_terms),
+        "generated_skill": path_status(generated_skill, activation_terms),
+        "safe_trial_commands": [
+            f"{launcher} --repo <owner>/<repo> auth-smoke",
+            f"{launcher} role-config-check --config {routing}",
+            f"{launcher} --repo <owner>/<repo> issue-context <issue> --comment-limit 3",
+            f"{launcher} --json activation-report",
+        ],
+        "mutation_performed": False,
+    }
+    payload["status"] = "ok" if all(
+        [
+            payload["helper"].get("ok", payload["helper"]["exists"]),
+            payload["launcher"]["exists"],
+            payload["workflow_contract"].get("ok", payload["workflow_contract"]["exists"]),
+            payload["routing_template"].get("ok", payload["routing_template"]["exists"]),
+            payload["generated_skill"].get("ok", payload["generated_skill"]["exists"]),
+            payload["installed_runtime_skill"].get("ok", payload["installed_runtime_skill"]["exists"]),
+        ]
+    ) else "incomplete"
+    print_json_or_text(payload, args.json)
+    if payload["status"] != "ok":
+        raise SystemExit(8)
+
+
 def telemetry_block(transition_type: str, role_from: str, role_to: str, note: str) -> str:
     return f"""workflow_telemetry:
   transition_type: {transition_type}
@@ -616,6 +704,14 @@ def build_parser() -> argparse.ArgumentParser:
     audit.add_argument("--config")
     audit.add_argument("--fixture-json", required=True)
     audit.set_defaults(func=cmd_scheduler_audit)
+
+    activation = sub.add_parser("activation-report")
+    activation.add_argument("--core-root", help="Agent Foundry Core root. Defaults to this helper's checkout.")
+    activation.add_argument("--launcher", help="Runtime launcher path to inspect.")
+    activation.add_argument("--runtime-skill", help="Installed Codex agent-collaboration SKILL.md to inspect.")
+    activation.add_argument("--generated-skill", help="Generated selected-output Codex agent-collaboration SKILL.md to inspect.")
+    activation.add_argument("--target-runtime", default="codex", help="Runtime being checked; informational.")
+    activation.set_defaults(func=cmd_activation_report)
 
     perm = sub.add_parser("permission-smoke")
     perm.add_argument("action")
