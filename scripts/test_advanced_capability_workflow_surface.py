@@ -116,7 +116,23 @@ def main() -> int:
     errors.extend(
         require_text(
             ROOT / "workflows" / "manage-capability-pack-lifecycle.md",
-            ["Skill-First Entry Points", "review capability pack lifecycle", "activate", "exportable", "writes: none", "#176"],
+            [
+                "Skill-First Entry Points",
+                "Normal-User Consumption Contract",
+                "list capability packs",
+                "recommend capability packs for my setup",
+                "verify capability pack",
+                "update capability pack",
+                "disable capability pack",
+                "pack identity",
+                "adopter display status",
+                "exact selected Vault write target",
+                "review capability pack lifecycle",
+                "activate",
+                "exportable",
+                "writes: none",
+                "#176",
+            ],
         )
     )
     errors.extend(
@@ -127,14 +143,29 @@ def main() -> int:
     )
     skill_first_snippets = [
         "discover capability packs",
+        "list capability packs",
+        "recommend capability packs for my setup",
         "preview capability pack deployment",
         "apply reviewed capability pack",
+        "verify capability pack",
+        "update capability pack",
+        "disable capability pack",
         "review capability pack lifecycle",
         "preview capability pack transfer",
     ]
     for path in [
         ROOT / "docs" / "commands.md",
         ROOT / "docs" / "usage.md",
+    ]:
+        errors.extend(require_text(path, skill_first_snippets))
+    adapter_skill_first_snippets = [
+        "discover capability packs",
+        "preview capability pack deployment",
+        "apply reviewed capability pack",
+        "review capability pack lifecycle",
+        "preview capability pack transfer",
+    ]
+    for path in [
         ROOT / "adapters" / "codex" / "skills" / "practice-harvester" / "SKILL.md",
         ROOT / "adapters" / "hermes" / "skills" / "practice-harvester" / "SKILL.md",
         ROOT / "adapters" / "trae" / "skills" / "agent-foundry" / "SKILL.md",
@@ -142,7 +173,22 @@ def main() -> int:
         ROOT / "adapters" / "chatgpt" / "custom-instructions.md",
         ROOT / "adapters" / "chatgpt" / "knowledge" / "commands.md",
     ]:
-        errors.extend(require_text(path, skill_first_snippets))
+        errors.extend(require_text(path, adapter_skill_first_snippets))
+    errors.extend(
+        require_text(
+            ROOT / "docs" / "usage.md",
+            [
+                "pack identity",
+                "display status",
+                "inspected layers",
+                "changed layers",
+                "exact selected Vault write target",
+                "next safe action",
+                "rollback or defer guidance",
+                "Do not write `recommended`, `compatible`, `merge_required`,",
+            ],
+        )
+    )
     for path in [
         ROOT / "docs" / "usage.md",
         ROOT / "adapters" / "codex" / "skills" / "practice-harvester" / "SKILL.md",

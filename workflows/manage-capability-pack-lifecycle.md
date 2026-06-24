@@ -21,6 +21,36 @@ The agent should translate those requests into dry-run lifecycle reports first.
 Raw scripts are implementation details or advanced/debug commands, not the
 primary user surface.
 
+## Normal-User Consumption Contract
+
+Normal-user capability-pack consumption flows are:
+
+- `list capability packs`;
+- `recommend capability packs for my setup`;
+- `preview capability pack deployment <pack-path>`;
+- `apply reviewed capability pack <pack-path>`;
+- `verify capability pack <pack-id>`;
+- `update capability pack <pack-id-or-path>`;
+- `disable capability pack <pack-id>`.
+
+For these flows, the agent must return a compact user-visible report with:
+
+- pack identity: id, title, version, source, and reviewed status;
+- adopter display status such as `available`, `recommended`, `compatible`,
+  `incompatible`, `deployed`, `update_available`, `blocked`, or `not_installed`;
+- inspected layers: Core, selected Vault, generated output, runtime receipts,
+  manual targets, and Local Private exclusions;
+- changed layers, if the action has an accepted write path;
+- `writes: none` for list, recommend, preview, verify, update comparison,
+  disable review, and transfer preview paths;
+- exact selected Vault write target for accepted apply paths;
+- next safe action;
+- rollback or defer guidance.
+
+Raw scripts remain implementation/debug substrate. Normal-user output must not
+make candidate discovery, pack authoring, export publication, or maintainer
+release decisions part of routine consumption.
+
 ## Invariants
 
 - Selected User Vault metadata owns canonical pack lifecycle state after
