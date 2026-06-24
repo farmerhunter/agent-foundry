@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import shutil
 import subprocess
 import sys
@@ -21,6 +22,17 @@ STATUS = ROOT / "scripts" / "sync_status.py"
 BOOTSTRAP_PACK = ROOT / "fixtures" / "capability-packs" / "bootstrap-minimal"
 OPTIONAL_PACK = ROOT / "fixtures" / "capability-packs" / "optional-multi-agent"
 OPTIONAL_ID = "pack.multi-agent.optional"
+EXPECTED_LIFECYCLE_STATES = {
+    "candidate",
+    "reviewed",
+    "proposed",
+    "active",
+    "exportable",
+    "deprecated",
+    "retired",
+    "archived",
+    "blocked",
+}
 
 
 def run(args: list[str]) -> subprocess.CompletedProcess[str]:
@@ -86,6 +98,25 @@ def lifecycle(vault: Path, action: str, apply: bool) -> subprocess.CompletedProc
     if apply:
         args.append("--apply")
     return run(args)
+
+
+def assert_lifecycle_namespace() -> list[str]:
+    spec = importlib.util.spec_from_file_location("manage_capability_pack_lifecycle", LIFECYCLE)
+    if spec is None or spec.loader is None:
+        return ["cannot load manage_capability_pack_lifecycle.py"]
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+
+    errors: list[str] = []
+    actual = set(module.LIFECYCLE_STATES)
+    if actual != EXPECTED_LIFECYCLE_STATES:
+        errors.append(f"lifecycle namespace mismatch: {sorted(actual)}")
+    for report_only in ["detected", "split", "merged", "recommended", "merge_required", "drifted"]:
+        if report_only in actual:
+            errors.append(f"{report_only} must not be a canonical lifecycle state")
+    print("lifecycle-namespace: ok" if not errors else "lifecycle-namespace: failed")
+    return errors
 
 
 def add_metadata_section(vault: Path, lines: list[str]) -> None:
@@ -155,6 +186,7 @@ def add_deployed_pack_contract(vault: Path, source_authority: str) -> None:
 
 def main() -> int:
     errors: list[str] = []
+    errors.extend(assert_lifecycle_namespace())
     with tempfile.TemporaryDirectory(prefix="agent-foundry-pack-lifecycle-") as tmp:
         base = Path(tmp)
         vault = base / "vault"
@@ -241,17 +273,19 @@ def main() -> int:
         errors.extend(expect("activate-apply-refused", activate_apply, False, "cannot be applied"))
 
         exportable_plan = lifecycle(vault, "exportable", apply=False)
-        errors.extend(expect("exportable-review-only", exportable_plan, False, "target_state: exportable"))
+        errors.extend(expect("exportable-review-only", exportable_plan, False, "target_lifecycle_status: exportable"))
         errors.extend(expect("exportable-no-runtime-authority", exportable_plan, False, "runtime_followup:"))
 
         deprecate_plan = lifecycle(vault, "deprecate", apply=False)
-        errors.extend(expect("deprecate-review-only", deprecate_plan, False, "target_state: deprecated"))
+        errors.extend(expect("deprecate-review-only", deprecate_plan, False, "target_lifecycle_status: deprecated"))
         errors.extend(expect("deprecate-reports-records", deprecate_plan, False, "ASSET-COLLAB-PACK-001 asset"))
 
         split_plan = lifecycle(vault, "split", apply=False)
         errors.extend(expect("split-review-only", split_plan, False, "before-after membership diff"))
+        errors.extend(expect("split-transition-outcome", split_plan, False, "transition_outcome: split"))
         merge_plan = lifecycle(vault, "merge", apply=False)
         errors.extend(expect("merge-review-only", merge_plan, False, "split/merge requires"))
+        errors.extend(expect("merge-transition-outcome", merge_plan, False, "transition_outcome: merged"))
 
         metadata_with_valid_contract = metadata.read_text(encoding="utf-8")
         add_deployed_pack_contract(vault, "runtime generated adapter authority")

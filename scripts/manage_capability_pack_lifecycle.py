@@ -18,20 +18,28 @@ from plan_capability_pack import scalar_texts, validate_deployed_pack_metadata
 PRACTICE_RETIRE_STATUS = "archived"
 ASSET_RETIRE_STATUS = "retired"
 LIFECYCLE_STATES = {
-    "detected",
     "candidate",
+    "reviewed",
     "proposed",
     "active",
     "exportable",
     "deprecated",
-    "split",
-    "merged",
     "retired",
+    "archived",
     "blocked",
 }
 LEGACY_DEPLOYED_STATES = {"deployed", "disabled"}
 WRITE_ACTIONS = {"disable", "retire"}
 REVIEW_ONLY_ACTIONS = {"activate", "exportable", "deprecate", "split", "merge"}
+REVIEW_ONLY_TARGET_LIFECYCLE = {
+    "activate": "active",
+    "exportable": "exportable",
+    "deprecate": "deprecated",
+}
+REVIEW_ONLY_TRANSITION_OUTCOMES = {
+    "split": "split",
+    "merge": "merged",
+}
 LOCAL_PRIVATE_RE = re.compile(
     r"(^~|/Users/|\.agent-foundry|\.codex|\.trae|raw session|raw log|runtime manifest|"
     r"local receipt|secret|token)",
@@ -287,14 +295,10 @@ def print_followup_guidance(action: str) -> None:
 
 
 def report_review_only_action(records: list[PackRecord], action: str) -> int:
-    target_state = {
-        "activate": "active",
-        "exportable": "exportable",
-        "deprecate": "deprecated",
-        "split": "split",
-        "merge": "merged",
-    }[action]
-    print(f"target_state: {target_state}")
+    if action in REVIEW_ONLY_TARGET_LIFECYCLE:
+        print(f"target_lifecycle_status: {REVIEW_ONLY_TARGET_LIFECYCLE[action]}")
+    else:
+        print(f"transition_outcome: {REVIEW_ONLY_TRANSITION_OUTCOMES[action]}")
     print("status: review_required")
     print("records:")
     if not records:

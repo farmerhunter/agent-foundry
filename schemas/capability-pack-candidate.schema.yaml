@@ -6,7 +6,7 @@ required_fields:
   candidate_id: "Stable candidate id for review, such as candidate.pack.multi-agent.github-collaboration."
   proposed_pack_id: "Proposed pack id if the candidate later becomes a pack, such as pack.multi-agent.github-collaboration."
   title: "Short human-readable candidate title."
-  outcome: "candidate | baseline_control | extend_existing | deferred_overlap | deferred_insufficient_evidence | deferred_privacy_review | rejected_false_positive | rejected_too_broad | rejected_too_narrow | blocked_policy"
+  outcome: "Candidate discovery outcome namespace only: candidate | baseline_control | extend_existing | deferred_overlap | deferred_insufficient_evidence | deferred_privacy_review | rejected_false_positive | rejected_too_broad | rejected_too_narrow | blocked_policy"
   confidence: "high | medium | low"
   summary: "One-paragraph explanation of the candidate and why this outcome was chosen."
   authority_layers: "Evidence references grouped by Core, selected_vault, generated, runtime, and local_private treatment."
@@ -58,6 +58,7 @@ false_positive_control_fields:
 
 rules:
   - "Candidate records are review artifacts, not active pack manifests."
+  - "Candidate discovery outcome values are not pack lifecycle_status values unless a later reviewed pack manifest explicitly uses the pack canonical lifecycle namespace."
   - "A candidate may propose outcome candidate, but only human-reviewed follow-up work may activate or export a pack."
   - "Observed facts must cite evidence references; inference must be labeled separately."
   - "Selected Vault evidence must use record IDs, metadata, or sanitized summaries, not raw private evidence."
