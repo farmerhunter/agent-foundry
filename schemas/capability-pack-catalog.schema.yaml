@@ -1,0 +1,83 @@
+# Official capability pack catalog schema.
+# Human-readable AF-12 catalog format, not a strict machine validator yet.
+# The catalog is Core-hosted discoverability metadata. It is not selected Vault
+# authority, a deployment receipt, or an export/import package.
+
+required_fields:
+  catalog_schema_version: "Integer schema version for this catalog format."
+  catalog_id: "Stable catalog id, such as core.official-capability-packs."
+  source: "Catalog source namespace. Current supported value: core_repo."
+  entries: "Official capability pack entries."
+
+entry_required_fields:
+  pack_id: "Stable capability pack id matching the referenced manifest."
+  title: "Human-readable pack title for official discovery."
+  channel: "Catalog channel. Official Core catalog entries must use official."
+  catalog_status: "Catalog display status: available | deprecated | retired | blocked."
+  latest_version: "Latest reviewed pack contract version, independent from Core tags/releases."
+  manifest_path: "Repository-relative path to the reviewed manifest reference."
+  manifest_sha256: "SHA-256 digest of the referenced manifest_path content."
+  compatibility_summary: "Short user-facing compatibility summary."
+  compatibility_metadata: "Core schema, Vault layout, and bootstrap requirements copied from the manifest for display."
+  changelog_path: "Repository-relative path to the human-readable official changelog."
+  readme_path: "Repository-relative path to the official pack overview."
+  review_evidence: "Public issue, PR, or review URL for the catalog entry."
+  authority_after_deployment: "Must name selected User Vault as canonical after accepted deployment."
+  private_local_evidence: "Must state that private/local/raw evidence is excluded."
+  core_release_axis: "Must state that pack version and Core release/tag are independent axes."
+  candidate_review_packet: "Must be false for official catalog entries."
+  release_artifact_published: "Must be false until a later reviewed release workflow exists."
+
+compatibility_metadata_fields:
+  core_schema_version_min: "Minimum Core schema version supported by the pack."
+  core_schema_version_max: "Maximum Core schema version supported by the pack."
+  vault_layout_versions: "List of supported selected Vault layout versions."
+  requires_bootstrap_pack: "Boolean copied from the reviewed manifest."
+
+status_namespaces:
+  catalog_status:
+    owns: "Official catalog availability/display state."
+    allowed_values: "available | deprecated | retired | blocked"
+    persistence_rule: "Do not persist catalog_status as manifest or deployed-pack lifecycle_status."
+  pack_canonical_lifecycle:
+    owns: "Referenced manifest and deployed-pack metadata lifecycle_status."
+    allowed_values: "candidate | reviewed | proposed | active | exportable | deprecated | retired | archived | blocked"
+    persistence_rule: "Canonical lifecycle remains in the reviewed manifest and selected Vault metadata after deployment."
+  candidate_review_packet:
+    owns: "Power-user diagnostic candidate records and review-list output."
+    persistence_rule: "Candidate review packets are not official catalog entries and cannot be deployment, export, or activation inputs by default."
+
+rules:
+  - "Core hosts the official catalog as first-party discoverability and availability metadata."
+  - "The catalog indexes reviewed manifests; it does not replace manifest validation or selected Vault authority."
+  - "After accepted deployment, selected User Vault records own canonical practice, asset, membership, provenance, and deployed-pack state."
+  - "Pack version and Core release/tag are independent axes: Core release identifies repository state; pack version identifies the reviewed pack contract."
+  - "Every official entry must pin manifest_sha256 for manifest_path."
+  - "Same pack_id plus same latest_version plus different manifest_sha256 must fail closed and require review."
+  - "Catalog status values are not pack lifecycle_status values."
+  - "Official entries must not contain raw private Vault evidence, local machine paths, runtime manifests, receipts, secrets, raw sessions, or usage rows."
+  - "Local candidate review packets cannot appear in the official catalog until a later reviewed maintainer flow creates a reviewed manifest and catalog entry."
+  - "Current AF-12 catalog work does not publish release artifacts, create a separate repository, export/import/deploy/activate packs, mutate live Vault state, or publish generated adapters/Skills."
+
+example_entry:
+  pack_id: pack.bootstrap.minimal
+  title: Minimal Agent Foundry Bootstrap Pack
+  channel: official
+  catalog_status: available
+  latest_version: 0.2.0
+  manifest_path: fixtures/capability-packs/bootstrap-minimal/manifest.yaml
+  manifest_sha256: dee22dc5a39f29c5cc87f2acaee0f1e24dd22285bf609f28dcca92a213ea1737
+  compatibility_summary: "Core schema 1; Vault layout [1]; bootstrap not required."
+  compatibility_metadata:
+    core_schema_version_min: 1
+    core_schema_version_max: 1
+    vault_layout_versions: [1]
+    requires_bootstrap_pack: false
+  changelog_path: catalog/capability-packs/pack.bootstrap.minimal/CHANGELOG.md
+  readme_path: catalog/capability-packs/pack.bootstrap.minimal/README.md
+  review_evidence: https://github.com/farmerhunter/agent-foundry/issues/232
+  authority_after_deployment: selected_user_vault
+  private_local_evidence: excluded
+  core_release_axis: independent
+  candidate_review_packet: false
+  release_artifact_published: false

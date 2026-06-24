@@ -51,6 +51,12 @@ Raw scripts remain implementation/debug substrate. Normal-user output must not
 make candidate discovery, pack authoring, export publication, or maintainer
 release decisions part of routine consumption.
 
+When a normal-user list or recommendation flow reads the official Core catalog,
+the catalog is a discovery surface only. It may show official availability,
+version, manifest hash, compatibility summary, changelog, and review evidence,
+but it must still route preview/apply work through the reviewed manifest and the
+selected Vault. The selected Vault remains canonical after accepted deployment.
+
 ## Power-User Maintenance Contract
 
 Power-user capability-pack workflows are advanced maintenance-level workflows.
@@ -113,6 +119,49 @@ pack lifecycle values.
 | Transfer/import state | Export/import preview and import review state. | `preview`, `dry-run`, `proposed`, `accepted`, `rejected`, `blocked` |
 | Comparison/report classification | Update, audit, diff, and lifecycle reports. | `clean_update_available`, `merge_required`, `same_version_hash_mismatch`, `unsupported`, `stale`, `drifted` |
 | Runtime/generated status | Downstream generated output and runtime freshness. | `generated_current`, `generated_stale`, `generated_missing`, `runtime_current`, `runtime_drifted`, `manual_import_required` |
+| Official catalog status | Core catalog availability and display state. | `available`, `deprecated`, `retired`, `blocked` |
+
+Official catalog status values are not canonical `lifecycle_status` values. The
+official catalog uses `catalog_status` so that display availability does not
+change the manifest or deployed-pack lifecycle namespace.
+
+## Official Core Catalog
+
+The current-stage official catalog is Core-hosted and schema-backed:
+
+- `schemas/capability-pack-catalog.schema.yaml`
+- `catalog/capability-packs/index.yaml`
+- `catalog/capability-packs/<pack-id>/README.md`
+- `catalog/capability-packs/<pack-id>/CHANGELOG.md`
+
+Each official catalog entry must include:
+
+- pack id, title, official channel, and `catalog_status`;
+- latest pack version;
+- reviewed manifest path and `manifest_sha256`;
+- compatibility summary and manifest-derived compatibility metadata;
+- changelog and readme paths;
+- public review evidence;
+- explicit selected Vault authority after deployment;
+- explicit private/local evidence exclusion;
+- explicit pack-version versus Core-release independence;
+- `candidate_review_packet: false`;
+- `release_artifact_published: false` until a later reviewed release workflow
+  exists.
+
+Manifest hash checks fail closed: the same `pack_id` plus same pack version with
+a different `manifest_sha256` requires review before list, recommendation,
+preview, apply, export, import, or deployment work can proceed.
+
+The official catalog is not a separate repository, release artifact channel,
+export/import package, deployment receipt, generated adapter, runtime install,
+or selected Vault source of truth. A Core tag or release may advertise a catalog
+snapshot, but pack version and Core release/tag remain independent axes.
+
+Local candidate review packets remain diagnostic or power-user review artifacts.
+They cannot appear in the official catalog, become official packs, or become
+export/import/deploy inputs without a later reviewed maintainer flow that
+creates a reviewed manifest and official catalog entry.
 
 ## Canonical Lifecycle States
 
