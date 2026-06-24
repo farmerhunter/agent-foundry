@@ -280,6 +280,10 @@ activation, export, publication, or runtime deploy authorization.
 
 Candidate outcomes、split/merge outcomes、exportability findings 和 release classifications 默认是 review/report values，除非后续 reviewed lifecycle step 持久化 canonical pack `lifecycle_status`。不要把 review packet 当作 activation、export、publication 或 runtime deploy authorization。
 
+Candidate discovery is a power-user diagnostic review-list flow. It does not run automatically during normal-user pack consumption, and it does not create candidate files, manifests, selected Vault records, exports, generated output, or runtime changes by default. A later reviewed power-user step must accept the review list before draft assembly or durable candidate-record work begins.
+
+Candidate discovery 是 power-user diagnostic review-list flow。它不会在 normal-user pack consumption 中自动运行，也不会默认创建 candidate files、manifests、selected Vault records、exports、generated output 或 runtime changes。必须先由后续 reviewed power-user step 接受 review list，才能开始 draft assembly 或 durable candidate-record work。
+
 Use plan commands before apply commands when operating manually or debugging:
 
 手动操作或 debug 时，先使用 plan commands，再使用 apply commands：

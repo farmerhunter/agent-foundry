@@ -29,8 +29,13 @@ a pack without a later reviewed step.
 
 ## Invariant
 
-Capability pack discovery outputs reviewable candidate records, not canonical
-pack state.
+Capability pack discovery is a diagnostic review-list workflow by default. It
+outputs a concise review list or review packet, not pack manifests, selected
+Vault files, generated adapters, runtime writes, or canonical pack state.
+
+Candidate records are optional follow-up artifacts. Create them only after a
+later reviewed power-user step accepts the discovery review list and requests
+draft assembly or durable candidate-record work.
 
 A capability pack is a bounded reusable capability contract around a recurring
 user goal. It is not:
@@ -44,6 +49,14 @@ user goal. It is not:
 - a memory-system record.
 
 ## 1. Gather Evidence
+
+Run discovery only when a human, issue, or explicit power-user maintenance
+request asks for it. Do not run candidate discovery automatically during
+normal-user list, recommend, preview, apply, verify, update, or disable flows.
+
+Group every possible candidate by one reusable normal-user goal before scoring.
+If evidence points to unrelated goals, split the review-list rows or reject the
+candidate as too broad.
 
 Use evidence in this order:
 
@@ -64,9 +77,11 @@ Separate observed facts from inference. Observed facts name the evidence source
 and layer. Inference names the proposed boundary and why the evidence supports
 or rejects that boundary.
 
-## 2. Apply Authority Gates
+## 2. Apply Authority And False-Positive Gates
 
-Reject or defer before scoring when any authority gate fails.
+Reject, defer, or route to an existing pack before scoring when any authority
+or false-positive gate fails. Scoring explains surviving candidates; it is not
+authority to create a pack.
 
 | Gate | Pass condition | Failure result |
 | --- | --- | --- |
@@ -76,6 +91,9 @@ Reject or defer before scoring when any authority gate fails.
 | Pack size | Candidate is broader than one asset/practice but still centered on one user goal. | `rejected_too_narrow` or `rejected_too_broad` |
 | Activation safety | Candidate can be proposed without activation, export, runtime apply, or adapter publication. | `blocked_policy` |
 | Existing coverage | Candidate does not duplicate an already sufficient pack or baseline bootstrap role. | `baseline_control` or `extend_existing` |
+| Review-list shape | Candidate can be summarized as a review-list row without manifest creation. | `blocked_policy` |
+
+Every review-list row must include the gate result before any signal score.
 
 ## 3. Score Explainable Signals
 
@@ -112,8 +130,9 @@ Then attach qualitative confidence:
 - `medium`: gates pass, score 12-17, or score is high but residual risk remains.
 - `low`: gates pass but score < 12, or evidence is mostly inferred.
 
-Confidence is not an activation decision. A high-confidence candidate still
-requires review before activation or export.
+Confidence is explanation, not authority. A high-confidence candidate still
+requires a later accepted power-user step before draft assembly, manifest work,
+activation, export, publication, deployment, or runtime mutation.
 
 ## 4. Classify Candidate Outcome
 
@@ -151,18 +170,20 @@ Every candidate review must explicitly test these controls:
 - Bootstrap duplicate: is it already covered by mandatory bootstrap or a stable
   lifecycle baseline?
 
-## 6. Output Candidate Record
+## 6. Output Diagnostic Review List
 
-Write candidate records using `schemas/capability-pack-candidate.schema.yaml`.
+Return a concise diagnostic review list by default. Do not create manifest files
+or selected Vault candidate files as part of ordinary discovery.
 
-Each record must include:
+Each review-list row must include:
 
-- proposed pack id and title;
+- proposed pack id and title, or explicit `no_pack_candidate`;
 - outcome and confidence;
+- reusable normal-user goal;
 - observed evidence references by authority layer;
 - inferred boundary;
 - likely included practices, assets, workflows, templates, or adapter projection
-  intent;
+  intent, if any;
 - explicit exclusions;
 - signal scores and total;
 - false-positive control results;
@@ -172,6 +193,10 @@ Each record must include:
 
 Use public issue/comment URLs when possible. For selected Vault evidence, cite
 record IDs and sanitized aggregate summaries rather than raw private content.
+
+When a later reviewed power-user step asks for a durable candidate record, write
+it using `schemas/capability-pack-candidate.schema.yaml`. That candidate record
+remains a review artifact and is still not an active pack manifest.
 
 ## 7. Review Handoff
 
@@ -206,12 +231,15 @@ when no candidate records exist.
 
 Use this sequence only when an issue or human asks for advanced discovery:
 
-1. Run discovery as evidence gathering. Output candidate records or a review
-   packet only; do not write canonical pack metadata or selected Vault records.
+1. Run discovery as evidence gathering. Output a diagnostic review list or
+   review packet only; do not write candidate records, canonical pack metadata,
+   selected Vault records, generated adapters, runtime files, or manifests by
+   default.
 2. Validate any candidate record against
-   `schemas/capability-pack-candidate.schema.yaml`. Candidate records remain
-   review artifacts and must not be passed to activation, export, or deployment
-   tooling as active pack manifests.
+   `schemas/capability-pack-candidate.schema.yaml` only after a later reviewed
+   power-user step explicitly requests durable candidate-record work. Candidate
+   records remain review artifacts and must not be passed to activation,
+   export, or deployment tooling as active pack manifests.
 3. If the candidate becomes a reviewed pack manifest, validate it with
    `scripts/plan_capability_pack.py` before any deployment flow. Advanced
    metadata is additive and optional; `manifest_schema_version: 1` packs without
