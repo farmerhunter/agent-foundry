@@ -51,6 +51,41 @@ Raw scripts remain implementation/debug substrate. Normal-user output must not
 make candidate discovery, pack authoring, export publication, or maintainer
 release decisions part of routine consumption.
 
+## Power-User Maintenance Contract
+
+Power-user capability-pack workflows are advanced maintenance-level workflows.
+They cover explicit requests to:
+
+- scan, propose, or evaluate candidate boundaries;
+- assemble a pack draft;
+- review a pack release or version update;
+- review exportability;
+- review deprecation, split, or merge outcomes.
+
+These workflows may produce taxonomy, versioning, distribution, privacy, or
+compatibility decisions for review. They must not create, activate, export,
+publish, or deploy a pack without a later reviewed step.
+
+Outputs are review packets by default, not active artifacts. A maintenance
+review packet must include:
+
+- requested flow and pack or candidate identity;
+- evidence sources and authority layer;
+- proposed boundary, draft membership, version, taxonomy, exportability,
+  deprecation, split, or merge decision;
+- practice, asset, selected Vault, generated output, runtime, and Local Private
+  impact;
+- clearly labeled state namespace: candidate discovery outcome,
+  transfer/import state, comparison/report classification, runtime/generated
+  status, or canonical `lifecycle_status`;
+- required Reviewer, Architect, or Human gate;
+- `writes: none`;
+- next safe action plus rollback or defer guidance.
+
+The advanced/maintenance label does not imply strict role permissions or hidden
+access control. It tells agents to use deeper review gates and review-packet
+outputs before any later apply, export, publish, or runtime deploy step.
+
 ## Invariants
 
 - Selected User Vault metadata owns canonical pack lifecycle state after
