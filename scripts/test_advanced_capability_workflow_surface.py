@@ -3,10 +3,13 @@
 
 from __future__ import annotations
 
+import hashlib
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+from deploy_capability_pack import parse_simple_yaml, top_level_scalars
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -15,6 +18,45 @@ PLAN = ROOT / "scripts" / "plan_capability_pack.py"
 LIFECYCLE = ROOT / "scripts" / "manage_capability_pack_lifecycle.py"
 TRANSFER = ROOT / "scripts" / "plan_capability_pack_transfer.py"
 BOOTSTRAP_PACK = ROOT / "fixtures" / "capability-packs" / "bootstrap-minimal"
+CATALOG_INDEX = ROOT / "catalog" / "capability-packs" / "index.yaml"
+CATALOG_SCHEMA = ROOT / "schemas" / "capability-pack-catalog.schema.yaml"
+CATALOG_STATUSES = {"available", "deprecated", "retired", "blocked"}
+CANONICAL_LIFECYCLE_STATUSES = {
+    "candidate",
+    "reviewed",
+    "proposed",
+    "active",
+    "exportable",
+    "deprecated",
+    "retired",
+    "archived",
+    "blocked",
+}
+REQUIRED_CATALOG_ENTRY_FIELDS = {
+    "pack_id",
+    "title",
+    "channel",
+    "catalog_status",
+    "latest_version",
+    "manifest_path",
+    "manifest_sha256",
+    "compatibility_summary",
+    "compatibility_metadata",
+    "changelog_path",
+    "readme_path",
+    "review_evidence",
+    "authority_after_deployment",
+    "private_local_evidence",
+    "core_release_axis",
+    "candidate_review_packet",
+    "release_artifact_published",
+}
+REQUIRED_COMPATIBILITY_METADATA_FIELDS = {
+    "core_schema_version_min",
+    "core_schema_version_max",
+    "vault_layout_versions",
+    "requires_bootstrap_pack",
+}
 
 
 def run(args: list[str]) -> subprocess.CompletedProcess[str]:
@@ -48,6 +90,118 @@ def require_text(path: Path, snippets: list[str]) -> list[str]:
             errors.append(f"{path.relative_to(ROOT)} missing {snippet!r}")
         else:
             print(f"{path.relative_to(ROOT)} contains {snippet}: ok")
+    return errors
+
+
+def scalar(value: object) -> str:
+    if isinstance(value, str):
+        return value
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, list):
+        return "[" + ", ".join(scalar(item) for item in value) + "]"
+    return ""
+
+
+def validate_official_catalog() -> list[str]:
+    errors: list[str] = []
+    if not CATALOG_INDEX.exists():
+        return [f"{CATALOG_INDEX.relative_to(ROOT)} missing"]
+    if not CATALOG_SCHEMA.exists():
+        errors.append(f"{CATALOG_SCHEMA.relative_to(ROOT)} missing")
+
+    try:
+        catalog = parse_simple_yaml(CATALOG_INDEX.read_text(encoding="utf-8"))
+    except ValueError as exc:
+        return [f"{CATALOG_INDEX.relative_to(ROOT)} parse error: {exc}"]
+
+    if scalar(catalog.get("catalog_schema_version")) != "1":
+        errors.append("official catalog schema version must be 1")
+    if catalog.get("catalog_id") != "core.official-capability-packs":
+        errors.append("official catalog_id must be core.official-capability-packs")
+    if catalog.get("source") != "core_repo":
+        errors.append("official catalog source must be core_repo")
+
+    entries = catalog.get("entries", [])
+    if not isinstance(entries, list) or not entries:
+        errors.append("official catalog entries must be a non-empty list")
+        return errors
+
+    seen_versions: dict[tuple[str, str], str] = {}
+    for raw_entry in entries:
+        if not isinstance(raw_entry, dict):
+            errors.append("official catalog entry must be a mapping")
+            continue
+        entry = raw_entry
+        pack_id = scalar(entry.get("pack_id", "<unknown>"))
+        missing = sorted(REQUIRED_CATALOG_ENTRY_FIELDS - set(entry.keys()))
+        for field in missing:
+            errors.append(f"official catalog {pack_id} missing {field}")
+
+        if entry.get("channel") != "official":
+            errors.append(f"official catalog {pack_id} channel must be official")
+        if entry.get("catalog_status") not in CATALOG_STATUSES:
+            errors.append(f"official catalog {pack_id} invalid catalog_status {entry.get('catalog_status')}")
+        if "lifecycle_status" in entry:
+            errors.append(f"official catalog {pack_id} must use catalog_status, not lifecycle_status")
+        if entry.get("core_release_axis") != "independent":
+            errors.append(f"official catalog {pack_id} must keep pack version and Core release/tag independent")
+        if scalar(entry.get("candidate_review_packet")) != "false":
+            errors.append(f"official catalog {pack_id} must not be a candidate review packet")
+        if scalar(entry.get("release_artifact_published")) != "false":
+            errors.append(f"official catalog {pack_id} must not publish release artifacts in AF12")
+        if scalar(entry.get("authority_after_deployment")) != "selected_user_vault":
+            errors.append(f"official catalog {pack_id} must name selected User Vault authority after deployment")
+        if scalar(entry.get("private_local_evidence")) != "excluded":
+            errors.append(f"official catalog {pack_id} must exclude private/local evidence")
+
+        compatibility = entry.get("compatibility_metadata", {})
+        if not isinstance(compatibility, dict):
+            errors.append(f"official catalog {pack_id} compatibility_metadata must be a mapping")
+        else:
+            for field in sorted(REQUIRED_COMPATIBILITY_METADATA_FIELDS - set(compatibility.keys())):
+                errors.append(f"official catalog {pack_id} compatibility_metadata missing {field}")
+
+        manifest_rel = scalar(entry.get("manifest_path"))
+        manifest_path = ROOT / manifest_rel
+        if not manifest_rel or not manifest_path.exists():
+            errors.append(f"official catalog {pack_id} manifest_path missing: {manifest_rel}")
+            continue
+        manifest_hash = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+        if entry.get("manifest_sha256") != manifest_hash:
+            errors.append(f"official catalog {pack_id} manifest_sha256 mismatch")
+
+        manifest = top_level_scalars(manifest_path.read_text(encoding="utf-8"))
+        if manifest.get("pack_id") != pack_id:
+            errors.append(f"official catalog {pack_id} manifest pack_id mismatch")
+        if manifest.get("version") != scalar(entry.get("latest_version")):
+            errors.append(f"official catalog {pack_id} latest_version must match manifest version")
+        if manifest.get("lifecycle_status") not in CANONICAL_LIFECYCLE_STATUSES:
+            errors.append(f"official catalog {pack_id} manifest lifecycle_status must use canonical lifecycle namespace")
+        if manifest.get("lifecycle_status") == scalar(entry.get("catalog_status")):
+            errors.append(f"official catalog {pack_id} catalog_status must be separate from manifest lifecycle_status")
+
+        version_key = (pack_id, scalar(entry.get("latest_version")))
+        prior_hash = seen_versions.get(version_key)
+        if prior_hash and prior_hash != scalar(entry.get("manifest_sha256")):
+            errors.append(f"official catalog {pack_id} same version has conflicting manifest_sha256")
+        seen_versions[version_key] = scalar(entry.get("manifest_sha256"))
+
+        for path_field in ["changelog_path", "readme_path"]:
+            rel_path = scalar(entry.get(path_field))
+            if not rel_path or not (ROOT / rel_path).exists():
+                errors.append(f"official catalog {pack_id} missing {path_field}: {rel_path}")
+
+    catalog_text = CATALOG_INDEX.read_text(encoding="utf-8")
+    if "candidate_schema_version" in catalog_text:
+        errors.append("official catalog must not contain candidate review packet fields")
+    for forbidden in ["/Users/", "gho_", "runtime/local/", "usage/local/"]:
+        if forbidden in catalog_text:
+            errors.append(f"official catalog contains private/local marker {forbidden}")
+
+    print("official capability catalog surface: ok")
     return errors
 
 
@@ -99,6 +253,21 @@ def write_deployed_index(vault: Path) -> None:
 
 def main() -> int:
     errors: list[str] = []
+    errors.extend(validate_official_catalog())
+    errors.extend(
+        require_text(
+            CATALOG_SCHEMA,
+            [
+                "catalog_status",
+                "available | deprecated | retired | blocked",
+                "selected User Vault",
+                "Pack version and Core release/tag are independent axes",
+                "Same pack_id plus same latest_version plus different manifest_sha256 must fail closed",
+                "Candidate review packets are not official catalog entries",
+                "Current AF-12 catalog work does not publish release artifacts",
+            ],
+        )
+    )
     errors.extend(
         require_text(
             ROOT / "workflows" / "discover-capability-packs.md",
@@ -120,6 +289,8 @@ def main() -> int:
                 "scripts/manage_capability_pack_lifecycle.py",
                 "scripts/plan_capability_pack_transfer.py",
                 "writes: none",
+                "separate from the official Core catalog",
+                "cannot become an official catalog entry",
             ],
         )
     )
@@ -139,6 +310,11 @@ def main() -> int:
                 "review a pack release or version update",
                 "review exportability",
                 "review packets by default",
+                "official Core catalog",
+                "catalog_status",
+                "selected Vault remains canonical",
+                "same `pack_id` plus same pack version with",
+                "pack version and Core release/tag remain independent axes",
                 "pack identity",
                 "adopter display status",
                 "exact selected Vault write target",

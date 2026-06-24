@@ -198,6 +198,12 @@ When a later reviewed power-user step asks for a durable candidate record, write
 it using `schemas/capability-pack-candidate.schema.yaml`. That candidate record
 remains a review artifact and is still not an active pack manifest.
 
+Candidate review packets are also separate from the official Core catalog in
+`catalog/capability-packs/index.yaml`. A candidate may cite official packs as
+existing coverage or provenance, but it cannot become an official catalog entry,
+export/import/deploy input, or active pack manifest until a later reviewed
+maintainer flow creates a reviewed manifest and catalog entry.
+
 ## 7. Review Handoff
 
 Route candidates to Reviewer for false-positive and boundary review when the
