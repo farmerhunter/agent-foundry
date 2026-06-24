@@ -154,22 +154,70 @@ Capability packs are reviewed bundles that can add or change practices, assets, 
 
 Capability packs 是经过 review 的 bundles，可能新增或改变 practices、assets、generated output 和 runtime-facing behavior。
 
-Use Skill-first requests for normal work:
+For normal users, capability-pack consumption is Skill-first. The agent should
+translate your intent into the reviewed planning, apply, lifecycle, update, or
+status workflow. Raw scripts remain implementation details or advanced/debug
+commands.
+
+对 normal user 来说，capability-pack consumption 是 Skill-first。Agent 应把你的意图转换成 reviewed planning、apply、lifecycle、update 或 status workflow。Raw scripts 只作为 implementation details 或 advanced/debug commands。
+
+Power-user or transfer/debug requests remain available outside the normal-user
+consumption path: `discover capability packs`, `review capability pack lifecycle <pack-id>`,
+and `preview capability pack transfer <pack-path>`.
+These keep raw scripts behind implementation details and advanced/debug
+workflow surfaces.
+
+Use these normal-user requests for consumption flows:
 
 正常工作优先使用 Skill-first 请求：
 
 ```text
-discover capability packs
-evaluate capability pack <pack-path>
+list capability packs
+recommend capability packs for my setup
 preview capability pack deployment <pack-path>
 apply reviewed capability pack <pack-path>
-review capability pack lifecycle <pack-id>
-preview capability pack transfer <pack-path>
+verify capability pack <pack-id>
+update capability pack <pack-id-or-path>
+disable capability pack <pack-id>
 ```
 
-These requests route through the relevant Agent Foundry workflows, preserve review gates, and keep raw scripts as implementation details or advanced/debug commands.
+The user-visible report for every normal-user pack request should include:
 
-这些请求会路由到对应的 Agent Foundry workflows，保留 review gates，并把 raw scripts 作为 implementation details 或 advanced/debug commands。
+- pack identity: id, title, version, source, and whether the pack is reviewed;
+- display status: available, recommended, compatible, incompatible, deployed,
+  update available, blocked, or not installed;
+- layers inspected: Core, selected Vault, generated output, runtime receipts,
+  manual targets, or Local Private exclusions;
+- changed layers, if any;
+- `writes: none` for list, recommend, preview, verify, update comparison,
+  disable review, and transfer preview paths;
+- exact selected Vault write target for accepted apply paths;
+- next safe action;
+- rollback or defer guidance.
+
+每个 normal-user pack 请求的用户可见报告都应包含：
+
+- pack identity：id、title、version、source，以及是否 reviewed；
+- display status：available、recommended、compatible、incompatible、deployed、update available、blocked 或 not installed；
+- inspected layers：Core、selected Vault、generated output、runtime receipts、manual targets 或 Local Private exclusions；
+- changed layers，如果有；
+- list、recommend、preview、verify、update comparison、disable review 和 transfer preview 路径必须显示 `writes: none`；accepted apply 路径必须显示确切的 selected Vault write target；
+- next safe action；
+- rollback 或 defer guidance。
+
+State names in normal-user output are display, comparison/report, transfer, or
+runtime/generated statuses unless the report explicitly names a canonical
+`lifecycle_status`. Do not write `recommended`, `compatible`, `merge_required`,
+`drifted`, `generated_missing`, or similar transient terms as lifecycle values.
+
+Normal-user flows do not create packs, run candidate discovery, publish exports,
+or make maintainer release decisions. Use power-user workflows only when you
+explicitly ask to scan, propose, assemble, release, export, split, or merge
+capability packs.
+
+Normal-user output 中的 state names 默认是 display、comparison/report、transfer 或 runtime/generated statuses，除非报告明确写出 canonical `lifecycle_status`。不要把 `recommended`、`compatible`、`merge_required`、`drifted`、`generated_missing` 等 transient terms 写成 lifecycle values。
+
+Normal-user flows 不创建 packs、不运行 candidate discovery、不发布 exports，也不做 maintainer release decisions。只有当你明确要求 scan、propose、assemble、release、export、split 或 merge capability packs 时，才使用 power-user workflows。
 
 Use plan commands before apply commands when operating manually or debugging:
 
