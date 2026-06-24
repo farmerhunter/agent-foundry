@@ -14,11 +14,18 @@ For normal agent use, invoke this workflow with natural-language requests such
 as:
 
 - `discover capability packs`
+- `scan capability pack candidate boundaries`
 - `evaluate capability pack <path>`
+- `assemble capability pack draft <candidate-id>`
 
 The agent should translate those requests into the evidence-gathering sequence
 below. Raw scripts are implementation details or advanced/debug commands, not
 the primary user surface.
+
+These are power-user maintenance-level requests. They may identify taxonomy,
+versioning, distribution, privacy, or compatibility decisions, but they output
+review packets only. They must not create, activate, export, publish, or deploy
+a pack without a later reviewed step.
 
 ## Invariant
 
@@ -184,6 +191,7 @@ Reviewer should check:
 After review, Architect decides whether to:
 
 - keep the candidate as evidence only;
+- assemble a pack draft for later review;
 - create a follow-up for schema evolution;
 - create a follow-up for lifecycle design;
 - create a follow-up for privacy-safe export/import;

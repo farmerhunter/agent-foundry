@@ -219,6 +219,67 @@ Normal-user output 中的 state names 默认是 display、comparison/report、tr
 
 Normal-user flows 不创建 packs、不运行 candidate discovery、不发布 exports，也不做 maintainer release decisions。只有当你明确要求 scan、propose、assemble、release、export、split 或 merge capability packs 时，才使用 power-user workflows。
 
+## Power-User Capability Pack Maintenance / Power-User Capability Pack 维护
+
+Power-user capability-pack workflows are advanced maintenance-level workflows.
+They are available when you explicitly ask to scan, propose, evaluate,
+assemble, release, review exportability, deprecate, split, or merge capability
+packs. They do not create strict permissions or hidden access control; the
+distinction is about risk, review depth, and output shape.
+
+Power-user capability-pack workflows 是 advanced maintenance-level workflows。只有当你明确要求 scan、propose、evaluate、assemble、release、review exportability、deprecate、split 或 merge capability packs 时才使用。这里不创建 strict permissions 或 hidden access control；区别在于 risk、review depth 和 output shape。
+
+Use these advanced maintenance requests:
+
+```text
+scan capability pack candidate boundaries
+discover capability packs
+evaluate capability pack <path>
+assemble capability pack draft <candidate-id>
+review capability pack release <pack-id-or-path>
+review capability pack exportability <pack-id-or-path>
+review capability pack deprecation <pack-id>
+review capability pack split or merge <pack-id>
+```
+
+Warning: these workflows may create taxonomy, versioning, distribution,
+privacy, or compatibility decisions for review. They must not create, activate,
+export, publish, or deploy a pack without a later reviewed step.
+
+警告：这些 workflows 可能生成需要 review 的 taxonomy、versioning、distribution、privacy 或 compatibility decisions。未经后续 reviewed step，不得 create、activate、export、publish 或 deploy pack。
+
+Power-user outputs are review packets by default, not active artifacts. A review
+packet should include:
+
+- requested maintenance flow and pack or candidate identity;
+- evidence sources and authority layer;
+- proposed boundary, draft membership, version or taxonomy decision;
+- privacy, distribution, compatibility, generated, and runtime impact;
+- candidate discovery outcome, transfer/import state, comparison/report
+  classification, or canonical `lifecycle_status`, clearly labeled by
+  namespace;
+- required Reviewer, Architect, or Human gate;
+- `writes: none`;
+- next safe action and rollback or defer guidance.
+
+Power-user output 默认是 review packet，不是 active artifact。Review packet 应包含：
+
+- requested maintenance flow 以及 pack 或 candidate identity；
+- evidence sources 和 authority layer；
+- proposed boundary、draft membership、version 或 taxonomy decision；
+- privacy、distribution、compatibility、generated 和 runtime impact；
+- candidate discovery outcome、transfer/import state、comparison/report classification 或 canonical `lifecycle_status`，并清楚标出 namespace；
+- 必需的 Reviewer、Architect 或 Human gate；
+- `writes: none`；
+- next safe action 和 rollback 或 defer guidance。
+
+Candidate outcomes, split/merge outcomes, exportability findings, and release
+classifications are review/report values unless a later reviewed lifecycle step
+persists a canonical pack `lifecycle_status`. Do not treat a review packet as an
+activation, export, publication, or runtime deploy authorization.
+
+Candidate outcomes、split/merge outcomes、exportability findings 和 release classifications 默认是 review/report values，除非后续 reviewed lifecycle step 持久化 canonical pack `lifecycle_status`。不要把 review packet 当作 activation、export、publication 或 runtime deploy authorization。
+
 Use plan commands before apply commands when operating manually or debugging:
 
 手动操作或 debug 时，先使用 plan commands，再使用 apply commands：
