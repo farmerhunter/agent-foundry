@@ -110,6 +110,9 @@ requires review before activation or export.
 
 ## 4. Classify Candidate Outcome
 
+Candidate outcomes are a power-user discovery namespace. They explain whether a
+reusable boundary is worth review; they are not persisted pack lifecycle states.
+
 Use the first matching outcome:
 
 | Outcome | Use when |

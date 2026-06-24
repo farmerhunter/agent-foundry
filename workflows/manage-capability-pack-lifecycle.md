@@ -32,25 +32,39 @@ primary user surface.
 - Local-private evidence, raw logs, runtime manifests, receipts, user paths,
   secrets, and memory-system records are not pack lifecycle authority.
 
-## Lifecycle States
+## State Namespace Rule
+
+Capability-pack workflows use several state namespaces. Persisted
+`lifecycle_status` fields belong only to the canonical pack lifecycle namespace.
+Display, candidate, transfer/import, comparison/report, and runtime/generated
+statuses must be labeled as their own output types and must not be written as
+pack lifecycle values.
+
+| Namespace | Owns | Examples |
+| --- | --- | --- |
+| Pack canonical lifecycle | Manifest and deployed-pack metadata `lifecycle_status`. | `candidate`, `reviewed`, `proposed`, `active`, `exportable`, `deprecated`, `retired`, `archived`, `blocked` |
+| Adopter discovery/display status | Normal-user list/recommend/status copy. | `available`, `recommended`, `compatible`, `incompatible`, `installed`, `deployed`, `update_available`, `not_installed` |
+| Candidate discovery outcome | Power-user discovery review-list output. | `candidate`, `baseline_control`, `extend_existing`, `deferred_overlap`, `rejected_false_positive`, `blocked_policy` |
+| Transfer/import state | Export/import preview and import review state. | `preview`, `dry-run`, `proposed`, `accepted`, `rejected`, `blocked` |
+| Comparison/report classification | Update, audit, diff, and lifecycle reports. | `clean_update_available`, `merge_required`, `same_version_hash_mismatch`, `unsupported`, `stale`, `drifted` |
+| Runtime/generated status | Downstream generated output and runtime freshness. | `generated_current`, `generated_stale`, `generated_missing`, `runtime_current`, `runtime_drifted`, `manual_import_required` |
+
+## Canonical Lifecycle States
 
 | State | Meaning | Agent action | Required gate |
 | --- | --- | --- | --- |
-| `detected` | Evidence suggests a possible pack. | Gather public/sanitized evidence and score signals. | Privacy gate if private evidence is needed. |
 | `candidate` | Reviewable candidate output from discovery. | Prepare candidate packet and false-positive controls. | Reviewer/Architect review before promotion. |
+| `reviewed` | Pack snapshot or boundary passed review but is not yet proposed for deployment. | Preserve as reviewed artifact or release input. | Reviewer/Architect acceptance. |
 | `proposed` | Boundary accepted for possible deployment. | Produce dry-run plan, diff, and lifecycle impact. | Human approval before active use. |
 | `active` | Reviewed pack is deployed as an optional capability. | Report status and downstream follow-up. | Activation approval and record governance. |
 | `exportable` | Pack may be exported after privacy review. | Produce exportability status only. | Human privacy/export review; #176 owns mechanics. |
 | `deprecated` | Pack remains readable but is no longer preferred. | Warn, suggest replacement, avoid new activation. | Reviewed rationale and user-visible status. |
-| `split` | Pack boundary is divided into multiple packs. | Produce membership diff and conflict report. | Human approval with rollback/defer plan. |
-| `merged` | Pack boundary is merged into another pack. | Produce target-pack diff and conflict report. | Human approval with conflict handling. |
 | `retired` | Pack should no longer be used. | Dry-run/apply only after approval. | Human approval and practice/asset lifecycle review. |
+| `archived` | Pack is retained only for history or provenance. | Keep readable; do not recommend or newly deploy. | Reviewed archival rationale. |
 | `blocked` | Transition is unsafe or lacks evidence. | Explain blockers and write nothing. | Human correction or explicit hold. |
 
 ## Transition Gates
 
-- `detected -> candidate`: requires passing discovery authority, privacy,
-  false-positive, and bootstrap-duplicate gates. No activation or export.
 - `candidate -> proposed`: requires Reviewer boundary review and Architect
   acceptance.
 - `proposed -> active`: requires human approval of boundary, included records,
@@ -61,10 +75,10 @@ primary user surface.
   user-visible warning/status report.
 - `deprecated -> retired`: requires dry-run report, affected records, generated
   and runtime follow-up, and human approval.
-- `active/proposed -> split`: requires proposed new pack ids, before/after
+- `active/proposed -> split outcome`: requires proposed new pack ids, before/after
   membership diff, per-record hashes, conflicts, local-edit handling, generated
   and runtime follow-up, rollback/defer plan, and human approval.
-- `active/proposed -> merged`: requires target pack id, membership diff,
+- `active/proposed -> merge outcome`: requires target pack id, membership diff,
   duplicate/conflict handling, local-edit handling, generated and runtime
   follow-up, rollback/defer plan, and human approval.
 - Any transition becomes `blocked` when metadata is malformed, hashes are
@@ -110,8 +124,9 @@ primary user surface.
      --apply
    ```
 
-   `activate`, `exportable`, `deprecate`, `split`, and `merge` are review-only
-   planning surfaces in #175. They must keep `writes: none`.
+  `activate`, `exportable`, `deprecate`, `split`, and `merge` are review-only
+  planning surfaces in #175. They must keep `writes: none`. `split` and
+  `merge` report transition outcomes, not persisted lifecycle statuses.
 
 5. After an approved Vault lifecycle change, publish and inspect downstream
    state separately:
@@ -154,7 +169,7 @@ Lifecycle tooling must refuse writes and print `writes: none` when it sees:
 
 ## #176 Boundary
 
-#175 may show `exportable` as a lifecycle status and report that export review is
-required. It must not implement export/import mechanics, produce export bundles,
-or mark a pack exportable from generated/runtime evidence alone. Privacy-safe
-export/import behavior belongs to #176.
+#175 may show `exportable` as a canonical lifecycle status and report that
+export review is required. It must not implement export/import mechanics,
+produce export bundles, or mark a pack exportable from generated/runtime
+evidence alone. Privacy-safe export/import behavior belongs to #176.
