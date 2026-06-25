@@ -23,6 +23,18 @@ status visibility, and fail-closed evidence gaps. Provider integration,
 frontend workflow design, export publication, and runtime apply behavior remain
 deferred until a later reviewed issue owns them.
 
+## Use Safely
+
+This pack is optional after bootstrap and first value. Normal users should start
+with `list capability packs`, `recommend capability packs for my setup`, and
+`preview capability pack deployment <pack-path>` before any apply request.
+
+Preview, verify, update comparison, and disable review paths should report
+`writes: none`. Accepted apply paths must name the selected Vault write target.
+Generated adapters, runtime installs, raw selected Vault exports, and Local
+Private evidence remain downstream or excluded surfaces, not catalog or pack
+authority.
+
 ## Versioning
 
 Pack version `0.1.0` identifies the reviewed architecture boundary starter

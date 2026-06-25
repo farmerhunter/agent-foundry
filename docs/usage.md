@@ -219,6 +219,51 @@ Normal-user output 中的 state names 默认是 display、comparison/report、tr
 
 Normal-user flows 不创建 packs、不运行 candidate discovery、不发布 exports，也不做 maintainer release decisions。只有当你明确要求 scan、propose、assemble、release、export、split 或 merge capability packs 时，才使用 power-user workflows。
 
+## Optional First-Party Starter Packs / 可选 First-Party Starter Packs
+
+Starter packs are optional after setup and first value. Do not make a new user
+choose them before the normal harvest, refresh, or status loop works.
+
+Starter packs 是 setup 和 first value 之后的可选项。不要让新用户在正常 harvest、refresh 或 status loop 可用之前必须选择它们。
+
+The official Core catalog currently exposes:
+
+当前 official Core catalog 暴露：
+
+| Pack | Normal-user use / 普通用户用途 |
+| --- | --- |
+| `pack.bootstrap.minimal` | Minimal bootstrap capability and prerequisite for optional starter packs. / 最小 bootstrap capability，也是 optional starter packs 的前置条件。 |
+| `pack.multi-agent.optional` | GitHub issue/PR collaboration starter with durable comments, role labels, and review handoff habits. / GitHub issue/PR 协作 starter，覆盖 durable comments、role labels 和 review handoff habits。 |
+| `pack.architecture-boundary-review.starter` | Public, synthetic source-of-truth and boundary review starter. / 使用 public、synthetic examples 的 source-of-truth 和 boundary review starter。 |
+
+Use the normal-user requests in this order when evaluating a starter pack:
+
+评估 starter pack 时，按这个顺序使用 normal-user requests：
+
+```text
+list capability packs
+recommend capability packs for my setup
+preview capability pack deployment <pack-path>
+apply reviewed capability pack <pack-path>
+verify capability pack <pack-id>
+update capability pack <pack-id-or-path>
+disable capability pack <pack-id>
+```
+
+`list`, `recommend`, `preview`, `verify`, update comparison, and disable review
+paths should report `writes: none`. Accepted apply paths must name the exact
+selected Vault write target before writing. Generated adapters and runtime
+installs remain separate downstream follow-up, never catalog authority.
+
+`list`、`recommend`、`preview`、`verify`、update comparison 和 disable review 路径应报告 `writes: none`。Accepted apply 路径必须在写入前说明确切 selected Vault write target。Generated adapters 和 runtime installs 始终是独立 downstream follow-up，不能成为 catalog authority。
+
+Core catalog pages carry version, manifest hash, provenance, compatibility, and
+review evidence. Those details are for ordinary/complete review, not mandatory
+beginner onboarding. After accepted deployment, the selected User Vault remains
+canonical; Core catalog entries are discoverability metadata.
+
+Core catalog pages 保存 version、manifest hash、provenance、compatibility 和 review evidence。这些细节属于 ordinary/complete review，不是 beginner onboarding 的必选内容。Accepted deployment 后 selected User Vault 仍然是 canonical；Core catalog entries 是 discoverability metadata。
+
 ## Power-User Capability Pack Maintenance / Power-User Capability Pack 维护
 
 Power-user capability-pack workflows are advanced maintenance-level workflows.

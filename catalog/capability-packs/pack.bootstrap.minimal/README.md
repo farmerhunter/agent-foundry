@@ -19,6 +19,19 @@ carry `ASSET-META-001`; Core does not create a duplicate meta/governance
 starter pack. The runtime and generated status path remains part of
 bootstrap/status surfaces rather than a standalone capability pack.
 
+## Use Safely
+
+This pack is the baseline for optional starter packs. Normal users should ask
+for `list capability packs`, `preview capability pack deployment <pack-path>`,
+`apply reviewed capability pack <pack-path>`, `verify capability pack
+<pack-id>`, `update capability pack <pack-id-or-path>`, or `disable capability
+pack <pack-id>` before using raw scripts.
+
+Preview, verify, update comparison, and disable review paths should report
+`writes: none`. Accepted apply paths must name the selected Vault write target.
+Generated adapters and runtime installs remain downstream follow-up, not pack
+authority.
+
 ## Versioning
 
 Pack version `0.2.0` identifies the reviewed bootstrap pack contract. Core git

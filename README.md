@@ -80,6 +80,35 @@ Use short commands instead of remembering internal workflows:
 
 Detailed prompts and Chinese equivalents are in [docs/usage.md](docs/usage.md) and [docs/commands.md](docs/commands.md).
 
+## Optional Starter Packs / 可选 Starter Packs
+
+After the first-value path above works, you can ask Agent Foundry to list or
+preview optional first-party starter packs. They are not required setup choices.
+
+完成上面的 first-value path 后，可以让 Agent Foundry list 或 preview 可选 first-party starter packs。它们不是必选 setup 选项。
+
+Current official starter packs:
+
+当前 official starter packs：
+
+| Pack | Purpose / 用途 |
+| --- | --- |
+| `pack.bootstrap.minimal` | Minimal bootstrap capability; required before optional packs. / 最小 bootstrap capability；optional packs 前需要先具备它。 |
+| `pack.multi-agent.optional` | GitHub issue/PR collaboration starter. / GitHub issue/PR 协作 starter。 |
+| `pack.architecture-boundary-review.starter` | Public, synthetic architecture boundary review starter. / 使用 public、synthetic examples 的 architecture boundary review starter。 |
+
+Use Skill-facing requests first: `list capability packs`, `recommend capability packs for my setup`, `preview capability pack deployment <pack-path>`, `apply reviewed capability pack <pack-path>`, `verify capability pack <pack-id>`, `update capability pack <pack-id-or-path>`, and `disable capability pack <pack-id>`.
+
+优先使用 Skill-facing 请求：`list capability packs`、`recommend capability packs for my setup`、`preview capability pack deployment <pack-path>`、`apply reviewed capability pack <pack-path>`、`verify capability pack <pack-id>`、`update capability pack <pack-id-or-path>` 和 `disable capability pack <pack-id>`。
+
+Core catalog entries make packs discoverable, but the selected User Vault remains canonical after accepted deployment. Generated adapters, runtime installs, local receipts, and Local Private evidence remain downstream or excluded surfaces.
+
+Core catalog entries 负责 discoverability；accepted deployment 后 selected User Vault 仍然是 canonical。Generated adapters、runtime installs、local receipts 和 Local Private evidence 仍是 downstream 或 excluded surfaces。
+
+For ordinary and complete details, see [docs/usage.md](docs/usage.md), [docs/commands.md](docs/commands.md), and the catalog pages under `catalog/capability-packs/`.
+
+普通和完整细节见 [docs/usage.md](docs/usage.md)、[docs/commands.md](docs/commands.md)，以及 `catalog/capability-packs/` 下的 catalog pages。
+
 ## Design Principles
 
 - The repository is the canonical source of truth.
