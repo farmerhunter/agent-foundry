@@ -9,6 +9,64 @@ continue to exercise the same compatibility path. The pack is discoverable as a
 first-party starter, while its member records still deploy as manual-review
 candidate records in the selected User Vault.
 
+## User Value / 用户价值
+
+`pack.multi-agent.optional` helps teams use Agent Foundry with GitHub issues
+and pull requests without losing handoff context between Implementer, Reviewer,
+Architect, Coordinator, and Human decision points. Its value is repeatable
+collaboration discipline, not automatic project management.
+
+`pack.multi-agent.optional` 帮助团队把 Agent Foundry 用在 GitHub issues 和 pull
+requests 上，并在 Implementer、Reviewer、Architect、Coordinator 和 Human decision
+points 之间保留 handoff context。它的价值是可重复的协作纪律，而不是自动项目管理。
+
+## Supported Workflow / 支持的协作流程
+
+The pack supports GitHub issue/PR collaboration with role labels, durable issue
+comments, explicit Execution Contracts, dependency-gated queues, review
+handoffs, and read-only audit before write automation. It is useful when work
+must move between multiple role sessions while GitHub remains the durable source
+of truth.
+
+这个 pack 支持使用 role labels、durable issue comments、explicit Execution Contracts、
+dependency-gated queues、review handoffs，以及 write automation 前的 read-only audit
+来进行 GitHub issue/PR 协作。当工作需要在多个 role sessions 之间流转，并且 GitHub
+仍然是 durable source of truth 时，它最有用。
+
+## What Remains Manual Or Review-Gated / 仍需手动或 Review-Gated 的内容
+
+People or delegated workflow roles still decide scope, architecture direction,
+dependency release, merge authorization, issue closure, and any action that
+changes protected branches or crosses privacy/security boundaries. Project v2
+may mirror status when configured, but labels and durable comments remain the
+handoff mechanism.
+
+Scope、architecture direction、dependency release、merge authorization、issue
+closure，以及任何修改 protected branches 或跨越 privacy/security boundaries 的动作，
+仍由人或被委托的 workflow roles 决定。Project v2 可在配置后 mirror status，但 labels
+和 durable comments 仍是 handoff mechanism。
+
+## What It Does Not Automate / 不自动化什么
+
+This pack does not merge PRs, close issues, create hidden access control, apply
+runtime helpers, publish generated Skills, mutate Project v2 by default, export
+private Vault content, or treat local helper receipts as authority.
+
+这个 pack 不会 merge PRs、close issues、创建隐藏 access control、apply runtime
+helpers、publish generated Skills、默认 mutate Project v2、export private Vault
+content，也不会把 local helper receipts 当成 authority。
+
+## When To Accept / 何时接受安装
+
+Accept or install this pack when a project coordinates implementation and
+review through GitHub issues/PRs and needs durable role handoffs. Skip it when a
+project is single-user, local-only, or not ready to use GitHub labels and issue
+comments as the workflow record.
+
+当项目通过 GitHub issues/PRs 协调 implementation 和 review，并需要 durable role
+handoffs 时，接受或安装这个 pack。若项目是单人、本地-only，或尚未准备好把 GitHub
+labels 和 issue comments 作为 workflow record，可以跳过它。
+
 ## Authority
 
 - Core hosts this official catalog entry and reviewed manifest reference.

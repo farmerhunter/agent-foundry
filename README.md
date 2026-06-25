@@ -91,10 +91,10 @@ Current official starter packs:
 
 当前 official starter packs：
 
-| Pack | Purpose / 用途 |
-| --- | --- |
-| `pack.bootstrap.minimal` | Minimal bootstrap capability; required before optional packs. / 最小 bootstrap capability；optional packs 前需要先具备它。 |
-| `pack.multi-agent.optional` | GitHub issue/PR collaboration starter. / GitHub issue/PR 协作 starter。 |
+| Pack | What you get / 获得什么 | Choose it when / 适合什么情况 |
+| --- | --- | --- |
+| `pack.bootstrap.minimal` | A small baseline for safe harvest, review, refresh, status, and source-of-truth boundaries. / 用于安全 harvest、review、refresh、status 和 source-of-truth boundaries 的小型 baseline。 | Accept it for a new selected Vault or before any optional pack; it does not install runtimes or publish generated adapters by itself. / 新 selected Vault 或安装 optional pack 前接受它；它本身不会安装 runtimes 或发布 generated adapters。 |
+| `pack.multi-agent.optional` | GitHub issue/PR collaboration habits: role labels, durable comments, Execution Contracts, and review handoff. / GitHub issue/PR 协作习惯：role labels、durable comments、Execution Contracts 和 review handoff。 | Install it when you coordinate work through GitHub issues and PRs; skip it for solo local usage or projects without GitHub collaboration. / 当你通过 GitHub issues 和 PRs 协调工作时安装；纯本地单人使用或没有 GitHub 协作的项目可以跳过。 |
 
 Use Skill-facing requests first: `list capability packs`, `recommend capability packs for my setup`, `preview capability pack deployment <pack-path>`, `apply reviewed capability pack <pack-path>`, `verify capability pack <pack-id>`, `update capability pack <pack-id-or-path>`, and `disable capability pack <pack-id>`.
 
