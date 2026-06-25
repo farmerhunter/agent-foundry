@@ -23,3 +23,45 @@ entries:
     core_release_axis: independent
     candidate_review_packet: false
     release_artifact_published: false
+  - pack_id: pack.multi-agent.optional
+    title: Optional GitHub Collaboration Starter Pack
+    channel: official
+    catalog_status: available
+    latest_version: 0.2.0
+    manifest_path: fixtures/capability-packs/optional-multi-agent/manifest.yaml
+    manifest_sha256: ea14748cdf10142f37c46c9357019e162a3991afe623b20708cc7ef2a618ed58
+    compatibility_summary: "Core schema 1; Vault layout [1]; bootstrap required; selected Vault review required."
+    compatibility_metadata:
+      core_schema_version_min: 1
+      core_schema_version_max: 1
+      vault_layout_versions: [1]
+      requires_bootstrap_pack: true
+    changelog_path: catalog/capability-packs/pack.multi-agent.optional/CHANGELOG.md
+    readme_path: catalog/capability-packs/pack.multi-agent.optional/README.md
+    review_evidence: https://github.com/farmerhunter/agent-foundry/issues/253
+    authority_after_deployment: selected_user_vault
+    private_local_evidence: excluded
+    core_release_axis: independent
+    candidate_review_packet: false
+    release_artifact_published: false
+  - pack_id: pack.architecture-boundary-review.starter
+    title: Architecture Boundary Review Starter Pack
+    channel: official
+    catalog_status: available
+    latest_version: 0.1.0
+    manifest_path: fixtures/capability-packs/architecture-boundary-review/manifest.yaml
+    manifest_sha256: 1142c8fd755424fbce0aaca320702301ee7a45986b904252465d261cee1f86cb
+    compatibility_summary: "Core schema 1; Vault layout [1]; bootstrap required; public synthetic examples only."
+    compatibility_metadata:
+      core_schema_version_min: 1
+      core_schema_version_max: 1
+      vault_layout_versions: [1]
+      requires_bootstrap_pack: true
+    changelog_path: catalog/capability-packs/pack.architecture-boundary-review.starter/CHANGELOG.md
+    readme_path: catalog/capability-packs/pack.architecture-boundary-review.starter/README.md
+    review_evidence: https://github.com/farmerhunter/agent-foundry/issues/253
+    authority_after_deployment: selected_user_vault
+    private_local_evidence: excluded
+    core_release_axis: independent
+    candidate_review_packet: false
+    release_artifact_published: false

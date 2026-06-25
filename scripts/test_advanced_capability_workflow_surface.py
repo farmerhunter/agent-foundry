@@ -130,12 +130,14 @@ def validate_official_catalog() -> list[str]:
         return errors
 
     seen_versions: dict[tuple[str, str], str] = {}
+    entries_by_id: dict[str, dict[object, object]] = {}
     for raw_entry in entries:
         if not isinstance(raw_entry, dict):
             errors.append("official catalog entry must be a mapping")
             continue
         entry = raw_entry
         pack_id = scalar(entry.get("pack_id", "<unknown>"))
+        entries_by_id[pack_id] = entry
         missing = sorted(REQUIRED_CATALOG_ENTRY_FIELDS - set(entry.keys()))
         for field in missing:
             errors.append(f"official catalog {pack_id} missing {field}")
@@ -200,6 +202,59 @@ def validate_official_catalog() -> list[str]:
     for forbidden in ["/Users/", "gho_", "runtime/local/", "usage/local/"]:
         if forbidden in catalog_text:
             errors.append(f"official catalog contains private/local marker {forbidden}")
+
+    required_starter_packs = {
+        "pack.bootstrap.minimal",
+        "pack.multi-agent.optional",
+        "pack.architecture-boundary-review.starter",
+    }
+    for pack_id in sorted(required_starter_packs - set(entries_by_id)):
+        errors.append(f"official starter catalog missing {pack_id}")
+
+    bootstrap_manifest = (ROOT / "fixtures" / "capability-packs" / "bootstrap-minimal" / "manifest.yaml").read_text(
+        encoding="utf-8"
+    )
+    bootstrap_readme = (ROOT / "catalog" / "capability-packs" / "pack.bootstrap.minimal" / "README.md").read_text(
+        encoding="utf-8"
+    )
+    for snippet in ["ASSET-META-001", "runtime and generated status", "standalone capability pack"]:
+        if snippet not in bootstrap_manifest + bootstrap_readme:
+            errors.append(f"bootstrap starter catalog must preserve {snippet!r}")
+
+    multi_manifest_path = ROOT / "fixtures" / "capability-packs" / "optional-multi-agent" / "manifest.yaml"
+    multi_manifest = multi_manifest_path.read_text(encoding="utf-8")
+    multi_top = top_level_scalars(multi_manifest)
+    if multi_top.get("lifecycle_status") != "reviewed":
+        errors.append("GitHub collaboration starter manifest must be reviewed")
+    for snippet in [
+        "pack.multi-agent.optional",
+        "manual_review",
+        "selected User Vault records",
+        "Project v2 as the scheduler source of truth",
+        "project issue numbers, branch names, Project ids, and local cache files",
+    ]:
+        if snippet not in multi_manifest:
+            errors.append(f"GitHub collaboration starter missing compatibility anchor {snippet!r}")
+
+    architecture_manifest_path = (
+        ROOT / "fixtures" / "capability-packs" / "architecture-boundary-review" / "manifest.yaml"
+    )
+    architecture_manifest = architecture_manifest_path.read_text(encoding="utf-8")
+    architecture_top = top_level_scalars(architecture_manifest)
+    if architecture_top.get("lifecycle_status") != "reviewed":
+        errors.append("architecture boundary starter manifest must be reviewed")
+    for snippet in [
+        "public synthetic examples",
+        "raw selected Vault export",
+        "Generated adapter output as pack authority",
+        "Runtime receipts as pack authority",
+        "provider integration design",
+        "frontend workflow design",
+        "generated_adapter_intent: none",
+        "runtime_install: false",
+    ]:
+        if snippet not in architecture_manifest:
+            errors.append(f"architecture boundary starter missing boundary anchor {snippet!r}")
 
     print("official capability catalog surface: ok")
     return errors

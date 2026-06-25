@@ -1,0 +1,37 @@
+id: ASSET-ARCH-PACK-001
+title: Architecture Boundary Review Starter
+asset_type: skill
+status: candidate
+version: 1
+created: 2026-06-25
+updated: 2026-06-25
+purpose: Provide a review-only starter surface for public, synthetic architecture boundary checks.
+responsibility: Help a reviewer identify canonical authority, downstream projections, private evidence exclusions, and deferred implementation areas.
+non_responsibility: Does not decide architecture, mutate Vault records, publish generated adapters, apply runtime installs, or create provider/frontend implementation plans.
+inputs:
+  - public issue or PR scope
+  - proposed boundary inventory
+  - layer taxonomy notes
+  - synthetic examples
+process:
+  - List canonical and downstream layers separately.
+  - Confirm selected user state remains canonical after accepted deployment.
+  - Mark generated and runtime artifacts as downstream status evidence only.
+  - Reject private/local paths, secrets, raw session notes, and runtime receipts as Core pack authority.
+  - Return review notes and next safe action without applying changes.
+outputs:
+  - boundary inventory review packet
+  - non-authority surface list
+  - fail-closed evidence gaps
+  - deferred provider/frontend/runtime items
+canonical_practices:
+  - ARCH-PACK-001
+published_to: []
+usage_triggers:
+  - architecture boundary review
+  - source of truth inventory
+  - downstream projection audit
+success_criteria:
+  - The review packet uses only public or synthetic examples.
+  - Canonical authority remains separate from generated and runtime status.
+  - Provider and frontend details are deferred unless a later reviewed issue owns them.
