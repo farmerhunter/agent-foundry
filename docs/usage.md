@@ -328,6 +328,25 @@ Runtime files still need the normal publish, dry-run install, status, and review
 
 Runtime files 仍然需要走正常的 publish、dry-run install、status 和 reviewed apply path。ChatGPT 仍然是 manual import。
 
+## Complete And Power-User References / 完整与高级参考
+
+Use these references when ordinary daily operation is not enough. They are discoverable from normal docs, but they are not prerequisites for the beginner README path.
+
+当普通日常操作不够用时，再使用这些 reference。它们可以从普通 docs 找到，但不是 beginner README path 的前置要求。
+
+| Need | Reference | Boundary / 边界 |
+| --- | --- | --- |
+| Fresh install, runtime target changes, Trae setup, status repair, cross-machine restore | [Deployment](deployment.md) | Full deployment/runtime guide. Runtime writes still require reviewed dry-run/status and approval where needed.<br>完整 deployment/runtime guide。Runtime writes 仍需要 reviewed dry-run/status，并在需要时取得 approval。 |
+| Runtime adapter framework and Trae details | [Runtime Adapter Framework And Trae](runtime-adapter-framework-and-trae.md) | Specialized runtime reference; do not use it as beginner onboarding.<br>专门 runtime reference；不要当作 beginner onboarding。 |
+| Capability-pack maintenance, candidate discovery, export/import, split, merge, or lifecycle review | [Capability pack workflows](../workflows/discover-capability-packs.md), [Lifecycle](../workflows/manage-capability-pack-lifecycle.md), [Export/Import](../workflows/export-import-capability-packs.md) | Maintainer/reference material. Normal pack use stays in the Skill-facing requests above.<br>Maintainer/reference material。普通 pack 使用仍留在上方 Skill-facing requests。 |
+| GitHub issue, PR, Project, and role handoff helper adoption | [GitHub Collaboration Helper](../workflows/github-collaboration-helper.md), [Coordinate Agent Work](../workflows/coordinate-agent-work.md) | Adopter/power-user reference. It is not part of the first-value path.<br>Adopter/power-user reference。它不是 first-value path 的一部分。 |
+| Architecture, source-of-truth boundaries, lifecycle, governance, standards | [System Design](system-design.md), [Lifecycle Compatibility](lifecycle-compatibility.md), [Standards and Sources](standards-and-sources.md) | Complete reference/spec material.<br>完整 reference/spec material。 |
+| Roadmap, stage history, and future memory-system planning evidence | [Roadmap](roadmap.md), [Roadmap details](roadmap/), [Memory System Handoff Dump](memory-system-handoff-dump.md) | Planning/evidence docs. They should not be treated as current operating instructions or memory-system implementation authorization.<br>Planning/evidence docs。不要把它们当作当前 operating instructions 或 memory-system implementation authorization。 |
+
+Final AF12 readiness evidence should trace the beginner README path, this ordinary-user daily path, runtime/generated status and repair boundaries, normal capability-pack consumption, GitHub helper adopter reference path, and bilingual spot-checks for touched user-facing docs. That readiness evidence belongs to the final walkthrough gate, not to ordinary daily operation.
+
+最终 AF12 readiness evidence 应能追踪 beginner README path、这里的 ordinary-user daily path、runtime/generated status 和 repair boundaries、normal capability-pack consumption、GitHub helper adopter reference path，以及 touched user-facing docs 的 bilingual spot-check。该 readiness evidence 属于 final walkthrough gate，不属于普通日常操作。
+
 ## Harvest Practices / 沉淀 Practices
 
 Use this after coding, design, debugging, or coordination work when reusable lessons should become durable practices.
