@@ -95,11 +95,14 @@ Current official starter packs:
 | --- | --- |
 | `pack.bootstrap.minimal` | Minimal bootstrap capability; required before optional packs. / 最小 bootstrap capability；optional packs 前需要先具备它。 |
 | `pack.multi-agent.optional` | GitHub issue/PR collaboration starter. / GitHub issue/PR 协作 starter。 |
-| `pack.architecture-boundary-review.starter` | Public, synthetic architecture boundary review starter. / 使用 public、synthetic examples 的 architecture boundary review starter。 |
 
 Use Skill-facing requests first: `list capability packs`, `recommend capability packs for my setup`, `preview capability pack deployment <pack-path>`, `apply reviewed capability pack <pack-path>`, `verify capability pack <pack-id>`, `update capability pack <pack-id-or-path>`, and `disable capability pack <pack-id>`.
 
 优先使用 Skill-facing 请求：`list capability packs`、`recommend capability packs for my setup`、`preview capability pack deployment <pack-path>`、`apply reviewed capability pack <pack-path>`、`verify capability pack <pack-id>`、`update capability pack <pack-id-or-path>` 和 `disable capability pack <pack-id>`。
+
+Architecture-boundary and source-of-truth orientation is folded into `pack.bootstrap.minimal`; it is not a standalone current-stage starter pack.
+
+Architecture-boundary 和 source-of-truth orientation 已并入 `pack.bootstrap.minimal`；它不是当前阶段的 standalone starter pack。
 
 Core catalog entries make packs discoverable, but the selected User Vault remains canonical after accepted deployment. Generated adapters, runtime installs, local receipts, and Local Private evidence remain downstream or excluded surfaces.
 

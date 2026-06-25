@@ -206,10 +206,11 @@ def validate_official_catalog() -> list[str]:
     required_starter_packs = {
         "pack.bootstrap.minimal",
         "pack.multi-agent.optional",
-        "pack.architecture-boundary-review.starter",
     }
     for pack_id in sorted(required_starter_packs - set(entries_by_id)):
         errors.append(f"official starter catalog missing {pack_id}")
+    if "pack.architecture-boundary-review.starter" in entries_by_id:
+        errors.append("architecture boundary guidance must be folded into bootstrap, not cataloged standalone")
 
     bootstrap_manifest = (ROOT / "fixtures" / "capability-packs" / "bootstrap-minimal" / "manifest.yaml").read_text(
         encoding="utf-8"
@@ -217,7 +218,14 @@ def validate_official_catalog() -> list[str]:
     bootstrap_readme = (ROOT / "catalog" / "capability-packs" / "pack.bootstrap.minimal" / "README.md").read_text(
         encoding="utf-8"
     )
-    for snippet in ["ASSET-META-001", "runtime and generated status", "standalone capability pack"]:
+    for snippet in [
+        "ASSET-META-001",
+        "runtime and generated status",
+        "standalone capability pack",
+        "architecture boundary",
+        "Generated and Runtime downstream-status orientation",
+        "Local Private evidence exclusion",
+    ]:
         if snippet not in bootstrap_manifest + bootstrap_readme:
             errors.append(f"bootstrap starter catalog must preserve {snippet!r}")
 
@@ -236,25 +244,31 @@ def validate_official_catalog() -> list[str]:
         if snippet not in multi_manifest:
             errors.append(f"GitHub collaboration starter missing compatibility anchor {snippet!r}")
 
-    architecture_manifest_path = (
-        ROOT / "fixtures" / "capability-packs" / "architecture-boundary-review" / "manifest.yaml"
-    )
-    architecture_manifest = architecture_manifest_path.read_text(encoding="utf-8")
-    architecture_top = top_level_scalars(architecture_manifest)
-    if architecture_top.get("lifecycle_status") != "reviewed":
-        errors.append("architecture boundary starter manifest must be reviewed")
+    architecture_pack_paths = [
+        ROOT / "catalog" / "capability-packs" / "pack.architecture-boundary-review.starter",
+        ROOT / "fixtures" / "capability-packs" / "architecture-boundary-review",
+    ]
+    for path in architecture_pack_paths:
+        if path.exists() and any(child.is_file() for child in path.rglob("*")):
+            errors.append(f"architecture boundary starter must not exist as standalone current-stage pack: {path.relative_to(ROOT)}")
+
+    for path in [ROOT / "README.md", ROOT / "docs" / "usage.md", CATALOG_INDEX]:
+        text = path.read_text(encoding="utf-8")
+        if "pack.architecture-boundary-review.starter" in text:
+            errors.append(f"{path.relative_to(ROOT)} must not advertise architecture boundary as a standalone pack")
+
+    usage_text = (ROOT / "docs" / "usage.md").read_text(encoding="utf-8")
     for snippet in [
-        "public synthetic examples",
-        "raw selected Vault export",
-        "Generated adapter output as pack authority",
-        "Runtime receipts as pack authority",
-        "provider integration design",
-        "frontend workflow design",
-        "generated_adapter_intent: none",
-        "runtime_install: false",
+        "First-Party Pack Selection Principles",
+        "independent user value beyond bootstrap",
+        "cohesive reusable goal",
+        "thin checklist",
+        "selected User Vault remains canonical",
+        "Generated, Runtime, and Local Private artifacts cannot be pack authority",
+        "Provider, frontend, private-project",
     ]:
-        if snippet not in architecture_manifest:
-            errors.append(f"architecture boundary starter missing boundary anchor {snippet!r}")
+        if snippet not in usage_text:
+            errors.append(f"docs/usage.md missing first-party selection principle {snippet!r}")
 
     print("official capability catalog surface: ok")
     return errors
