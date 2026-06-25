@@ -41,6 +41,10 @@ The commands below are secondary. Use them when you explicitly need power-user m
 
 下面的命令是 secondary。只有在你明确需要 power-user maintenance、transfer review、runtime repair、import review 或 deterministic CLI/debug evidence 时再使用。
 
+For complete reference material, use the complete/power-user reference map in [Usage](usage.md), [Deployment](deployment.md), and the relevant workflow docs. Do not treat this section as the beginner or ordinary-user first path.
+
+完整 reference material 请看 [Usage](usage.md) 中的 complete/power-user reference map、[Deployment](deployment.md) 和相关 workflow docs。不要把本节当作 beginner 或 ordinary-user first path。
+
 | Command | 中文 | Meaning / 说明 |
 |---|---|---|
 | `discover capability packs` | `发现 capability pack` | Power-user diagnostic flow: find higher-level reusable capability bundles and produce candidates only.<br>power-user diagnostic flow：发现更高层的 reusable capability bundle；只产出 candidates。 |

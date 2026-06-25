@@ -156,16 +156,26 @@ DeepSeek, MiniMax, and similar model providers are treated as underlying models 
 
 ## Documentation / 文档入口
 
-Start with task-oriented docs, then use complete references only when you need them.
+Start with the tier that matches your task, then use complete references only when you need them.
 
-先看 task-oriented docs；只有需要时再进入完整 reference。
+先看与你任务匹配的层级；只有需要时再进入完整 reference。
 
-- [Usage](docs/usage.md): ordinary daily operation, first maintenance loops, safe approvals, and normal capability-pack use.
-- [Commands](docs/commands.md): short Skill-facing intents and CLI fallback reference.
-- [Deployment](docs/deployment.md): fresh install, runtime target changes, Trae setup, sync, status, repair, and cross-machine restore.
-- [Philosophy](docs/philosophy.md): why this project exists.
-- [System Design](docs/system-design.md): complete architecture, boundaries, lifecycle, and governance reference.
-- [Lifecycle Compatibility](docs/lifecycle-compatibility.md): how the full loop maps across agent systems.
+| Tier | Start here | When to use it | 中文 |
+| --- | --- | --- | --- |
+| Beginner / first value | This README | Minimal onboarding, one representative harvest/review scenario, visible outcome, verification, and next safe step. | 新手 first value：最小 onboarding、一个 harvest/review 场景、可见结果、验证和下一步。 |
+| Ordinary daily operation | [Usage](docs/usage.md), [Commands](docs/commands.md) | Daily status, refresh, harvest, review, publish, normal runtime/generated checks, and normal capability-pack consumption. | 普通日常：status、refresh、harvest、review、publish、runtime/generated 检查和普通 capability-pack 使用。 |
+| Complete / power-user reference | [Deployment](docs/deployment.md), [System Design](docs/system-design.md), [Lifecycle Compatibility](docs/lifecycle-compatibility.md) | Full runtime setup/repair, architecture boundaries, lifecycle/governance, advanced/debug workflows, and maintainer decisions. | 完整/高级参考：runtime setup/repair、architecture boundaries、lifecycle/governance、advanced/debug workflows 和 maintainer decisions。 |
+
+Additional references:
+
+补充参考：
+
 - [Offline Sync](docs/offline-sync.md): snapshot and remote sync strategy.
-- [Roadmap](docs/roadmap.md): project planning and milestone history.
+- [Runtime Adapter Framework And Trae](docs/runtime-adapter-framework-and-trae.md): runtime adapter framework and Trae support reference.
 - [Standards and Sources](docs/standards-and-sources.md): external conventions and adapter standards.
+- [Roadmap](docs/roadmap.md): project planning and milestone history.
+- [Philosophy](docs/philosophy.md): why this project exists.
+
+Planning/evidence docs such as [Memory System Handoff Dump](docs/memory-system-handoff-dump.md) are not beginner or ordinary-user operating guides.
+
+[Memory System Handoff Dump](docs/memory-system-handoff-dump.md) 等 planning/evidence docs 不是 beginner 或 ordinary-user operating guides。

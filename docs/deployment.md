@@ -4,6 +4,10 @@ Agent Foundry is local-first. Core tooling, User Vault records, generated output
 
 Agent Foundry 是 local-first 系统。Core tooling、User Vault records、generated output、runtime receipts 和已安装的 runtime files 是不同层。
 
+Use this as the complete deployment/runtime/status/repair guide. For ordinary daily operation, start with [Usage](usage.md) and [Commands](commands.md); return here when you need full install, runtime target changes, Trae setup, repair, or cross-machine restore.
+
+本文件是完整 deployment/runtime/status/repair guide。普通日常操作先看 [Usage](usage.md) 和 [Commands](commands.md)；需要完整安装、runtime target changes、Trae setup、repair 或 cross-machine restore 时再回到这里。
+
 ## Layers / 分层
 
 - Core checkout: public repo with `workflows/`, `schemas/`, `scripts/`, `templates/`, `docs/`, adapter profiles, runtime templates, and validation tooling.
