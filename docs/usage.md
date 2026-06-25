@@ -80,17 +80,27 @@ Recreate local state from Core plus the selected Vault, then verify with `sync_s
 
 ## Daily Workflow / 日常流程
 
-Use `refresh practices and assets` at the start of a session, after switching machines, or when local agent rules may be stale.
+Daily operation should start from what you want done, not from the script that might implement it. Ask the agent in natural language, then review the visible outcome before approving durable changes.
 
-在 session 开始、切换机器后，或本地 agent rules 可能 stale 时，使用 `refresh practices and assets`。
+日常操作应从你的意图开始，而不是从可能实现它的 script 开始。用自然语言告诉 agent 目标，然后先 review 可见结果，再批准 durable changes。
 
-Use `check Agent Foundry status` or `python3 scripts/sync_status.py` when you only need a read-only answer to whether this machine is current.
+Use this ordinary loop:
 
-只需要 read-only 检查这台机器是否 current 时，使用 `check Agent Foundry status` 或 `python3 scripts/sync_status.py`。
+普通日常 loop：
 
-Use `harvest practices` after a session when you want to preserve reusable lessons.
+1. Start with `check Agent Foundry status` when you need a read-only answer about Core, selected Vault, generated output, runtime receipts, or manual targets.
+2. Use `refresh practices and assets` at the start of a session, after switching machines, or when local agent rules may be stale.
+3. Use `harvest practices` after real work when you want to preserve reusable lessons.
+4. Review the numbered candidate list. Approve only the items you want promoted or merged.
+5. After approval, expect selected Vault records, indexes, and relevant generated adapters to change; runtime writes still follow the reviewed status or install path.
+6. Run `check Agent Foundry status` again when you need the next safe action or troubleshooting boundary.
 
-想在一次 session 后沉淀可复用经验时，使用 `harvest practices`。
+1. 需要 read-only 了解 Core、selected Vault、generated output、runtime receipts 或 manual targets 状态时，先用 `check Agent Foundry status`。
+2. 在 session 开始、切换机器后，或本地 agent rules 可能 stale 时，使用 `refresh practices and assets`。
+3. 完成真实工作并想沉淀可复用经验时，使用 `harvest practices`。
+4. Review 编号 candidate list。只批准你想 promote 或 merge 的项目。
+5. 批准后，预期 selected Vault records、indexes 和相关 generated adapters 会变化；runtime writes 仍走 reviewed status 或 install path。
+6. 需要 next safe action 或排查边界时，再运行 `check Agent Foundry status`。
 
 Use `discover assets` when repeated manual work should become a reusable skill, subagent, automation, or extension.
 
@@ -99,6 +109,14 @@ Use `discover assets` when repeated manual work should become a reusable skill, 
 Use `review practices` and `review assets` periodically to prevent skill rot and asset rot.
 
 定期使用 `review practices` 和 `review assets`，避免 skill rot 和 asset rot。
+
+For normal capability-pack use, stay with the Skill-facing requests in [Capability Pack Safety](#capability-pack-safety--capability-pack-安全规则). Do not run candidate discovery, release review, split, merge, export, or transfer workflows unless you explicitly want a power-user maintenance review packet.
+
+普通 capability-pack 使用请留在 [Capability Pack Safety](#capability-pack-safety--capability-pack-安全规则) 中的 Skill-facing requests。除非你明确需要 power-user maintenance review packet，否则不要运行 candidate discovery、release review、split、merge、export 或 transfer workflows。
+
+Raw CLI commands are secondary. Use them when the agent asks for a deterministic verification command, when you are debugging, or when [Deployment](deployment.md) tells you to operate runtime/install state directly.
+
+Raw CLI commands 是 secondary。只有当 agent 要求 deterministic verification command、你正在 debug，或 [Deployment](deployment.md) 要求你直接处理 runtime/install state 时再使用。
 
 ## Refresh Practices And Assets / 刷新 Practices 和 Assets
 
@@ -126,6 +144,10 @@ Expected behavior:
 - Report current commit, unpushed work, generated output state, runtime receipts, and updated runtimes.
 - 汇报 current commit、未 push 工作、generated output state、runtime receipts 和已更新 runtimes。
 
+If refresh reports generated output as stale, the normal next step is adapter publish through the reviewed path. If it reports runtime drift, read the status output first; runtime install or repair is a separate step, not an implicit side effect of harvest.
+
+如果 refresh 报告 generated output stale，普通 next step 是通过 reviewed path publish adapters。如果报告 runtime drift，先阅读 status output；runtime install 或 repair 是单独步骤，不是 harvest 的隐式副作用。
+
 ## Status And Drift / Status 和 Drift
 
 Run status before applying runtime writes, after long idle periods, after switching machines, or when a rule appears not to affect an agent.
@@ -147,6 +169,10 @@ If generated output is missing or stale, publish adapters first. If runtime rece
 Do not repair runtime drift by editing Vault records.
 
 不要通过编辑 Vault records 来修复 runtime drift。
+
+For runtime target changes, Trae setup, cross-machine restore, or manual target repair, escalate to [Deployment](deployment.md). For complete architecture and governance references, use [System Design](system-design.md) and [Lifecycle Compatibility](lifecycle-compatibility.md).
+
+需要 runtime target changes、Trae setup、cross-machine restore 或 manual target repair 时，升级查看 [Deployment](deployment.md)。需要完整 architecture 和 governance reference 时，查看 [System Design](system-design.md) 与 [Lifecycle Compatibility](lifecycle-compatibility.md)。
 
 ## Capability Pack Safety / Capability Pack 安全规则
 
