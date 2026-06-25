@@ -1,27 +1,27 @@
 manifest_schema_version: 1
 pack_id: pack.multi-agent.optional
 title: Optional Multi-Agent Collaboration Pack
-description: Candidate optional capability snapshot for role-generic GitHub multi-agent coordination helpers.
-lifecycle_status: candidate
+description: Reviewed optional first-party starter pack for role-generic GitHub issue and PR collaboration helpers.
+lifecycle_status: reviewed
 version: 0.2.0
 exported_at: 2026-06-12
 distribution_type: optional_capability
-source_provenance: "Agent Foundry public Core fixture for issue #79; Tiny IPA helper work used as evidence only."
+source_provenance: "Agent Foundry public Core fixture reviewed through AF12-3 issue #253."
 maintainer_contact: "https://github.com/farmerhunter/agent-foundry"
 license: "repository license"
 sensitivity: public
-review_state: accepted
+review_state: reviewed
 
 pack_contract:
-  promised_use_case: "Help a project operate GitHub issues, PRs, labels, comments, and optional Project status as a lightweight multi-agent scheduler."
+  promised_use_case: "Help a project operate GitHub issues, PRs, labels, comments, and optional visual status mirrors as a lightweight multi-agent scheduler."
   deployment_role: "optional user-selected capability after bootstrap"
   source_authority_after_deployment: "selected User Vault records"
   non_authority_boundaries: [generated adapters are downstream only, runtime installs are downstream only, pack staging is transfer evidence only, Core fixtures are schema and test evidence only]
 
 evidence_sources:
-  - "Tiny IPA tools/agents helper suite"
-  - "Tiny IPA role-generic agent helper design notes"
-  - "Agent Foundry #53 executable helper boundary"
+  - "Agent Foundry issue 252 public starter-pack selection decision"
+  - "Agent Foundry issue 253 public starter-pack implementation review"
+  - "Agent Foundry public first-party starter-pack review"
 
 export_policy:
   exportability: review_required
@@ -41,14 +41,7 @@ lifecycle_policy:
   deprecation_behavior: review_required
   update_behavior: reviewed_diff_required
 
-candidate_provenance:
-  review_only: true
-  candidate_ids: [AF9-optional-multi-agent]
-  canonical: false
-  activation_input: false
-  export_input: false
-
-candidate_contents:
+starter_contents:
   practices:
     - "role-generic needs:<role> routing"
     - "durable pickup and handoff comments"
@@ -74,7 +67,7 @@ candidate_contents:
     - "gh-retry"
     - "role routing library and config"
 
-project_local_overlays:
+excluded_project_local_overlays:
   - "GH_REPO default repository"
   - "GitHub Project ids, field ids, and status option ids"
   - "Roadmap Status mapping"
@@ -82,7 +75,7 @@ project_local_overlays:
   - "Project cache paths"
 
 rejected_as_pack:
-  - "Tiny IPA issue numbers, branch names, Project ids, and local cache files"
+  - "project issue numbers, branch names, Project ids, and local cache files"
   - "Project v2 as the scheduler source of truth"
   - "mutating apply behavior before managed helper install exists"
   - "execution from product project paths, pack staging, or canonical Vault payload paths"

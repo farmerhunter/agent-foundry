@@ -1,0 +1,107 @@
+manifest_schema_version: 1
+pack_id: pack.architecture-boundary-review.starter
+title: Architecture Boundary Review Starter Pack
+description: Reviewed optional first-party starter pack for public, synthetic architecture boundary review.
+lifecycle_status: reviewed
+version: 0.1.0
+exported_at: 2026-06-25
+distribution_type: optional_capability
+source_provenance: "Agent Foundry public Core fixture reviewed through AF12-3 issue #253."
+maintainer_contact: "https://github.com/farmerhunter/agent-foundry"
+license: "repository license"
+sensitivity: public
+review_state: reviewed
+
+pack_contract:
+  promised_use_case: "Help reviewers inspect canonical authority, generated/runtime downstream status, and private evidence exclusions using public synthetic examples."
+  deployment_role: "optional user-selected capability after bootstrap"
+  source_authority_after_deployment: "selected User Vault records"
+  non_authority_boundaries: [generated adapters are downstream only, runtime installs are downstream only, private Vault exports are excluded, Core fixtures are schema and review evidence only]
+
+evidence_sources:
+  - "Agent Foundry issue 252 public starter-pack selection decision"
+  - "Agent Foundry issue 253 public starter-pack implementation review"
+  - "Agent Foundry public first-party starter-pack review"
+
+export_policy:
+  exportability: review_required
+  privacy_class: sanitized
+  excluded_material: [private Vault content, local machine paths, runtime receipts, generated adapter output, raw session notes, provider credentials, frontend screenshots with private data]
+  review_required: true
+
+runtime_projection:
+  downstream_only: true
+  generated_adapter_intent: none
+  runtime_install: false
+  authority: downstream_only
+
+lifecycle_policy:
+  split_behavior: review_required
+  merge_behavior: review_required
+  deprecation_behavior: review_required
+  update_behavior: reviewed_diff_required
+
+starter_contents:
+  practices:
+    - "source-of-truth boundary inventory"
+    - "generated and runtime downstream status separation"
+    - "private/local evidence exclusion"
+  assets:
+    - "architecture boundary review starter skill"
+  synthetic_examples:
+    - "selected user state as canonical authority"
+    - "generated adapter files as downstream projections"
+    - "runtime receipts as local status evidence"
+  deferred_scope:
+    - "provider integration design"
+    - "frontend workflow design"
+    - "runtime apply implementation"
+
+rejected_as_pack:
+  - "raw selected Vault export"
+  - "Generated adapter output as pack authority"
+  - "Runtime receipts as pack authority"
+  - "private project architecture notes"
+  - "provider or frontend implementation decisions"
+
+compatibility:
+  core_schema_version_min: 1
+  core_schema_version_max: 1
+  vault_layout_versions: [1]
+  requires_bootstrap_pack: true
+
+included_records:
+  - id: ARCH-PACK-001
+    kind: practice
+    lifecycle_status: candidate
+    path: records/practices/ARCH-PACK-001-boundary-inventory.md
+    source_version: 1
+    content_sha256: "13bb310f7367ef512ea93655e8ab5ed15deea382336c508bf7f240df18654fe4"
+    destination_layer: canonical_vault_record
+    membership_role: optional_member
+    activation_default: manual_review
+    import_action: create_or_review_update
+  - id: ASSET-ARCH-PACK-001
+    kind: asset
+    lifecycle_status: candidate
+    path: records/assets/ASSET-ARCH-PACK-001-boundary-review-starter.asset.yaml
+    source_version: 1
+    content_sha256: "e651291d4038929b9a20df378627992175b605db2ba4d705062b0ccf4d5bc2a7"
+    destination_layer: canonical_vault_record
+    membership_role: optional_member
+    activation_default: manual_review
+    import_action: create_or_review_update
+
+executable_payloads: []
+
+conflict_policy:
+  id_collision: fail_closed
+  same_version_hash_mismatch: fail_closed
+  newer_version_update: reviewed_diff_required
+  local_edit_behavior: preserve_vault_and_propose_merge
+  rollback_notes: "Keep selected Vault edits canonical; remove generated/runtime copies only through later reviewed receipts and repair flows."
+
+integrity:
+  digest_algorithm: sha256
+  manifest_paths_are_relative: true
+  private_vault_content: excluded

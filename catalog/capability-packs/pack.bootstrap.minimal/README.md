@@ -14,6 +14,11 @@ that manifest by SHA-256 in `catalog/capability-packs/index.yaml`.
 - Private Vault evidence, local machine paths, runtime manifests, receipts,
   secrets, raw sessions, and usage rows are excluded.
 
+AF12-3 keeps bootstrap as the only mandatory starter pack. It continues to
+carry `ASSET-META-001`; Core does not create a duplicate meta/governance
+starter pack. The runtime and generated status path remains part of
+bootstrap/status surfaces rather than a standalone capability pack.
+
 ## Versioning
 
 Pack version `0.2.0` identifies the reviewed bootstrap pack contract. Core git
@@ -28,3 +33,4 @@ Review evidence:
 - https://github.com/farmerhunter/agent-foundry/issues/232#issuecomment-4787766294
 - https://github.com/farmerhunter/agent-foundry/issues/232#issuecomment-4787780757
 - https://github.com/farmerhunter/agent-foundry/issues/232#issuecomment-4787793177
+- https://github.com/farmerhunter/agent-foundry/issues/253
