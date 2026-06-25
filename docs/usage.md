@@ -234,7 +234,12 @@ The official Core catalog currently exposes:
 | --- | --- |
 | `pack.bootstrap.minimal` | Minimal bootstrap capability and prerequisite for optional starter packs. / 最小 bootstrap capability，也是 optional starter packs 的前置条件。 |
 | `pack.multi-agent.optional` | GitHub issue/PR collaboration starter with durable comments, role labels, and review handoff habits. / GitHub issue/PR 协作 starter，覆盖 durable comments、role labels 和 review handoff habits。 |
-| `pack.architecture-boundary-review.starter` | Public, synthetic source-of-truth and boundary review starter. / 使用 public、synthetic examples 的 source-of-truth 和 boundary review starter。 |
+
+Architecture-boundary, source-of-truth, Generated/Runtime downstream, and Local
+Private evidence-exclusion guidance belongs in `pack.bootstrap.minimal` at the
+current stage. It is not a standalone optional starter pack.
+
+Architecture-boundary、source-of-truth、Generated/Runtime downstream 和 Local Private evidence-exclusion guidance 当前阶段属于 `pack.bootstrap.minimal`，不是 standalone optional starter pack。
 
 Use the normal-user requests in this order when evaluating a starter pack:
 
@@ -263,6 +268,28 @@ beginner onboarding. After accepted deployment, the selected User Vault remains
 canonical; Core catalog entries are discoverability metadata.
 
 Core catalog pages 保存 version、manifest hash、provenance、compatibility 和 review evidence。这些细节属于 ordinary/complete review，不是 beginner onboarding 的必选内容。Accepted deployment 后 selected User Vault 仍然是 canonical；Core catalog entries 是 discoverability metadata。
+
+### First-Party Pack Selection Principles / First-Party Pack 选择原则
+
+A first-party Core capability pack should be standalone only when it has
+independent user value beyond bootstrap, a cohesive reusable goal, enough mature
+payload beyond a thin checklist, clear audience and lifecycle behavior, low
+coupling to mandatory bootstrap/governance behavior, and public-safe sanitized
+evidence.
+
+First-party Core capability pack 只有在具备 bootstrap 之外的独立用户价值、cohesive reusable goal、超过 thin checklist 的成熟 payload、清晰 audience 和 lifecycle behavior、对 mandatory bootstrap/governance behavior 的低耦合，以及 public-safe sanitized evidence 时，才应成为 standalone pack。
+
+After deployment, the selected User Vault remains canonical. `recommend`,
+`preview`, `verify`, `update`, and `disable` surfaces are read-only unless a
+later reviewed apply step is accepted. Generated, Runtime, and Local Private artifacts cannot be pack authority.
+
+Deployment 后 selected User Vault 仍然是 canonical。`recommend`、`preview`、`verify`、`update` 和 `disable` surface 默认 read-only，除非后续 reviewed apply step 被接受。Generated、Runtime 和 Local Private artifacts 不能成为 pack authority。
+
+Provider, frontend, private-project, raw selected Vault export, Generated, and
+Runtime candidates stay deferred or rejected unless a later issue defines safe
+public fixtures and review gates.
+
+Provider、frontend、private-project、raw selected Vault export、Generated 和 Runtime candidates 需要继续 defer 或 reject，除非后续 issue 定义 safe public fixtures 和 review gates。
 
 ## Power-User Capability Pack Maintenance / Power-User Capability Pack 维护
 

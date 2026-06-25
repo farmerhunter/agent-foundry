@@ -19,19 +19,21 @@ compatibility:
   requires_bootstrap_pack: false
 
 selection_review:
-  rationale: "Provide the smallest usable blank-Vault baseline: bootstrap orientation plus the public Practice Harvester asset and its canonical meta, governance, and runtime practices."
+  rationale: "Provide the smallest usable blank-Vault baseline: bootstrap orientation plus the public Practice Harvester asset and its canonical meta, governance, runtime, and source-of-truth boundary practices."
   included_groups:
     - bootstrap orientation and status records
     - Practice Harvester skill asset
     - meta practices required for harvest, asset discovery, import review, dedupe, and adapter publishing
-    - governance practices required for source-of-truth and maintainability decisions
+    - governance practices required for source-of-truth, architecture boundary, and maintainability decisions
     - runtime practices required for root, adapter, sync, and privacy boundaries
+    - Generated and Runtime downstream-status orientation plus Local Private evidence exclusion
   excluded_groups:
     - optional multi-agent collaboration records
-    - architecture and provider-integration records
+    - standalone architecture-boundary optional pack records
+    - provider-integration and frontend workflow records
     - product-project-specific records
     - raw maintainer usage evidence
-    - private paths, runtime manifests, and local deployment receipts
+    - private paths, raw selected Vault exports, runtime manifests, generated adapter output, and local deployment receipts
   adapter_impact: "After deployment and refresh, generated runtime outputs expose ASSET-META-001, ASSET-BOOT-001, and the included active practices only."
   runtime_impact: "No runtime files are changed by deploying the pack; runtime installation remains a separate refresh/install step."
 

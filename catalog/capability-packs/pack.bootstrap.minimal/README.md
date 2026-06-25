@@ -19,6 +19,12 @@ carry `ASSET-META-001`; Core does not create a duplicate meta/governance
 starter pack. The runtime and generated status path remains part of
 bootstrap/status surfaces rather than a standalone capability pack.
 
+It also carries current-stage architecture-boundary orientation: Core is public
+catalog and tooling, the selected User Vault is canonical after accepted
+deployment, Generated and Runtime surfaces are downstream status or install
+outputs, and Local Private evidence is excluded. That guidance is bootstrap and
+governance behavior, not a standalone optional pack.
+
 ## Use Safely
 
 This pack is the baseline for optional starter packs. Normal users should ask
