@@ -28,6 +28,17 @@ Project v2 status may be a configured visual mirror, but it is not the scheduler
 source of truth. Runtime helper install, generated Skill publish, and mutating
 automation remain deferred to later reviewed workflows.
 
+## Use Safely
+
+This pack is optional after bootstrap and first value. Normal users should start
+with `list capability packs`, `recommend capability packs for my setup`, and
+`preview capability pack deployment <pack-path>` before any apply request.
+
+Preview, verify, update comparison, and disable review paths should report
+`writes: none`. Accepted apply paths must name the selected Vault write target.
+Generated adapters, runtime installs, Project status mirrors, and local helper
+receipts remain downstream status surfaces, not catalog or pack authority.
+
 ## Versioning
 
 Pack version `0.2.0` identifies the reviewed GitHub collaboration starter
