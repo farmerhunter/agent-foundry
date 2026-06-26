@@ -918,6 +918,27 @@ def comparison_telemetry_block(args: argparse.Namespace) -> str:
     user_visible_scope: {str(args.user_visible_scope).lower()}
     risk_class: {args.risk_class}
     human_gate_count: {args.human_gate_count}
+  instrumentation:
+    observed_counter_available: {str(args.observed_counter_available).lower()}
+    observed_counter_source: "{args.observed_counter_source}"
+    elapsed_time_available: {str(args.elapsed_time_available).lower()}
+    elapsed_time_source: "{args.elapsed_time_source}"
+    github_api_read_attempts: "{args.github_api_read_attempts}"
+    github_api_failures: "{args.github_api_failures}"
+    project_read_attempts: "{args.project_read_attempts}"
+    project_write_attempts: "{args.project_write_attempts}"
+    fallback_review_used: {str(args.fallback_review_used).lower()}
+    fallback_review_reason: "{args.fallback_review_reason}"
+    hdc_superseded_count: {args.hdc_superseded_count}
+    label_cleanup_count: {args.label_cleanup_count}
+    source_threads_count: "{args.source_threads_count}"
+    dispatch_mechanisms: "{args.dispatch_mechanisms}"
+    durable_links_count:
+      issues: "{args.durable_issue_links}"
+      pull_requests: "{args.durable_pr_links}"
+      comments: "{args.durable_comment_links}"
+    closure_sync_passes: {args.closure_sync_passes}
+    stale_state_repairs: {args.stale_state_repairs}
   single_agent_baseline:
     source: {args.single_agent_source}
     transitions: {single_agent_transitions}
@@ -1163,6 +1184,25 @@ def add_comparison_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--user-visible-scope", action="store_true")
     parser.add_argument("--risk-class", choices=["low", "medium", "high", "mixed"], default="medium")
     parser.add_argument("--human-gate-count", type=int, default=0)
+    parser.add_argument("--observed-counter-available", action="store_true")
+    parser.add_argument("--observed-counter-source", default="not_available")
+    parser.add_argument("--elapsed-time-available", action="store_true")
+    parser.add_argument("--elapsed-time-source", default="not_available")
+    parser.add_argument("--github-api-read-attempts", default="unknown")
+    parser.add_argument("--github-api-failures", default="unknown")
+    parser.add_argument("--project-read-attempts", default="unknown")
+    parser.add_argument("--project-write-attempts", default="unknown")
+    parser.add_argument("--fallback-review-used", action="store_true")
+    parser.add_argument("--fallback-review-reason", default="not_available")
+    parser.add_argument("--hdc-superseded-count", type=int, default=0)
+    parser.add_argument("--label-cleanup-count", type=int, default=0)
+    parser.add_argument("--source-threads-count", default="unknown")
+    parser.add_argument("--dispatch-mechanisms", default="unknown")
+    parser.add_argument("--durable-issue-links", default="unknown")
+    parser.add_argument("--durable-pr-links", default="unknown")
+    parser.add_argument("--durable-comment-links", default="unknown")
+    parser.add_argument("--closure-sync-passes", type=int, default=0)
+    parser.add_argument("--stale-state-repairs", type=int, default=0)
     parser.add_argument("--single-agent-source", choices=["observed", "estimated", "unavailable"], default="estimated")
     parser.add_argument("--single-agent-transitions", type=int, default=1)
     parser.add_argument("--single-agent-none-rehydrates", type=int, default=1)

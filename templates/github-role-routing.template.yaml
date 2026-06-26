@@ -68,10 +68,30 @@ telemetry:
   required_for_meaningful_transitions: true
   workflow: "workflows/coordinate-agent-work.md"
   supports_workflow_comparison: true
+  supports_improved_pilot_instrumentation: true
   comparison_modes:
     - single_agent_baseline
     - unoptimized_collaboration_counterfactual
     - optimized_collaboration_observed
+  next_pilot_fields:
+    observed_counter_available: optional
+    observed_counter_source: optional
+    elapsed_time_available: optional
+    elapsed_time_source: optional
+    github_api_read_attempts: optional
+    github_api_failures: optional
+    project_read_attempts: optional
+    project_write_attempts: optional
+    fallback_review_used: optional
+    fallback_review_reason: optional
+    hdc_superseded_count: optional
+    label_cleanup_count: optional
+    source_threads_count: optional
+    dispatch_mechanism: optional
+    durable_links_count: optional
+    closure_sync_passes: optional
+    stale_state_repairs: optional
+  unknown_value_policy: "use unknown or not_available instead of guessing"
   ledger_parent_issue: "<parent-issue-number>"
   skip_rule: "only trivial comments may skip telemetry with an explicit reason"
 

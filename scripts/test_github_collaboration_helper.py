@@ -503,6 +503,43 @@ def main() -> int:
         )
         errors.extend(
             expect_ok(
+                "comparison-draft-instrumentation-defaults",
+                run(["comparison-draft", "--subject", "AF10 #264 instrumentation defaults"], base),
+                "github_api_read_attempts: \"unknown\"",
+            )
+        )
+        errors.extend(
+            expect_ok(
+                "comparison-draft-instrumentation-boundaries",
+                run(["comparison-draft", "--subject", "AF10 #264 instrumentation defaults"], base),
+                "observed_counter_source: \"not_available\"",
+            )
+        )
+        errors.extend(
+            expect_ok(
+                "comparison-draft-fallback-review",
+                run(
+                    [
+                        "comparison-draft",
+                        "--subject",
+                        "AF10 #264 fallback review",
+                        "--fallback-review-used",
+                        "--fallback-review-reason",
+                        "reviewer_thread_unavailable",
+                        "--project-read-attempts",
+                        "3",
+                        "--github-api-failures",
+                        "2",
+                        "--durable-comment-links",
+                        "5",
+                    ],
+                    base,
+                ),
+                "fallback_review_reason: \"reviewer_thread_unavailable\"",
+            )
+        )
+        errors.extend(
+            expect_ok(
                 "comparison-draft-three-modes",
                 run(["comparison-draft", "--subject", "AF10 #215"], base),
                 "unoptimized_collaboration_counterfactual:",
