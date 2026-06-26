@@ -1,8 +1,8 @@
 # Agent Foundry Roadmap
 
 Status: planning document
-Updated: 2026-06-20
-Scope: Agent Foundry productization, runtime adapter framework, Trae support, capability-system hardening, repository hygiene, role-orchestration optimization, and memory-system readiness.
+Updated: 2026-06-26
+Scope: Agent Foundry productization, runtime adapter framework, Trae support, capability-system hardening, capability-pack UX, first-party starter packs, role-orchestration optimization, and memory-system readiness.
 
 ## Purpose
 
@@ -80,11 +80,12 @@ Agent Foundry should use maturity stages for planning and release versions for d
 | AF-8 | Capability System Hardening | The post-AF6 capability system is exercised against realistic multi-user, multi-machine, multi-runtime, long-running-agent, drift, restore, parser/schema, and lifecycle edge cases. | Capability-system boundary scenarios are validated or improved through temp fixtures, status/repair UX, Project scheduler state, and safe runtime/Vault boundaries. |
 | AF-9 | Advanced Capability Pack Discovery and Lifecycle | Capability packs can be recognized, maintained, exported, and optimized as higher-level reusable bundles after the basic pack lifecycle is stable and hardened. | Emergent capability-pack discovery and export/update automation can be designed without weakening Core/Vault authority, runtime freshness, or reviewed pack deployment. |
 | AF-10 | Coordinator Workflow Optimization | Multi-thread role orchestration, rehydration, GitHub state synchronization, Human Decision Contracts, and Project/Roadmap coherence are measured and optimized before memory-system planning expands the workflow surface. AF10 is intentionally phased: foundation and telemetry first, an AF11 pilot in the middle, then analysis, policy, and implementation closeout. | Coordinator and role-thread workflows have measurable overhead, compact handoff patterns, durable state ledgers, and clear guidance for when to use multi-thread orchestration versus single-thread serial work. |
-| AF-11 | GitHub Collaboration Helper Migration | Placeholder for migrating the GitHub-based collaboration workflow helper incubated in Tiny IPA into Agent Foundry as an interleaved pilot after AF10 foundation work and before AF10 final optimization closeout. | Migration scope, ownership boundary, reusable asset shape, user-facing workflow, validation path, and telemetry evidence are defined without importing Tiny IPA project-local assumptions. |
+| AF-11 | GitHub Collaboration Helper Migration | The Tiny IPA-incubated GitHub collaboration workflow helper is migrated into Agent Foundry as an interleaved AF10 pilot. The stage proves repo-neutral helper docs/config, read-only and dry-run helper behavior, bounded mutation decisions, optional Project v2 boundaries, portable fixtures, and scheduler audit readback without importing Tiny IPA project-local assumptions. | Helper contracts, dry-run/read-only behavior, optional Project v2 boundary, user-facing workflow docs, telemetry evidence, and the read-only scheduler audit helper are merged and verified on `main`. |
+| AF-12 | End-to-End UX, Documentation, And Core Starter Packs | Agent Foundry's user-facing experience is reviewed end to end: capability-pack lifecycle UX, normal-user and power-user flows, runtime/generated and GitHub helper adopter UX, documentation information architecture, README first-value path, and first-party Core starter packs. | README, usage, commands, deployment, catalog docs, capability-pack catalog entries, starter pack manifests, and readiness evidence are merged and verified. Current starter set is `pack.bootstrap.minimal` plus optional `pack.multi-agent.optional`; architecture-boundary guidance is folded into bootstrap rather than shipped as a standalone pack. |
 
-Current planning stage: MS-01 readiness design preparation.
+Current planning focus: AF10 follow-up evidence, especially whether the latest AF11 and AF12 runs produced enough meaningful telemetry to support future workflow optimization. AF10-B itself is closed; the remaining work is follow-up measurement, calibration, and possible future-stage design. MS-01 memory readiness remains a separate axis and does not start automatically.
 
-AF-0 explains the existing mixed history. AF-1 starts the stricter planning and multi-agent coordination era. AF-2 designs the productization boundary. AF-3 executes the local Core/Vault split. AF-4 proves the split system works for the current real user across existing deployments and establishes the migration discipline needed for later major upgrades. AF-5 makes onboarding humane and reliable for new users. AF-6 closes the current Foundry product lifecycle so install, pack deployment, refresh, status, and rollback are usable beyond a one-off maintainer path. AF-7 upgrades runtime adapters and adds Trae CN support around a verified global Skill path. AF-8 hardens the capability system under realistic multi-user, multi-machine, multi-runtime, long-running-agent, and drift scenarios. AF-9 adds advanced capability-pack discovery, lifecycle, privacy-safe transfer planning, and user-facing Skill workflow packaging. AF-10 optimizes the Coordinator-driven role workflow using AF9 evidence, then pauses for an AF11 pilot migration, then resumes to analyze real telemetry and harden the workflow model. AF-11 is reserved for the Tiny IPA-incubated GitHub collaboration workflow helper migration pilot. Memory-system planning now uses the separate MS milestone axis.
+AF-0 explains the existing mixed history. AF-1 starts the stricter planning and multi-agent coordination era. AF-2 designs the productization boundary. AF-3 executes the local Core/Vault split. AF-4 proves the split system works for the current real user across existing deployments and establishes the migration discipline needed for later major upgrades. AF-5 makes onboarding humane and reliable for new users. AF-6 closes the current Foundry product lifecycle so install, pack deployment, refresh, status, and rollback are usable beyond a one-off maintainer path. AF-7 upgrades runtime adapters and adds Trae CN support around a verified global Skill path. AF-8 hardens the capability system under realistic multi-user, multi-machine, multi-runtime, long-running-agent, and drift scenarios. AF-9 adds advanced capability-pack discovery, lifecycle, privacy-safe transfer planning, and user-facing Skill workflow packaging. AF-10 optimizes the Coordinator-driven role workflow using AF9 evidence, AF10-A foundations, and AF11 pilot telemetry before AF10-B closeout. AF-11 completed the GitHub collaboration helper migration pilot, including the final read-only scheduler audit follow-up. AF-12 completed the user-facing UX/docs consolidation and first-party Core starter pack readiness path. Memory-system planning uses the separate MS milestone axis.
 
 Memory-system milestones are tracked separately as MS-01 and MS-02 so repeated AF roadmap changes do not keep renumbering memory planning. MS milestones do not authorize memory-system implementation unless an explicit human decision does so.
 
@@ -107,6 +108,7 @@ Suggested mapping:
 | AF-9 | `v0.9.0`: advanced capability-pack discovery and lifecycle design baseline. |
 | AF-10 | `v0.10.0`: Coordinator workflow optimization and role-orchestration evidence baseline. |
 | AF-11 | `v0.11.0`: GitHub collaboration workflow helper migration baseline. |
+| AF-12 | `v0.12.0`: end-to-end UX, documentation consolidation, and first-party Core starter pack baseline. |
 
 `v1.0` should wait until the reusable core, user vault story, generated artifact policy, and runtime adapter behavior are stable enough that external users can rely on them without understanding this repository's personal history.
 
@@ -125,7 +127,7 @@ Minimal fields:
 | Field | Values | Purpose |
 | --- | --- | --- |
 | Status | Inbox, Ready, In Progress, Review, Done, Blocked | Human-visible work state. |
-| Stage | AF-1 through AF-11, MS-01, MS-02 | Maturity or memory-system planning stage the item serves. |
+| Stage | AF-1 through AF-12, MS-01, MS-02 | Maturity or memory-system planning stage the item serves. |
 | Epic | Free text or single-select | Groups issues by roadmap epic. |
 | Owner Role | Architect, Implementer, Reviewer, Harvester | Clarifies expected agent/human role. |
 | Depends On | Issue or PR references | Prevents ready queues from bypassing dependencies. |
@@ -143,7 +145,7 @@ Issue types:
 
 Recommended labels:
 
-- `stage:AF-1` through `stage:AF-11`
+- `stage:AF-1` through `stage:AF-12`
 - `stage:MS-01`, `stage:MS-02`
 - `type:epic`, `type:task`, `type:decision`, `type:review`, `type:evidence`
 - `area:core`, `area:vault`, `area:generated`, `area:runtime`, `area:privacy`, `area:memory-readiness`, `area:adapters`
@@ -157,7 +159,7 @@ Multi-agent rule:
 - Reviewer checks against the Epic exit criteria and relevant practices.
 - Harvester extracts reusable practices or asset candidates after meaningful work, using the harvest workflow.
 
-Create GitHub Project/Epic items for the active stage and its immediate successor. Completed stage detail should stay in the split milestone files and durable GitHub records rather than expanding this overview. AF-10 work may collect readiness and workflow-optimization evidence. MS-01 planning lives on a separate milestone axis, but MS-01 execution should wait until AF10 workflow optimization evidence is accepted or explicitly waived by the user.
+Create GitHub Project/Epic items for the active stage and its immediate successor. Completed stage detail should stay in the split milestone files and durable GitHub records rather than expanding this overview. AF-10 work may collect readiness and workflow-optimization evidence. AF-11 and AF-12 completion records are durable GitHub state plus merged `main` changes, not new active queues. MS-01 planning lives on a separate milestone axis, but MS-01 execution should wait until AF10 workflow optimization evidence is accepted or explicitly waived by the user.
 
 ## Milestone Details
 
@@ -166,7 +168,7 @@ Detailed milestone plans are split out of this overview so the roadmap stays rea
 | Range | Detail file | Contents |
 | --- | --- | --- |
 | AF-0 through AF-6 | [roadmap/milestones-af0-af6.md](roadmap/milestones-af0-af6.md) | Planning context, repository hygiene, productization, Core/Vault split, current-user deployment migration, onboarding, and existing Foundry lifecycle completion. |
-| AF-7 through AF-11 | [roadmap/milestones-af7-af11.md](roadmap/milestones-af7-af11.md) | Runtime adapter framework, capability hardening, advanced capability-pack discovery, Coordinator workflow optimization, and GitHub collaboration helper migration. |
+| AF-7 through AF-12 | [roadmap/milestones-af7-af12.md](roadmap/milestones-af7-af12.md) | Runtime adapter framework, capability hardening, advanced capability-pack discovery, Coordinator workflow optimization, GitHub collaboration helper migration, end-to-end UX/docs, and first-party Core starter packs. |
 | MS-01 through MS-02 | [roadmap/memory-system-milestones.md](roadmap/memory-system-milestones.md) | Memory-system readiness design and memory implementation-home decision, tracked outside the AF stage sequence. |
 
 ## Future Memory-System Implementation
@@ -189,8 +191,9 @@ Expected scope will be defined by MS-01 and MS-02. AF-10 may optimize the collab
 
 1. Keep this overview compact; move detailed stage execution notes into `docs/roadmap/`.
 2. Treat AF-9 as completed through its final user-facing Skill workflow packaging gate and durable GitHub closure records.
-3. Use #189 as the AF-10 evidence issue for multi-thread workflow overhead and Coordinator optimization analysis.
-4. Split AF10 into foundation, AF11 pilot, and AF10 closeout phases rather than treating token telemetry as the whole stage.
-5. Use AF-11 as the Tiny IPA-incubated GitHub collaboration workflow helper migration pilot after AF10 telemetry and routing foundations exist.
-6. Keep memory-system planning on the MS milestone axis: MS-01 for readiness design and MS-02 for implementation-home decision. MS-01 execution is gated on accepted AF10 evidence or an explicit human waiver.
-7. Do not create memory directories, schemas, MCP write tools, or automatic memory writing before explicit user authorization.
+3. Treat AF11 as completed: #201 through #210, #222, and #224 are closed; PR #225 is merged; Project/Roadmap state is Done.
+4. Treat AF12 as completed through the final `main` integration and closure path: #227, #226, #255, and supporting child issues are closed; final user-facing docs and Core starter pack catalog are merged.
+5. Open or continue AF10 follow-up evidence for the latest AF11/AF12 telemetry: determine whether the recorded workflow telemetry, ledger updates, callback history, Project sync events, fallback review events, and closure corrections are sufficient for real optimization decisions.
+6. Use the local collaboration ledger / Foundry Board discussion as candidate input for a future AF stage only after AF10 follow-up evidence decides whether GitHub plus compact packets is sufficient or whether a local collaboration state substrate is justified. Do not treat the untracked local design note as canonical roadmap state until it is reviewed and committed through an issue.
+7. Keep memory-system planning on the MS milestone axis: MS-01 for readiness design and MS-02 for implementation-home decision. MS-01 execution is gated on accepted AF10 evidence or an explicit human waiver.
+8. Do not create memory directories, schemas, MCP write tools, or automatic memory writing before explicit user authorization.

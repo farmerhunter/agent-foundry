@@ -1,4 +1,4 @@
-# Roadmap Milestones AF-7 Through AF-11
+# Roadmap Milestones AF-7 Through AF-12
 
 This file contains detailed milestone plans moved out of `docs/roadmap.md` to keep the main roadmap readable.
 
@@ -264,19 +264,26 @@ Acceptance criteria:
 
 ### AF-11 / M11: GitHub Collaboration Helper Migration
 
-Goal: reserve a future Agent Foundry stage for migrating the GitHub-based collaboration workflow helper incubated in Tiny IPA into Agent Foundry, after AF10-A clarifies Coordinator workflow cost, routing, durable-state requirements, and handoff discipline.
+Goal: migrate the GitHub-based collaboration workflow helper incubated in Tiny IPA into Agent Foundry, after AF10-A clarifies Coordinator workflow cost, routing, durable-state requirements, and handoff discipline.
 
 AF-11 is intentionally interleaved into AF10: it starts only after AF10 foundation and instrumentation exist, then feeds evidence back into AF10-B analysis and optimization. It should not import project-local Tiny IPA assumptions, branch conventions, cache paths, Project ids, or mutating behavior without review.
 
-Expected scope:
+Completed scope:
 
-- Identify the reusable portion of the Tiny IPA GitHub collaboration helper.
-- Separate generic GitHub workflow behavior from Tiny IPA project-local defaults.
-- Decide whether the helper becomes a practice, asset, capability pack member, adapter-facing Skill entry point, or Core script.
-- Define user-facing workflows for issue triage, role handoff, PR review, Project sync, Human Decision Contracts, and closure gates.
+- Identified the reusable portion of the Tiny IPA GitHub collaboration helper.
+- Separated generic GitHub workflow behavior from Tiny IPA project-local defaults.
+- Established Core docs/config/templates and Skill-facing workflow contracts before executable helper work.
+- Added repo-neutral helper workflow docs and role routing templates.
+- Added read-only and dry-run helper subsets with portable fixtures and Agent Foundry smoke validation.
+- Added dry-run planning helper templates and examples.
+- Decided mutation helper gates for `agent-comment` and `agent-label`.
+- Decided the optional Project v2 adapter boundary.
+- Activated the GitHub collaboration helper in Codex target environments.
+- Added the final read-only `scheduler-audit` follow-up for transition-gated Project enrollment and field coherence readback.
+- Defined user-facing workflows for issue triage, role handoff, PR review, Project sync, Human Decision Contracts, and closure gates.
 - Preserve Agent Foundry's Core/Vault/Generated/Runtime/Local Private boundaries.
-- Reuse AF10 workflow telemetry and routing guidance instead of adding another unmeasured orchestration layer.
-- Produce telemetry that AF10-B can use to optimize collaboration policy and implementation.
+- Reused AF10 workflow telemetry and routing guidance instead of adding another unmeasured orchestration layer.
+- Produced telemetry and concrete fallback evidence that AF10-B can use to optimize collaboration policy and implementation.
 
 Non-scope:
 
@@ -285,10 +292,101 @@ Non-scope:
 - No memory-system design or implementation.
 - No runtime/global config mutation unless a later scoped issue explicitly authorizes it.
 
-Acceptance criteria:
+Accepted completion records:
+
+| Record | Purpose | Status |
+| --- | --- | --- |
+| #201 | AF11 planning/decomposition Epic. | Done |
+| #202 | Unit A repo-neutral docs, config templates, and Skill-facing workflow contract. | Done |
+| #203 | Helper packaging and install path boundary decision. | Done |
+| #204 | Unit B read-only and dry-run helper subset design. | Done |
+| #205 | Unit B read-only and dry-run helper subset implementation. | Done |
+| #206 | Portable fixture and Agent Foundry smoke validation. | Done |
+| #207 | Dry-run planning helper templates and examples. | Done |
+| #208 | Mutation helper gates for `agent-comment` and `agent-label`. | Done |
+| #209 | Optional Project v2 adapter boundary. | Done |
+| #210 | Final readiness and AF10-B telemetry handoff. | Done |
+| #222 / PR #223 | Codex target activation follow-up. | Done / Merged |
+| #224 / PR #225 | Read-only scheduler audit helper follow-up. | Done / Merged |
+
+Acceptance criteria status:
 
 - The helper's reusable behavior is documented separately from Tiny IPA-specific behavior.
-- The migration target is chosen: practice, asset, capability pack member, adapter-facing Skill, Core script, or explicit rejection/defer.
-- User-facing workflow entry points are named before implementation.
-- GitHub mutation permissions, dry-run behavior, review gates, and rollback or no-write modes are explicit.
-- AF10 cost/rehydration/routing findings are applied to avoid unnecessary role-thread overhead.
+- The migration target is Core helper/docs/templates plus Skill-facing workflow contract; practice/asset/capability-pack membership remains governed by harvest or later reviewed work.
+- User-facing workflow entry points were named before implementation.
+- GitHub mutation permissions, dry-run behavior, review gates, and no-write modes are explicit.
+- Project v2 remains optional visual mirror behavior unless a later reviewed adapter changes that boundary.
+- AF10 cost/rehydration/routing findings were applied and preserved as evidence for AF10-B.
+
+### AF-12 / M12: End-to-End UX, Documentation, And Core Starter Packs
+
+Goal: make Agent Foundry understandable and usable from a final-user viewpoint, not only as scripts and internal workflow fragments.
+
+AF-12 was replanned into three stages:
+
+1. **AF12-1: Capability-pack lifecycle management**
+   - Normalized capability-pack state taxonomy.
+   - Defined normal-user consumption flows and power-user maintenance flows.
+   - Kept candidate discovery as a power-user diagnostic review-list workflow, not automatic pack creation.
+   - Added a Core-hosted official pack catalog and versioning model.
+   - Produced fixture-backed readiness evidence for preview, dry-run apply, safe temp-Vault apply, status, disable dry-run, exportability gate, and privacy fail-closed transfer/import behavior.
+
+2. **AF12-2: User scenarios, UX, and documentation**
+   - Inventoried user-facing docs, Skill, workflow, and command surfaces.
+   - Defined end-to-end journeys across beginner onboarding, daily operation, harvest/review/publish, normal capability-pack consumption, runtime/generated adapter operation, power-user maintenance, GitHub collaboration helper adoption, and final readiness.
+   - Designed runtime/generated adapter UX and status vocabulary.
+   - Designed GitHub collaboration helper adopter UX.
+   - Designed documentation information architecture.
+   - Updated README, usage, commands, and deployment docs so README owns the first-value path, ordinary docs own daily operation, and complete/power-user references stay discoverable without polluting onboarding.
+
+3. **AF12-3: First-party Core starter capability packs**
+   - Replanned closure after the user identified that the system's accumulated value should be available as initial optional capability packs.
+   - Inventoried public-safe candidate first-party Core starter packs from selected Vault evidence and public Core/GitHub evidence without copying raw private Vault content.
+   - Selected a corrected starter set:
+     - `pack.bootstrap.minimal` as the mandatory/bootstrap baseline.
+     - `pack.multi-agent.optional` as the only standalone optional first-party Core starter pack.
+   - Removed `pack.architecture-boundary-review.starter` as a standalone current-stage official pack; its source-of-truth, architecture-boundary, Generated/Runtime downstream, and Local Private exclusion guidance is folded into `pack.bootstrap.minimal`.
+   - Added user-value descriptions so README and catalog pages help users decide whether to accept/install starter packs without reading schema details.
+
+Accepted completion records:
+
+| Record range | Purpose | Status |
+| --- | --- | --- |
+| #226 through #233 | Capability-pack UX state taxonomy, normal-user and power-user contracts, candidate discovery, Core-hosted catalog model, and capability-pack UX readiness evidence. | Done |
+| #239 through #244 | Broader AF12 inventory, journeys, runtime/generated UX, GitHub helper adopter UX, docs IA, and final docs readiness evidence. | Done |
+| #245 through #247 | README first-value path, ordinary-user docs, and complete/power-user reference navigation cleanup. | Done |
+| #251 through #260 | AF12-3 first-party Core starter pack inventory, selection/privacy architecture, implementation, promotion, correction, user-value docs, and final readiness. | Done |
+| PR #262 | Final AF12 integration into `main`. | Merged |
+
+Current official starter pack state:
+
+| Pack | User-facing role | Current-stage status |
+| --- | --- | --- |
+| `pack.bootstrap.minimal` | Mandatory baseline that teaches source-of-truth, architecture-boundary, Generated/Runtime downstream, Local Private exclusion, and safe first steps. | Official baseline starter. |
+| `pack.multi-agent.optional` | Optional GitHub issue/PR collaboration starter focused on durable comments, role labels, handoff, review, and human-gated collaboration habits. | Official optional starter. |
+| `pack.architecture-boundary-review.starter` | Not a standalone pack. Useful guidance is folded into bootstrap. | Regression guard only. |
+
+Acceptance criteria status:
+
+- Beginner README path, ordinary daily docs, complete/power-user references, and catalog pages are separated by tier.
+- User-facing docs preserve concise bilingual decision support where touched.
+- Capability-pack normal-user flows are Skill-facing first; raw scripts remain advanced/debug substrate.
+- Official starter pack selection principles are documented.
+- Selected User Vault remains canonical after deployment.
+- Generated, Runtime, and Local Private artifacts are downstream or excluded, not pack authority.
+- No live private Vault export, runtime apply, generated adapter publish, real pack activation/export/import/deploy, memory-system work, or destructive action was authorized by AF12.
+
+### Future Candidate: Local Collaboration Ledger / Foundry Board
+
+Goal: investigate whether Agent Foundry should add a local-first collaboration state substrate so role handoffs, gates, telemetry, and scheduler state can be read from compact local state instead of repeatedly reconstructing them from GitHub comments, labels, Project fields, and thread callbacks.
+
+This is not yet an AF-numbered active stage. The current discussion should feed AF10 follow-up evidence first, starting with #263's audit of whether the latest AF11 and AF12 runs produced enough meaningful telemetry for workflow optimization decisions. If accepted later, it should be planned as a future AF stage with explicit issue decomposition.
+
+Candidate principles:
+
+- Foundry Board / Local Collaboration Ledger would be Core substrate, not a capability pack.
+- It would be authoritative only for collaboration workflow state, not for PR diffs, GitHub merge state, selected User Vault records, generated adapters, or runtime installs.
+- GitHub would remain the public collaboration and code-hosting bridge.
+- `pack.multi-agent.optional` should expose multi-agent collaboration habits to users, but should not own live board state.
+- Initial sync should be conservative: append-only local events, deterministic reducer, GitHub import/export dry-run, divergence report, and human/Architect conflict resolution before any hot-sync or CRDT-style behavior.
+- LangGraph or similar orchestration engines may be evaluated as optional runners, but should not replace the readable Agent Foundry collaboration state model without review.
