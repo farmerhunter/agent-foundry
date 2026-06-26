@@ -14,6 +14,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -81,6 +82,31 @@ def run_gh(args: list[str]) -> Any:
         return json.loads(result.stdout)
     except json.JSONDecodeError:
         return result.stdout
+
+
+def run_gh_read(args: list[str]) -> dict[str, Any]:
+    result = subprocess.run(
+        ["gh", *args],
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    output = (result.stderr or result.stdout).strip()
+    if result.returncode != 0:
+        lower = output.lower()
+        if "authentication" in lower or "not logged" in lower:
+            return {"ok": False, "error_type": "auth_unavailable", "message": output}
+        if "not found" in lower or "permission" in lower:
+            return {"ok": False, "error_type": "permission_denied", "message": output}
+        if any(marker in lower for marker in ("eof", "499", "tls", "timeout", "rate limit", "temporarily")):
+            return {"ok": False, "error_type": "transient", "message": output}
+        return {"ok": False, "error_type": "github_read_failed", "message": output or "gh command failed"}
+    try:
+        data = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        data = result.stdout
+    return {"ok": True, "data": data}
 
 
 def default_core_root() -> Path:
@@ -357,27 +383,389 @@ def cmd_issue_context(args: argparse.Namespace) -> None:
     )
 
 
+def label_names(issue: dict[str, Any]) -> list[str]:
+    return [label["name"] if isinstance(label, dict) else str(label) for label in issue.get("labels", [])]
+
+
+def issue_number(issue: dict[str, Any]) -> int | None:
+    number = issue.get("number")
+    try:
+        return int(number)
+    except (TypeError, ValueError):
+        return None
+
+
+def stage_from_labels(labels: list[str]) -> str | None:
+    for label in labels:
+        if label.startswith("stage:"):
+            return label.split(":", 1)[1]
+    return None
+
+
+def risk_from_labels(labels: list[str]) -> str | None:
+    for label in labels:
+        if label.startswith("risk:"):
+            return label.split(":", 1)[1].capitalize()
+    return None
+
+
+def owner_from_needs(label: str | None) -> str | None:
+    if not label or not label.startswith("needs:"):
+        return None
+    value = label.split(":", 1)[1]
+    if value == "human":
+        return "Human"
+    return value.replace("-", " ").title().replace(" ", "")
+
+
+def is_transition_routable(labels: list[str]) -> bool:
+    return any(label.startswith(("stage:", "type:", "area:", "risk:")) for label in labels)
+
+
+def normalize_issue_collection(data: Any) -> list[dict[str, Any]]:
+    if data is None:
+        return []
+    if isinstance(data, dict) and "issues" in data:
+        data = data["issues"]
+    elif isinstance(data, dict) and "items" in data:
+        data = data["items"]
+    elif isinstance(data, dict):
+        data = [data]
+    if not isinstance(data, list):
+        fail("invalid_issues_json", "issues JSON must be an issue object, list, or object with issues/items")
+    return [item for item in data if isinstance(item, dict)]
+
+
+def normalize_project_items(data: Any) -> list[dict[str, Any]]:
+    if data is None:
+        return []
+    if isinstance(data, dict) and "items" in data:
+        data = data["items"]
+    elif isinstance(data, dict):
+        data = [data]
+    if not isinstance(data, list):
+        fail("invalid_project_items_json", "Project items JSON must be a list or object with items")
+    return [item for item in data if isinstance(item, dict)]
+
+
+def project_item_issue_number(item: dict[str, Any]) -> int | None:
+    candidates = [
+        item.get("number"),
+        item.get("issue"),
+        item.get("content", {}).get("number") if isinstance(item.get("content"), dict) else None,
+    ]
+    for candidate in candidates:
+        try:
+            return int(candidate)
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def project_field_value(item: dict[str, Any], field: str) -> str | None:
+    aliases = {
+        "Status": ["Status", "status"],
+        "Roadmap Status": ["Roadmap Status", "roadmap Status", "roadmap_status", "roadmapStatus"],
+        "Stage": ["Stage", "stage"],
+        "Owner Role": ["Owner Role", "owner Role", "owner_role", "ownerRole"],
+        "Risk": ["Risk", "risk"],
+    }
+    for key in aliases[field]:
+        if key not in item:
+            continue
+        value = item[key]
+        if isinstance(value, dict):
+            value = value.get("name") or value.get("text") or value.get("title")
+        if value is None:
+            return None
+        value = str(value).strip()
+        return value or None
+    field_values = item.get("fieldValues") or item.get("field_values")
+    if isinstance(field_values, list):
+        for value in field_values:
+            if not isinstance(value, dict):
+                continue
+            name = value.get("fieldName") or value.get("name")
+            if name != field:
+                continue
+            raw = value.get("value") or value.get("text") or value.get("name")
+            if isinstance(raw, dict):
+                raw = raw.get("name") or raw.get("text") or raw.get("title")
+            return str(raw).strip() if raw is not None else None
+    return None
+
+
+def finding(code: str, issue: int | None, severity: str, message: str, expected: Any = None, actual: Any = None) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "issue": issue,
+        "severity": severity,
+        "code": code,
+        "message": message,
+    }
+    if expected is not None:
+        payload["expected"] = expected
+    if actual is not None:
+        payload["actual"] = actual
+    return payload
+
+
+def repair(action: str, issue: int | None, field: str | None = None, value: Any = None) -> dict[str, Any]:
+    payload: dict[str, Any] = {"action": action, "issue": issue, "mutation_performed": False}
+    if field:
+        payload["field"] = field
+    if value is not None:
+        payload["value"] = value
+    return payload
+
+
+def read_live_issues(repo: str, args: argparse.Namespace) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    if args.issues:
+        numbers = [number.strip() for number in args.issues.split(",") if number.strip()]
+        if not numbers:
+            fail("issue_selector_empty", "--issues must include at least one issue number")
+        if len(numbers) > args.limit:
+            fail("issue_limit_exceeded", f"--issues selected {len(numbers)} issues but --limit is {args.limit}")
+        issues = []
+        for number in numbers:
+            result = run_gh_read(
+                [
+                    "issue",
+                    "view",
+                    number,
+                    "--repo",
+                    repo,
+                    "--json",
+                    "number,title,state,labels,body",
+                ]
+            )
+            if not result["ok"]:
+                fail(result["error_type"], result["message"], 5)
+            issues.append(result["data"])
+        return issues, {"mode": "issues", "issue_numbers": [int(number) for number in numbers]}
+    if args.stage:
+        stage_label = args.stage if args.stage.startswith("stage:") else f"stage:{args.stage}"
+        result = run_gh_read(
+            [
+                "issue",
+                "list",
+                "--repo",
+                repo,
+                "--state",
+                "all",
+                "--limit",
+                str(args.limit),
+                "--label",
+                stage_label,
+                "--json",
+                "number,title,state,labels",
+            ]
+        )
+        if not result["ok"]:
+            fail(result["error_type"], result["message"], 5)
+        return normalize_issue_collection(result["data"]), {"mode": "stage", "stage": args.stage, "limit": args.limit}
+    fail("audit_scope_missing", "pass --issues, --stage, --issues-json, or --fixture-json")
+
+
+def read_project_items(args: argparse.Namespace) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
+    if args.project_items_json:
+        data = load_json(args.project_items_json)
+        items = normalize_project_items(data)
+        return items, {"source": "fixture", "status": "ok", "item_count": len(items)}, {"attempts": 0, "transient_failures": []}
+    if not args.project_owner and not args.project_number:
+        return [], {"source": "skipped", "status": "config_missing", "item_count": 0}, {"attempts": 0, "transient_failures": []}
+    if not args.project_owner or not args.project_number:
+        fail("project_config_incomplete", "pass both --project-owner and --project-number for live Project audit")
+    transient_failures: list[str] = []
+    attempts = max(args.project_retries, 1)
+    last_result: dict[str, Any] | None = None
+    for attempt in range(1, attempts + 1):
+        result = run_gh_read(
+            [
+                "project",
+                "item-list",
+                str(args.project_number),
+                "--owner",
+                args.project_owner,
+                "--format",
+                "json",
+                "--limit",
+                str(args.project_limit),
+            ]
+        )
+        if result["ok"]:
+            items = normalize_project_items(result["data"])
+            return (
+                items,
+                {
+                    "source": "live_gh",
+                    "status": "ok",
+                    "owner": args.project_owner,
+                    "number": args.project_number,
+                    "item_count": len(items),
+                },
+                {"attempts": attempt, "transient_failures": transient_failures},
+            )
+        last_result = result
+        if result["error_type"] != "transient":
+            break
+        transient_failures.append(result["message"])
+        if attempt < attempts:
+            time.sleep(args.project_retry_backoff)
+    availability = "unavailable"
+    if last_result and last_result["error_type"] == "permission_denied":
+        availability = "permission_denied"
+    elif last_result and last_result["error_type"] == "auth_unavailable":
+        availability = "auth_unavailable"
+    return (
+        [],
+        {
+            "source": "live_gh",
+            "status": availability,
+            "owner": args.project_owner,
+            "number": args.project_number,
+            "item_count": 0,
+            "error": last_result.get("message") if last_result else "Project read failed",
+            "error_type": last_result.get("error_type") if last_result else "unknown",
+        },
+        {
+            "attempts": attempts if transient_failures else 1,
+            "transient_failures": transient_failures,
+            "final_error": last_result.get("message") if last_result else "Project read failed",
+        },
+    )
+
+
+def audit_issue(
+    issue: dict[str, Any],
+    item: dict[str, Any] | None,
+    needs_labels: set[str],
+    project_requested: bool,
+    default_stage: str | None,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    labels = label_names(issue)
+    number = issue_number(issue)
+    present_needs = sorted(set(labels).intersection(needs_labels))
+    issue_findings: list[dict[str, Any]] = []
+    repairs: list[dict[str, Any]] = []
+    if len(present_needs) > 1:
+        issue_findings.append(
+            finding("multiple_needs_labels", number, "warning", "Issue has more than one next-owner needs label.", expected="one needs:* label", actual=present_needs)
+        )
+        repairs.append(repair("adjust_label", number, "needs:*", "exactly one next-owner label"))
+    if issue.get("state", "").upper() == "OPEN" and not present_needs and is_transition_routable(labels):
+        issue_findings.append(
+            finding("no_next_owner_label", number, "warning", "Open transition-routable issue lacks a next-owner needs:* label.", expected=sorted(needs_labels), actual=labels)
+        )
+        repairs.append(repair("adjust_label", number, "needs:*", "add the intended next-owner label"))
+    if project_requested and item is None:
+        issue_findings.append(
+            finding("missing_project_item", number, "error", "Issue is not present in the requested Project v2 item list.")
+        )
+        repairs.append(repair("add_project_item", number))
+        return issue_findings, repairs
+    if item is None:
+        return issue_findings, repairs
+    expected_stage = default_stage or stage_from_labels(labels)
+    expected_risk = risk_from_labels(labels)
+    expected_owner = owner_from_needs(present_needs[0]) if present_needs else None
+    for field_name in ("Status", "Roadmap Status", "Stage", "Owner Role", "Risk"):
+        actual = project_field_value(item, field_name)
+        if not actual:
+            issue_findings.append(
+                finding("empty_project_field", number, "error", f"Project field {field_name} is empty.", expected="non-empty", actual=actual)
+            )
+            repairs.append(repair("set_project_field", number, field_name, "expected scheduler value"))
+    comparisons = [
+        ("Stage", expected_stage),
+        ("Risk", expected_risk),
+        ("Owner Role", expected_owner),
+    ]
+    for field_name, expected in comparisons:
+        if not expected:
+            continue
+        actual = project_field_value(item, field_name)
+        if actual and actual != expected:
+            issue_findings.append(
+                finding("project_field_mismatch", number, "error", f"Project field {field_name} does not match issue scheduler labels.", expected={field_name: expected}, actual={field_name: actual})
+            )
+            repairs.append(repair("set_project_field", number, field_name, expected))
+    status = project_field_value(item, "Status")
+    roadmap = project_field_value(item, "Roadmap Status")
+    if issue.get("state", "").upper() == "CLOSED" and (status != "Done" or roadmap != "Done"):
+        issue_findings.append(
+            finding("closed_issue_not_done", number, "warning", "Closed issue is not Done in the Project mirror.", expected={"Status": "Done", "Roadmap Status": "Done"}, actual={"Status": status, "Roadmap Status": roadmap})
+        )
+        repairs.append(repair("set_project_field", number, "Status", "Done"))
+        repairs.append(repair("set_project_field", number, "Roadmap Status", "Done"))
+    if issue.get("state", "").upper() == "OPEN" and present_needs and (status == "Done" or roadmap == "Done"):
+        issue_findings.append(
+            finding("open_needs_label_status_mismatch", number, "error", "Open issue with a needs:* label is marked Done in the Project mirror.", expected={"Status": "not Done", "Roadmap Status": "not Done"}, actual={"Status": status, "Roadmap Status": roadmap})
+        )
+        repairs.append(repair("set_project_field", number, "Status", "Todo"))
+    return issue_findings, repairs
+
+
 def cmd_scheduler_audit(args: argparse.Namespace) -> None:
-    fixture = load_json(args.fixture_json)
-    if fixture is None:
-        fail("fixture_required", "scheduler-audit Unit B pilot requires --fixture-json or a later accepted live-read design")
-    labels = [label["name"] if isinstance(label, dict) else label for label in fixture.get("labels", [])]
+    repo, repo_source = resolve_repo(args)
     config = parse_simple_yaml(Path(args.config)) if args.config else {}
-    needs = set(config.get("needs_labels", []))
-    present = sorted(set(labels).intersection(needs))
-    findings = []
-    if len(present) > 1:
-        findings.append("multiple_needs_labels")
-    if fixture.get("state", "").upper() == "CLOSED" and present:
-        findings.append("closed_issue_has_needs_label")
-    if not present:
-        findings.append("no_next_owner_label")
+    needs = set(config.get("needs_labels", [])) or {"needs:architect", "needs:implementer", "needs:reviewer", "needs:harvester", "needs:human"}
+    fixture = load_json(args.fixture_json)
+    if args.issues_json:
+        issues = normalize_issue_collection(load_json(args.issues_json))
+        issue_source = "fixture"
+        scope = {"mode": "fixture", "issue_numbers": [issue_number(issue) for issue in issues if issue_number(issue) is not None]}
+    elif fixture is not None:
+        issues = normalize_issue_collection(fixture)
+        issue_source = "fixture"
+        scope = {"mode": "fixture", "issue_numbers": [issue_number(issue) for issue in issues if issue_number(issue) is not None]}
+    else:
+        issues, scope = read_live_issues(repo, args)
+        issue_source = "live_gh"
+    project_items, project_status, retry_summary = read_project_items(args)
+    project_requested = project_status["source"] in ("fixture", "live_gh") and project_status["status"] == "ok"
+    project_by_issue = {project_item_issue_number(item): item for item in project_items if project_item_issue_number(item) is not None}
+    findings: list[dict[str, Any]] = []
+    repairs: list[dict[str, Any]] = []
+    for issue in issues[: args.limit]:
+        item = project_by_issue.get(issue_number(issue))
+        issue_findings, issue_repairs = audit_issue(issue, item, needs, project_requested, args.stage)
+        findings.extend(issue_findings)
+        repairs.extend(issue_repairs)
+    status = "ok"
+    if findings:
+        status = "findings"
+    if project_status["status"] not in ("ok", "config_missing") and project_status["source"] == "live_gh":
+        status = "degraded"
     payload = {
-        "issue": fixture.get("number"),
+        "status": status,
+        "repo": repo,
+        "audit_scope": {
+            **scope,
+            "limit": args.limit,
+            "project_owner": args.project_owner,
+            "project_number": args.project_number,
+        },
+        "sources": {
+            "repo": repo_source,
+            "issues": issue_source,
+            "project_items": project_status["source"],
+            "config": args.config,
+            "needs_labels": sorted(needs),
+        },
+        "project_v2": {
+            "mode": "optional_visual_mirror",
+            "availability": project_status["status"],
+            "owner": project_status.get("owner"),
+            "number": project_status.get("number"),
+            "item_count": project_status.get("item_count", 0),
+            "error": project_status.get("error"),
+            "error_type": project_status.get("error_type"),
+        },
+        "retry_summary": {
+            "project_item_list": retry_summary,
+        },
         "findings": findings,
-        "next_owner_labels": present,
-        "project_v2": "optional_project_mirror_unavailable",
-        "overhead_class": "state_sync_cost" if findings else "necessary_delivery_cost",
+        "dry_run_repair_plan": repairs,
         "mutation_performed": False,
     }
     print_json_or_text(payload, args.json)
@@ -702,7 +1090,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     audit = sub.add_parser("scheduler-audit")
     audit.add_argument("--config")
-    audit.add_argument("--fixture-json", required=True)
+    audit.add_argument("--fixture-json", help="Legacy single-issue fixture; prefer --issues-json for new tests.")
+    audit.add_argument("--issues-json", help="Fixture issue object, list, or object with issues/items.")
+    audit.add_argument("--project-items-json", help="Fixture Project item list or gh project item-list JSON.")
+    audit.add_argument("--issues", help="Comma-separated explicit issue numbers for bounded live audit.")
+    audit.add_argument("--stage", help="Stage value or label for bounded live audit, such as AF-11 or stage:AF-11.")
+    audit.add_argument("--limit", type=int, default=20, help="Maximum issues to audit.")
+    audit.add_argument("--project-owner", help="Project owner for live Project item-list, such as @me or an org.")
+    audit.add_argument("--project-number", type=int, help="Project number for live Project item-list.")
+    audit.add_argument("--project-limit", type=int, default=300, help="Maximum Project items to read once per batch.")
+    audit.add_argument("--project-retries", type=int, default=3, help="Bounded retries for transient Project reads.")
+    audit.add_argument("--project-retry-backoff", type=float, default=0.5, help="Seconds between transient Project read retries.")
+    audit.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON for scheduler-audit.")
     audit.set_defaults(func=cmd_scheduler_audit)
 
     activation = sub.add_parser("activation-report")

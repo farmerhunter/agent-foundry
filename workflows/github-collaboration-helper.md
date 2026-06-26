@@ -116,6 +116,90 @@ state:
 Retry behavior must not hide permission failures or convert a preview into an
 apply. Mutation helpers remain out of scope for Unit A.
 
+## Scheduler Audit
+
+Use `scheduler-audit` only for transition-gated scheduler readback, such as an
+Implementer pickup, Reviewer handoff, or AF stage repair pass. Do not run it as
+an always-on preflight for ordinary inbox reads, issue context reads, PR diff
+review, or code edits.
+
+The helper supports deterministic fixture input:
+
+```text
+agent-foundry-github-collab scheduler-audit \
+  --config templates/github-role-routing.template.yaml \
+  --issues-json <fixture> \
+  --project-items-json <fixture> \
+  --json
+```
+
+It also supports bounded live reads when the caller provides an explicit batch
+selector:
+
+```text
+agent-foundry-github-collab --repo <owner>/<repo> scheduler-audit \
+  --config templates/github-role-routing.template.yaml \
+  --stage AF-11 \
+  --project-owner @me \
+  --project-number 3 \
+  --json
+```
+
+Use `--issues 224,225` for a smaller explicit batch, or `--stage AF-11
+--limit <n>` for a bounded stage audit. When live Project readback is requested,
+the helper reads `gh project item-list` once per audit batch and compares the
+returned items against all selected issues. It must not perform `gh project
+item-add`, `gh project item-edit`, label changes, comments, closure, dispatch,
+runtime install, adapter publish, Vault writes, generated adapter writes, or
+memory writes.
+
+JSON output is the primary contract:
+
+```yaml
+status: ok | findings | degraded
+repo: owner/repo
+audit_scope:
+  mode: issues | stage | fixture
+  issue_numbers: []
+  stage: AF-11
+  limit: 20
+  project_owner: "@me"
+  project_number: 3
+sources:
+  issues: live_gh | fixture
+  project_items: live_gh | fixture | skipped
+  config: templates/github-role-routing.template.yaml
+project_v2:
+  mode: optional_visual_mirror
+  availability: ok | config_missing | unavailable | permission_denied | auth_unavailable
+retry_summary:
+  project_item_list:
+    attempts: 1
+    transient_failures: []
+findings:
+  - issue: 224
+    severity: error | warning | info
+    code: missing_project_item | empty_project_field | project_field_mismatch | closed_issue_not_done | open_needs_label_status_mismatch | multiple_needs_labels | no_next_owner_label
+    message: human-readable summary
+    expected: {}
+    actual: {}
+dry_run_repair_plan:
+  - action: add_project_item | set_project_field | adjust_label | post_handoff_comment
+    issue: 224
+    field: Owner Role
+    value: Implementer
+    mutation_performed: false
+mutation_performed: false
+```
+
+Project v2 failures are first-class audit state. Transient `EOF`, `499`, TLS,
+timeout, and rate-limit-like failures use bounded retries. If Project readback
+still fails, the helper returns `status: degraded`, preserves
+`mutation_performed: false`, and keeps issue/label findings that can be audited
+without the Project mirror. Auth, permission, malformed fixture, unresolved repo,
+and incomplete required input errors fail closed instead of being retried as
+transient failures.
+
 ## Dispatch Evidence Modes
 
 Dispatch evidence must name the mechanism actually used:
