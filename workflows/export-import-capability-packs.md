@@ -61,7 +61,11 @@ Fail closed before sharing or import acceptance when transfer material contains:
 - executable payload execution, install side effects, destructive changes, or
   automatic activation claims.
 
-## Import States
+## Import States / Transfer State Namespace
+
+Transfer/import states describe a privacy-safe review workflow. They are not
+pack canonical lifecycle states and must not be persisted as
+`lifecycle_status`.
 
 | State | Meaning | Writes |
 | --- | --- | --- |

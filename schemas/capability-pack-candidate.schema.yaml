@@ -1,12 +1,15 @@
 # Capability pack candidate schema.
 # Human-readable AF-9 candidate format, not a strict machine validator yet.
+# Candidate discovery defaults to a diagnostic review list. This schema is used
+# only after a later reviewed power-user step asks for durable candidate-record
+# work.
 
 required_fields:
   candidate_schema_version: "Integer schema version for this candidate format."
   candidate_id: "Stable candidate id for review, such as candidate.pack.multi-agent.github-collaboration."
   proposed_pack_id: "Proposed pack id if the candidate later becomes a pack, such as pack.multi-agent.github-collaboration."
   title: "Short human-readable candidate title."
-  outcome: "candidate | baseline_control | extend_existing | deferred_overlap | deferred_insufficient_evidence | deferred_privacy_review | rejected_false_positive | rejected_too_broad | rejected_too_narrow | blocked_policy"
+  outcome: "Candidate discovery outcome namespace only: candidate | baseline_control | extend_existing | deferred_overlap | deferred_insufficient_evidence | deferred_privacy_review | rejected_false_positive | rejected_too_broad | rejected_too_narrow | blocked_policy"
   confidence: "high | medium | low"
   summary: "One-paragraph explanation of the candidate and why this outcome was chosen."
   authority_layers: "Evidence references grouped by Core, selected_vault, generated, runtime, and local_private treatment."
@@ -57,7 +60,10 @@ false_positive_control_fields:
   bootstrap_duplicate: "pass | fail | uncertain, with baseline-control rationale."
 
 rules:
+  - "Candidate discovery output is a diagnostic review list by default; do not create candidate files, pack manifests, selected Vault records, generated adapters, runtime files, or export packages during ordinary discovery."
   - "Candidate records are review artifacts, not active pack manifests."
+  - "Candidate records may be written only after a later reviewed power-user step accepts the discovery review list and requests durable candidate-record or draft-assembly work."
+  - "Candidate discovery outcome values are not pack lifecycle_status values unless a later reviewed pack manifest explicitly uses the pack canonical lifecycle namespace."
   - "A candidate may propose outcome candidate, but only human-reviewed follow-up work may activate or export a pack."
   - "Observed facts must cite evidence references; inference must be labeled separately."
   - "Selected Vault evidence must use record IDs, metadata, or sanitized summaries, not raw private evidence."

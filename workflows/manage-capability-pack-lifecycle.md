@@ -21,6 +21,77 @@ The agent should translate those requests into dry-run lifecycle reports first.
 Raw scripts are implementation details or advanced/debug commands, not the
 primary user surface.
 
+## Normal-User Consumption Contract
+
+Normal-user capability-pack consumption flows are:
+
+- `list capability packs`;
+- `recommend capability packs for my setup`;
+- `preview capability pack deployment <pack-path>`;
+- `apply reviewed capability pack <pack-path>`;
+- `verify capability pack <pack-id>`;
+- `update capability pack <pack-id-or-path>`;
+- `disable capability pack <pack-id>`.
+
+For these flows, the agent must return a compact user-visible report with:
+
+- pack identity: id, title, version, source, and reviewed status;
+- adopter display status such as `available`, `recommended`, `compatible`,
+  `incompatible`, `deployed`, `update_available`, `blocked`, or `not_installed`;
+- inspected layers: Core, selected Vault, generated output, runtime receipts,
+  manual targets, and Local Private exclusions;
+- changed layers, if the action has an accepted write path;
+- `writes: none` for list, recommend, preview, verify, update comparison,
+  disable review, and transfer preview paths;
+- exact selected Vault write target for accepted apply paths;
+- next safe action;
+- rollback or defer guidance.
+
+Raw scripts remain implementation/debug substrate. Normal-user output must not
+make candidate discovery, pack authoring, export publication, or maintainer
+release decisions part of routine consumption.
+
+When a normal-user list or recommendation flow reads the official Core catalog,
+the catalog is a discovery surface only. It may show official availability,
+version, manifest hash, compatibility summary, changelog, and review evidence,
+but it must still route preview/apply work through the reviewed manifest and the
+selected Vault. The selected Vault remains canonical after accepted deployment.
+
+## Power-User Maintenance Contract
+
+Power-user capability-pack workflows are advanced maintenance-level workflows.
+They cover explicit requests to:
+
+- scan, propose, or evaluate candidate boundaries;
+- assemble a pack draft;
+- review a pack release or version update;
+- review exportability;
+- review deprecation, split, or merge outcomes.
+
+These workflows may produce taxonomy, versioning, distribution, privacy, or
+compatibility decisions for review. They must not create, activate, export,
+publish, or deploy a pack without a later reviewed step.
+
+Outputs are review packets by default, not active artifacts. A maintenance
+review packet must include:
+
+- requested flow and pack or candidate identity;
+- evidence sources and authority layer;
+- proposed boundary, draft membership, version, taxonomy, exportability,
+  deprecation, split, or merge decision;
+- practice, asset, selected Vault, generated output, runtime, and Local Private
+  impact;
+- clearly labeled state namespace: candidate discovery outcome,
+  transfer/import state, comparison/report classification, runtime/generated
+  status, or canonical `lifecycle_status`;
+- required Reviewer, Architect, or Human gate;
+- `writes: none`;
+- next safe action plus rollback or defer guidance.
+
+The advanced/maintenance label does not imply strict role permissions or hidden
+access control. It tells agents to use deeper review gates and review-packet
+outputs before any later apply, export, publish, or runtime deploy step.
+
 ## Invariants
 
 - Selected User Vault metadata owns canonical pack lifecycle state after
@@ -32,25 +103,82 @@ primary user surface.
 - Local-private evidence, raw logs, runtime manifests, receipts, user paths,
   secrets, and memory-system records are not pack lifecycle authority.
 
-## Lifecycle States
+## State Namespace Rule
+
+Capability-pack workflows use several state namespaces. Persisted
+`lifecycle_status` fields belong only to the canonical pack lifecycle namespace.
+Display, candidate, transfer/import, comparison/report, and runtime/generated
+statuses must be labeled as their own output types and must not be written as
+pack lifecycle values.
+
+| Namespace | Owns | Examples |
+| --- | --- | --- |
+| Pack canonical lifecycle | Manifest and deployed-pack metadata `lifecycle_status`. | `candidate`, `reviewed`, `proposed`, `active`, `exportable`, `deprecated`, `retired`, `archived`, `blocked` |
+| Adopter discovery/display status | Normal-user list/recommend/status copy. | `available`, `recommended`, `compatible`, `incompatible`, `installed`, `deployed`, `update_available`, `not_installed` |
+| Candidate discovery outcome | Power-user discovery review-list output. | `candidate`, `baseline_control`, `extend_existing`, `deferred_overlap`, `rejected_false_positive`, `blocked_policy` |
+| Transfer/import state | Export/import preview and import review state. | `preview`, `dry-run`, `proposed`, `accepted`, `rejected`, `blocked` |
+| Comparison/report classification | Update, audit, diff, and lifecycle reports. | `clean_update_available`, `merge_required`, `same_version_hash_mismatch`, `unsupported`, `stale`, `drifted` |
+| Runtime/generated status | Downstream generated output and runtime freshness. | `generated_current`, `generated_stale`, `generated_missing`, `runtime_current`, `runtime_drifted`, `manual_import_required` |
+| Official catalog status | Core catalog availability and display state. | `available`, `deprecated`, `retired`, `blocked` |
+
+Official catalog status values are not canonical `lifecycle_status` values. The
+official catalog uses `catalog_status` so that display availability does not
+change the manifest or deployed-pack lifecycle namespace.
+
+## Official Core Catalog
+
+The current-stage official catalog is Core-hosted and schema-backed:
+
+- `schemas/capability-pack-catalog.schema.yaml`
+- `catalog/capability-packs/index.yaml`
+- `catalog/capability-packs/<pack-id>/README.md`
+- `catalog/capability-packs/<pack-id>/CHANGELOG.md`
+
+Each official catalog entry must include:
+
+- pack id, title, official channel, and `catalog_status`;
+- latest pack version;
+- reviewed manifest path and `manifest_sha256`;
+- compatibility summary and manifest-derived compatibility metadata;
+- changelog and readme paths;
+- public review evidence;
+- explicit selected Vault authority after deployment;
+- explicit private/local evidence exclusion;
+- explicit pack-version versus Core-release independence;
+- `candidate_review_packet: false`;
+- `release_artifact_published: false` until a later reviewed release workflow
+  exists.
+
+Manifest hash checks fail closed: the same `pack_id` plus same pack version with
+a different `manifest_sha256` requires review before list, recommendation,
+preview, apply, export, import, or deployment work can proceed.
+
+The official catalog is not a separate repository, release artifact channel,
+export/import package, deployment receipt, generated adapter, runtime install,
+or selected Vault source of truth. A Core tag or release may advertise a catalog
+snapshot, but pack version and Core release/tag remain independent axes.
+
+Local candidate review packets remain diagnostic or power-user review artifacts.
+They cannot appear in the official catalog, become official packs, or become
+export/import/deploy inputs without a later reviewed maintainer flow that
+creates a reviewed manifest and official catalog entry.
+
+## Canonical Lifecycle States
 
 | State | Meaning | Agent action | Required gate |
 | --- | --- | --- | --- |
-| `detected` | Evidence suggests a possible pack. | Gather public/sanitized evidence and score signals. | Privacy gate if private evidence is needed. |
 | `candidate` | Reviewable candidate output from discovery. | Prepare candidate packet and false-positive controls. | Reviewer/Architect review before promotion. |
+| `reviewed` | Pack snapshot or boundary passed review but is not yet proposed for deployment. | Preserve as reviewed artifact or release input. | Reviewer/Architect acceptance. |
 | `proposed` | Boundary accepted for possible deployment. | Produce dry-run plan, diff, and lifecycle impact. | Human approval before active use. |
 | `active` | Reviewed pack is deployed as an optional capability. | Report status and downstream follow-up. | Activation approval and record governance. |
 | `exportable` | Pack may be exported after privacy review. | Produce exportability status only. | Human privacy/export review; #176 owns mechanics. |
 | `deprecated` | Pack remains readable but is no longer preferred. | Warn, suggest replacement, avoid new activation. | Reviewed rationale and user-visible status. |
-| `split` | Pack boundary is divided into multiple packs. | Produce membership diff and conflict report. | Human approval with rollback/defer plan. |
-| `merged` | Pack boundary is merged into another pack. | Produce target-pack diff and conflict report. | Human approval with conflict handling. |
 | `retired` | Pack should no longer be used. | Dry-run/apply only after approval. | Human approval and practice/asset lifecycle review. |
+| `archived` | Pack is retained only for history or provenance. | Keep readable; do not recommend or newly deploy. | Reviewed archival rationale. |
 | `blocked` | Transition is unsafe or lacks evidence. | Explain blockers and write nothing. | Human correction or explicit hold. |
 
 ## Transition Gates
 
-- `detected -> candidate`: requires passing discovery authority, privacy,
-  false-positive, and bootstrap-duplicate gates. No activation or export.
 - `candidate -> proposed`: requires Reviewer boundary review and Architect
   acceptance.
 - `proposed -> active`: requires human approval of boundary, included records,
@@ -61,10 +189,10 @@ primary user surface.
   user-visible warning/status report.
 - `deprecated -> retired`: requires dry-run report, affected records, generated
   and runtime follow-up, and human approval.
-- `active/proposed -> split`: requires proposed new pack ids, before/after
+- `active/proposed -> split outcome`: requires proposed new pack ids, before/after
   membership diff, per-record hashes, conflicts, local-edit handling, generated
   and runtime follow-up, rollback/defer plan, and human approval.
-- `active/proposed -> merged`: requires target pack id, membership diff,
+- `active/proposed -> merge outcome`: requires target pack id, membership diff,
   duplicate/conflict handling, local-edit handling, generated and runtime
   follow-up, rollback/defer plan, and human approval.
 - Any transition becomes `blocked` when metadata is malformed, hashes are
@@ -110,8 +238,9 @@ primary user surface.
      --apply
    ```
 
-   `activate`, `exportable`, `deprecate`, `split`, and `merge` are review-only
-   planning surfaces in #175. They must keep `writes: none`.
+  `activate`, `exportable`, `deprecate`, `split`, and `merge` are review-only
+  planning surfaces in #175. They must keep `writes: none`. `split` and
+  `merge` report transition outcomes, not persisted lifecycle statuses.
 
 5. After an approved Vault lifecycle change, publish and inspect downstream
    state separately:
@@ -154,7 +283,7 @@ Lifecycle tooling must refuse writes and print `writes: none` when it sees:
 
 ## #176 Boundary
 
-#175 may show `exportable` as a lifecycle status and report that export review is
-required. It must not implement export/import mechanics, produce export bundles,
-or mark a pack exportable from generated/runtime evidence alone. Privacy-safe
-export/import behavior belongs to #176.
+#175 may show `exportable` as a canonical lifecycle status and report that
+export review is required. It must not implement export/import mechanics,
+produce export bundles, or mark a pack exportable from generated/runtime
+evidence alone. Privacy-safe export/import behavior belongs to #176.

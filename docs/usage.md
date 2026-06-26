@@ -154,22 +154,207 @@ Capability packs are reviewed bundles that can add or change practices, assets, 
 
 Capability packs 是经过 review 的 bundles，可能新增或改变 practices、assets、generated output 和 runtime-facing behavior。
 
-Use Skill-first requests for normal work:
+For normal users, capability-pack consumption is Skill-first. The agent should
+translate your intent into the reviewed planning, apply, lifecycle, update, or
+status workflow. Raw scripts remain implementation details or advanced/debug
+commands.
+
+对 normal user 来说，capability-pack consumption 是 Skill-first。Agent 应把你的意图转换成 reviewed planning、apply、lifecycle、update 或 status workflow。Raw scripts 只作为 implementation details 或 advanced/debug commands。
+
+Power-user or transfer/debug requests remain available outside the normal-user
+consumption path: `discover capability packs`, `review capability pack lifecycle <pack-id>`,
+and `preview capability pack transfer <pack-path>`.
+These keep raw scripts behind implementation details and advanced/debug
+workflow surfaces.
+
+Use these normal-user requests for consumption flows:
 
 正常工作优先使用 Skill-first 请求：
 
 ```text
-discover capability packs
-evaluate capability pack <pack-path>
+list capability packs
+recommend capability packs for my setup
 preview capability pack deployment <pack-path>
 apply reviewed capability pack <pack-path>
-review capability pack lifecycle <pack-id>
-preview capability pack transfer <pack-path>
+verify capability pack <pack-id>
+update capability pack <pack-id-or-path>
+disable capability pack <pack-id>
 ```
 
-These requests route through the relevant Agent Foundry workflows, preserve review gates, and keep raw scripts as implementation details or advanced/debug commands.
+The user-visible report for every normal-user pack request should include:
 
-这些请求会路由到对应的 Agent Foundry workflows，保留 review gates，并把 raw scripts 作为 implementation details 或 advanced/debug commands。
+- pack identity: id, title, version, source, and whether the pack is reviewed;
+- display status: available, recommended, compatible, incompatible, deployed,
+  update available, blocked, or not installed;
+- layers inspected: Core, selected Vault, generated output, runtime receipts,
+  manual targets, or Local Private exclusions;
+- changed layers, if any;
+- `writes: none` for list, recommend, preview, verify, update comparison,
+  disable review, and transfer preview paths;
+- exact selected Vault write target for accepted apply paths;
+- next safe action;
+- rollback or defer guidance.
+
+每个 normal-user pack 请求的用户可见报告都应包含：
+
+- pack identity：id、title、version、source，以及是否 reviewed；
+- display status：available、recommended、compatible、incompatible、deployed、update available、blocked 或 not installed；
+- inspected layers：Core、selected Vault、generated output、runtime receipts、manual targets 或 Local Private exclusions；
+- changed layers，如果有；
+- list、recommend、preview、verify、update comparison、disable review 和 transfer preview 路径必须显示 `writes: none`；accepted apply 路径必须显示确切的 selected Vault write target；
+- next safe action；
+- rollback 或 defer guidance。
+
+State names in normal-user output are display, comparison/report, transfer, or
+runtime/generated statuses unless the report explicitly names a canonical
+`lifecycle_status`. Do not write `recommended`, `compatible`, `merge_required`,
+`drifted`, `generated_missing`, or similar transient terms as lifecycle values.
+
+Normal-user flows do not create packs, run candidate discovery, publish exports,
+or make maintainer release decisions. Use power-user workflows only when you
+explicitly ask to scan, propose, assemble, release, export, split, or merge
+capability packs.
+
+Normal-user output 中的 state names 默认是 display、comparison/report、transfer 或 runtime/generated statuses，除非报告明确写出 canonical `lifecycle_status`。不要把 `recommended`、`compatible`、`merge_required`、`drifted`、`generated_missing` 等 transient terms 写成 lifecycle values。
+
+Normal-user flows 不创建 packs、不运行 candidate discovery、不发布 exports，也不做 maintainer release decisions。只有当你明确要求 scan、propose、assemble、release、export、split 或 merge capability packs 时，才使用 power-user workflows。
+
+## Optional First-Party Starter Packs / 可选 First-Party Starter Packs
+
+Starter packs are optional after setup and first value. Do not make a new user
+choose them before the normal harvest, refresh, or status loop works.
+
+Starter packs 是 setup 和 first value 之后的可选项。不要让新用户在正常 harvest、refresh 或 status loop 可用之前必须选择它们。
+
+The official Core catalog currently exposes:
+
+当前 official Core catalog 暴露：
+
+| Pack | Normal-user use / 普通用户用途 |
+| --- | --- |
+| `pack.bootstrap.minimal` | Minimal bootstrap capability and prerequisite for optional starter packs. / 最小 bootstrap capability，也是 optional starter packs 的前置条件。 |
+| `pack.multi-agent.optional` | GitHub issue/PR collaboration starter with durable comments, role labels, and review handoff habits. / GitHub issue/PR 协作 starter，覆盖 durable comments、role labels 和 review handoff habits。 |
+
+Architecture-boundary, source-of-truth, Generated/Runtime downstream, and Local
+Private evidence-exclusion guidance belongs in `pack.bootstrap.minimal` at the
+current stage. It is not a standalone optional starter pack.
+
+Architecture-boundary、source-of-truth、Generated/Runtime downstream 和 Local Private evidence-exclusion guidance 当前阶段属于 `pack.bootstrap.minimal`，不是 standalone optional starter pack。
+
+Use the normal-user requests in this order when evaluating a starter pack:
+
+评估 starter pack 时，按这个顺序使用 normal-user requests：
+
+```text
+list capability packs
+recommend capability packs for my setup
+preview capability pack deployment <pack-path>
+apply reviewed capability pack <pack-path>
+verify capability pack <pack-id>
+update capability pack <pack-id-or-path>
+disable capability pack <pack-id>
+```
+
+`list`, `recommend`, `preview`, `verify`, update comparison, and disable review
+paths should report `writes: none`. Accepted apply paths must name the exact
+selected Vault write target before writing. Generated adapters and runtime
+installs remain separate downstream follow-up, never catalog authority.
+
+`list`、`recommend`、`preview`、`verify`、update comparison 和 disable review 路径应报告 `writes: none`。Accepted apply 路径必须在写入前说明确切 selected Vault write target。Generated adapters 和 runtime installs 始终是独立 downstream follow-up，不能成为 catalog authority。
+
+Core catalog pages carry version, manifest hash, provenance, compatibility, and
+review evidence. Those details are for ordinary/complete review, not mandatory
+beginner onboarding. After accepted deployment, the selected User Vault remains
+canonical; Core catalog entries are discoverability metadata.
+
+Core catalog pages 保存 version、manifest hash、provenance、compatibility 和 review evidence。这些细节属于 ordinary/complete review，不是 beginner onboarding 的必选内容。Accepted deployment 后 selected User Vault 仍然是 canonical；Core catalog entries 是 discoverability metadata。
+
+### First-Party Pack Selection Principles / First-Party Pack 选择原则
+
+A first-party Core capability pack should be standalone only when it has
+independent user value beyond bootstrap, a cohesive reusable goal, enough mature
+payload beyond a thin checklist, clear audience and lifecycle behavior, low
+coupling to mandatory bootstrap/governance behavior, and public-safe sanitized
+evidence.
+
+First-party Core capability pack 只有在具备 bootstrap 之外的独立用户价值、cohesive reusable goal、超过 thin checklist 的成熟 payload、清晰 audience 和 lifecycle behavior、对 mandatory bootstrap/governance behavior 的低耦合，以及 public-safe sanitized evidence 时，才应成为 standalone pack。
+
+After deployment, the selected User Vault remains canonical. `recommend`,
+`preview`, `verify`, `update`, and `disable` surfaces are read-only unless a
+later reviewed apply step is accepted. Generated, Runtime, and Local Private artifacts cannot be pack authority.
+
+Deployment 后 selected User Vault 仍然是 canonical。`recommend`、`preview`、`verify`、`update` 和 `disable` surface 默认 read-only，除非后续 reviewed apply step 被接受。Generated、Runtime 和 Local Private artifacts 不能成为 pack authority。
+
+Provider, frontend, private-project, raw selected Vault export, Generated, and
+Runtime candidates stay deferred or rejected unless a later issue defines safe
+public fixtures and review gates.
+
+Provider、frontend、private-project、raw selected Vault export、Generated 和 Runtime candidates 需要继续 defer 或 reject，除非后续 issue 定义 safe public fixtures 和 review gates。
+
+## Power-User Capability Pack Maintenance / Power-User Capability Pack 维护
+
+Power-user capability-pack workflows are advanced maintenance-level workflows.
+They are available when you explicitly ask to scan, propose, evaluate,
+assemble, release, review exportability, deprecate, split, or merge capability
+packs. They do not create strict permissions or hidden access control; the
+distinction is about risk, review depth, and output shape.
+
+Power-user capability-pack workflows 是 advanced maintenance-level workflows。只有当你明确要求 scan、propose、evaluate、assemble、release、review exportability、deprecate、split 或 merge capability packs 时才使用。这里不创建 strict permissions 或 hidden access control；区别在于 risk、review depth 和 output shape。
+
+Use these advanced maintenance requests:
+
+```text
+scan capability pack candidate boundaries
+discover capability packs
+evaluate capability pack <path>
+assemble capability pack draft <candidate-id>
+review capability pack release <pack-id-or-path>
+review capability pack exportability <pack-id-or-path>
+review capability pack deprecation <pack-id>
+review capability pack split or merge <pack-id>
+```
+
+Warning: these workflows may create taxonomy, versioning, distribution,
+privacy, or compatibility decisions for review. They must not create, activate,
+export, publish, or deploy a pack without a later reviewed step.
+
+警告：这些 workflows 可能生成需要 review 的 taxonomy、versioning、distribution、privacy 或 compatibility decisions。未经后续 reviewed step，不得 create、activate、export、publish 或 deploy pack。
+
+Power-user outputs are review packets by default, not active artifacts. A review
+packet should include:
+
+- requested maintenance flow and pack or candidate identity;
+- evidence sources and authority layer;
+- proposed boundary, draft membership, version or taxonomy decision;
+- privacy, distribution, compatibility, generated, and runtime impact;
+- candidate discovery outcome, transfer/import state, comparison/report
+  classification, or canonical `lifecycle_status`, clearly labeled by
+  namespace;
+- required Reviewer, Architect, or Human gate;
+- `writes: none`;
+- next safe action and rollback or defer guidance.
+
+Power-user output 默认是 review packet，不是 active artifact。Review packet 应包含：
+
+- requested maintenance flow 以及 pack 或 candidate identity；
+- evidence sources 和 authority layer；
+- proposed boundary、draft membership、version 或 taxonomy decision；
+- privacy、distribution、compatibility、generated 和 runtime impact；
+- candidate discovery outcome、transfer/import state、comparison/report classification 或 canonical `lifecycle_status`，并清楚标出 namespace；
+- 必需的 Reviewer、Architect 或 Human gate；
+- `writes: none`；
+- next safe action 和 rollback 或 defer guidance。
+
+Candidate outcomes, split/merge outcomes, exportability findings, and release
+classifications are review/report values unless a later reviewed lifecycle step
+persists a canonical pack `lifecycle_status`. Do not treat a review packet as an
+activation, export, publication, or runtime deploy authorization.
+
+Candidate outcomes、split/merge outcomes、exportability findings 和 release classifications 默认是 review/report values，除非后续 reviewed lifecycle step 持久化 canonical pack `lifecycle_status`。不要把 review packet 当作 activation、export、publication 或 runtime deploy authorization。
+
+Candidate discovery is a power-user diagnostic review-list flow. It does not run automatically during normal-user pack consumption, and it does not create candidate files, manifests, selected Vault records, exports, generated output, or runtime changes by default. A later reviewed power-user step must accept the review list before draft assembly or durable candidate-record work begins.
+
+Candidate discovery 是 power-user diagnostic review-list flow。它不会在 normal-user pack consumption 中自动运行，也不会默认创建 candidate files、manifests、selected Vault records、exports、generated output 或 runtime changes。必须先由后续 reviewed power-user step 接受 review list，才能开始 draft assembly 或 durable candidate-record work。
 
 Use plan commands before apply commands when operating manually or debugging:
 

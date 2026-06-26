@@ -6,7 +6,7 @@ required_fields:
   pack_id: "Stable pack id such as pack.bootstrap.minimal or pack.multi-agent.optional."
   title: "Short human-readable pack title."
   description: "One sentence describing the pack's reusable capability."
-  lifecycle_status: "candidate | reviewed | active | deprecated | retired | archived"
+  lifecycle_status: "candidate | reviewed | proposed | active | exportable | deprecated | retired | archived | blocked"
   version: "Snapshot version string. Use semantic versioning when practical."
   exported_at: "UTC timestamp or YYYY-MM-DD for the exported snapshot."
   distribution_type: "mandatory_bootstrap | optional_capability | product_project_candidate"
@@ -30,7 +30,7 @@ compatibility_fields:
 included_record_fields:
   id: "Stable record id."
   kind: "practice | asset | doc | template | example | config_default"
-  lifecycle_status: "Record lifecycle state intended after reviewed deployment."
+  lifecycle_status: "Record lifecycle state intended after reviewed deployment. This is a member-record state, not a pack report/display/import/runtime status."
   path: "Path inside the pack snapshot, relative to the manifest directory."
   source_version: "Version of this item within the pack."
   content_sha256: "SHA-256 digest of the referenced snapshot file."
@@ -42,7 +42,7 @@ included_record_fields:
 executable_payload_fields:
   id: "Stable payload id."
   title: "Short helper title."
-  lifecycle_status: "candidate | reviewed | active | deprecated | retired | archived"
+  lifecycle_status: "candidate | reviewed | proposed | active | exportable | deprecated | retired | archived | blocked"
   path: "Path inside the pack snapshot, relative to the manifest directory."
   source_sha256: "SHA-256 digest of the referenced helper source."
   interpreter: "Runtime or interpreter such as python3, node, bash, or none."
@@ -84,6 +84,32 @@ advanced_metadata_sections:
     activation_input: "Must not be true."
     export_input: "Must not be true."
 
+state_namespaces:
+  pack_canonical_lifecycle:
+    owns: "Persisted pack manifest and deployed-pack metadata lifecycle_status values."
+    allowed_values: "candidate | reviewed | proposed | active | exportable | deprecated | retired | archived | blocked"
+    not_allowed_here: "Adopter display status, candidate discovery outcome, transfer/import state, comparison/report classification, generated output status, runtime status, or split/merge report outcome."
+  adopter_discovery_display_status:
+    owns: "Normal-user list/recommend/status copy and Skill display."
+    examples: "available | recommended | compatible | incompatible | installed | deployed | update_available | not_installed"
+    persistence_rule: "Do not persist these as lifecycle_status."
+  candidate_discovery_outcome:
+    owns: "Power-user candidate discovery review-list output."
+    examples: "candidate | baseline_control | extend_existing | deferred_overlap | deferred_insufficient_evidence | deferred_privacy_review | rejected_false_positive | rejected_too_broad | rejected_too_narrow | blocked_policy"
+    persistence_rule: "Candidate outcomes stay in candidate records and must not become active pack lifecycle_status values."
+  transfer_import_state:
+    owns: "Export/import preview and transfer review state."
+    examples: "preview | dry-run | proposed | accepted | rejected | blocked"
+    persistence_rule: "Transfer/import states do not activate, deprecate, retire, or otherwise change pack lifecycle_status."
+  comparison_report_classification:
+    owns: "Update, audit, diff, and lifecycle report classifications."
+    examples: "clean_update_available | merge_required | same_version_hash_mismatch | unsupported | stale | drifted | manual_target_pending"
+    persistence_rule: "Report classifications must be labeled as report output, not lifecycle_status."
+  runtime_generated_status:
+    owns: "Downstream generated output and runtime freshness/receipt status."
+    examples: "generated_current | generated_stale | generated_missing | runtime_current | runtime_drifted | runtime_missing | manual_import_required"
+    persistence_rule: "Generated/runtime status is downstream evidence only and never pack authority."
+
 rules:
   - "A pack snapshot is a transfer and review artifact, not a live source of truth after deployment."
   - "After deployment, selected User Vault records own canonical practice, asset, membership, and provenance state."
@@ -97,3 +123,6 @@ rules:
   - "Same id from unrelated provenance or incompatible kind must fail closed."
   - "Local Vault edits must be treated as canonical user state and handled through a reviewed merge proposal."
   - "Runtime installation is out of scope for the manifest fixture; generated or managed runtime outputs come later."
+  - "Persisted lifecycle_status fields must use the pack_canonical_lifecycle namespace only."
+  - "Do not persist previewed, recommended, compatible, merge_required, drifted, generated_missing, runtime_current, detected, split, or merged as pack lifecycle_status."
+  - "Split and merge are review-only transition actions or report outcomes unless a later reviewed schema explicitly promotes a replacement lifecycle value."
