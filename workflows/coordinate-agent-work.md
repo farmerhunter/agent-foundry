@@ -63,6 +63,30 @@ workflow_telemetry:
     labels_added: 1
     labels_removed: 1
     project_writes: 0
+  retry_and_fallback:
+    github_api_read_attempts: 1
+    github_api_failures: 0
+    project_read_attempts: 1
+    project_write_attempts: 0
+    fallback_review_used: false
+    fallback_review_reason: null
+  workflow_state_corrections:
+    hdc_superseded_count: 0
+    label_cleanup_count: 0
+    closure_sync_passes: 0
+    stale_state_repairs: 0
+  dispatch_and_links:
+    source_threads_count: 1
+    dispatch_mechanism: live_thread_dispatch | github_comment | generated_note | portable_prompt | none
+    durable_links_count:
+      issues: 1
+      pull_requests: 1
+      comments: 2
+  observed_counters:
+    observed_counter_available: false
+    observed_counter_source: null
+    elapsed_time_available: false
+    elapsed_time_source: null
   estimated_tokens:
     input: 8000-12000
     output: 1000-2500
@@ -89,9 +113,15 @@ Use these fields whenever telemetry is included:
 Use these when the information is reasonably available:
 
 - `rehydration_sources`
+- `retry_and_fallback`
+- `workflow_state_corrections`
+- `dispatch_and_links`
+- `observed_counters`
 - `estimated_tokens`
 - `reason_full_rehydrate_required`
 - `notes`
+
+Use `unknown` or `not_available` rather than guessing when a counter cannot be observed in the current runtime. `observed_counters` are calibration evidence only; they do not replace `estimated_tokens` and must not be added to estimate totals unless a later reviewed workflow defines a compatible accounting unit.
 
 ## Transition Types
 
@@ -287,6 +317,27 @@ workflow_cost_ledger:
     value: unknown
     source: null
     notes: "Optional observed thread/goal counter; do not add to estimate totals."
+  instrumentation:
+    observed_counter_available: false
+    observed_counter_source: null
+    elapsed_time_available: false
+    elapsed_time_source: null
+    github_api_read_attempts: unknown
+    github_api_failures: unknown
+    project_read_attempts: unknown
+    project_write_attempts: unknown
+    fallback_review_used: false
+    fallback_review_reason: null
+    hdc_superseded_count: 0
+    label_cleanup_count: 0
+    source_threads_count: unknown
+    dispatch_mechanisms: []
+    durable_links_count:
+      issues: unknown
+      pull_requests: unknown
+      comments: unknown
+    closure_sync_passes: 0
+    stale_state_repairs: 0
   overhead_notes: []
 ```
 
@@ -304,6 +355,27 @@ workflow_comparison_telemetry:
     user_visible_scope: false
     risk_class: low | medium | high | mixed
     human_gate_count: 0
+  instrumentation:
+    observed_counter_available: false
+    observed_counter_source: null
+    elapsed_time_available: false
+    elapsed_time_source: null
+    github_api_read_attempts: unknown
+    github_api_failures: unknown
+    project_read_attempts: unknown
+    project_write_attempts: unknown
+    fallback_review_used: false
+    fallback_review_reason: null
+    hdc_superseded_count: 0
+    label_cleanup_count: 0
+    source_threads_count: unknown
+    dispatch_mechanisms: []
+    durable_links_count:
+      issues: unknown
+      pull_requests: unknown
+      comments: unknown
+    closure_sync_passes: 0
+    stale_state_repairs: 0
   single_agent_baseline:
     source: observed | estimated | unavailable
     transitions: 0
@@ -376,6 +448,8 @@ workflow_comparison_telemetry:
     confidence: low | medium | high
     notes: "Decision-support estimate, not billing-grade accounting."
 ```
+
+The `instrumentation` block is intentionally separate from `ledger_estimated_tokens` and `observed_goal_tokens`. It records whether the workflow captured enough operational evidence to compare routes later. `unknown` means the workflow did not capture that value; `not_available` means the runtime or tool surface did not expose it; `0` means it was measured and did not occur.
 
 ### Comparison Rules
 
