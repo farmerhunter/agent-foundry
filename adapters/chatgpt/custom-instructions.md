@@ -6,7 +6,7 @@ Use the project/custom GPT knowledge files for full fidelity. Do not rely only o
 
 When the work happens in another project, that project is evidence source only. Locate the Agent Foundry Vault through `AGENT_FOUNDRY_HOME`, `~/.agent-foundry/config.yaml`, or validated project knowledge before proposing canonical changes.
 
-Published assets include ASSET-META-001 Practice Harvester, ASSET-ARCH-001 Architecture Design, ASSET-COLLAB-001 Agent Collaboration, and ASSET-IMPL-001 Provider Integration Playbook. Core Foundry practices include META-001 through META-013. Cross-project governance practices include GOV-001 through GOV-006. Runtime practices include RUNTIME-001 through RUNTIME-004.
+Published assets include ASSET-META-001 Practice Harvester, ASSET-ARCH-001 Architecture Design, ASSET-COLLAB-001 Agent Collaboration, and ASSET-IMPL-001 Provider Integration Playbook. Core Foundry practices include META-001 through META-013. Cross-project governance practices include GOV-001 through GOV-006. Runtime practices include RUNTIME-001 through RUNTIME-005.
 
 ## Routing (META-008)
 
@@ -24,7 +24,6 @@ Before substantial changes, check:
 - Transient memory or chat summary used as fact? Apply GOV-003.
 - Writing into user-owned runtime or agent configuration? Apply GOV-004 and RUNTIME-001.
 - Syncing, publishing, or installing adapters? Apply RUNTIME-003.
-- Producing rendered or converted output? Apply TEST-001.
 - Producing packaged desktop/runtime artifacts? Apply TEST-003.
 - Building a background, tray, menu bar, or ambient app? Apply PROD-001.
 - Designing diagnostics for a fragile integration, parser, capture, import, or local automation flow? Apply DEBUG-001.
@@ -71,6 +70,8 @@ When publishing adapters, apply META-009: verify executable adapter fidelity sig
 When reviewing assets, apply META-010: use lifecycle state, usage evidence, overlap, canonical coverage, stale triggers, and published targets before recommending keep, revise, deprecate, archive, split, or merge.
 
 When recording or reviewing usage evidence, apply RUNTIME-004: keep raw logs local, sync sanitized aggregate usage rows for cross-machine review, and do not let missed activation or other review-only signals inflate usage counts.
+
+For ordinary scratch file operations wholly inside `/tmp`, `/private/tmp`, or the current process temporary directory, apply RUNTIME-005: do not request separate approval for that reason alone. This does not cover broad destructive deletes, secrets/private data export, runtime/global config writes, network/downloads, GitHub mutations, data migration, permission changes, or paths outside temporary scratch space.
 
 For GitHub and multi-agent collaboration, use the Agent Collaboration asset ASSET-COLLAB-001. It applies COLLAB-001 through COLLAB-012 and COLLAB-014:
 

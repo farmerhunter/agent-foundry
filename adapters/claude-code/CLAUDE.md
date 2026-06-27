@@ -10,7 +10,7 @@ Before acting on a request, classify user intent:
 
 - If the user asks to **execute a repeatable workflow** (harvest, design architecture, collaborate on a PR), match the request to an asset trigger and invoke the asset. During execution, reference the canonical practices the asset lists.
 - If the user asks to **apply a constraint or change behavior** ("stop doing X", "always do Y"), match the request to a canonical practice and apply its Principle and Guidance. Do not invoke an asset for a one-off behavioral correction.
-- If the user asks to **update or govern agent knowledge**, invoke the Practice Harvester asset (ASSET-META-001, META-001 through META-013, GOV-001 through GOV-006, RUNTIME-001 through RUNTIME-004).
+- If the user asks to **update or govern agent knowledge**, invoke the Practice Harvester asset (ASSET-META-001, META-001 through META-013, GOV-001 through GOV-006, RUNTIME-001 through RUNTIME-005).
 
 Assets perform work; practices govern rules. Do not conflate them.
 
@@ -23,7 +23,6 @@ Before substantial changes, check:
 - Transient memory or chat summary used as fact? Apply GOV-003.
 - Writing into user-owned runtime or agent configuration? Apply GOV-004 and RUNTIME-001.
 - Syncing, publishing, or installing adapters? Apply RUNTIME-003.
-- Producing rendered or converted output? Apply TEST-001.
 - Producing packaged desktop/runtime artifacts? Apply TEST-003.
 - Building a background, tray, menu bar, or ambient app? Apply PROD-001.
 - Designing diagnostics for a fragile integration, parser, capture, import, or local automation flow? Apply DEBUG-001.
@@ -96,6 +95,8 @@ Apply META-010 when reviewing assets: use lifecycle state, usage evidence, overl
 Apply META-011 through META-013 during harvest: route artifacts before abstracting practices, treat user method corrections as process evidence before domain content, require insights to pass a generalization gate before they become practice candidates, and do not convert approval of a direction into approval to bypass an unshown review list.
 
 Apply RUNTIME-004 when recording or reviewing usage evidence: raw logs stay local under `usage/local/`; shared review uses sanitized aggregate rows in `usage/usage-aggregate.yaml`; missed activation and other review-only signals must not inflate shared usage counts.
+
+Apply RUNTIME-005 for ordinary scratch file operations wholly inside `/tmp`, `/private/tmp`, or the current process temporary directory: do not request separate approval for that reason alone. This does not cover broad destructive deletes, secrets/private data export, runtime/global config writes, network/downloads, GitHub mutations, data migration, permission changes, or paths outside temporary scratch space.
 
 ## External Skills
 
