@@ -7,7 +7,7 @@ description: Use when the user says "harvest practices", "harvest skills", "harv
 
 This skill maintains Agent Foundry, the user's canonical capability system.
 
-Asset ID: ASSET-META-001. Canonical constraints include META-001 through META-013, GOV-001 through GOV-006, and RUNTIME-001 through RUNTIME-004.
+Asset ID: ASSET-META-001. Canonical constraints include META-001 through META-013, GOV-001 through GOV-006, and RUNTIME-001 through RUNTIME-005.
 
 ## Asset vs Practice
 
@@ -22,7 +22,6 @@ Before substantial changes, check:
 - Transient memory or chat summary used as fact? Apply GOV-003.
 - Writing into user-owned runtime or agent configuration? Apply GOV-004 and RUNTIME-001.
 - Syncing, publishing, or installing adapters? Apply RUNTIME-003.
-- Producing rendered or converted output? Apply TEST-001.
 
 ## Short Commands
 

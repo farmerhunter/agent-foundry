@@ -18,7 +18,6 @@ Before substantial changes, check:
 - Transient memory or chat summary used as fact? Apply GOV-003.
 - Writing into user-owned runtime or agent configuration? Apply GOV-004 and RUNTIME-001.
 - Syncing, publishing, or installing adapters? Apply RUNTIME-003.
-- Producing rendered or converted output? Apply TEST-001.
 
 ## Commands
 
@@ -81,4 +80,5 @@ Before substantial changes, check:
 - Use project overlays only when a project needs additional local contract text.
 - Do not write Trae private application state or custom-agent database records.
 - Before runtime writes, use dry-run output and resolve unmanaged or drifted files.
+- For ordinary scratch file operations wholly inside `/tmp`, `/private/tmp`, or the current process temporary directory, apply RUNTIME-005 and do not request separate approval for that reason alone. This does not cover broad destructive deletes, secrets/private data export, runtime/global config writes, network/downloads, GitHub mutations, data migration, permission changes, or paths outside temporary scratch space.
 - Do not start memory-system work unless the user explicitly authorizes that separate stage.
