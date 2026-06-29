@@ -56,6 +56,28 @@ github:
   retry_policy: "bounded_retry_for_transient_network_or_rate_limit_only"
   markdown_comment_mode: "body_file_or_api_safe"
   mutation_default: "preview"
+  operation_policy: "hybrid_runtime_discovery_then_connector_helper_api_bare_gh"
+  runtime_discovery_required_per_session: true
+  connector_preferred_for_low_risk:
+    - issue_pr_reads
+    - top_level_comments
+    - issue_create_update
+    - label_add_remove
+    - pr_metadata
+  helper_first_for:
+    - scheduler_semantics
+    - issue_context
+    - handoff_shaping
+    - dispatch_evidence
+    - telemetry
+    - audit
+    - dry_run_preview
+    - fail_closed_permission_checks
+  current_helper_comment_write_apply: false
+  controlled_gh_api_fallback: "body_file_or_structured_json_when_connector_unavailable_or_unclear"
+  bare_gh_last_resort: "short_low_risk_comments_only_with_bounded_retry_and_failure_recording"
+  project_v2_policy: "optional_visual_mirror_only_no_generalized_write_policy"
+  runtime_approval_prompt_boundary: "workflow_authorization_does_not_override_app_level_approval_prompts"
 
 project_v2:
   mode: "optional_visual_mirror"

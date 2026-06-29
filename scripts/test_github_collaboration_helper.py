@@ -14,6 +14,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 HELPER = ROOT / "scripts" / "github_collaboration_helper.py"
 TEMPLATE = ROOT / "templates" / "github-role-routing.template.yaml"
+WORKFLOW = ROOT / "workflows" / "github-collaboration-helper.md"
 
 
 def run(args: list[str], cwd: Path, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
@@ -52,8 +53,53 @@ def expect_fail(name: str, result: subprocess.CompletedProcess[str], expected: s
     return [f"{name}: expected failure containing {expected!r}, got {result.returncode}\n{output}"]
 
 
+def expect_text_contains(name: str, text: str, snippets: list[str]) -> list[str]:
+    missing = [snippet for snippet in snippets if snippet not in text]
+    if not missing:
+        print(f"{name}: ok")
+        return []
+    return [f"{name}: missing {missing!r}"]
+
+
 def main() -> int:
     errors: list[str] = []
+    workflow_text = WORKFLOW.read_text(encoding="utf-8")
+    template_text = TEMPLATE.read_text(encoding="utf-8")
+    errors.extend(
+        expect_text_contains(
+            "github-operation-policy-workflow",
+            workflow_text,
+            [
+                "GitHub Operation Policy",
+                "Each role/session must discover",
+                "GitHub connector or structured tools",
+                "repo-local helper paths first",
+                "controlled `gh api` with a body-file or structured JSON payload",
+                "bare `gh issue comment --body` only as a last resort",
+                "permission-smoke agent-comment",
+                "Do not document or imply that `agent-comment --apply`",
+                "Project v2 was not meaningfully evaluated",
+                "Workflow authorization does not override product/runtime approval prompts",
+            ],
+        )
+    )
+    errors.extend(
+        expect_text_contains(
+            "github-operation-policy-template",
+            template_text,
+            [
+                "operation_policy: \"hybrid_runtime_discovery_then_connector_helper_api_bare_gh\"",
+                "runtime_discovery_required_per_session: true",
+                "connector_preferred_for_low_risk:",
+                "helper_first_for:",
+                "current_helper_comment_write_apply: false",
+                "controlled_gh_api_fallback: \"body_file_or_structured_json_when_connector_unavailable_or_unclear\"",
+                "bare_gh_last_resort: \"short_low_risk_comments_only_with_bounded_retry_and_failure_recording\"",
+                "project_v2_policy: \"optional_visual_mirror_only_no_generalized_write_policy\"",
+                "runtime_approval_prompt_boundary: \"workflow_authorization_does_not_override_app_level_approval_prompts\"",
+            ],
+        )
+    )
     with tempfile.TemporaryDirectory(prefix="agent-foundry-gh-helper-") as tmp:
         base = Path(tmp)
         fixture = base / "issue.json"

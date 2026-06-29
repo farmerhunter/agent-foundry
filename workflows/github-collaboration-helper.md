@@ -116,6 +116,48 @@ state:
 Retry behavior must not hide permission failures or convert a preview into an
 apply. Mutation helpers remain out of scope for Unit A.
 
+## GitHub Operation Policy
+
+Use a hybrid GitHub operation policy. Each role/session must discover the
+current GitHub connector or structured tool surface before choosing a write
+path; do not assume Architect, Coordinator, Reviewer, Implementer, Harvester, or
+future runtime sessions expose identical tools.
+
+Preferred routing order:
+
+1. Use GitHub connector or structured tools when the current session exposes a
+   clear, bounded path for straightforward low-risk issue/PR reads, top-level
+   comments, issue create/update, label add/remove, and PR metadata reads.
+   Record observed connector behavior as session evidence, not a universal
+   runtime guarantee.
+2. Use repo-local helper paths first when scheduler semantics, issue context,
+   handoff shaping, dispatch evidence, telemetry, audit, dry-run previews, or
+   fail-closed permission checks matter.
+3. Use controlled `gh api` with a body-file or structured JSON payload when
+   connector tools are unavailable, incomplete, unclear, or failing and the
+   write is still inside the authorized workflow.
+4. Use bare `gh issue comment --body` only as a last resort for short
+   low-risk comments. Apply bounded retry or fallback and record TLS, EOF,
+   timeout, or rate-limit-like failures explicitly.
+
+Current Agent Foundry helper behavior:
+
+- `scripts/github_collaboration_helper.py` remains read-only, dry-run, or
+  fail-closed for GitHub comment writes.
+- `permission-smoke agent-comment` must remain forbidden until a later reviewed
+  mutation-helper gate adds a comment-write apply path.
+- Do not document or imply that `agent-comment --apply` or an equivalent
+  comment-write helper exists in the current helper.
+
+Project v2 was not meaningfully evaluated by the #272 pilot. Treat Project v2
+as an optional visual mirror and scheduler metadata surface only; do not derive
+a generalized Project v2 connector or mutation policy from this workflow.
+
+Workflow authorization does not override product/runtime approval prompts. If a
+runtime asks for shell approval despite a workflow-approved action, stop for the
+user or switch to an already available approved connector/helper path. Do not
+claim workflow policy suppresses app-level prompts.
+
 ## Scheduler Audit
 
 Use `scheduler-audit` only for transition-gated scheduler readback, such as an
