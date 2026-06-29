@@ -487,7 +487,7 @@ def main() -> int:
         )
 
         basic_plan = run([str(PLAN), str(BOOTSTRAP_PACK), "--core-root", str(ROOT), "--vault-root", str(vault)])
-        errors.extend(expect("advanced-basic-pack-flow-still-works", basic_plan, True, "add: 24"))
+        errors.extend(expect("advanced-basic-pack-flow-still-works", basic_plan, True, "add: 25"))
         errors.extend(expect("advanced-basic-pack-writes-none", basic_plan, True, "writes: none"))
 
         candidate_pack = write_candidate_as_manifest(base)

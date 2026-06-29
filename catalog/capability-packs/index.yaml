@@ -8,7 +8,7 @@ entries:
     catalog_status: available
     latest_version: 0.2.0
     manifest_path: fixtures/capability-packs/bootstrap-minimal/manifest.yaml
-    manifest_sha256: 8cb8e4495cd5cc04c9390ce9ec616d5cd3edf3cadf258891d600e8acaf7141ef
+    manifest_sha256: a9c940d7ed56759b70082b973f1fd1591f27dcc6e8b6f7354ce91c297e97240e
     compatibility_summary: "Core schema 1; Vault layout [1]; bootstrap not required."
     compatibility_metadata:
       core_schema_version_min: 1

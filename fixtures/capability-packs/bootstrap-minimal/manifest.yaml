@@ -258,6 +258,16 @@ included_records:
     membership_role: bootstrap_required
     activation_default: active
     import_action: create_or_review_update
+  - id: RUNTIME-005
+    kind: practice
+    lifecycle_status: active
+    path: records/practices/RUNTIME-005-treat-tmp-as-preapproved-scratch-space.md
+    source_version: 2
+    content_sha256: "6892eb161e1412ebf5fc5716229b85f900da7ae74fa3a181817f4243a41f572e"
+    destination_layer: canonical_vault_record
+    membership_role: bootstrap_required
+    activation_default: active
+    import_action: create_or_review_update
   - id: ASSET-BOOT-001
     kind: asset
     lifecycle_status: active

@@ -252,7 +252,7 @@ def main() -> int:
         errors.extend(expect("optional-pack-refused", optional_result, False, "only mandatory_bootstrap packs are supported"))
 
         deploy_result = deploy_bootstrap(vault)
-        errors.extend(expect("deploy-bootstrap", deploy_result, True, "added: 24"))
+        errors.extend(expect("deploy-bootstrap", deploy_result, True, "added: 25"))
         errors.extend(expect("deploy-bootstrap-validates", deploy_result, True, "selected Vault validated"))
         for expected in [
             vault / "practices" / "meta" / "BOOT-001-bootstrap-orientation.md",
@@ -289,7 +289,7 @@ def main() -> int:
                 "--apply",
             ]
         )
-        errors.extend(expect("publish-bootstrap-vault", publish, True, "Active practices selected: 22"))
+        errors.extend(expect("publish-bootstrap-vault", publish, True, "Active practices selected: 23"))
         errors.extend(expect("publish-bootstrap-skill", publish, True, "Active assets selected: 2"))
         generated_text = "\n".join(path.read_text(encoding="utf-8") for path in generated.rglob("*") if path.is_file())
         for expected in ["BOOT-001", "META-001", "ASSET-BOOT-001", "ASSET-META-001", "Generated from the selected Agent Foundry Vault."]:
@@ -297,7 +297,7 @@ def main() -> int:
                 errors.append(f"publish-bootstrap-vault: generated output missing {expected}")
 
         rerun = deploy_bootstrap(vault)
-        errors.extend(expect("deploy-bootstrap-rerun-skip", rerun, True, "skipped: 24"))
+        errors.extend(expect("deploy-bootstrap-rerun-skip", rerun, True, "skipped: 25"))
         errors.extend(expect("deploy-bootstrap-rerun-no-add", rerun, True, "added: 0"))
 
         errors.extend(exercise_restore_rollback_boundaries(base, vault))
