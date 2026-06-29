@@ -419,7 +419,7 @@ def main() -> int:
         errors.extend(expect("init-blank-vault", init_blank(vault), True, "Blank Vault initialized and validated."))
 
         bootstrap_plan = plan_pack(BOOTSTRAP_PACK, vault)
-        errors.extend(expect("plan-bootstrap-add", bootstrap_plan, True, "add: 24"))
+        errors.extend(expect("plan-bootstrap-add", bootstrap_plan, True, "add: 25"))
         errors.extend(expect("plan-bootstrap-no-writes", bootstrap_plan, True, "writes: none"))
 
         optional_without_bootstrap = plan_pack(OPTIONAL_PACK, vault)
@@ -435,7 +435,7 @@ def main() -> int:
         errors.extend(expect("deploy-bootstrap", deploy_bootstrap(vault), True, "selected Vault validated"))
 
         bootstrap_after_deploy = plan_pack(BOOTSTRAP_PACK, vault)
-        errors.extend(expect("plan-bootstrap-skip-after-deploy", bootstrap_after_deploy, True, "skip: 24"))
+        errors.extend(expect("plan-bootstrap-skip-after-deploy", bootstrap_after_deploy, True, "skip: 25"))
 
         optional_after_bootstrap = plan_pack(OPTIONAL_PACK, vault)
         errors.extend(expect("plan-optional-adds-records", optional_after_bootstrap, True, "add: 2"))
@@ -611,7 +611,7 @@ def main() -> int:
             sha256(target),
         )
         reordered = plan_pack(BOOTSTRAP_PACK, vault)
-        errors.extend(expect("plan-reordered-metadata-parses", reordered, True, "skip: 24"))
+        errors.extend(expect("plan-reordered-metadata-parses", reordered, True, "skip: 25"))
 
         write_advanced_deployed_index(
             vault,
@@ -622,7 +622,7 @@ def main() -> int:
             sha256(target),
         )
         advanced_deployed_index = plan_pack(BOOTSTRAP_PACK, vault)
-        errors.extend(expect("plan-advanced-deployed-index-parses", advanced_deployed_index, True, "skip: 24"))
+        errors.extend(expect("plan-advanced-deployed-index-parses", advanced_deployed_index, True, "skip: 25"))
 
         write_malformed_deployed_index(vault)
         malformed_metadata = plan_pack(BOOTSTRAP_PACK, vault)
