@@ -178,6 +178,34 @@ def main() -> int:
                             "state": "OPEN",
                             "labels": [{"name": "stage:AF-11"}, {"name": "risk:medium"}, {"name": "type:task"}],
                         },
+                        {
+                            "number": 230,
+                            "title": "Uppercase owner role",
+                            "state": "OPEN",
+                            "labels": [{"name": "stage:AF-11"}, {"name": "risk:medium"}, {"name": "needs:implementer"}],
+                            "body": "## Execution Contract\n\nOwner role: Implementer\nReview role: reviewer\nAcceptance role: architect\nCompletion handoff: to:reviewer\n",
+                        },
+                        {
+                            "number": 231,
+                            "title": "Compound acceptance role",
+                            "state": "OPEN",
+                            "labels": [{"name": "stage:AF-11"}, {"name": "risk:medium"}, {"name": "needs:implementer"}],
+                            "body": "## Execution Contract\n\nOwner role: implementer\nReview role: reviewer\nAcceptance role: architect / user\nCompletion handoff: to:reviewer\nHuman review prompt: ask user after merge\n",
+                        },
+                        {
+                            "number": 232,
+                            "title": "Reviewer target without review role",
+                            "state": "OPEN",
+                            "labels": [{"name": "stage:AF-11"}, {"name": "risk:medium"}, {"name": "needs:implementer"}],
+                            "body": "## Execution Contract\n\nOwner role: implementer\nAcceptance role: architect\nCompletion handoff: to:reviewer\nReviewer target: separate Reviewer agent\n",
+                        },
+                        {
+                            "number": 233,
+                            "title": "Legacy handoff",
+                            "state": "OPEN",
+                            "labels": [{"name": "stage:AF-11"}, {"name": "risk:medium"}, {"name": "needs:implementer"}],
+                            "body": "## Execution Contract\n\nOwner role: implementer\nReview role: reviewer\nAcceptance role: architect\nCompletion handoff: move to Review\n",
+                        },
                     ]
                 }
             ),
@@ -241,6 +269,14 @@ def main() -> int:
                             "title": "Unit B",
                             "labels": [{"name": "needs:implementer"}],
                             "updatedAt": "2026-06-18T00:00:00Z",
+                            "body": "## Execution Contract\n\nOwner role: implementer\nReview role: reviewer\nAcceptance role: architect\nCompletion handoff: to:reviewer\n",
+                        },
+                        {
+                            "number": 207,
+                            "title": "Bad contract",
+                            "labels": [{"name": "needs:implementer"}],
+                            "updatedAt": "2026-06-18T00:00:00Z",
+                            "body": "## Execution Contract\n\nOwner role: Implementer\nCompletion handoff: move to Review\nReviewer target: separate Reviewer agent\n",
                         },
                         {
                             "number": 206,
@@ -359,6 +395,23 @@ def main() -> int:
                 "needs:implementer",
             )
         )
+        inbox_result = run(
+            [
+                "--json",
+                "--repo",
+                "farmerhunter/agent-foundry",
+                "inbox",
+                "--config",
+                str(TEMPLATE),
+                "--fixture-json",
+                str(inbox),
+            ],
+            base,
+        )
+        errors.extend(expect_ok("inbox-contract-validation-surface", inbox_result, '"contract_validation"'))
+        errors.extend(expect_ok("inbox-contract-validation-invalid", inbox_result, '"status": "invalid"'))
+        errors.extend(expect_ok("inbox-contract-validation-role", inbox_result, '"actual": "Implementer"'))
+        errors.extend(expect_ok("inbox-contract-validation-handoff", inbox_result, '"actual": "move to Review"'))
         errors.extend(
             expect_ok(
                 "issue-context-fixture",
@@ -406,8 +459,16 @@ def main() -> int:
             "open_needs_label_status_mismatch",
             "multiple_needs_labels",
             "no_next_owner_label",
+            "execution_contract_invalid",
         ):
             errors.extend(expect_ok(f"scheduler-audit-{code}", scheduler_json, f'"code": "{code}"'))
+        for name, expected in (
+            ("scheduler-audit-uppercase-role", '"Owner role": "Implementer"'),
+            ("scheduler-audit-compound-acceptance", '"Acceptance role": "architect / user"'),
+            ("scheduler-audit-missing-review-role", "Reviewer target is present but Review role is missing."),
+            ("scheduler-audit-legacy-handoff", '"Completion handoff": "move to Review"'),
+        ):
+            errors.extend(expect_ok(name, scheduler_json, expected))
         errors.extend(expect_ok("scheduler-audit-json-status", scheduler_json, '"status": "findings"'))
         errors.extend(expect_ok("scheduler-audit-json-no-mutation", scheduler_json, '"mutation_performed": false'))
         degraded = run(
