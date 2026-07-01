@@ -132,7 +132,32 @@ def main() -> int:
                     "title": "Unit B",
                     "state": "OPEN",
                     "labels": [{"name": "needs:implementer"}, {"name": "stage:AF-11"}],
-                    "body": "## Execution Contract\n\n## Acceptance Criteria\n\n## Depends On",
+                    "body": "\n".join(
+                        [
+                            "```markdown",
+                            "## Final Execution Contract",
+                            "",
+                            "Example only; this fenced heading must not be validated.",
+                            "```",
+                            "",
+                            "```text",
+                            "## Execution Contract",
+                            "Owner role: Implementer",
+                            "Completion handoff: move to Review",
+                            "```",
+                            "",
+                            "## Execution Contract",
+                            "",
+                            "Owner role: implementer",
+                            "Review role: reviewer",
+                            "Acceptance role: architect",
+                            "Completion handoff: to:reviewer",
+                            "",
+                            "## Acceptance Criteria",
+                            "",
+                            "## Depends On",
+                        ]
+                    ),
                     "comments": [{"body": "latest"}, {"body": "older"}],
                 }
             ),
@@ -412,13 +437,19 @@ def main() -> int:
         errors.extend(expect_ok("inbox-contract-validation-invalid", inbox_result, '"status": "invalid"'))
         errors.extend(expect_ok("inbox-contract-validation-role", inbox_result, '"actual": "Implementer"'))
         errors.extend(expect_ok("inbox-contract-validation-handoff", inbox_result, '"actual": "move to Review"'))
+        issue_context_result = run(
+            ["--repo", "farmerhunter/agent-foundry", "issue-context", "205", "--fixture-json", str(fixture)],
+            base,
+        )
         errors.extend(
             expect_ok(
                 "issue-context-fixture",
-                run(["--repo", "farmerhunter/agent-foundry", "issue-context", "205", "--fixture-json", str(fixture)], base),
+                issue_context_result,
                 "summary_is_authority: False",
             )
         )
+        errors.extend(expect_ok("issue-context-ignores-fenced-contract-heading", issue_context_result, '"status": "ok"'))
+        errors.extend(expect_ok("issue-context-real-contract-owner", issue_context_result, '"Owner role": "implementer"'))
         errors.extend(
             expect_ok(
                 "scheduler-audit-fixture",

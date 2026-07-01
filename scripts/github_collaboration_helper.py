@@ -188,7 +188,28 @@ def scalar_in_block(block_text: str, key: str) -> str | None:
     return match.group(1).strip().strip('"')
 
 
+def strip_markdown_fenced_blocks(text: str) -> str:
+    output: list[str] = []
+    fence: tuple[str, int] | None = None
+    for line in text.splitlines(keepends=True):
+        if fence:
+            char, length = fence
+            if re.match(rf"^\s*{re.escape(char)}{{{length},}}\s*$", line.rstrip("\n\r")):
+                fence = None
+            output.append("\n" if line.endswith(("\n", "\r")) else "")
+            continue
+        match = re.match(r"^\s*(`{3,}|~{3,})", line)
+        if match:
+            marker = match.group(1)
+            fence = (marker[0], len(marker))
+            output.append("\n" if line.endswith(("\n", "\r")) else "")
+            continue
+        output.append(line)
+    return "".join(output)
+
+
 def extract_execution_contract(body: str) -> tuple[str | None, str]:
+    body = strip_markdown_fenced_blocks(body or "")
     sections: list[tuple[str, str]] = []
     pattern = re.compile(
         r"^##\s+(Final Execution Contract|Execution Contract|Draft Execution Contract)\s*$"
