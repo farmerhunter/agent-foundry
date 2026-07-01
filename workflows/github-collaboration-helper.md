@@ -100,6 +100,25 @@ Required properties:
   explains why telemetry was skipped under `workflows/coordinate-agent-work.md`.
 - `project_v2.mode` defaults to `optional_visual_mirror`.
 
+Execution Contract role fields are machine-readable. Use lowercase single-token
+role values and machine handoff values:
+
+```markdown
+## Execution Contract
+
+Owner role: implementer
+Review role: reviewer
+Acceptance role: architect
+Completion handoff: to:reviewer
+Reviewer target: separate Reviewer agent, contract-validation focused
+Human review prompt: only when a real human gate is needed
+```
+
+Keep natural-language reviewer descriptions, human prompts, and trial
+instructions in separate fields such as `Reviewer target:`, `Human verification
+needed:`, or `Human review prompt:`. Do not encode them in `Owner role:`,
+`Review role:`, `Acceptance role:`, or `Completion handoff:`.
+
 ## GitHub Auth And Retry Expectations
 
 Agents should verify GitHub readiness before making claims about available

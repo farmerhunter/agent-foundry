@@ -50,6 +50,17 @@ DRY_RUN_ACTIONS = {
     "comparison-draft",
 }
 REMOTE_RE = re.compile(r"(?:github\.com[:/])([^/]+)/([^/.]+)(?:\.git)?$")
+CONTRACT_HEADINGS = ("Final Execution Contract", "Execution Contract", "Draft Execution Contract")
+ROLE_FIELDS = ("Owner role", "Review role", "Acceptance role")
+VALID_ROLE_VALUES = {"none", "implementer", "reviewer", "architect"}
+VALID_COMPLETION_HANDOFFS = {
+    "none",
+    "to:implementer",
+    "to:reviewer",
+    "to:architect",
+    "to:human",
+    "batch checkpoint",
+}
 
 
 def fail(code: str, detail: str, exit_code: int = 2) -> None:
@@ -175,6 +186,141 @@ def scalar_in_block(block_text: str, key: str) -> str | None:
     if not match:
         return None
     return match.group(1).strip().strip('"')
+
+
+def strip_markdown_fenced_blocks(text: str) -> str:
+    output: list[str] = []
+    fence: tuple[str, int] | None = None
+    for line in text.splitlines(keepends=True):
+        if fence:
+            char, length = fence
+            if re.match(rf"^\s*{re.escape(char)}{{{length},}}\s*$", line.rstrip("\n\r")):
+                fence = None
+            output.append("\n" if line.endswith(("\n", "\r")) else "")
+            continue
+        match = re.match(r"^\s*(`{3,}|~{3,})", line)
+        if match:
+            marker = match.group(1)
+            fence = (marker[0], len(marker))
+            output.append("\n" if line.endswith(("\n", "\r")) else "")
+            continue
+        output.append(line)
+    return "".join(output)
+
+
+def extract_execution_contract(body: str) -> tuple[str | None, str]:
+    body = strip_markdown_fenced_blocks(body or "")
+    sections: list[tuple[str, str]] = []
+    pattern = re.compile(
+        r"^##\s+(Final Execution Contract|Execution Contract|Draft Execution Contract)\s*$"
+        r"(?P<body>.*?)(?=^##\s+|\Z)",
+        re.MULTILINE | re.DOTALL,
+    )
+    for match in pattern.finditer(body or ""):
+        sections.append((match.group(1), match.group("body")))
+    if not sections:
+        return None, ""
+    for preferred in CONTRACT_HEADINGS:
+        for heading, text in reversed(sections):
+            if heading == preferred:
+                return heading, text
+    return sections[-1]
+
+
+def markdown_field(text: str, field: str) -> str | None:
+    match = re.search(rf"^\s*{re.escape(field)}:\s*(.+?)\s*$", text, re.MULTILINE)
+    if not match:
+        return None
+    return match.group(1).strip()
+
+
+def contract_error(field: str, code: str, message: str, expected: Any = None, actual: Any = None, hint: str | None = None) -> dict[str, Any]:
+    payload: dict[str, Any] = {"field": field, "code": code, "message": message}
+    if expected is not None:
+        payload["expected"] = expected
+    if actual is not None:
+        payload["actual"] = actual
+    if hint:
+        payload["hint"] = hint
+    return payload
+
+
+def validate_execution_contract(body: str) -> dict[str, Any]:
+    heading, contract = extract_execution_contract(body)
+    if not heading:
+        return {"status": "missing", "heading": None, "fields": {}, "errors": []}
+    fields = {field: markdown_field(contract, field) for field in (*ROLE_FIELDS, "Completion handoff")}
+    reviewer_target = markdown_field(contract, "Reviewer target")
+    human_prompt = markdown_field(contract, "Human review prompt")
+    human_verification = markdown_field(contract, "Human verification needed")
+    errors: list[dict[str, Any]] = []
+
+    for field in ("Owner role", "Completion handoff"):
+        if not fields.get(field):
+            errors.append(
+                contract_error(
+                    field,
+                    "missing_contract_field",
+                    f"{field} is required for pickup-ready Execution Contracts.",
+                    actual=None,
+                )
+            )
+    if reviewer_target and not fields.get("Review role"):
+        errors.append(
+            contract_error(
+                "Review role",
+                "missing_contract_field",
+                "Reviewer target is present but Review role is missing.",
+                expected=sorted(VALID_ROLE_VALUES),
+                actual=None,
+                hint="Use `Review role: reviewer` and keep natural-language reviewer details in `Reviewer target:`.",
+            )
+        )
+
+    for field in ROLE_FIELDS:
+        value = fields.get(field)
+        if value is None:
+            continue
+        if value not in VALID_ROLE_VALUES:
+            hint = "Use a single lowercase machine role token: none, implementer, reviewer, or architect."
+            if field == "Acceptance role" and "/" in value:
+                hint = "Use `Acceptance role: architect` and keep human gates in `Human verification needed:` or `Human review prompt:`."
+            errors.append(
+                contract_error(
+                    field,
+                    "malformed_role_field",
+                    f"{field} must be a single lowercase machine role token.",
+                    expected=sorted(VALID_ROLE_VALUES),
+                    actual=value,
+                    hint=hint,
+                )
+            )
+
+    handoff = fields.get("Completion handoff")
+    if handoff is not None and handoff not in VALID_COMPLETION_HANDOFFS:
+        errors.append(
+            contract_error(
+                "Completion handoff",
+                "malformed_completion_handoff",
+                "Completion handoff must be a machine-readable handoff value.",
+                expected=sorted(VALID_COMPLETION_HANDOFFS),
+                actual=handoff,
+                hint="Use `Completion handoff: to:reviewer` for ordinary review handoff.",
+            )
+        )
+
+    natural_fields = {
+        "Reviewer target": reviewer_target,
+        "Human review prompt": human_prompt,
+        "Human verification needed": human_verification,
+    }
+    return {
+        "status": "ok" if not errors else "invalid",
+        "heading": heading,
+        "fields": {key: value for key, value in fields.items() if value is not None},
+        "natural_language_fields_present": sorted(key for key, value in natural_fields.items() if value),
+        "errors": errors,
+    }
 
 
 def parse_simple_yaml(path: Path) -> dict[str, Any]:
@@ -325,7 +471,7 @@ def cmd_inbox(args: argparse.Namespace) -> None:
                 "--search",
                 search,
                 "--json",
-                "number,title,labels,updatedAt",
+                "number,title,labels,updatedAt,body",
             ]
         )
     rows = []
@@ -338,6 +484,7 @@ def cmd_inbox(args: argparse.Namespace) -> None:
                     "title": issue.get("title"),
                     "labels": issue_labels,
                     "updatedAt": issue.get("updatedAt"),
+                    "contract_validation": validate_execution_contract(issue.get("body") or ""),
                 }
             )
     print_json_or_text({"repo": repo, "issues": rows, "mutation_performed": False}, args.json)
@@ -367,6 +514,7 @@ def cmd_issue_context(args: argparse.Namespace) -> None:
     for marker in ("Execution Contract", "Depends On", "Acceptance Criteria", "Forbidden actions"):
         if marker.lower() in body.lower():
             contract_hints.append(marker)
+    contract_validation = validate_execution_contract(body)
     print_json_or_text(
         {
             "repo": repo,
@@ -375,6 +523,7 @@ def cmd_issue_context(args: argparse.Namespace) -> None:
             "state": issue.get("state"),
             "labels": labels,
             "contract_hints": contract_hints,
+            "contract_validation": contract_validation,
             "comment_count_returned": len(comments),
             "summary_is_authority": False,
             "mutation_performed": False,
@@ -557,7 +706,7 @@ def read_live_issues(repo: str, args: argparse.Namespace) -> tuple[list[dict[str
                 "--label",
                 stage_label,
                 "--json",
-                "number,title,state,labels",
+                "number,title,state,labels,body",
             ]
         )
         if not result["ok"]:
@@ -657,6 +806,20 @@ def audit_issue(
             finding("no_next_owner_label", number, "warning", "Open transition-routable issue lacks a next-owner needs:* label.", expected=sorted(needs_labels), actual=labels)
         )
         repairs.append(repair("adjust_label", number, "needs:*", "add the intended next-owner label"))
+    contract_validation = validate_execution_contract(issue.get("body") or "")
+    if contract_validation["status"] == "invalid":
+        for error in contract_validation["errors"]:
+            issue_findings.append(
+                finding(
+                    "execution_contract_invalid",
+                    number,
+                    "error",
+                    error["message"],
+                    expected={error["field"]: error.get("expected")},
+                    actual={error["field"]: error.get("actual")},
+                )
+            )
+        repairs.append(repair("fix_execution_contract", number, "Execution Contract", "use lowercase role tokens and machine-readable handoff values"))
     if project_requested and item is None:
         issue_findings.append(
             finding("missing_project_item", number, "error", "Issue is not present in the requested Project v2 item list.")

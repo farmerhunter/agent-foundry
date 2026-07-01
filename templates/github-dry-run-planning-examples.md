@@ -29,6 +29,20 @@ before a reviewed mutation helper exists.
 Use this when a role is about to pick up an issue but no durable mutation should
 occur yet.
 
+Execution Contract examples should keep role and handoff fields
+machine-readable:
+
+```markdown
+## Execution Contract
+
+Owner role: implementer
+Review role: reviewer
+Acceptance role: architect
+Completion handoff: to:reviewer
+Reviewer target: separate Reviewer agent, focused on contract validation
+Human verification needed: no
+```
+
 ```yaml
 dry_run_planning_example:
   mode: generated_note
