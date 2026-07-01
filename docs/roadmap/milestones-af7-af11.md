@@ -1,4 +1,4 @@
-# Roadmap Milestones AF-7 Through AF-11
+# Roadmap Milestones AF-7 Through AF-12
 
 This file contains detailed milestone plans moved out of `docs/roadmap.md` to keep the main roadmap readable.
 
@@ -292,3 +292,58 @@ Acceptance criteria:
 - User-facing workflow entry points are named before implementation.
 - GitHub mutation permissions, dry-run behavior, review gates, and rollback or no-write modes are explicit.
 - AF10 cost/rehydration/routing findings are applied to avoid unnecessary role-thread overhead.
+
+### AF-12 / M12: End-to-End UX, Documentation, And Core Starter Packs
+
+Goal: make the accepted Core capabilities understandable and usable from a final-user point of view before the first public V1 release.
+
+AF-12 covered onboarding, daily operation, capability-pack UX, runtime/generated adapter status, GitHub collaboration helper adopter UX, documentation information architecture, first-party Core starter packs, and final walkthrough evidence. It did not authorize memory-system work.
+
+Accepted V1-facing outputs:
+
+- README first-value onboarding path and documentation tiering.
+- Ordinary-user usage and command guidance.
+- Complete/power-user reference navigation.
+- Capability-pack state taxonomy, normal-user consumption contract, power-user maintenance contract, candidate discovery review-list workflow, Core-hosted official catalog model, and readiness walkthrough.
+- Corrected first-party starter pack set:
+  - `pack.bootstrap.minimal` as mandatory/bootstrap baseline with source-of-truth, architecture-boundary, Generated/Runtime downstream, and Local Private exclusion guidance.
+  - `pack.multi-agent.optional` as the only standalone optional first-party Core starter pack.
+  - No standalone `pack.architecture-boundary-review.starter` in the current-stage official set.
+
+Acceptance criteria:
+
+- Users can understand the Core/Vault/Generated/Runtime/Local Private model without reading internal planning history.
+- Starter packs are discoverable with simple user-value descriptions.
+- Raw scripts remain implementation/debug substrate rather than the primary user interface.
+- Final release notes can point to README, usage, commands, deployment, catalog docs, and readiness evidence.
+- No memory-system directories, schemas, storage, MCP tools, or automatic memory writing are introduced.
+
+### V1.0 Readiness: External Skills Import And Reference Hardening
+
+Goal: complete the release-critical external-skill import/reference story before the public `v1.0.0` release.
+
+This work is tracked as GitHub milestone `V1.0: External Skills Import and Reference Hardening` with issues #276 through #281.
+
+Why it is V1.0-relevant:
+
+- Agent Foundry already exposes `import skill <source>` to users.
+- External skills, prompt packs, articles, repos, and local skill folders can be valuable, but they are reviewed inputs rather than authorities.
+- Users need a clear review result: discard, reference-only, defer, merge into existing, propose practice, propose asset, or publish after approval.
+- Reference-only material must be searchable or manually useful without becoming active practice/asset authority or adapter output.
+
+Planned issue sequence:
+
+1. #276 plan end-to-end import, reference, and user-facing workflow hardening.
+2. #277 define outcome taxonomy and reference-only contract.
+3. #278 harden import workflow and review packet template.
+4. #279 add user-facing import/reference workflow docs.
+5. #280 add fixture-backed validation for import outcomes.
+6. #281 run final readiness walkthrough for the import/reference workflow.
+
+Acceptance criteria:
+
+- External-skill import has a complete lifecycle from source review through approval, canonicalization, adapter publish, and verification.
+- User-facing docs explain when to import, what the report means, what approval changes, and what remains blocked.
+- Script-bearing or unsafe external material remains inert unless explicitly reviewed and approved.
+- Fixture coverage proves safe public skill, local folder, script-bearing skill, duplicate practice, reference-only material, unknown/unsafe license, and prompt-injection cases.
+- No real external skill import, external script execution, Vault/private/runtime/generated mutation, generated adapter publish, capability-pack operation, or memory-system work occurs without a later reviewed issue and explicit authorization where required.
