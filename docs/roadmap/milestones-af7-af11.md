@@ -318,15 +318,15 @@ Acceptance criteria:
 - Final release notes can point to README, usage, commands, deployment, catalog docs, and readiness evidence.
 - No memory-system directories, schemas, storage, MCP tools, or automatic memory writing are introduced.
 
-### V1.0 Readiness: External Skills Import And Reference Hardening
+### AF-13: External Skills Import And Reference Workflow
 
-Goal: complete the release-critical external-skill import/reference story before the public `v1.0.0` release.
+Goal: support the independent external-skills use case before the public `v1.0.0` release.
 
-This work is tracked as GitHub milestone `V1.0: External Skills Import and Reference Hardening` with issues #276 through #281.
+This work is tracked as GitHub milestone `AF-13: External Skills Import and Reference Workflow` with Epic #286 and child issues #276 through #281.
 
 Current scheduler state: the human hold is lifted, #276 is accepted as the completed planning/decomposition record, and #277 is the active next issue.
 
-Why it is V1.0-relevant:
+Why it is an independent AF milestone:
 
 - Agent Foundry already exposes `import skill <source>` to users.
 - External skills, prompt packs, articles, repos, and local skill folders can be valuable, but they are reviewed inputs rather than authorities.
