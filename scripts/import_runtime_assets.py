@@ -33,6 +33,15 @@ ROUTES = {
     "discard",
     "future_work",
 }
+OUTCOMES = {
+    "discard",
+    "reference_only",
+    "defer",
+    "merge_into_existing",
+    "propose_practice",
+    "propose_asset",
+}
+POST_APPROVAL_ACTIONS = {"publish_adapters", "runtime_followup", "manual_re_review"}
 TEXT_EXTENSIONS = {
     ".cfg",
     ".cjs",
@@ -67,6 +76,13 @@ class SourceRecord:
     size_bytes: int
     sha256: str
     has_script_surface: bool
+    has_network_surface: bool
+    has_file_write_surface: bool
+    has_credential_surface: bool
+    has_install_surface: bool
+    has_permission_change_surface: bool
+    has_destructive_surface: bool
+    has_prompt_injection_surface: bool
 
 
 def yaml_scalar(value: object) -> str:
@@ -95,6 +111,68 @@ def looks_like_script(path: Path, text: str) -> bool:
         return True
     first_line = text.splitlines()[0] if text.splitlines() else ""
     return first_line.startswith("#!")
+
+
+def contains_any(patterns: list[str], text: str) -> bool:
+    return any(re.search(pattern, text, flags=re.IGNORECASE | re.MULTILINE) for pattern in patterns)
+
+
+def risk_flags(path: Path, text: str) -> dict[str, bool]:
+    has_script_surface = looks_like_script(path, text)
+    return {
+        "has_script_surface": has_script_surface,
+        "has_network_surface": contains_any(
+            [
+                r"\b(curl|wget)\b",
+                r"\b(requests|fetch)\s*[.(]",
+                r"https?://",
+                r"\bgh\s+api\b",
+            ],
+            text,
+        ),
+        "has_file_write_surface": contains_any(
+            [
+                r">\s*[^&]",
+                r"\b(write_text|write_bytes)\s*\(",
+                r"\bopen\s*\([^,\n]+,\s*['\"]w",
+                r"\btouch\s+",
+            ],
+            text,
+        ),
+        "has_credential_surface": contains_any(
+            [
+                r"\b(token|credential|api[_-]?key|secret|password)\b",
+                r"\b[A-Z0-9_]*(TOKEN|SECRET|PASSWORD|KEY)\b",
+            ],
+            text,
+        ),
+        "has_install_surface": contains_any(
+            [
+                r"\b(pip|npm|pnpm|yarn|brew|uv)\s+(install|sync|add)\b",
+                r"\binstaller?\b",
+            ],
+            text,
+        ),
+        "has_permission_change_surface": contains_any([r"\bchmod\b", r"\bchown\b"], text),
+        "has_destructive_surface": contains_any(
+            [
+                r"\brm\s+-rf\b",
+                r"\bgit\s+reset\s+--hard\b",
+                r"\bdelete\s+all\b",
+                r"\bdrop\s+database\b",
+            ],
+            text,
+        ),
+        "has_prompt_injection_surface": contains_any(
+            [
+                r"ignore (all )?(previous|prior|above) instructions",
+                r"disregard (all )?(previous|prior|above) instructions",
+                r"reveal (the )?(system|developer) prompt",
+                r"exfiltrate",
+            ],
+            text,
+        ),
+    }
 
 
 def infer_routing(path: Path, runtime: str, has_script_surface: bool, rejected: bool) -> str:
@@ -153,6 +231,13 @@ def read_source(
             size_bytes=0,
             sha256="",
             has_script_surface=False,
+            has_network_surface=False,
+            has_file_write_surface=False,
+            has_credential_surface=False,
+            has_install_surface=False,
+            has_permission_change_surface=False,
+            has_destructive_surface=False,
+            has_prompt_injection_surface=False,
         )
     if not path.exists() or not path.is_file():
         return SourceRecord(
@@ -165,6 +250,13 @@ def read_source(
             size_bytes=0,
             sha256="",
             has_script_surface=False,
+            has_network_surface=False,
+            has_file_write_surface=False,
+            has_credential_surface=False,
+            has_install_surface=False,
+            has_permission_change_surface=False,
+            has_destructive_surface=False,
+            has_prompt_injection_surface=False,
         )
 
     data = path.read_bytes()
@@ -180,6 +272,13 @@ def read_source(
             size_bytes=len(data),
             sha256=digest,
             has_script_surface=path.suffix.lower() in SCRIPT_EXTENSIONS,
+            has_network_surface=False,
+            has_file_write_surface=False,
+            has_credential_surface=False,
+            has_install_surface=False,
+            has_permission_change_surface=False,
+            has_destructive_surface=False,
+            has_prompt_injection_surface=False,
         )
     if path.suffix.lower() not in TEXT_EXTENSIONS:
         return SourceRecord(
@@ -192,6 +291,13 @@ def read_source(
             size_bytes=len(data),
             sha256=digest,
             has_script_surface=False,
+            has_network_surface=False,
+            has_file_write_surface=False,
+            has_credential_surface=False,
+            has_install_surface=False,
+            has_permission_change_surface=False,
+            has_destructive_surface=False,
+            has_prompt_injection_surface=False,
         )
     try:
         text = data.decode("utf-8")
@@ -206,10 +312,17 @@ def read_source(
             size_bytes=len(data),
             sha256=digest,
             has_script_surface=False,
+            has_network_surface=False,
+            has_file_write_surface=False,
+            has_credential_surface=False,
+            has_install_surface=False,
+            has_permission_change_surface=False,
+            has_destructive_surface=False,
+            has_prompt_injection_surface=False,
         )
 
-    has_script_surface = looks_like_script(path, text)
-    routing = routing_override or infer_routing(path, source_runtime, has_script_surface, rejected=False)
+    flags = risk_flags(path, text)
+    routing = routing_override or infer_routing(path, source_runtime, flags["has_script_surface"], rejected=False)
     return SourceRecord(
         path=path,
         source_context=source_context,
@@ -219,7 +332,14 @@ def read_source(
         text=text,
         size_bytes=len(data),
         sha256=digest,
-        has_script_surface=has_script_surface,
+        has_script_surface=flags["has_script_surface"],
+        has_network_surface=flags["has_network_surface"],
+        has_file_write_surface=flags["has_file_write_surface"],
+        has_credential_surface=flags["has_credential_surface"],
+        has_install_surface=flags["has_install_surface"],
+        has_permission_change_surface=flags["has_permission_change_surface"],
+        has_destructive_surface=flags["has_destructive_surface"],
+        has_prompt_injection_surface=flags["has_prompt_injection_surface"],
     )
 
 
@@ -229,12 +349,20 @@ def render_record(
     sensitivity: str,
     license_status: str,
     retrieved_at: str,
+    import_outcome: str,
+    post_approval_actions: list[str],
 ) -> str:
+    action_lines = ["post_approval_actions: []"]
+    if post_approval_actions:
+        action_lines = ["post_approval_actions:"]
+        action_lines.extend(f"  - {action}" for action in post_approval_actions)
     lines = [
         "---",
         "schema_version: 1",
         "record_type: runtime_import_evidence",
         f"status: {record.status}",
+        f"import_outcome: {import_outcome}",
+        *action_lines,
         f"source_runtime: {source_runtime}",
         f"source_context: {record.source_context}",
         f"source_path: {yaml_scalar(record.path)}",
@@ -246,6 +374,15 @@ def render_record(
         "review_required: true",
         f"routing_recommendation: {record.routing}",
         f"has_script_surface: {'true' if record.has_script_surface else 'false'}",
+        "risk_flags:",
+        f"  scripts_present: {'true' if record.has_script_surface else 'false'}",
+        f"  network_access: {'true' if record.has_network_surface else 'false'}",
+        f"  file_writes: {'true' if record.has_file_write_surface else 'false'}",
+        f"  credential_access: {'true' if record.has_credential_surface else 'false'}",
+        f"  install_steps: {'true' if record.has_install_surface else 'false'}",
+        f"  permission_changes: {'true' if record.has_permission_change_surface else 'false'}",
+        f"  destructive_actions: {'true' if record.has_destructive_surface else 'false'}",
+        f"  prompt_injection_concerns: {'true' if record.has_prompt_injection_surface else 'false'}",
         "runtime_source_preserved: true",
         "activation_performed: false",
         "runtime_write_performed: false",
@@ -269,6 +406,16 @@ def render_record(
         f"- Sensitivity: `{sensitivity}`",
         f"- License: `{license_status}`",
         f"- Script or executable surface present: `{'yes' if record.has_script_surface else 'no'}`",
+        "",
+        "## Risk Flags",
+        "",
+        f"- Network access: `{'yes' if record.has_network_surface else 'no'}`",
+        f"- File writes: `{'yes' if record.has_file_write_surface else 'no'}`",
+        f"- Credential access: `{'yes' if record.has_credential_surface else 'no'}`",
+        f"- Install steps: `{'yes' if record.has_install_surface else 'no'}`",
+        f"- Permission changes: `{'yes' if record.has_permission_change_surface else 'no'}`",
+        f"- Destructive actions: `{'yes' if record.has_destructive_surface else 'no'}`",
+        f"- Prompt injection concerns: `{'yes' if record.has_prompt_injection_surface else 'no'}`",
         "",
         "## Safety Notes",
         "",
@@ -322,7 +469,15 @@ def plan_records(
             name = f"runtime-import-{now[:10]}-{slug}-{counter}.md"
             counter += 1
         used_names.add(name)
-        content = render_record(record, args.source_runtime, args.sensitivity, args.license, now)
+        content = render_record(
+            record,
+            args.source_runtime,
+            args.sensitivity,
+            args.license,
+            now,
+            args.outcome,
+            args.post_approval_action or [],
+        )
         records.append((record, staging_root / name, content))
     return staging_root, records
 
@@ -332,6 +487,14 @@ def parser() -> argparse.ArgumentParser:
     parser.add_argument("--source", action="append", required=True, help="Explicit runtime/source file or directory.")
     parser.add_argument("--source-runtime", required=True, choices=sorted(RUNTIMES), help="Runtime or source family.")
     parser.add_argument("--routing", choices=sorted(ROUTES), default="", help="Override routing recommendation.")
+    parser.add_argument("--outcome", choices=sorted(OUTCOMES), default="reference_only", help="Import review outcome recorded in staged evidence.")
+    parser.add_argument(
+        "--post-approval-action",
+        action="append",
+        choices=sorted(POST_APPROVAL_ACTIONS),
+        default=[],
+        help="Report-only post-approval action. Does not authorize writes during import review.",
+    )
     parser.add_argument("--sensitivity", default="unknown-review-required", help="Sensitivity review status.")
     parser.add_argument("--license", default="unknown-review-required", help="License review status.")
     parser.add_argument("--core-root", default="", help="Agent Foundry Core root.")
