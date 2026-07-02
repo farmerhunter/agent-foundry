@@ -27,7 +27,7 @@ Use these short commands in day-to-day agent work.
 | `disable capability pack <pack-id>` | `停用 capability pack <pack-id>` | Produce a dry-run lifecycle/rollback plan first; do not delete selected Vault records or mutate runtime files silently.<br>先生成 dry-run lifecycle/rollback plan；不要静默删除 selected Vault records 或修改 runtime files。 |
 | `review capability pack lifecycle <pack-id>` | `review capability pack lifecycle <pack-id>` | Dry-run lifecycle transitions such as activate, exportable, split, merge, deprecate, disable, or retire.<br>dry-run 检查 activate、exportable、split、merge、deprecate、disable、retire 等 lifecycle transition。 |
 | `preview capability pack transfer <path>` | `预览 capability pack transfer <路径>` | Validate export/import transfer material with privacy-safe, writes-none checks.<br>用 privacy-safe、writes-none 检查验证 export/import transfer material。 |
-| `import skill <source>` | `导入这个 skill <source>` | Evaluate an external skill, repo, prompt pack, article, or local folder.<br>评估外部 skill、repo、prompt pack、文章或本地目录。 |
+| `import skill <source>` | `导入这个 skill <source>` | Review an external skill, repo, prompt pack, article, or local folder and return safe outcomes: discard, reference-only, defer, merge, propose practice, or propose asset. It does not activate or publish before approval.<br>review 外部 skill、repo、prompt pack、文章或本地目录，并返回安全 outcome：discard、reference-only、defer、merge、propose practice 或 propose asset。未经批准不会 activate 或 publish。 |
 | `publish practices` | `发布 practices` | Publish adapters from current active practices. Usually not needed manually.<br>从当前 active practices 发布 adapters；通常不需要手动执行。 |
 | `check operation context` | `检查操作上下文` | Show the current Agent Foundry Core/Vault/evidence/runtime context before writes.<br>在写入前显示当前 Agent Foundry Core/Vault/evidence/runtime 上下文。 |
 | `check Agent Foundry status` | `检查 Agent Foundry 状态` | Run a read-only status pass for Core, selected Vault, generated output, runtime receipts, and manual targets.<br>对 Core、selected Vault、generated output、runtime receipts 和 manual targets 做 read-only status 检查。 |
@@ -67,6 +67,6 @@ or:
 我批准第 1 和第 3 条。
 ```
 
-After approval, the agent should apply the approved items and publish relevant adapters automatically.
+After approval, the agent should apply only the approved items. For `import skill`, `reference_only` means keep safe review evidence for lookup or later review; it is not active behavior. Adapter publishing happens only as a post-approval action after an approved canonical practice or asset exists.
 
-批准后，agent 应自动应用已批准项目，并发布相关 adapters。
+批准后，agent 只应应用已批准项目。对 `import skill` 来说，`reference_only` 表示保留安全的 review evidence 供查阅或后续 review；它不是 active behavior。只有在已批准的 canonical practice 或 asset 存在后，adapter publishing 才能作为 post-approval action 发生。

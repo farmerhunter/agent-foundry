@@ -46,6 +46,10 @@ After approval, the agent should apply the approved item, update the canonical V
 
 批准后，agent 应应用已批准项目，更新 canonical Vault records，更新 indexes，发布相关 adapters，并汇报 changed files。
 
+External skills are handled as reviewed inputs. An import can be discarded, kept as reference-only evidence, deferred, merged into an existing item, proposed as a practice, or proposed as an asset. Reference-only material stays as sanitized review evidence under the selected Vault `imports/inbox/`; it is useful for lookup or later re-review, but it is not active behavior and cannot publish adapters or mutate runtime files.
+
+外部 skills 会被当作 reviewed inputs 处理。一次 import 可能被 discard、作为 reference-only evidence 保留、defer、merge 到已有项目、propose 为 practice，或 propose 为 asset。Reference-only material 会作为 sanitized review evidence 留在 selected Vault 的 `imports/inbox/`；它可用于查阅或后续 re-review，但不是 active behavior，也不能 publish adapters 或修改 runtime files。
+
 ## First-Time Setup / 首次设置
 
 On a new machine, use `docs/deployment.md` for the full split Core/Vault install flow.
@@ -425,6 +429,28 @@ Evaluate this external skill for Agent Foundry: <URL or local path>. Use the imp
 请评估这个外部 skill 是否适合加入 Agent Foundry：<URL 或 local path>。使用 import workflow，但报告保持简洁。展示 provenance、license/security concerns、有价值的 candidate practices、duplicates found，以及批准后会导入什么。每个 candidate 未经我批准前不要 activate 或 publish。
 ```
 
+Expected outcomes:
+
+预期 outcomes：
+
+- `discard`: not useful or not safe enough to keep.
+- `reference_only`: keep sanitized evidence for lookup or later re-review only.
+- `defer`: wait for a license, privacy, dependency, or design decision.
+- `merge_into_existing`: propose a bounded change to an existing practice or asset.
+- `propose_practice`: propose a new practice candidate.
+- `propose_asset`: propose a new reusable asset candidate.
+
+- `discard`：不值得保留，或安全性不足。
+- `reference_only`：只保留 sanitized evidence，供查阅或后续 re-review。
+- `defer`：等待 license、privacy、dependency 或 design decision。
+- `merge_into_existing`：提出对已有 practice 或 asset 的 bounded change。
+- `propose_practice`：提出新的 practice candidate。
+- `propose_asset`：提出新的 reusable asset candidate。
+
+`Publish after approval` is not an import outcome. It is a later action only after you approve a specific candidate and the required canonical practice or asset exists.
+
+`Publish after approval` 不是 import outcome。它只是后续动作，只能在你批准某个具体 candidate 且所需 canonical practice 或 asset 已存在后发生。
+
 Approval example:
 
 批准示例：
@@ -433,6 +459,16 @@ Approval example:
 I approve candidate 2. Import it, promote it to active, update the index, and publish the relevant adapters.
 
 我批准第 2 个 candidate。请导入它，提升为 active，更新 index，并发布相关 adapters。
+```
+
+Reference-only example:
+
+Reference-only 示例：
+
+```text
+Keep candidate 1 as reference-only. Do not create an active practice or publish adapters.
+
+把第 1 个 candidate 保留为 reference-only。不要创建 active practice，也不要 publish adapters。
 ```
 
 ## Discover Assets / 发现 Assets
