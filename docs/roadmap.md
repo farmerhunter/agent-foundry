@@ -120,7 +120,7 @@ V1.0 release readiness is tracked separately from AF stage numbering so late rel
 | Milestone | GitHub records | User-facing reason | Status |
 | --- | --- | --- | --- |
 | Agent Foundry `v1.0.0` release | #267 | Define the first downloadable public Core release, release notes, verification, tag, and GitHub Release gate. | Open |
-| External Skills Import and Reference Hardening | #276 through #281 | Users need a clear, safe path to evaluate public skills, prompt packs, articles, repos, and local skill folders before anything becomes a practice, asset, reference-only material, adapter output, or rejected input. | Held until explicitly resumed |
+| External Skills Import and Reference Hardening | #276 through #281 | Users need a clear, safe path to evaluate public skills, prompt packs, articles, repos, and local skill folders before anything becomes a practice, asset, reference-only material, adapter output, or rejected input. | Active; #277 released |
 
 External skills are V1.0-relevant because Agent Foundry already exposes `import skill <source>` and already treats external skills as evidence sources. Before public release, this path needs a complete lifecycle, reference-only semantics, user-facing decision support, review templates, fixture-backed validation, and a readiness walkthrough.
 
@@ -205,7 +205,7 @@ Expected scope will be defined by MS-01 and MS-02. AF-10 may optimize the collab
 
 ## Immediate Next Planning Tasks
 
-1. Complete the V1.0 external skills import/reference hardening milestone (#276-#281) after the human hold is lifted.
+1. Complete the active V1.0 external skills import/reference hardening milestone (#276-#281), starting with #277 taxonomy and reference-only contract.
 2. Complete #267 release planning, verification, release notes, and final Human Decision Contract for `v1.0.0`.
 3. Keep #266 as a V2.0 telemetry collection window, held until formal V2.0 kickoff.
 4. Keep memory-system planning on the MS milestone axis: MS-01 for readiness design and MS-02 for implementation-home decision. MS work remains gated on explicit human authorization.
