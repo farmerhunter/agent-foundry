@@ -58,6 +58,10 @@ External skills may be used as references for:
 - adapter packaging;
 - scripts or schemas, after review.
 
+External skills are reviewed inputs, not authority. Import review outcomes are `discard`, `reference_only`, `defer`, `merge_into_existing`, `propose_practice`, or `propose_asset`; adapter/runtime publishing is a post-approval action after approved canonical changes, not an import outcome.
+
+`reference_only` material is selected Vault `imports/inbox/` review evidence for lookup or re-review only. It must not create active practice, asset, capability-pack, generated adapter, or runtime authority.
+
 External skills should not be imported directly into active adapters without:
 
 1. provenance capture;
@@ -65,3 +69,5 @@ External skills should not be imported directly into active adapters without:
 3. security review;
 4. dedupe against canonical practices;
 5. human approval.
+
+Script-bearing material must remain inert during review: no execution, install, dependency fetch, `chmod`, runtime write, generated adapter publish, or canonical Vault mutation.
