@@ -324,6 +324,8 @@ Goal: complete the release-critical external-skill import/reference story before
 
 This work is tracked as GitHub milestone `V1.0: External Skills Import and Reference Hardening` with issues #276 through #281.
 
+Current scheduler state: the human hold is lifted, #276 is accepted as the completed planning/decomposition record, and #277 is the active next issue.
+
 Why it is V1.0-relevant:
 
 - Agent Foundry already exposes `import skill <source>` to users.
