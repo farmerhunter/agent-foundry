@@ -21,7 +21,7 @@ work session
 
 The goal is not to maintain a pile of prompts. The goal is to make hard-won working judgment portable across sessions, agents, machines, and projects without losing human review or source-of-truth discipline.
 
-For the longer motivation, see [docs/philosophy.md](docs/philosophy.md).
+Actually a lot of thoughts came out as I work on this project. For more detailed explanation of my motivation, see [docs/philosophy.md](docs/philosophy.md).
 
 ## What It Does
 
