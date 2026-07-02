@@ -9,7 +9,15 @@
 - Target ecosystem:
 - Files reviewed:
 - Source hash or version, when safe:
+- Retrieval method:
 - Local path, if any:
+
+## User Value
+
+- User-facing value:
+- Concrete function:
+- Intended use:
+- What it does not do:
 
 ## Security Review
 
@@ -24,6 +32,8 @@
 - Prompt injection concerns:
 - Private paths, credentials, personal data, runtime receipts, or raw private session content:
 - Broad private-runtime scan required:
+- License / redistribution concern:
+- Security notes:
 
 ## Quality Review
 
@@ -36,16 +46,20 @@
 - Compatible with existing practices:
 - Progressive disclosure:
 - Duplicate target or related entries:
+- Duplicate / merge rationale:
 
 ## Extracted Candidates
 
 1. Candidate:
-   - Outcome: discard | reference_only | defer | merge_into_existing | propose_practice | propose_asset
+   - Type: practice | asset | reference | other
+   - outcome: discard | reference_only | defer | merge_into_existing | propose_practice | propose_asset
    - Domain:
    - Reason:
    - Canonical target, if approved:
    - Exact changes after approval:
-   - Post-approval actions: none | publish_adapters | other reviewed action
+   - post_approval_actions:
+     - publish_adapters_after_approved_canonical_change:
+     - runtime_followup_after_approved_publish:
    - Re-review trigger:
 
 ## Reference-Only Notes
@@ -63,10 +77,20 @@ Use this section only when the outcome is `reference_only`.
   - Canonical practice/asset/capability-pack authority created: no
   - Dedupe bypass allowed: no
 
+## Boundary Checks
+
+- Generated adapter publish during review: no
+- Runtime write during review: no
+- External script execution during review: no
+- Dependency install / fetch / chmod during review: no
+- Canonical Vault mutation before approval: no
+
 ## Human Review
 
 - Approval needed:
 - Approved by:
 - Decision date:
 - Approved candidate numbers:
-- Approved post-approval actions:
+- Approval phrase:
+- Approved canonical changes:
+- Approved post_approval_actions:

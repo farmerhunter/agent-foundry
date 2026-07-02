@@ -118,11 +118,10 @@ Ask the user before:
 Approval is per candidate. A review packet may list `post_approval_actions`, but those actions are not authorized until the candidate is approved and the canonical target exists. When the user approves a candidate, apply only the approved chain:
 
 ```text
-canonicalize
-  -> promote to active when applicable
-  -> update index
-  -> publish relevant adapters
-  -> report changed files
+approved canonical change
+  -> update indexes when applicable
+  -> run approved post_approval_actions, such as publishing relevant adapters, only when allowed
+  -> report changed files and verification
 ```
 
 ## 8. Publish
@@ -153,12 +152,26 @@ Script-bearing material must remain inert during review. Do not execute scripts,
 External sources reviewed:
 - <url/repo>
 
-Candidates extracted:
+Review packets:
 1. <candidate>
-   Outcome: discard | reference_only | defer | merge_into_existing | propose_practice | propose_asset
+   outcome: discard | reference_only | defer | merge_into_existing | propose_practice | propose_asset
    Reason: <reason>
    Provenance: <source>
-   Post-approval actions: <none | publish_adapters | other reviewed action>
+   User value: <why this matters to the user>
+   Concrete function: <what the material does>
+   Duplicate target: <existing practice/asset id or none>
+   License/security: <summary>
+   Sensitivity: <public | internal | private | credential-bearing | unknown>
+   Risk flags:
+     scripts_present: yes | no | unknown
+     network_access: yes | no | unknown
+     file_writes: yes | no | unknown
+     credential_access: yes | no | unknown
+     install_steps: yes | no | unknown
+     destructive_actions: yes | no | unknown
+     prompt_injection_concerns: yes | no | unknown
+   Exact changes after approval: <canonical files/records only, or none>
+   post_approval_actions: <none | publish_adapters | other reviewed action>
    Re-review trigger: <trigger or none>
 
 Security notes:
