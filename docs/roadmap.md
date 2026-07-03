@@ -84,7 +84,7 @@ Agent Foundry should use maturity stages for planning and release versions for d
 | AF-12 | End-to-End UX, Documentation, And Core Starter Packs | Final pre-V1 user experience consolidation across onboarding, daily operation, capability packs, runtime/generated adapters, GitHub collaboration helpers, documentation tiers, and first-party Core starter packs. | README, user docs, workflow docs, capability-pack UX, Core-hosted starter packs, and readiness evidence are coherent enough for a public V1 release path. |
 | AF-13 | External Skills Import And Reference Workflow | Users can evaluate external skills, prompt packs, articles, repositories, and local skill folders through a reviewed import/reference workflow before anything becomes active Agent Foundry behavior. | External sources have clear outcomes, reference-only semantics, review packets, user-facing docs, fixture validation, and readiness evidence without treating external material as authority. |
 
-Current planning stage: AF-13 external skills import/reference workflow.
+Current planning stage: Agent Foundry `v1.0.0` release gate.
 
 AF-0 explains the existing mixed history. AF-1 starts the stricter planning and multi-agent coordination era. AF-2 designs the productization boundary. AF-3 executes the local Core/Vault split. AF-4 proves the split system works for the current real user across existing deployments and establishes the migration discipline needed for later major upgrades. AF-5 makes onboarding humane and reliable for new users. AF-6 closes the current Foundry product lifecycle so install, pack deployment, refresh, status, and rollback are usable beyond a one-off maintainer path. AF-7 upgrades runtime adapters and adds Trae CN support around a verified global Skill path. AF-8 hardens the capability system under realistic multi-user, multi-machine, multi-runtime, long-running-agent, and drift scenarios. AF-9 adds advanced capability-pack discovery, lifecycle, privacy-safe transfer planning, and user-facing Skill workflow packaging. AF-10 optimizes the Coordinator-driven role workflow using AF9 evidence, then pauses for an AF11 pilot migration, then resumes to analyze real telemetry and harden the workflow model. AF-11 is reserved for the Tiny IPA-incubated GitHub collaboration workflow helper migration pilot. AF-12 closes the V1 user-facing UX/docs/starter-pack surface. AF-13 adds the independent external-skills import/reference workflow. Memory-system planning now uses the separate MS milestone axis.
 
@@ -117,12 +117,12 @@ Suggested mapping:
 
 ## Active Milestone
 
-AF-13 is an independent user-facing capability milestone, not release-readiness polish.
+AF-13 is complete as an independent user-facing capability milestone, not release-readiness polish. The active milestone is now the `v1.0.0` release gate.
 
 | Milestone | GitHub records | User-facing reason | Status |
 | --- | --- | --- | --- |
-| AF-13 External Skills Import and Reference Workflow | #286 Epic; #276 through #281 | Users need a clear, safe path to evaluate public skills, prompt packs, articles, repos, and local skill folders before anything becomes a practice, asset, reference-only material, adapter output, or rejected input. | Active; #277 released |
-| Agent Foundry `v1.0.0` release | #267 | Define the first downloadable public Core release, release notes, verification, tag, and GitHub Release gate after AF-13 is accepted. | Open |
+| AF-13 External Skills Import and Reference Workflow | #286 Epic; #276 through #281 | Users need a clear, safe path to evaluate public skills, prompt packs, articles, repos, and local skill folders before anything becomes a practice, asset, reference-only material, adapter output, or rejected input. | Completed; accepted as part of the V1 baseline |
+| Agent Foundry `v1.0.0` release | #267 | Define the first downloadable public Core release, release notes, verification, tag, and GitHub Release gate after AF-13 acceptance. | Active |
 
 External skills are an independent use case because Agent Foundry already exposes `import skill <source>` and already treats external skills as evidence sources. This path needs a complete lifecycle, reference-only semantics, user-facing decision support, review templates, fixture-backed validation, and a readiness walkthrough.
 
@@ -207,8 +207,7 @@ Expected scope will be defined by MS-01 and MS-02. AF-10 may optimize the collab
 
 ## Immediate Next Planning Tasks
 
-1. Complete AF-13 external skills import/reference workflow (#286; #276-#281), starting with #277 taxonomy and reference-only contract.
-2. Complete #267 release planning, verification, release notes, and final Human Decision Contract for `v1.0.0`.
-3. Keep #266 as a V2.0 telemetry collection window, held until formal V2.0 kickoff.
-4. Keep memory-system planning on the MS milestone axis: MS-01 for readiness design and MS-02 for implementation-home decision. MS work remains gated on explicit human authorization.
-5. Do not create memory directories, schemas, MCP write tools, or automatic memory writing before explicit user authorization.
+1. Complete #267 release planning, verification, release notes, and final Human Decision Contract for `v1.0.0`.
+2. Keep #266 as a V2.0 telemetry collection window, held until formal V2.0 kickoff.
+3. Keep memory-system planning on the MS milestone axis: MS-01 for readiness design and MS-02 for implementation-home decision. MS work remains gated on explicit human authorization.
+4. Do not create memory directories, schemas, MCP write tools, or automatic memory writing before explicit user authorization.
