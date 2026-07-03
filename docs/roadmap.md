@@ -119,6 +119,28 @@ Suggested mapping:
 
 `v2.0` is the next product development target. It should not start by building board features in isolation. It starts with end-to-end user journeys, then telemetry evidence, then local ledger, board model, migration, read-only MVP, controlled GitHub sync, and readiness review.
 
+## Branch and Release Lines
+
+Use `main` as the stable V1.x maintenance line until V2 is accepted and ready to become the default product line.
+
+This matters because Agent Foundry Core can keep receiving harvest-driven, user-approved, backward-compatible improvements after `v1.0.0`. Those improvements should remain available to current users and future V2 work. Therefore:
+
+- `main` receives V1.x maintenance, bug fixes, documentation improvements, workflow/template/test improvements, and generic Core harvest updates.
+- `v1.1.0`, `v1.2.0`, and other V1.x tags are cut from `main` while V2 is still under development.
+- `codex/v2-local-first-orchestration` is the V2 integration branch for ledger, Foundry Board, migration, sync, and other V2-only work.
+- V2 child branches target `codex/v2-local-first-orchestration`, not `main`, unless the change is explicitly a V1.x-compatible Core maintenance improvement.
+- V2 periodically forward-merges from `main` so V1.x maintenance and harvest improvements are not lost.
+- V2 merges back to `main` only after V2 readiness is accepted and a final human-gated release/integration decision is made.
+
+Default harvest routing:
+
+| Update type | Target |
+| --- | --- |
+| Backward-compatible Core practice/workflow/template/docs/test improvement | `main`, then forward-merge into V2 |
+| V2-only orchestration, ledger, board, migration, or sync behavior | `codex/v2-local-first-orchestration` |
+| Private or canonical User Vault practice/asset update | selected User Vault, not Core |
+| Breaking schema/runtime/source-of-truth change | V2 branch or explicit major-version gate, not default `main` maintenance |
+
 ## Active Milestone
 
 Agent Foundry `v1.0.0` is published. The active planning area is now V2.0 local-first orchestration, but the first V2 implementation milestone is not released yet.
