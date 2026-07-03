@@ -27,6 +27,8 @@ Actually a lot of thoughts came out as I work on this project. For more detailed
 
 Agent Foundry keeps Core tooling, User Vault records, and runtime delivery separate.
 
+![Agent Foundry experience-to-capability flow](assets/agent-foundry-experience-to-capability.png)
+
 - Core contains workflows, schemas, scripts, templates, docs, adapter profiles, and validation tools.
 - A User Vault contains canonical practices, reusable assets, indexes, imports, and sanitized usage aggregates.
 - `adapters/`: downstream outputs for specific agent environments.
