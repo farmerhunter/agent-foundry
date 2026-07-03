@@ -1,0 +1,172 @@
+# Roadmap Milestones V2
+
+Status: planning document
+Updated: 2026-07-03
+Scope: V2 local-first orchestration, Foundry Board, Local Collaboration Ledger, GitHub Project remote sync, and migration from existing GitHub-first projects.
+
+## V2 Goal
+
+V2 makes Agent Foundry a local-first orchestration system.
+
+The user value is simple: a user should be able to see what work is happening, who owns it, what evidence supports it, what is blocked, what changed, and what should happen next without reconstructing state from scattered GitHub comments, Project columns, and Codex thread history.
+
+GitHub Project remains useful, but it becomes a remote sync and collaboration surface. The durable orchestration record should live locally first, then sync outward in a controlled way.
+
+## Product Principles
+
+- Start from end-to-end user journeys before building storage or board features.
+- Support both new projects and existing issue-driven projects.
+- Build read-only visibility before write or sync automation.
+- Preserve GitHub issue and PR evidence as durable public collaboration records.
+- Preserve Agent Foundry layer boundaries: Core, User Vault, Generated, Runtime, and Local Private.
+- Keep memory-system work out of V2 unless a later explicit decision changes that.
+- Make migration and backfill first-class work, not a cleanup afterthought.
+
+## V2 Milestone Sequence
+
+| Milestone | GitHub records | Purpose | Status |
+| --- | --- | --- | --- |
+| V2-0 User Journey And UX Contract | #293 | Define the end-to-end experience before implementation: new project setup, existing project migration, day-to-day orchestration, review, recovery, sync, and completion. | Planned; not released |
+| V2-1 Telemetry Evidence Window | #266 | Collect meaningful telemetry across selected V2 work so ledger and board design are based on real coordination overhead rather than guesses. | Held until V2-0 acceptance |
+| V2-2 Local Collaboration Ledger | #294 | Define the local durable event model for assignments, dispatches, evidence, reviews, approvals, merges, closures, blockers, and handoffs. | Dependency-gated |
+| V2-3 Foundry Board Domain Model | #295 | Define board state, columns, filters, issue/project/thread relationships, and user-visible status without binding too early to UI implementation. | Dependency-gated |
+| V2-4 Existing Project Migration And Backfill | #296 | Convert current GitHub-first projects into local-first orchestration state with provenance and conflict handling. | Dependency-gated |
+| V2-5 Foundry Board Read-Only MVP | #297 | Give users a working read-only board that explains current work, evidence, owner, next action, and blocked states from local durable data. | Dependency-gated |
+| V2-6 GitHub Project Remote Sync | #298 | Sync local orchestration state to GitHub Project safely, with conflict rules, dry-run/readback behavior, and no hidden source-of-truth reversal. | Dependency-gated |
+| V2-7 V2 Readiness And Release Gate | #299 | Verify end-to-end journeys, migration, board visibility, sync behavior, docs, and release readiness. | Dependency-gated |
+
+## V2-0 User Journey And UX Contract
+
+This milestone prevents V2 from repeating a common failure mode: implementing useful internal mechanics without first proving the user-facing workflow.
+
+It should answer:
+
+- What does a user do when starting a new local-first project?
+- What does a user do when migrating an existing GitHub issue/project workflow?
+- What does the board show when work is ready, in progress, in review, blocked, done, or stale?
+- What can the user trust as the local source of truth?
+- What is GitHub allowed to overwrite, and what is local state allowed to overwrite?
+- What are the first read-only screens or reports before write automation exists?
+- What evidence is required before an item is considered complete?
+
+V2-0 should not implement the board, ledger, sync, or migration tools. It is a design and acceptance contract.
+
+## V2-1 Telemetry Evidence Window
+
+#266 remains the telemetry evidence window. It should not run as a standalone research task disconnected from real work.
+
+It should be bound to a selected V2 slice after V2-0 is accepted. The telemetry should capture enough data to compare:
+
+- GitHub issue/PR comment overhead;
+- Project field and label churn;
+- dispatch and callback frequency;
+- review and re-review loops;
+- human gate count and delay;
+- context rehydration cost;
+- unclear owner or next-action failures;
+- places where local-first state would have reduced coordination cost.
+
+Telemetry evidence remains decision support. It is not billing-grade token accounting and does not authorize memory-system work.
+
+## V2-2 Local Collaboration Ledger
+
+The Local Collaboration Ledger is the local durable event record for orchestration.
+
+Expected event categories include:
+
+- issue or Epic creation;
+- assignment and owner-role changes;
+- dispatch;
+- callback;
+- evidence collection;
+- review;
+- requested changes;
+- acceptance;
+- human approval;
+- merge;
+- closure;
+- blocked state;
+- migration/backfill provenance;
+- GitHub sync readback.
+
+The ledger must support audit and replay before it supports automation.
+
+## V2-3 Foundry Board Domain Model
+
+The Foundry Board is the user-facing view over local orchestration state.
+
+It should help users answer:
+
+- What should I look at next?
+- What is blocked and why?
+- What is waiting on human approval?
+- What is done but not reflected in GitHub Project?
+- What has GitHub state that disagrees with local state?
+- Which thread, issue, PR, or evidence comment explains the latest state?
+
+The domain model should define states and transitions before UI implementation.
+
+## V2-4 Existing Project Migration And Backfill
+
+Existing GitHub-first projects must be supported.
+
+Migration should:
+
+- read current issues, PRs, comments, labels, milestones, and Project fields;
+- preserve provenance rather than inventing clean history;
+- identify incomplete, contradictory, or stale records;
+- create local ledger records with confidence levels;
+- avoid changing GitHub state during read-only backfill;
+- produce a migration report users can review before any write-back.
+
+This milestone is required for V2 because Agent Foundry already has substantial durable GitHub history.
+
+## V2-5 Foundry Board Read-Only MVP
+
+The first usable board should be read-only.
+
+It should display enough information for a user to operate confidently:
+
+- active work;
+- owner role;
+- Roadmap Status;
+- blocking reason;
+- latest evidence;
+- next action;
+- related issue, PR, branch, and thread;
+- local/GitHub sync status.
+
+Write automation should wait until read-only behavior is trusted.
+
+## V2-6 GitHub Project Remote Sync
+
+GitHub Project sync should treat GitHub as a collaboration mirror, not the canonical local orchestration store.
+
+The sync design must define:
+
+- dry-run plan;
+- conflict detection;
+- field mapping;
+- Roadmap Status and built-in Status behavior;
+- idempotency;
+- retry and readback behavior;
+- human gates for risky writes;
+- rollback or repair guidance.
+
+Project sync must not silently close issues, overwrite human edits, or hide discrepancies between local and remote state.
+
+## V2-7 V2 Readiness And Release Gate
+
+V2 readiness should verify:
+
+- new project journey;
+- existing project migration journey;
+- daily orchestration journey;
+- review and human approval journey;
+- blocked/recovery journey;
+- local-first source-of-truth behavior;
+- GitHub Project sync behavior;
+- docs and user-facing walkthrough;
+- telemetry evidence and residual risks.
+
+V2 release should remain separate from memory-system implementation.
