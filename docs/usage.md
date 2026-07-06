@@ -284,7 +284,7 @@ The official Core catalog currently exposes:
 | Pack | Normal-user use / 普通用户用途 |
 | --- | --- |
 | `pack.bootstrap.minimal` | Minimal bootstrap capability and prerequisite for optional starter packs. / 最小 bootstrap capability，也是 optional starter packs 的前置条件。 |
-| `pack.multi-agent.optional` | GitHub issue/PR collaboration starter with durable comments, role labels, and review handoff habits. / GitHub issue/PR 协作 starter，覆盖 durable comments、role labels 和 review handoff habits。 |
+| `pack.multi-agent.optional` | GitHub issue/PR collaboration starter with durable comments, role labels, review handoff habits, collaboration readiness audit, and dry-run repair planning. / GitHub issue/PR 协作 starter，覆盖 durable comments、role labels、review handoff habits、collaboration readiness audit 和 dry-run repair planning。 |
 
 Architecture-boundary, source-of-truth, Generated/Runtime downstream, and Local
 Private evidence-exclusion guidance belongs in `pack.bootstrap.minimal` at the

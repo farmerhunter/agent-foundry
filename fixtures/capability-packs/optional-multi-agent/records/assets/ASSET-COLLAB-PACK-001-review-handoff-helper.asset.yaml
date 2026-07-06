@@ -2,12 +2,12 @@ id: ASSET-COLLAB-PACK-001
 title: Role-Generic GitHub Scheduler Helper Set
 asset_type: skill
 status: candidate
-version: 2
+version: 3
 created: 2026-06-11
-updated: 2026-06-12
-purpose: Provide reviewed helper surfaces for role-generic GitHub issue and PR coordination.
-responsibility: Support inbox, ready-queue, pickup, handoff, audit, label routing, issue context, PR context, and retry wrappers after managed install.
-non_responsibility: Does not decide product scope, override issue contracts, make Project v2 the scheduler authority, install helpers, or execute from pack staging.
+updated: 2026-07-06
+purpose: Provide reviewed helper surfaces for role-generic GitHub issue/PR coordination and collaboration readiness reporting.
+responsibility: Support inbox, ready-queue, pickup, handoff, audit, collaboration readiness, dry-run repair planning, degraded GitHub/Project access reporting, label routing, issue context, PR context, and retry wrappers after managed install.
+non_responsibility: Does not decide product scope, override issue contracts, make Project v2 the scheduler authority, install helpers, execute from pack staging, apply dry-run repairs, publish generated Skills, or mutate Project v2 by default.
 inputs:
   - issue number
   - PR number
@@ -18,7 +18,12 @@ inputs:
 process:
   - Read durable GitHub issue, PR, label, and comment state.
   - Resolve role labels and completion handoff from explicit configuration and contracts.
+  - Report collaboration readiness for new or existing projects before multi-agent work relies on the setup.
+  - Include Execution Contract validation and Testing Contract validation where the workflow asks for explicit test evidence.
   - Print dry-run plans before any mutating helper behavior is allowed.
+  - Keep dry-run repair entries report-only with mutation_performed false and apply_supported_now false.
+  - Prefer REST-first GitHub reads and targeted Project v2 GraphQL only when configured and needed.
+  - Report Project v2 TLS, EOF, timeout, rate-limit-like, unavailable, or config-missing states as degraded sources instead of blocking unrelated checks.
   - Keep Project status updates optional and project-configured.
   - Leave installation and runtime exposure to managed Agent Foundry tooling.
 outputs:
@@ -26,6 +31,9 @@ outputs:
   - ready queue report
   - pickup or handoff dry-run
   - audit report
+  - collaboration readiness report
+  - dry-run repair plan
+  - degraded-source summary
   - issue or PR context summary
 canonical_practices:
   - COLLAB-PACK-001
@@ -35,7 +43,12 @@ usage_triggers:
   - role handoff
   - GitHub issue scheduler
   - multi-agent ready queue
+  - collaboration readiness
+  - dry-run repair plan
+  - degraded GitHub access
 success_criteria:
   - The helper set can be reviewed as source without being executed from the pack snapshot.
   - Project-specific defaults are represented as overlays rather than reusable pack defaults.
   - Mutating actions remain disabled until managed install, permissions, and receipts exist.
+  - Readiness reports identify missing or drifted setup without mutating GitHub or Project state.
+  - Degraded GitHub or Project access is visible in reports instead of hidden by inferred success.
