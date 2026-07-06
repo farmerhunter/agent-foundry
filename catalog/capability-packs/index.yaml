@@ -27,9 +27,9 @@ entries:
     title: Optional GitHub Collaboration Starter Pack
     channel: official
     catalog_status: available
-    latest_version: 0.2.0
+    latest_version: 0.3.0
     manifest_path: fixtures/capability-packs/optional-multi-agent/manifest.yaml
-    manifest_sha256: ea14748cdf10142f37c46c9357019e162a3991afe623b20708cc7ef2a618ed58
+    manifest_sha256: e5a92fffe31c3065564ce43aae6daa0b029ba3a4e2490061cfd7fc0d4d1d8cb6
     compatibility_summary: "Core schema 1; Vault layout [1]; bootstrap required; selected Vault review required."
     compatibility_metadata:
       core_schema_version_min: 1

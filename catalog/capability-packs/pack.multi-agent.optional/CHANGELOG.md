@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.0
+
+- Added AF15 collaboration readiness guidance for new-project setup and
+  existing-project drift audit.
+- Added dry-run repair planning and degraded GitHub/Project access reporting
+  to the optional starter contract while keeping all repair/apply behavior
+  disabled.
+- Kept member records as manual-review candidate records and preserved selected
+  User Vault authority after deployment.
+- No live Project repair/apply, generated Skill publish, runtime install,
+  Vault mutation, adapter publish, release artifact publishing, or private/local
+  evidence export is authorized by this catalog entry.
+
 ## 0.2.0
 
 - Cataloged as an official first-party optional GitHub collaboration starter

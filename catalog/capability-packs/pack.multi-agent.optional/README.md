@@ -33,6 +33,28 @@ dependency-gated queues、review handoffs，以及 write automation 前的 read-
 来进行 GitHub issue/PR 协作。当工作需要在多个 role sessions 之间流转，并且 GitHub
 仍然是 durable source of truth 时，它最有用。
 
+## Collaboration Readiness / 协作就绪检查
+
+The current starter guidance includes the AF15 collaboration readiness model:
+new projects can check whether role labels, routing templates, Execution
+Contracts, Testing Contracts, and optional Project/Kanban mirrors are present
+before they start multi-agent work. Existing projects can audit drift and get a
+dry-run repair plan without changing GitHub or Project state.
+
+当前 starter guidance 包含 AF15 collaboration readiness model：新项目可以先检查
+role labels、routing templates、Execution Contracts、Testing Contracts 和可选的
+Project/Kanban mirrors 是否齐备；已有项目可以 audit drift，并获得 dry-run repair
+plan，而不会修改 GitHub 或 Project state。
+
+Readiness reports are expected to stay read-only. They should show
+`mutation_performed: false`, use REST-first GitHub access, query Project v2 only
+when configured and needed, avoid default full Project scans, and report
+degraded GitHub or Project access instead of hiding it.
+
+Readiness reports 应保持 read-only。它们应显示 `mutation_performed: false`，
+优先使用 REST 访问 GitHub，仅在配置且必要时查询 Project v2，避免默认 full Project
+scan，并在 GitHub 或 Project 访问 degraded 时明确报告。
+
 ## What Remains Manual Or Review-Gated / 仍需手动或 Review-Gated 的内容
 
 People or delegated workflow roles still decide scope, architecture direction,
@@ -49,12 +71,13 @@ closure，以及任何修改 protected branches 或跨越 privacy/security bound
 ## What It Does Not Automate / 不自动化什么
 
 This pack does not merge PRs, close issues, create hidden access control, apply
-runtime helpers, publish generated Skills, mutate Project v2 by default, export
-private Vault content, or treat local helper receipts as authority.
+runtime helpers, publish generated Skills, mutate Project v2 by default, execute
+dry-run repair plans, export private Vault content, or treat local helper
+receipts as authority.
 
 这个 pack 不会 merge PRs、close issues、创建隐藏 access control、apply runtime
-helpers、publish generated Skills、默认 mutate Project v2、export private Vault
-content，也不会把 local helper receipts 当成 authority。
+helpers、publish generated Skills、默认 mutate Project v2、执行 dry-run repair
+plans、export private Vault content，也不会把 local helper receipts 当成 authority。
 
 ## When To Accept / 何时接受安装
 
@@ -80,7 +103,9 @@ labels 和 issue comments 作为 workflow record，可以跳过它。
 
 The pack covers a base GitHub collaboration workflow: role labels, durable
 issue/PR comments, explicit Execution Contract fields, dependency-gated queues,
-and read-only audit before write automation.
+Testing Contract evidence when needed, collaboration readiness audit, dry-run
+repair planning, degraded GitHub/Project access reporting, and read-only audit
+before write automation.
 
 Project v2 status may be a configured visual mirror, but it is not the scheduler
 source of truth. Runtime helper install, generated Skill publish, and mutating
@@ -99,9 +124,10 @@ receipts remain downstream status surfaces, not catalog or pack authority.
 
 ## Versioning
 
-Pack version `0.2.0` identifies the reviewed GitHub collaboration starter
-contract. Core git tags and releases identify repository snapshots. These are
-related but independent axes.
+Pack version `0.3.0` identifies the reviewed GitHub collaboration readiness
+starter contract. Pack version `0.2.0` identified the earlier GitHub
+collaboration starter contract. Core git tags and releases identify repository
+snapshots. These are related but independent axes.
 
 ## Review
 
@@ -109,3 +135,8 @@ Review evidence:
 
 - https://github.com/farmerhunter/agent-foundry/issues/252
 - https://github.com/farmerhunter/agent-foundry/issues/253
+- https://github.com/farmerhunter/agent-foundry/issues/315
+- https://github.com/farmerhunter/agent-foundry/issues/316
+- https://github.com/farmerhunter/agent-foundry/issues/317
+- https://github.com/farmerhunter/agent-foundry/issues/318
+- https://github.com/farmerhunter/agent-foundry/issues/319
