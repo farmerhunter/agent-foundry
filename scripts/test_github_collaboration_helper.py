@@ -116,6 +116,7 @@ def main() -> int:
         fixture = base / "issue.json"
         audit_issues = base / "audit-issues.json"
         audit_project = base / "audit-project.json"
+        readiness_project = base / "readiness-project.json"
         readiness_labels = base / "readiness-labels.json"
         readiness_prs = base / "readiness-prs.json"
         inbox = base / "inbox.json"
@@ -308,6 +309,44 @@ def main() -> int:
                             "risk": {"name": "Medium"},
                         },
                     ]
+                }
+            ),
+        )
+        write(
+            readiness_project,
+            json.dumps(
+                {
+                    "fields": [
+                        {"name": "Status"},
+                        {"name": "Roadmap Status"},
+                        {"name": "Stage"},
+                        {
+                            "name": "Owner Role",
+                            "options": [
+                                {"name": "Architect"},
+                                {"name": "Implementer"},
+                                {"name": "Reviewer"},
+                                {"name": "Tester"},
+                                {"name": "Human"},
+                            ],
+                        },
+                    ],
+                    "items": [
+                        {
+                            "content": {"number": 225},
+                            "status": {"name": "Todo"},
+                            "roadmap Status": {"name": "Ready"},
+                            "stage": {"name": "AF-11"},
+                            "owner Role": None,
+                        },
+                        {
+                            "content": {"number": 227},
+                            "status": {"name": "Done"},
+                            "roadmap Status": {"name": "Done"},
+                            "stage": {"name": "AF-10"},
+                            "owner Role": {"name": "Reviewer"},
+                        },
+                    ],
                 }
             ),
         )
@@ -593,7 +632,7 @@ def main() -> int:
                 "--prs-json",
                 str(readiness_prs),
                 "--project-items-json",
-                str(audit_project),
+                str(readiness_project),
                 "--json",
             ],
             base,
@@ -607,8 +646,12 @@ def main() -> int:
             ("collaboration-readiness-missing-harvester", '"label:needs:harvester"'),
             ("collaboration-readiness-contract-invalid", '"code": "execution_contract_invalid"'),
             ("collaboration-readiness-testing-invalid", '"code": "testing_contract_invalid"'),
+            ("collaboration-readiness-missing-project-item", '"code": "missing_project_item"'),
+            ("collaboration-readiness-missing-project-field", '"code": "missing_project_field"'),
+            ("collaboration-readiness-missing-role-option", '"code": "missing_project_role_option"'),
             ("collaboration-readiness-pr-sampled", '"prs_sampled"'),
             ("collaboration-readiness-repair-not-supported", '"apply_supported_now": false'),
+            ("collaboration-readiness-project-option-repair", '"action": "create_project_option"'),
             ("collaboration-readiness-no-full-project-scan", '"full_project_scan_performed": false'),
             ("collaboration-readiness-v2-shape", '"local_ledger_candidate": true'),
         ):
@@ -632,7 +675,7 @@ def main() -> int:
             {"AGENT_REPO": "farmerhunter/agent-foundry", "PATH": f"{fake_bin}{os.pathsep}{os.environ.get('PATH', '')}"},
         )
         errors.extend(expect_ok("scheduler-audit-project-degraded", degraded, '"status": "degraded"'))
-        errors.extend(expect_ok("scheduler-audit-project-unavailable", degraded, '"availability": "unavailable"'))
+        errors.extend(expect_ok("scheduler-audit-project-degraded-availability", degraded, '"availability": "degraded"'))
         errors.extend(expect_ok("scheduler-audit-project-read-once", degraded, '"attempts": 1'))
         readiness_degraded = run(
             [
@@ -655,9 +698,58 @@ def main() -> int:
             {"AGENT_REPO": "farmerhunter/agent-foundry", "PATH": f"{fake_bin}{os.pathsep}{os.environ.get('PATH', '')}"},
         )
         errors.extend(expect_ok("collaboration-readiness-project-degraded", readiness_degraded, '"status": "degraded"'))
-        errors.extend(expect_ok("collaboration-readiness-project-unavailable", readiness_degraded, '"availability": "unavailable"'))
+        errors.extend(expect_ok("collaboration-readiness-project-degraded-availability", readiness_degraded, '"availability": "degraded"'))
         errors.extend(expect_ok("collaboration-readiness-project-read-once", readiness_degraded, '"attempts": 1'))
+        errors.extend(expect_ok("collaboration-readiness-project-eof-recorded", readiness_degraded, "EOF while reading Project v2"))
         errors.extend(expect_ok("collaboration-readiness-no-project-write", readiness_degraded, '"apply_supported_now": false'))
+        write(fake_gh, "#!/bin/sh\nprintf '%s\\n' 'GraphQL rate limit exceeded' >&2\nexit 1\n")
+        fake_gh.chmod(0o755)
+        readiness_rate_limited = run(
+            [
+                "collaboration-readiness",
+                "--config",
+                str(TEMPLATE),
+                "--labels-json",
+                str(readiness_labels),
+                "--issues-json",
+                str(audit_issues),
+                "--project-owner",
+                "@me",
+                "--project-number",
+                "3",
+                "--project-retries",
+                "1",
+                "--json",
+            ],
+            base,
+            {"AGENT_REPO": "farmerhunter/agent-foundry", "PATH": f"{fake_bin}{os.pathsep}{os.environ.get('PATH', '')}"},
+        )
+        errors.extend(expect_ok("collaboration-readiness-rate-limit-degraded", readiness_rate_limited, '"availability": "degraded"'))
+        errors.extend(expect_ok("collaboration-readiness-rate-limit-recorded", readiness_rate_limited, "GraphQL rate limit exceeded"))
+        write(fake_gh, "#!/bin/sh\nprintf '%s\\n' 'TLS handshake timeout while reading Project v2' >&2\nexit 1\n")
+        fake_gh.chmod(0o755)
+        readiness_tls = run(
+            [
+                "collaboration-readiness",
+                "--config",
+                str(TEMPLATE),
+                "--labels-json",
+                str(readiness_labels),
+                "--issues-json",
+                str(audit_issues),
+                "--project-owner",
+                "@me",
+                "--project-number",
+                "3",
+                "--project-retries",
+                "1",
+                "--json",
+            ],
+            base,
+            {"AGENT_REPO": "farmerhunter/agent-foundry", "PATH": f"{fake_bin}{os.pathsep}{os.environ.get('PATH', '')}"},
+        )
+        errors.extend(expect_ok("collaboration-readiness-tls-degraded", readiness_tls, '"availability": "degraded"'))
+        errors.extend(expect_ok("collaboration-readiness-tls-recorded", readiness_tls, "TLS handshake timeout"))
         errors.extend(
             expect_ok(
                 "activation-report-fixture",
