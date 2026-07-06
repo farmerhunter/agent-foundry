@@ -1,10 +1,10 @@
 manifest_schema_version: 1
 pack_id: pack.multi-agent.optional
 title: Optional Multi-Agent Collaboration Pack
-description: Reviewed optional first-party starter pack for role-generic GitHub issue and PR collaboration helpers.
+description: Reviewed optional first-party starter pack for role-generic GitHub issue and PR collaboration helpers, collaboration readiness, and dry-run repair planning.
 lifecycle_status: reviewed
-version: 0.2.0
-exported_at: 2026-06-12
+version: 0.3.0
+exported_at: 2026-07-06
 distribution_type: optional_capability
 source_provenance: "Agent Foundry public Core fixture reviewed through AF12-3 issue #253."
 maintainer_contact: "https://github.com/farmerhunter/agent-foundry"
@@ -13,7 +13,7 @@ sensitivity: public
 review_state: reviewed
 
 pack_contract:
-  promised_use_case: "Help a project operate GitHub issues, PRs, labels, comments, and optional visual status mirrors as a lightweight multi-agent scheduler."
+  promised_use_case: "Help a project operate GitHub issues, PRs, labels, comments, collaboration readiness reports, dry-run repair plans, and optional visual status mirrors as a lightweight multi-agent scheduler."
   deployment_role: "optional user-selected capability after bootstrap"
   source_authority_after_deployment: "selected User Vault records"
   non_authority_boundaries: [generated adapters are downstream only, runtime installs are downstream only, pack staging is transfer evidence only, Core fixtures are schema and test evidence only]
@@ -21,6 +21,8 @@ pack_contract:
 evidence_sources:
   - "Agent Foundry issue 252 public starter-pack selection decision"
   - "Agent Foundry issue 253 public starter-pack implementation review"
+  - "Agent Foundry issue 315 collaboration readiness model decision"
+  - "Agent Foundry issues 316-319 AF15 helper, docs, dry-run repair, and dogfood review"
   - "Agent Foundry public first-party starter-pack review"
 
 export_policy:
@@ -46,20 +48,27 @@ starter_contents:
     - "role-generic needs:<role> routing"
     - "durable pickup and handoff comments"
     - "explicit Execution Contract role fields"
+    - "Testing Contract evidence routing when explicit testing is needed"
     - "dependency-gated ready queues"
+    - "collaboration readiness before new project adoption"
+    - "existing project drift audit and dry-run repair planning"
+    - "degraded GitHub/Project access reporting"
     - "read-only audit before write automation"
   assets:
     - "role-generic GitHub scheduler helper set"
   docs_templates:
     - "role routing config example"
     - "Execution Contract template"
+    - "Testing Contract template"
     - "pickup and handoff comment templates"
+    - "collaboration readiness adoption guidance"
   executable_payload_candidates:
     - "agent-inbox"
     - "agent-ready-queue"
     - "agent-pickup"
     - "agent-handoff"
     - "agent-audit"
+    - "agent-collaboration-readiness"
     - "agent-issue-context"
     - "agent-pr-context"
     - "agent-label"
@@ -80,6 +89,7 @@ rejected_as_pack:
   - "mutating apply behavior before managed helper install exists"
   - "execution from product project paths, pack staging, or canonical Vault payload paths"
   - "active Agent Foundry practices without separate harvest review"
+  - "live Project repair/apply behavior without later reviewed gate"
 
 compatibility:
   core_schema_version_min: 1
@@ -92,8 +102,8 @@ included_records:
     kind: practice
     lifecycle_status: candidate
     path: records/practices/COLLAB-PACK-001-review-handoff.md
-    source_version: 2
-    content_sha256: "3d68186c067db71927fd4861842c8c7f446e435c1dc0f17176cfdc18222a2116"
+    source_version: 3
+    content_sha256: "463e006672c02dcc98a7e606ddb76fecd8a29539b7720e8d26c4cb2839942c18"
     destination_layer: canonical_vault_record
     membership_role: optional_member
     activation_default: manual_review
@@ -102,8 +112,8 @@ included_records:
     kind: asset
     lifecycle_status: candidate
     path: records/assets/ASSET-COLLAB-PACK-001-review-handoff-helper.asset.yaml
-    source_version: 2
-    content_sha256: "e43c1f9205a51ccf796eba87ec16dc15f9a70255ad83e31322ffdd92f9495eb4"
+    source_version: 3
+    content_sha256: "fc2e79c4696d519af319a070fbbccd11d6f860ae932bd6b6956391066981e6ea"
     destination_layer: canonical_vault_record
     membership_role: optional_member
     activation_default: manual_review
