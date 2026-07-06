@@ -52,12 +52,17 @@ DRY_RUN_ACTIONS = {
 REMOTE_RE = re.compile(r"(?:github\.com[:/])([^/]+)/([^/.]+)(?:\.git)?$")
 CONTRACT_HEADINGS = ("Final Execution Contract", "Execution Contract", "Draft Execution Contract")
 ROLE_FIELDS = ("Owner role", "Review role", "Acceptance role")
-VALID_ROLE_VALUES = {"none", "implementer", "reviewer", "architect"}
+VALID_ROLE_VALUES_BY_FIELD = {
+    "Owner role": {"none", "implementer", "reviewer", "architect", "tester", "harvester", "human"},
+    "Review role": {"none", "reviewer"},
+    "Acceptance role": {"none", "architect", "reviewer", "human"},
+}
 VALID_COMPLETION_HANDOFFS = {
     "none",
     "to:implementer",
     "to:reviewer",
     "to:architect",
+    "to:tester",
     "to:human",
     "batch checkpoint",
 }
@@ -271,7 +276,7 @@ def validate_execution_contract(body: str) -> dict[str, Any]:
                 "Review role",
                 "missing_contract_field",
                 "Reviewer target is present but Review role is missing.",
-                expected=sorted(VALID_ROLE_VALUES),
+                expected=sorted(VALID_ROLE_VALUES_BY_FIELD["Review role"]),
                 actual=None,
                 hint="Use `Review role: reviewer` and keep natural-language reviewer details in `Reviewer target:`.",
             )
@@ -281,16 +286,19 @@ def validate_execution_contract(body: str) -> dict[str, Any]:
         value = fields.get(field)
         if value is None:
             continue
-        if value not in VALID_ROLE_VALUES:
-            hint = "Use a single lowercase machine role token: none, implementer, reviewer, or architect."
+        valid_values = VALID_ROLE_VALUES_BY_FIELD[field]
+        if value not in valid_values:
+            hint = f"Use one lowercase machine role token from {', '.join(sorted(valid_values))}."
             if field == "Acceptance role" and "/" in value:
                 hint = "Use `Acceptance role: architect` and keep human gates in `Human verification needed:` or `Human review prompt:`."
+            if field == "Review role" and value == "tester":
+                hint = "Use `Owner role: tester` or `Completion handoff: to:tester`; Tester supplies evidence and is not Reviewer authority."
             errors.append(
                 contract_error(
                     field,
                     "malformed_role_field",
                     f"{field} must be a single lowercase machine role token.",
-                    expected=sorted(VALID_ROLE_VALUES),
+                    expected=sorted(valid_values),
                     actual=value,
                     hint=hint,
                 )
@@ -319,6 +327,115 @@ def validate_execution_contract(body: str) -> dict[str, Any]:
         "heading": heading,
         "fields": {key: value for key, value in fields.items() if value is not None},
         "natural_language_fields_present": sorted(key for key, value in natural_fields.items() if value),
+        "errors": errors,
+    }
+
+
+def extract_markdown_section(body: str, heading: str) -> str:
+    pattern = re.compile(
+        rf"^#+\s+{re.escape(heading)}\s*$"
+        r"(?P<body>.*?)(?=^#+\s+|\Z)",
+        re.MULTILINE | re.DOTALL,
+    )
+    match = pattern.search(strip_markdown_fenced_blocks(body or ""))
+    return match.group("body") if match else ""
+
+
+def markdown_field_loose(text: str, field: str) -> str | None:
+    match = re.search(rf"^\s*{re.escape(field)}:\s*(.*?)\s*$", text, re.MULTILINE | re.IGNORECASE)
+    if not match:
+        return None
+    return match.group(1).strip()
+
+
+def has_markdown_field(text: str, field: str) -> bool:
+    return re.search(rf"^\s*{re.escape(field)}:\s*", text, re.MULTILINE | re.IGNORECASE) is not None
+
+
+def validate_testing_contract(body: str, labels: list[str] | None = None) -> dict[str, Any]:
+    labels = labels or []
+    text = strip_markdown_fenced_blocks(body or "")
+    responsibility = markdown_field_loose(text, "Testing Responsibility")
+    tester_trigger_present = has_markdown_field(text, "Tester Trigger")
+    testing_contract = extract_markdown_section(text, "Testing Contract")
+    evidence_handoff = extract_markdown_section(text, "Test Evidence Handoff")
+    handoff_to = markdown_field_loose(evidence_handoff, "to") if evidence_handoff else None
+    needs_tester = "needs:tester" in labels
+    tester_related = needs_tester or responsibility == "tester" or bool(testing_contract) or bool(evidence_handoff)
+    errors: list[dict[str, Any]] = []
+
+    if not tester_related:
+        return {
+            "status": "missing",
+            "fields": {},
+            "errors": [],
+        }
+
+    if needs_tester and responsibility != "tester":
+        errors.append(
+            contract_error(
+                "Testing Responsibility",
+                "missing_testing_contract_field",
+                "needs:tester requires Testing Responsibility: tester.",
+                expected="tester",
+                actual=responsibility,
+            )
+        )
+    if responsibility == "tester" and not tester_trigger_present:
+        errors.append(
+            contract_error(
+                "Tester Trigger",
+                "missing_testing_contract_field",
+                "Testing Responsibility: tester requires a Tester Trigger field.",
+                expected="Tester Trigger",
+                actual=None,
+            )
+        )
+    if needs_tester and not testing_contract:
+        errors.append(
+            contract_error(
+                "Testing Contract",
+                "missing_testing_contract_field",
+                "needs:tester requires a Testing Contract section.",
+                expected="Testing Contract section",
+                actual=None,
+            )
+        )
+    if evidence_handoff and not handoff_to:
+        errors.append(
+            contract_error(
+                "Test Evidence Handoff.to",
+                "missing_testing_contract_field",
+                "Test Evidence Handoff requires a to value.",
+                expected=["reviewer", "architect", "implementer", "human"],
+                actual=None,
+            )
+        )
+    if handoff_to and handoff_to not in {"reviewer", "architect", "implementer", "human"}:
+        errors.append(
+            contract_error(
+                "Test Evidence Handoff.to",
+                "malformed_testing_handoff",
+                "Test Evidence Handoff to must name the next authority role.",
+                expected=["reviewer", "architect", "implementer", "human"],
+                actual=handoff_to,
+            )
+        )
+
+    fields = {}
+    if responsibility is not None:
+        fields["Testing Responsibility"] = responsibility
+    if tester_trigger_present:
+        fields["Tester Trigger"] = "present"
+    if testing_contract:
+        fields["Testing Contract"] = "present"
+    if evidence_handoff:
+        fields["Test Evidence Handoff"] = "present"
+    if handoff_to:
+        fields["Test Evidence Handoff.to"] = handoff_to
+    return {
+        "status": "ok" if not errors else "invalid",
+        "fields": fields,
         "errors": errors,
     }
 
@@ -485,6 +602,7 @@ def cmd_inbox(args: argparse.Namespace) -> None:
                     "labels": issue_labels,
                     "updatedAt": issue.get("updatedAt"),
                     "contract_validation": validate_execution_contract(issue.get("body") or ""),
+                    "testing_contract_validation": validate_testing_contract(issue.get("body") or "", issue_labels),
                 }
             )
     print_json_or_text({"repo": repo, "issues": rows, "mutation_performed": False}, args.json)
@@ -515,6 +633,7 @@ def cmd_issue_context(args: argparse.Namespace) -> None:
         if marker.lower() in body.lower():
             contract_hints.append(marker)
     contract_validation = validate_execution_contract(body)
+    testing_contract_validation = validate_testing_contract(body, labels)
     print_json_or_text(
         {
             "repo": repo,
@@ -524,6 +643,7 @@ def cmd_issue_context(args: argparse.Namespace) -> None:
             "labels": labels,
             "contract_hints": contract_hints,
             "contract_validation": contract_validation,
+            "testing_contract_validation": testing_contract_validation,
             "comment_count_returned": len(comments),
             "summary_is_authority": False,
             "mutation_performed": False,
@@ -820,6 +940,20 @@ def audit_issue(
                 )
             )
         repairs.append(repair("fix_execution_contract", number, "Execution Contract", "use lowercase role tokens and machine-readable handoff values"))
+    testing_contract_validation = validate_testing_contract(issue.get("body") or "", labels)
+    if testing_contract_validation["status"] == "invalid":
+        for error in testing_contract_validation["errors"]:
+            issue_findings.append(
+                finding(
+                    "testing_contract_invalid",
+                    number,
+                    "error",
+                    error["message"],
+                    expected={error["field"]: error.get("expected")},
+                    actual={error["field"]: error.get("actual")},
+                )
+            )
+        repairs.append(repair("fix_testing_contract", number, "Testing Contract", "add Tester pickup fields and evidence handoff values"))
     if project_requested and item is None:
         issue_findings.append(
             finding("missing_project_item", number, "error", "Issue is not present in the requested Project v2 item list.")
