@@ -80,6 +80,8 @@ def main() -> int:
                 "Do not document or imply that `agent-comment --apply`",
                 "Project v2 was not meaningfully evaluated",
                 "Workflow authorization does not override product/runtime approval prompts",
+                "Tester Routing",
+                "Do not use `Review role: tester`",
             ],
         )
     )
@@ -89,6 +91,9 @@ def main() -> int:
             template_text,
             [
                 "operation_policy: \"hybrid_runtime_discovery_then_connector_helper_api_bare_gh\"",
+                "tester:",
+                "inbox_label: \"needs:tester\"",
+                "needs:tester",
                 "runtime_discovery_required_per_session: true",
                 "connector_preferred_for_low_risk:",
                 "helper_first_for:",
@@ -231,6 +236,20 @@ def main() -> int:
                             "labels": [{"name": "stage:AF-11"}, {"name": "risk:medium"}, {"name": "needs:implementer"}],
                             "body": "## Execution Contract\n\nOwner role: implementer\nReview role: reviewer\nAcceptance role: architect\nCompletion handoff: move to Review\n",
                         },
+                        {
+                            "number": 234,
+                            "title": "Tester missing contract",
+                            "state": "OPEN",
+                            "labels": [{"name": "stage:AF-14"}, {"name": "risk:high"}, {"name": "needs:tester"}],
+                            "body": "## Execution Contract\n\nOwner role: tester\nReview role: reviewer\nAcceptance role: architect\nCompletion handoff: to:reviewer\n",
+                        },
+                        {
+                            "number": 235,
+                            "title": "Tester as reviewer",
+                            "state": "OPEN",
+                            "labels": [{"name": "stage:AF-14"}, {"name": "risk:high"}, {"name": "needs:tester"}],
+                            "body": "## Execution Contract\n\nOwner role: implementer\nReview role: tester\nAcceptance role: architect\nCompletion handoff: to:tester\n\n## Testing Contract\n\nTesting Responsibility: tester\nTester Trigger:\n  - stateful workflow risk\nuser_value_or_risk: stale state\n\n## Test Evidence Handoff\n\nto: reviewer\nresult_summary: passed\nresidual_risks: none\n",
+                        },
                     ]
                 }
             ),
@@ -308,6 +327,13 @@ def main() -> int:
                             "title": "Evidence",
                             "labels": [{"name": "stage:AF-11"}],
                             "updatedAt": "2026-06-18T00:00:00Z",
+                        },
+                        {
+                            "number": 208,
+                            "title": "Tester evidence",
+                            "labels": [{"name": "needs:tester"}],
+                            "updatedAt": "2026-06-18T00:00:00Z",
+                            "body": "## Execution Contract\n\nOwner role: tester\nReview role: reviewer\nAcceptance role: architect\nCompletion handoff: to:reviewer\n\n## Testing Contract\n\nTesting Responsibility: tester\nTester Trigger:\n  - route mock does not prove backend persistence\nuser_value_or_risk: user can trust the preview does not write\n\n## Test Evidence Handoff\n\nto: reviewer\nresult_summary: passed\nresidual_risks: backend persistence not covered\n",
                         },
                     ]
                 }
@@ -437,6 +463,8 @@ def main() -> int:
         errors.extend(expect_ok("inbox-contract-validation-invalid", inbox_result, '"status": "invalid"'))
         errors.extend(expect_ok("inbox-contract-validation-role", inbox_result, '"actual": "Implementer"'))
         errors.extend(expect_ok("inbox-contract-validation-handoff", inbox_result, '"actual": "move to Review"'))
+        errors.extend(expect_ok("inbox-testing-contract-validation-surface", inbox_result, '"testing_contract_validation"'))
+        errors.extend(expect_ok("inbox-testing-contract-validation-ok", inbox_result, '"Testing Responsibility": "tester"'))
         issue_context_result = run(
             ["--repo", "farmerhunter/agent-foundry", "issue-context", "205", "--fixture-json", str(fixture)],
             base,
@@ -491,6 +519,7 @@ def main() -> int:
             "multiple_needs_labels",
             "no_next_owner_label",
             "execution_contract_invalid",
+            "testing_contract_invalid",
         ):
             errors.extend(expect_ok(f"scheduler-audit-{code}", scheduler_json, f'"code": "{code}"'))
         for name, expected in (
@@ -498,6 +527,8 @@ def main() -> int:
             ("scheduler-audit-compound-acceptance", '"Acceptance role": "architect / user"'),
             ("scheduler-audit-missing-review-role", "Reviewer target is present but Review role is missing."),
             ("scheduler-audit-legacy-handoff", '"Completion handoff": "move to Review"'),
+            ("scheduler-audit-tester-missing-contract", "needs:tester requires Testing Responsibility: tester."),
+            ("scheduler-audit-review-role-tester", '"Review role": "tester"'),
         ):
             errors.extend(expect_ok(name, scheduler_json, expected))
         errors.extend(expect_ok("scheduler-audit-json-status", scheduler_json, '"status": "findings"'))

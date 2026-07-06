@@ -50,6 +50,14 @@ External skills are handled as reviewed inputs. An import outcome is one of `dis
 
 外部 skills 会被当作 reviewed inputs 处理。一次 import outcome 只能是 `discard`、`reference_only`、`defer`、`merge_into_existing`、`propose_practice` 或 `propose_asset`。Reference-only material 会作为 sanitized review evidence 留在 selected Vault 的 `imports/inbox/`；它可用于查阅或后续 re-review，但不是 active behavior，也不能 publish adapters 或修改 runtime files。Publishing 是 approved canonical change 之后的 post-approval action。
 
+For risky user-visible or stateful changes, you can ask for Tester evidence before accepting the work. Tester plans or gathers evidence; Tester does not approve the change.
+
+对于有用户可见行为或状态风险的变更，你可以在接受工作前要求 Tester evidence。Tester 负责规划或收集 evidence；Tester 不负责批准变更。
+
+Use Tester when the question is "what did we test, why is that enough, and what remains risky?" Skip Tester when a simple docs check, static check, or unit test already answers the confidence question.
+
+当问题是“测试了什么、为什么足够、还剩什么风险”时使用 Tester。如果简单 docs check、static check 或 unit test 已经能回答信心问题，就跳过 Tester。
+
 ## First-Time Setup / 首次设置
 
 On a new machine, use `docs/deployment.md` for the full split Core/Vault install flow.
