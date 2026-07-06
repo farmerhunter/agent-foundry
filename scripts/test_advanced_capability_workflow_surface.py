@@ -304,7 +304,7 @@ def write_deployed_index(vault: Path) -> None:
                 "updated: 2026-06-17",
                 "deployed_packs:",
                 "  - pack_id: pack.bootstrap.minimal",
-                "    version: 0.2.0",
+                "    version: 0.2.1",
                 "    lifecycle_status: active",
                 "    source:",
                 f"      manifest_sha256: {'0' * 64}",

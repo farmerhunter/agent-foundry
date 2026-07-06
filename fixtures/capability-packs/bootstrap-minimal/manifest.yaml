@@ -3,8 +3,8 @@ pack_id: pack.bootstrap.minimal
 title: Minimal Agent Foundry Bootstrap Pack
 description: Minimal public bootstrap snapshot for first-run harvest, review, refresh, publish, root, and runtime-boundary workflows.
 lifecycle_status: reviewed
-version: 0.2.0
-exported_at: 2026-06-12
+version: 0.2.1
+exported_at: 2026-07-06
 distribution_type: mandatory_bootstrap
 source_provenance: "Agent Foundry public Core fixture for issue #77"
 maintainer_contact: "https://github.com/farmerhunter/agent-foundry"
@@ -112,8 +112,8 @@ included_records:
     kind: practice
     lifecycle_status: active
     path: records/practices/META-003-borrow-external-skills-through-review.md
-    source_version: 1
-    content_sha256: "ee3c7c051f185bc3b7d3747a5dac140effb8284933f30ecb151dd25f1db2f7b7"
+    source_version: 2
+    content_sha256: "0ba4bae1a029069c543dee68f1335721a94f24eb4ff704b0829ca1f7a3a73cbb"
     destination_layer: canonical_vault_record
     membership_role: bootstrap_required
     activation_default: active

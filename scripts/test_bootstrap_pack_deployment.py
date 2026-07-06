@@ -266,10 +266,10 @@ def main() -> int:
             else:
                 text = expected.read_text(encoding="utf-8")
                 for marker in [
-                    "provenance: \"Deployed from capability pack pack.bootstrap.minimal version 0.2.0",
+                    "provenance: \"Deployed from capability pack pack.bootstrap.minimal version 0.2.1",
                     "pack_membership",
                     "pack.bootstrap.minimal",
-                    "pack_source_version: \"0.2.0\"",
+                    "pack_source_version: \"0.2.1\"",
                 ]:
                     if marker not in text:
                         errors.append(f"deploy-bootstrap: {expected} missing deployment metadata marker {marker}")

@@ -3,7 +3,7 @@ pack_id: pack.multi-agent.optional
 title: Optional Multi-Agent Collaboration Pack
 description: Reviewed optional first-party starter pack for role-generic GitHub issue and PR collaboration helpers, collaboration readiness, and dry-run repair planning.
 lifecycle_status: reviewed
-version: 0.3.0
+version: 0.3.1
 exported_at: 2026-07-06
 distribution_type: optional_capability
 source_provenance: "Agent Foundry public Core fixture reviewed through AF12-3 issue #253."
@@ -23,6 +23,7 @@ evidence_sources:
   - "Agent Foundry issue 253 public starter-pack implementation review"
   - "Agent Foundry issue 315 collaboration readiness model decision"
   - "Agent Foundry issues 316-319 AF15 helper, docs, dry-run repair, and dogfood review"
+  - "Agent Foundry issues 328-331 AF15 action-plan UX correction and dogfood review"
   - "Agent Foundry public first-party starter-pack review"
 
 export_policy:
@@ -52,6 +53,7 @@ starter_contents:
     - "dependency-gated ready queues"
     - "collaboration readiness before new project adoption"
     - "existing project drift audit and dry-run repair planning"
+    - "user-facing readiness action-plan output"
     - "degraded GitHub/Project access reporting"
     - "read-only audit before write automation"
   assets:
@@ -102,8 +104,8 @@ included_records:
     kind: practice
     lifecycle_status: candidate
     path: records/practices/COLLAB-PACK-001-review-handoff.md
-    source_version: 3
-    content_sha256: "463e006672c02dcc98a7e606ddb76fecd8a29539b7720e8d26c4cb2839942c18"
+    source_version: 4
+    content_sha256: "9c35b4a380ce398119175a4378625767c057cbcb222ddee9323fe21953027f13"
     destination_layer: canonical_vault_record
     membership_role: optional_member
     activation_default: manual_review
@@ -112,8 +114,8 @@ included_records:
     kind: asset
     lifecycle_status: candidate
     path: records/assets/ASSET-COLLAB-PACK-001-review-handoff-helper.asset.yaml
-    source_version: 3
-    content_sha256: "fc2e79c4696d519af319a070fbbccd11d6f860ae932bd6b6956391066981e6ea"
+    source_version: 4
+    content_sha256: "ca4191e0d9d843a6606481edcb811e93ed01e1975a85d4811453779a23c73ef8"
     destination_layer: canonical_vault_record
     membership_role: optional_member
     activation_default: manual_review

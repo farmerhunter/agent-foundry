@@ -16,9 +16,8 @@ and pull requests without losing handoff context between Implementer, Reviewer,
 Architect, Coordinator, and Human decision points. Its value is repeatable
 collaboration discipline, not automatic project management.
 
-`pack.multi-agent.optional` 帮助团队把 Agent Foundry 用在 GitHub issues 和 pull
-requests 上，并在 Implementer、Reviewer、Architect、Coordinator 和 Human decision
-points 之间保留 handoff context。它的价值是可重复的协作纪律，而不是自动项目管理。
+**中文要点：** 这个 pack 帮团队在 GitHub issue/PR 协作中保留 handoff context。
+它提供可重复的协作纪律，不是自动项目管理。
 
 ## Supported Workflow / 支持的协作流程
 
@@ -28,10 +27,9 @@ handoffs, and read-only audit before write automation. It is useful when work
 must move between multiple role sessions while GitHub remains the durable source
 of truth.
 
-这个 pack 支持使用 role labels、durable issue comments、explicit Execution Contracts、
-dependency-gated queues、review handoffs，以及 write automation 前的 read-only audit
-来进行 GitHub issue/PR 协作。当工作需要在多个 role sessions 之间流转，并且 GitHub
-仍然是 durable source of truth 时，它最有用。
+**中文要点：** 它覆盖 role labels、durable comments、Execution Contracts、
+dependency-gated queues、review handoffs，以及 write automation 前的 read-only
+audit。
 
 ## Collaboration Readiness / 协作就绪检查
 
@@ -41,19 +39,32 @@ Contracts, Testing Contracts, and optional Project/Kanban mirrors are present
 before they start multi-agent work. Existing projects can audit drift and get a
 dry-run repair plan without changing GitHub or Project state.
 
-当前 starter guidance 包含 AF15 collaboration readiness model：新项目可以先检查
-role labels、routing templates、Execution Contracts、Testing Contracts 和可选的
-Project/Kanban mirrors 是否齐备；已有项目可以 audit drift，并获得 dry-run repair
-plan，而不会修改 GitHub 或 Project state。
+**中文要点：** 新项目先检查 role labels、routing templates、Execution Contracts、
+Testing Contracts 和可选 Project/Kanban mirrors；老项目 audit drift 并得到安全
+action plan。
 
 Readiness reports are expected to stay read-only. They should show
 `mutation_performed: false`, use REST-first GitHub access, query Project v2 only
 when configured and needed, avoid default full Project scans, and report
 degraded GitHub or Project access instead of hiding it.
 
-Readiness reports 应保持 read-only。它们应显示 `mutation_performed: false`，
-优先使用 REST 访问 GitHub，仅在配置且必要时查询 Project v2，避免默认 full Project
-scan，并在 GitHub 或 Project 访问 degraded 时明确报告。
+Normal users should read the action-plan layer before raw JSON evidence:
+`readiness_status`, summary, blocking gaps, unknown/degraded sources,
+recommended next actions, forbidden actions, and telemetry. Recommended actions
+are informational-only, handled through existing workflow, explicit human gate,
+or unsupported/deferred repair/apply.
+
+**中文要点：** 普通用户先看 action-plan layer：status、summary、blocking gaps、
+unknown/degraded sources、recommended next actions、forbidden actions 和 telemetry。
+Raw JSON 是 evidence/debug output。
+
+Readiness reports stay read-only. They show `mutation_performed: false`,
+use REST-first GitHub access, query Project v2 only when configured and needed,
+avoid default full Project scans, and report degraded GitHub or Project access
+instead of hiding it.
+
+**中文要点：** Readiness report 仍是 read-only：不执行 repair/apply，不默认扫全量
+Project，访问 degraded 时明确报告。
 
 ## What Remains Manual Or Review-Gated / 仍需手动或 Review-Gated 的内容
 
@@ -63,10 +74,8 @@ changes protected branches or crosses privacy/security boundaries. Project v2
 may mirror status when configured, but labels and durable comments remain the
 handoff mechanism.
 
-Scope、architecture direction、dependency release、merge authorization、issue
-closure，以及任何修改 protected branches 或跨越 privacy/security boundaries 的动作，
-仍由人或被委托的 workflow roles 决定。Project v2 可在配置后 mirror status，但 labels
-和 durable comments 仍是 handoff mechanism。
+**中文要点：** scope、architecture、release、merge、closure 和隐私/安全边界仍由
+人或被委托的 workflow roles 决定；Project v2 只是可选 mirror。
 
 ## What It Does Not Automate / 不自动化什么
 
@@ -75,9 +84,8 @@ runtime helpers, publish generated Skills, mutate Project v2 by default, execute
 dry-run repair plans, export private Vault content, or treat local helper
 receipts as authority.
 
-这个 pack 不会 merge PRs、close issues、创建隐藏 access control、apply runtime
-helpers、publish generated Skills、默认 mutate Project v2、执行 dry-run repair
-plans、export private Vault content，也不会把 local helper receipts 当成 authority。
+**中文要点：** 它不 merge/close、不执行 live repair/apply、不 mutate Project v2、
+不 publish generated Skills、不 export private Vault。
 
 ## When To Accept / 何时接受安装
 
@@ -86,9 +94,8 @@ review through GitHub issues/PRs and needs durable role handoffs. Skip it when a
 project is single-user, local-only, or not ready to use GitHub labels and issue
 comments as the workflow record.
 
-当项目通过 GitHub issues/PRs 协调 implementation 和 review，并需要 durable role
-handoffs 时，接受或安装这个 pack。若项目是单人、本地-only，或尚未准备好把 GitHub
-labels 和 issue comments 作为 workflow record，可以跳过它。
+**中文要点：** 项目通过 GitHub issues/PRs 协调并需要 durable handoffs 时安装；
+纯本地单人项目可跳过。
 
 ## Authority
 
@@ -124,7 +131,7 @@ receipts remain downstream status surfaces, not catalog or pack authority.
 
 ## Versioning
 
-Pack version `0.3.0` identifies the reviewed GitHub collaboration readiness
+Pack version `0.3.1` identifies the reviewed GitHub collaboration readiness
 starter contract. Pack version `0.2.0` identified the earlier GitHub
 collaboration starter contract. Core git tags and releases identify repository
 snapshots. These are related but independent axes.
