@@ -1,14 +1,12 @@
-# Usage Guide / 使用指南
+# Usage Guide
 
 This guide is for day-to-day Agent Foundry use. You do not need to remember the internal workflows.
 
-这份指南面向日常使用 Agent Foundry 的场景。你不需要记住内部 workflow 细节。
+**中文要点：** 这份指南面向日常使用；你不需要记住内部 workflow 细节。
 
-## How It Works / 工作方式
+## How It Works
 
 Agent Foundry is a local-first system with separate Core, selected User Vault, generated output, and runtime layers.
-
-Agent Foundry 是 local-first 系统，并区分 Core、selected User Vault、generated output 和 runtime layers。
 
 ```text
 work session or external skill
@@ -22,49 +20,35 @@ work session or external skill
 
 Core contains public workflows, schemas, scripts, templates, docs, adapter profiles, runtime templates, and validation tooling.
 
-Core 保存 public workflows、schemas、scripts、templates、docs、adapter profiles、runtime templates 和 validation tooling。
-
 The selected User Vault contains canonical `practices/`, `assets/`, `indexes/`, `imports/`, and shared sanitized usage aggregates.
-
-selected User Vault 保存 canonical `practices/`、`assets/`、`indexes/`、`imports/` 和 shared sanitized usage aggregates。
 
 Installed files under `~/.codex`, `~/.claude`, `~/.hermes`, and `~/.trae-cn` are downstream runtime copies.
 
-`~/.codex`、`~/.claude`、`~/.hermes` 和 `~/.trae-cn` 下的已安装文件是下游 runtime copies。
+**中文要点：** Agent Foundry 区分 Core、selected User Vault、generated output 和 runtime。Core 是 public tooling；selected User Vault 是 canonical records；runtime files 是 downstream copies。
 
-## Core Rule / 核心规则
+## Core Rule
 
 For daily use, prefer the short commands in `docs/commands.md`, such as `harvest practices`, `refresh practices and assets`, or `check Agent Foundry status`.
 
-日常使用时，优先使用 `docs/commands.md` 中的短命令，例如 `harvest practices`、`refresh practices and assets` 或 `check Agent Foundry status`。
-
 The agent may discover, draft, and recommend practices or assets. You approve each meaningful new item or change before it becomes active.
-
-Agent 可以发现、起草并推荐 practices 或 assets。每个重要新增项或变更都需要你批准后才能 active。
 
 After approval, the agent should apply the approved item, update the canonical Vault records, update indexes, publish relevant adapters, and report changed files.
 
-批准后，agent 应应用已批准项目，更新 canonical Vault records，更新 indexes，发布相关 adapters，并汇报 changed files。
+**中文要点：** 日常优先用短命令。Agent 可以发现和推荐 practices/assets，但重要新增或变更必须经你批准后才会 active。
 
 External skills are handled as reviewed inputs. An import outcome is one of `discard`, `reference_only`, `defer`, `merge_into_existing`, `propose_practice`, or `propose_asset`. Reference-only material stays as sanitized review evidence under the selected Vault `imports/inbox/`; it is useful for lookup or later re-review, but it is not active behavior and cannot publish adapters or mutate runtime files. Publishing is a post-approval action after an approved canonical change.
 
-外部 skills 会被当作 reviewed inputs 处理。一次 import outcome 只能是 `discard`、`reference_only`、`defer`、`merge_into_existing`、`propose_practice` 或 `propose_asset`。Reference-only material 会作为 sanitized review evidence 留在 selected Vault 的 `imports/inbox/`；它可用于查阅或后续 re-review，但不是 active behavior，也不能 publish adapters 或修改 runtime files。Publishing 是 approved canonical change 之后的 post-approval action。
+**中文要点：** 外部 skills 只是 reviewed inputs；`reference_only` 只保留在 `imports/inbox/` 作为证据，不会激活、publish 或修改 runtime。
 
 For risky user-visible or stateful changes, you can ask for Tester evidence before accepting the work. Tester plans or gathers evidence; Tester does not approve the change.
 
-对于有用户可见行为或状态风险的变更，你可以在接受工作前要求 Tester evidence。Tester 负责规划或收集 evidence；Tester 不负责批准变更。
-
 Use Tester when the question is "what did we test, why is that enough, and what remains risky?" Skip Tester when a simple docs check, static check, or unit test already answers the confidence question.
-
-当问题是“测试了什么、为什么足够、还剩什么风险”时使用 Tester。如果简单 docs check、static check 或 unit test 已经能回答信心问题，就跳过 Tester。
 
 For the full role-based issue and PR development flow, including Coordinator, Architect, Implementer, Tester, Reviewer, and Human gates, see `docs/multi-agent-collaboration.md`.
 
-完整 role-based issue 和 PR 开发流程，包括 Coordinator、Architect、Implementer、Tester、Reviewer 和 Human gates，见 `docs/multi-agent-collaboration.md`。
+**中文要点：** 有用户可见或状态风险时可以要求 Tester evidence。Tester 负责回答“测了什么、为什么够、还剩什么风险”，不替代 Reviewer/Architect/Human。
 
 For GitHub issue/PR collaboration setup, ask for a collaboration readiness check before using the repo for multi-agent work.
-
-对于 GitHub issue/PR collaboration setup，在用该 repo 做 multi-agent work 前，先要求 collaboration readiness check。
 
 ```text
 check collaboration readiness for this repo
@@ -73,11 +57,9 @@ check collaboration readiness for this repo
 
 The readiness report tells you whether role labels, routing templates, Execution Contracts, Testing Contracts, issue/PR routing, and optional Project/Kanban visibility are present or drifted. Normal users should read the action-plan layer first: `readiness_status`, a short summary, and `recommended_next_actions`. Raw JSON remains evidence/debug output for review, fixtures, and future migration.
 
-Readiness report 会告诉你 role labels、routing templates、Execution Contracts、Testing Contracts、issue/PR routing 和可选 Project/Kanban visibility 是否存在或 drift。普通用户优先阅读 action-plan layer：`readiness_status`、简短 summary 和 `recommended_next_actions`。Raw JSON 仍是 review、fixtures 和 future migration 使用的 evidence/debug output。
+**中文要点：** 用 repo 做 multi-agent work 前，先要求 collaboration readiness check。普通用户先看 `readiness_status`、summary 和 `recommended_next_actions`；raw JSON 是 evidence/debug output。
 
 For a new project, ask the agent to prepare the setup checklist first:
-
-新项目先让 agent 准备 setup checklist：
 
 ```text
 prepare this repo for multi-agent collaboration
@@ -86,11 +68,9 @@ prepare this repo for multi-agent collaboration
 
 Expected setup items are role labels, the role-routing config template, optional Project fields and role options, Execution Contract examples, Testing Contract examples, human-gate examples, residual risks, and the first safe workflow action. Project v2 is optional; missing Project setup should be visible, not guessed healthy.
 
-预期 setup items 包括 role labels、role-routing config template、可选 Project fields 和 role options、Execution Contract examples、Testing Contract examples、human-gate examples、residual risks，以及第一个安全 workflow action。Project v2 是 optional；缺少 Project setup 时应明确显示，而不是猜测为健康。
+**中文要点：** 新项目先准备 setup checklist：role labels、routing config、contracts、human-gate examples、residual risks 和第一个安全 action。Project v2 是 optional。
 
 For an existing project, use:
-
-已有项目使用：
 
 ```text
 audit existing collaboration setup
@@ -106,28 +86,24 @@ That audit should report drift, degraded GitHub or Project access, dry-run repai
 
 Raw helper commands such as `python3 scripts/github_collaboration_helper.py collaboration-readiness --json` are debug details; prefer the Skill-facing requests above during normal use.
 
-该 audit 应报告 drift、degraded GitHub 或 Project access、dry-run repair ideas 和 next safe actions。`recommended_next_actions` 使用四类：
+`recommended_next_actions` use four categories:
 
 - `informational_only`：记录 evidence 或 degraded optional mirrors；不需要 mutation。
 - `agent_handled_existing_workflow`：通过正常 Agent Foundry issue、comment、label、PR 或 role handoff workflow 路由。
 - `explicit_human_gate`：对 product、governance、privacy、final integration、closure 或有意义的 Project policy choices 使用 Human Decision Contract。
 - `unsupported_deferred_repair_apply`：描述 repair，但 AF15 不执行。
 
-`python3 scripts/github_collaboration_helper.py collaboration-readiness --json` 这类 raw helper commands 是 debug details；日常使用优先使用上面的 Skill-facing requests。
+**中文要点：** 老项目用 audit 找 drift、degraded access、dry-run repair ideas 和 next safe actions。日常使用优先看 Skill-facing output，不要从 raw JSON 开始。
 
 The action-plan report stays read-only: `mutation_performed: false`, repair entries keep `apply_supported_now: false`, and the workflow does not perform live repair/apply, Project v2 mutation, generated Skill/adapter publish, or capability-pack deploy/apply. Its telemetry-compatible shape can support future local-first or V2 backfill, but AF15 does not implement V2 and does not make GitHub Project the source of truth.
 
-Action-plan report 保持 read-only：`mutation_performed: false`，repair entries 保持 `apply_supported_now: false`，workflow 不执行 live repair/apply、Project v2 mutation、generated Skill/adapter publish 或 capability-pack deploy/apply。它的 telemetry-compatible shape 可以支持未来 local-first 或 V2 backfill，但 AF15 不实现 V2，也不把 GitHub Project 变成 source of truth。
+**中文要点：** action-plan report 是 read-only：不做 live repair/apply，不 mutate Project v2，不 publish generated Skills/adapters，也不 deploy/apply capability packs。
 
-## First-Time Setup / 首次设置
+## First-Time Setup
 
 On a new machine, use `docs/deployment.md` for the full split Core/Vault install flow.
 
-新机器上，使用 `docs/deployment.md` 中完整的 Core/Vault 分离安装流程。
-
 Short version:
-
-简版流程：
 
 ```bash
 python3 scripts/init_vault.py ~/.agent-foundry/vault/my-agent-foundry-vault --core-root . --apply
@@ -145,39 +121,27 @@ python3 scripts/sync_status.py
 
 Do not copy another machine's `runtime/local/`, `~/.agent-foundry/config.yaml`, runtime directories, or ChatGPT project files as canonical truth.
 
-不要把另一台机器的 `runtime/local/`、`~/.agent-foundry/config.yaml`、runtime directories 或 ChatGPT project files 当作 canonical truth 复制。
-
 Recreate local state from Core plus the selected Vault, then verify with `sync_status.py`.
 
-应从 Core 加 selected Vault 重建本机状态，再用 `sync_status.py` 验证。
+**中文要点：** 新机器从 Core + selected Vault 重建；不要把另一台机器的 `runtime/local/`、config 或 runtime directories 当作 canonical truth 复制。
 
-## Daily Workflow / 日常流程
+## Daily Workflow
 
 Use `refresh practices and assets` at the start of a session, after switching machines, or when local agent rules may be stale.
 
-在 session 开始、切换机器后，或本地 agent rules 可能 stale 时，使用 `refresh practices and assets`。
-
 Use `check Agent Foundry status` or `python3 scripts/sync_status.py` when you only need a read-only answer to whether this machine is current.
-
-只需要 read-only 检查这台机器是否 current 时，使用 `check Agent Foundry status` 或 `python3 scripts/sync_status.py`。
 
 Use `harvest practices` after a session when you want to preserve reusable lessons.
 
-想在一次 session 后沉淀可复用经验时，使用 `harvest practices`。
-
 Use `discover assets` when repeated manual work should become a reusable skill, subagent, automation, or extension.
-
-发现重复手工工作值得变成 reusable skill、subagent、automation 或 extension 时，使用 `discover assets`。
 
 Use `review practices` and `review assets` periodically to prevent skill rot and asset rot.
 
-定期使用 `review practices` 和 `review assets`，避免 skill rot 和 asset rot。
+**中文要点：** session 开始、切换机器或规则可能 stale 时 refresh；只读检查用 status；沉淀经验用 harvest；发现重复工作用 discover assets；定期 review 防止 skill rot。
 
-## Refresh Practices And Assets / 刷新 Practices 和 Assets
+## Refresh Practices And Assets
 
 Command:
-
-命令：
 
 ```text
 refresh practices and assets
@@ -186,24 +150,17 @@ refresh practices and assets
 
 Expected behavior:
 
-预期行为：
-
 - Check local state and avoid losing real work.
-- 检查本地状态，避免丢失真实工作。
 - Pull remote git updates when appropriate.
-- 在合适时 pull remote git updates。
 - Regenerate adapters if canonical practices or assets changed.
-- 如果 canonical practices 或 assets 发生变化，重新生成 adapters。
 - Dry-run or install to enabled local runtimes through the reviewed path.
-- 通过 reviewed path 对 enabled local runtimes 做 dry-run 或 install。
 - Report current commit, unpushed work, generated output state, runtime receipts, and updated runtimes.
-- 汇报 current commit、未 push 工作、generated output state、runtime receipts 和已更新 runtimes。
 
-## Status And Drift / Status 和 Drift
+**中文要点：** refresh 会先保护本地状态，再 pull、regenerate adapters、dry-run/install，并汇报 commit、未 push 工作、generated output 和 runtime receipts。
+
+## Status And Drift
 
 Run status before applying runtime writes, after long idle periods, after switching machines, or when a rule appears not to affect an agent.
-
-在 apply runtime writes 前、长时间 idle 后、切换机器后，或某条 rule 看起来没有影响 agent 时，运行 status。
 
 ```bash
 python3 scripts/sync_status.py
@@ -211,15 +168,11 @@ python3 scripts/sync_status.py
 
 `sync_status.py` separates Core repo progress, selected Vault state, generated output, runtime receipt state, manual targets, and human-gated runtime writes.
 
-`sync_status.py` 会分开报告 Core repo progress、selected Vault state、generated output、runtime receipt state、manual targets 和 human-gated runtime writes。
-
 If generated output is missing or stale, publish adapters first. If runtime receipt is missing or drifted, review generated output, run install dry-run, read status, then apply only when the runtime write is expected.
-
-如果 generated output missing 或 stale，先 publish adapters。如果 runtime receipt missing 或 drifted，先 review generated output，运行 install dry-run，读取 status，最后只有 runtime write 符合预期时才 apply。
 
 Do not repair runtime drift by editing Vault records.
 
-不要通过编辑 Vault records 来修复 runtime drift。
+**中文要点：** status 分层报告 Core、Vault、generated output、runtime receipt 和 manual targets。Runtime drift 不要通过编辑 Vault records 修。
 
 ## Capability Pack Safety / Capability Pack 安全规则
 

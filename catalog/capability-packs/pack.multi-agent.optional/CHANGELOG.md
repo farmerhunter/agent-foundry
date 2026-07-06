@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.1
+
+- Added AF15 user-facing readiness action-plan semantics to the optional
+  collaboration starter contract.
+- Clarified recommended next-action categories, unknown/degraded source
+  reporting, forbidden actions, and telemetry-compatible readiness evidence.
+- Kept live repair/apply, Project v2 mutation, generated Skill publish,
+  runtime install, Vault mutation, and private/local evidence export outside
+  pack authority.
+
 ## 0.3.0
 
 - Added AF15 collaboration readiness guidance for new-project setup and

@@ -13,9 +13,8 @@ baseline before optional packs are considered. It helps users keep harvest,
 review, refresh, status, and source-of-truth behavior consistent instead of
 learning those boundaries one script at a time.
 
-`pack.bootstrap.minimal` 为新的 Agent Foundry setup 提供一个小型、reviewed 的
-baseline，然后再考虑 optional packs。它帮助用户保持 harvest、review、refresh、
-status 和 source-of-truth behavior 一致，而不是逐个脚本学习这些 boundaries。
+**中文要点：** 这是新 Vault 的最小 reviewed baseline，用来先建立 harvest、
+review、refresh、status 和 source-of-truth 边界，再考虑 optional packs。
 
 ## Concrete Function / 具体功能
 
@@ -25,10 +24,9 @@ deployment target, Core as public catalog/tooling, Generated and Runtime as
 downstream status or install surfaces, and Local Private evidence as excluded
 from pack authority.
 
-这个 pack 携带 bootstrap capability 和 `ASSET-META-001` governance baseline。
-它让用户明确 selected User Vault 是 accepted deployment target，Core 是 public
-catalog/tooling，Generated 和 Runtime 是 downstream status 或 install surfaces，
-Local Private evidence 不属于 pack authority。
+**中文要点：** 它携带 bootstrap capability、`ASSET-META-001` governance
+baseline，并明确 Core、selected User Vault、Generated、Runtime、Local Private
+各自的权威边界。
 
 ## What It Enables Next / 接下来能启用什么
 
@@ -37,9 +35,20 @@ verify deployed pack state, compare updates, disable a pack through a reviewed
 path, and inspect generated/runtime follow-up without treating those downstream
 surfaces as source of truth.
 
-接受 bootstrap 后，用户可以安全 preview optional starter packs、verify deployed
-pack state、compare updates、通过 reviewed path disable pack，并查看 generated/runtime
-follow-up，同时不会把这些 downstream surfaces 当成 source of truth。
+**中文要点：** 接受 bootstrap 后，用户可以安全 preview、verify、update、disable
+optional packs，同时不会把 generated/runtime downstream surfaces 当成 source of
+truth。
+
+It also carries the AF13 external-skill import/reference baseline. External
+sources are reviewed inputs with explicit outcomes: `discard`, `reference_only`,
+`defer`, `merge_into_existing`, `propose_practice`, or `propose_asset`.
+`reference_only` stays selected Vault `imports/inbox/` evidence only; publishing
+adapters or generated Skills is a later post-approval action after canonical
+records are approved.
+
+**中文要点：** 它也包含 AF13 external-skill import/reference baseline：外部来源只
+能先成为 reviewed input；`reference_only` 只是 `imports/inbox/` 证据，不会激活、
+publish 或成为 pack authority。
 
 ## What It Does Not Do / 不做什么
 
@@ -48,10 +57,9 @@ runtime files, publish generated adapters, export a private Vault, or make
 project-specific governance decisions. It does not duplicate `ASSET-META-001`;
 it preserves that baseline in the bootstrap path.
 
-这个 pack 不会创建单独的 architecture-boundary starter pack，不会安装 runtime
-files、发布 generated adapters、export private Vault，也不会替项目做 project-specific
-governance decisions。它不会复制 `ASSET-META-001`；它在 bootstrap path 中保留该
-baseline。
+**中文要点：** 它不安装 runtime files、不发布 generated adapters、不 export
+private Vault、不替项目做 governance decision，也不会把 external/reference-only
+材料变成 active authority。
 
 ## When To Accept / 何时接受安装
 
@@ -59,8 +67,8 @@ Accept or install this pack when you are setting up a selected User Vault for
 normal Agent Foundry use, before installing optional packs, or when you need to
 restore the baseline boundary guidance for harvest/review/status workflows.
 
-当你为正常 Agent Foundry 使用设置 selected User Vault、准备安装 optional packs，
-或需要恢复 harvest/review/status workflows 的 baseline boundary guidance 时，接受或安装这个 pack。
+**中文要点：** 新建 selected Vault、安装 optional packs 前，或需要恢复
+harvest/review/status baseline 时接受它。
 
 ## Authority
 
@@ -96,7 +104,7 @@ authority.
 
 ## Versioning
 
-Pack version `0.2.0` identifies the reviewed bootstrap pack contract. Core git
+Pack version `0.2.1` identifies the reviewed bootstrap pack contract. Core git
 tags and releases identify repository snapshots. These are related but
 independent axes.
 

@@ -21,7 +21,9 @@ work session
 
 The goal is not to maintain a pile of prompts. The goal is to make hard-won working judgment portable across sessions, agents, machines, and projects without losing human review or source-of-truth discipline.
 
-Actually a lot of thoughts came out as I work on this project. For more detailed explanation of my motivation, see [docs/philosophy.md](docs/philosophy.md).
+For the motivation and collaboration philosophy behind this project, see [docs/philosophy.md](docs/philosophy.md).
+
+**中文要点：** 项目的动机和人-agent 协作反思主要写在 [docs/philosophy.md](docs/philosophy.md)。
 
 ## What It Does
 
@@ -82,37 +84,32 @@ Use short commands instead of remembering internal workflows:
 
 Detailed prompts and Chinese equivalents are in [docs/usage.md](docs/usage.md) and [docs/commands.md](docs/commands.md).
 
-## Optional Starter Packs / 可选 Starter Packs
+## Optional Starter Packs
 
 After the first-value path above works, you can ask Agent Foundry to list or
 preview optional first-party starter packs. They are not required setup choices.
 
-完成上面的 first-value path 后，可以让 Agent Foundry list 或 preview 可选 first-party starter packs。它们不是必选 setup 选项。
+**中文要点：** Starter packs 是 first-value path 之后的可选项，不是新用户必须先做的安装选择。
 
-Current official starter packs:
-
-当前 official starter packs：
-
-| Pack | What you get / 获得什么 | Choose it when / 适合什么情况 |
+| Pack | What you get | Choose it when |
 | --- | --- | --- |
-| `pack.bootstrap.minimal` | A small baseline for safe harvest, review, refresh, status, and source-of-truth boundaries. / 用于安全 harvest、review、refresh、status 和 source-of-truth boundaries 的小型 baseline。 | Accept it for a new selected Vault or before any optional pack; it does not install runtimes or publish generated adapters by itself. / 新 selected Vault 或安装 optional pack 前接受它；它本身不会安装 runtimes 或发布 generated adapters。 |
-| `pack.multi-agent.optional` | GitHub issue/PR collaboration habits: role labels, durable comments, Execution Contracts, and review handoff. / GitHub issue/PR 协作习惯：role labels、durable comments、Execution Contracts 和 review handoff。 | Install it when you coordinate work through GitHub issues and PRs; skip it for solo local usage or projects without GitHub collaboration. / 当你通过 GitHub issues 和 PRs 协调工作时安装；纯本地单人使用或没有 GitHub 协作的项目可以跳过。 |
+| `pack.bootstrap.minimal` | A small baseline for safe harvest, review, refresh, status, source-of-truth boundaries, and external-skill import/reference review. | Accept it for a new selected Vault or before any optional pack; it does not install runtimes or publish generated adapters by itself. |
+| `pack.multi-agent.optional` | GitHub issue/PR collaboration habits: role labels, durable comments, Execution Contracts, Tester evidence routing, collaboration readiness, and action-plan guidance. | Install it when you coordinate work through GitHub issues and PRs; skip it for solo local usage or projects without GitHub collaboration. |
+
+**中文要点：** `pack.bootstrap.minimal` 是最小基础包；`pack.multi-agent.optional`
+适合需要 GitHub issue/PR 协作、Tester evidence、collaboration readiness 和 action plan 的项目。
 
 Use Skill-facing requests first: `list capability packs`, `recommend capability packs for my setup`, `preview capability pack deployment <pack-path>`, `apply reviewed capability pack <pack-path>`, `verify capability pack <pack-id>`, `update capability pack <pack-id-or-path>`, and `disable capability pack <pack-id>`.
 
-优先使用 Skill-facing 请求：`list capability packs`、`recommend capability packs for my setup`、`preview capability pack deployment <pack-path>`、`apply reviewed capability pack <pack-path>`、`verify capability pack <pack-id>`、`update capability pack <pack-id-or-path>` 和 `disable capability pack <pack-id>`。
-
-Architecture-boundary and source-of-truth orientation is folded into `pack.bootstrap.minimal`; it is not a standalone current-stage starter pack.
-
-Architecture-boundary 和 source-of-truth orientation 已并入 `pack.bootstrap.minimal`；它不是当前阶段的 standalone starter pack。
+Architecture-boundary and source-of-truth orientation is folded into `pack.bootstrap.minimal`.
 
 Core catalog entries make packs discoverable, but the selected User Vault remains canonical after accepted deployment. Generated adapters, runtime installs, local receipts, and Local Private evidence remain downstream or excluded surfaces.
 
-Core catalog entries 负责 discoverability；accepted deployment 后 selected User Vault 仍然是 canonical。Generated adapters、runtime installs、local receipts 和 Local Private evidence 仍是 downstream 或 excluded surfaces。
+**中文要点：** architecture-boundary guidance 由 `pack.bootstrap.minimal` 承载；accepted deployment 后 selected User Vault 仍是 canonical，Generated/Runtime 只是 downstream surfaces。
 
 For ordinary and complete details, see [docs/usage.md](docs/usage.md), [docs/commands.md](docs/commands.md), and the catalog pages under `catalog/capability-packs/`.
 
-普通和完整细节见 [docs/usage.md](docs/usage.md)、[docs/commands.md](docs/commands.md)，以及 `catalog/capability-packs/` 下的 catalog pages。
+**中文要点：** 完整细节见 [docs/usage.md](docs/usage.md)、[docs/commands.md](docs/commands.md)，以及 `catalog/capability-packs/` 下的 catalog pages。
 
 ## Design Principles
 

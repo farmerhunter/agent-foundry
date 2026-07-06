@@ -2,11 +2,11 @@ id: ASSET-COLLAB-PACK-001
 title: Role-Generic GitHub Scheduler Helper Set
 asset_type: skill
 status: candidate
-version: 3
+version: 4
 created: 2026-06-11
 updated: 2026-07-06
 purpose: Provide reviewed helper surfaces for role-generic GitHub issue/PR coordination and collaboration readiness reporting.
-responsibility: Support inbox, ready-queue, pickup, handoff, audit, collaboration readiness, dry-run repair planning, degraded GitHub/Project access reporting, label routing, issue context, PR context, and retry wrappers after managed install.
+responsibility: Support inbox, ready-queue, pickup, handoff, audit, collaboration readiness, user-facing readiness action plans, dry-run repair planning, degraded GitHub/Project access reporting, label routing, issue context, PR context, and retry wrappers after managed install.
 non_responsibility: Does not decide product scope, override issue contracts, make Project v2 the scheduler authority, install helpers, execute from pack staging, apply dry-run repairs, publish generated Skills, or mutate Project v2 by default.
 inputs:
   - issue number
@@ -19,6 +19,7 @@ process:
   - Read durable GitHub issue, PR, label, and comment state.
   - Resolve role labels and completion handoff from explicit configuration and contracts.
   - Report collaboration readiness for new or existing projects before multi-agent work relies on the setup.
+  - Present readiness status, summary, blocking gaps, unknown/degraded sources, recommended next actions, forbidden actions, and telemetry before raw debug evidence.
   - Include Execution Contract validation and Testing Contract validation where the workflow asks for explicit test evidence.
   - Print dry-run plans before any mutating helper behavior is allowed.
   - Keep dry-run repair entries report-only with mutation_performed false and apply_supported_now false.
@@ -32,6 +33,7 @@ outputs:
   - pickup or handoff dry-run
   - audit report
   - collaboration readiness report
+  - readiness action plan
   - dry-run repair plan
   - degraded-source summary
   - issue or PR context summary

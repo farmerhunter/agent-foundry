@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.1
+
+- Added AF13 external-skill import/reference baseline semantics to bootstrap.
+- Clarified import outcomes, `reference_only` selected Vault `imports/inbox/`
+  evidence, and post-approval publish boundaries.
+- Preserved runtime/generated publishing, real deploy/apply, and private/local
+  evidence as separate reviewed gates outside pack authority.
+
 ## 0.2.0
 
 - Cataloged as the first minimal official Core-hosted capability pack entry.
