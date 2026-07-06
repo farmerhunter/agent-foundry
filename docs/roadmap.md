@@ -121,6 +121,15 @@ Suggested mapping:
 
 `v2.0` is the next product development target. It should not start by building board features in isolation. It starts with end-to-end user journeys, then telemetry evidence, then local ledger, board model, migration, read-only MVP, controlled GitHub sync, and readiness review.
 
+Every public release or V1.x maintenance release-readiness gate must include a
+Capability Pack impact check. The gate reviews changed workflows, docs,
+templates, scripts, and generated Skill-facing behavior against affected Core
+capability packs. The release packet must record either `CP impact: none` with
+specific reasons, or accepted capability-pack update issue(s) with pack version,
+manifest hash, catalog hash, and verification evidence. Capability-pack
+implementation, generated/runtime publishing, real deploy/apply, release tags,
+and GitHub Release publishing remain separate reviewed gates.
+
 ## Branch and Release Lines
 
 Use `main` as the stable V1.x maintenance line until V2 is accepted and ready to become the default product line.
