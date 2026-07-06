@@ -321,6 +321,60 @@ without the Project mirror. Auth, permission, malformed fixture, unresolved repo
 and incomplete required input errors fail closed instead of being retried as
 transient failures.
 
+## Collaboration Readiness
+
+Use `collaboration-readiness` when a user asks whether a new or existing
+repository is ready for role-based GitHub collaboration.
+
+Skill-facing requests should come first:
+
+```text
+check collaboration readiness for this repo
+prepare this repo for multi-agent collaboration
+audit existing collaboration setup
+```
+
+The helper command is the secondary/debug surface:
+
+```text
+agent-foundry-github-collab --repo <owner>/<repo> collaboration-readiness \
+  --config templates/github-role-routing.template.yaml \
+  --stage AF-15 \
+  --json
+```
+
+The report is read-only and must include `mutation_performed: false`. It checks
+role labels, routing config, Execution Contract values, Testing Contract values,
+issue/PR routing state, and optional Project/Kanban visibility. It may include
+`dry_run_repair_plan` items, but every item must keep
+`apply_supported_now` set to `false` until a later reviewed repair/apply issue
+changes that boundary.
+
+For new-project setup, use the report to confirm:
+
+- standard role labels exist: `needs:architect`, `needs:implementer`,
+  `needs:reviewer`, `needs:tester`, `needs:harvester`, and `needs:human`;
+- the role-routing config is present and uses lowercase role tokens;
+- Execution Contract and Testing Contract examples use machine-readable role
+  and handoff values;
+- optional Project fields and role options are visible if a Project mirror is
+  configured.
+
+For existing-project audit, use the report to identify drift:
+
+- missing or extra `needs:*` routing labels;
+- malformed Execution Contract or Testing Contract values;
+- issue/PR routing that does not match next-owner state;
+- missing or degraded Project v2 visibility;
+- safe next actions that are still preview-only.
+
+Project v2 remains an optional visual mirror. A degraded or unavailable Project
+read should appear in the report without blocking issue/PR/label findings that
+can still be read through REST. The helper must not perform full Project scans
+by default, Project writes, label repair, comments, merges, closure, runtime
+writes, Vault writes, generated adapter publishing, capability-pack publishing,
+or V2 local-ledger implementation.
+
 ## Dispatch Evidence Modes
 
 Dispatch evidence must name the mechanism actually used:

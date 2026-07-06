@@ -40,6 +40,7 @@ READ_ONLY_ACTIONS = {
     "inbox",
     "issue-context",
     "scheduler-audit",
+    "collaboration-readiness",
     "activation-report",
 }
 DRY_RUN_ACTIONS = {
@@ -66,6 +67,17 @@ VALID_COMPLETION_HANDOFFS = {
     "to:human",
     "batch checkpoint",
 }
+READINESS_ROLES = ["coordinator", "architect", "implementer", "tester", "reviewer", "human", "harvester"]
+READINESS_NEEDS_LABELS = [
+    "needs:architect",
+    "needs:implementer",
+    "needs:reviewer",
+    "needs:tester",
+    "needs:harvester",
+    "needs:human",
+]
+READINESS_PROJECT_FIELDS = ["Status", "Roadmap Status", "Stage", "Owner Role", "Risk"]
+READINESS_PROJECT_OPTIONS = ["Architect", "Implementer", "Tester", "Reviewer", "Human", "Harvester"]
 
 
 def fail(code: str, detail: str, exit_code: int = 2) -> None:
@@ -717,6 +729,24 @@ def normalize_project_items(data: Any) -> list[dict[str, Any]]:
     return [item for item in data if isinstance(item, dict)]
 
 
+def normalize_label_collection(data: Any) -> list[str]:
+    if data is None:
+        return []
+    if isinstance(data, dict) and "labels" in data:
+        data = data["labels"]
+    if not isinstance(data, list):
+        fail("invalid_labels_json", "labels JSON must be a list or object with labels")
+    labels: list[str] = []
+    for item in data:
+        if isinstance(item, dict):
+            name = item.get("name")
+        else:
+            name = item
+        if name:
+            labels.append(str(name))
+    return labels
+
+
 def project_item_issue_number(item: dict[str, Any]) -> int | None:
     candidates = [
         item.get("number"),
@@ -833,6 +863,56 @@ def read_live_issues(repo: str, args: argparse.Namespace) -> tuple[list[dict[str
             fail(result["error_type"], result["message"], 5)
         return normalize_issue_collection(result["data"]), {"mode": "stage", "stage": args.stage, "limit": args.limit}
     fail("audit_scope_missing", "pass --issues, --stage, --issues-json, or --fixture-json")
+
+
+def read_readiness_issues(repo: str, args: argparse.Namespace) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
+    if args.issues_json:
+        issues = normalize_issue_collection(load_json(args.issues_json))
+        return issues, {"source": "fixture", "status": "ok", "mode": "fixture", "count": len(issues)}, {"attempts": 0}
+    if args.fixture_json:
+        issues = normalize_issue_collection(load_json(args.fixture_json))
+        return issues, {"source": "fixture", "status": "ok", "mode": "fixture", "count": len(issues)}, {"attempts": 0}
+    if not args.issues and not args.stage:
+        return [], {"source": "skipped", "status": "skipped", "mode": "not_requested", "count": 0}, {"attempts": 0}
+    issues, scope = read_live_issues(repo, args)
+    return issues, {"source": "github_rest", "status": "ok", **scope, "count": len(issues)}, {"attempts": 1}
+
+
+def read_readiness_prs(repo: str, args: argparse.Namespace) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
+    if args.prs_json:
+        prs = normalize_issue_collection(load_json(args.prs_json))
+        return prs, {"source": "fixture", "status": "ok", "count": len(prs)}, {"attempts": 0}
+    if not args.prs:
+        return [], {"source": "skipped", "status": "skipped", "count": 0}, {"attempts": 0}
+    numbers = [number.strip() for number in args.prs.split(",") if number.strip()]
+    prs: list[dict[str, Any]] = []
+    for number in numbers[: args.limit]:
+        result = run_gh_read(
+            [
+                "pr",
+                "view",
+                number,
+                "--repo",
+                repo,
+                "--json",
+                "number,title,state,labels,body,headRefOid,baseRefName,headRefName",
+            ]
+        )
+        if not result["ok"]:
+            return [], {"source": "github_rest", "status": result["error_type"], "error": result["message"]}, {"attempts": 1}
+        prs.append(result["data"])
+    return prs, {"source": "github_rest", "status": "ok", "count": len(prs)}, {"attempts": len(prs)}
+
+
+def read_readiness_labels(repo: str, args: argparse.Namespace) -> tuple[list[str], dict[str, Any], dict[str, Any]]:
+    if args.labels_json:
+        labels = normalize_label_collection(load_json(args.labels_json))
+        return labels, {"source": "fixture", "status": "ok", "count": len(labels)}, {"attempts": 0}
+    result = run_gh_read(["label", "list", "--repo", repo, "--limit", "100", "--json", "name"])
+    if not result["ok"]:
+        return [], {"source": "github_rest", "status": result["error_type"], "error": result["message"]}, {"attempts": 1}
+    labels = normalize_label_collection(result["data"])
+    return labels, {"source": "github_rest", "status": "ok", "count": len(labels)}, {"attempts": 1}
 
 
 def read_project_items(args: argparse.Namespace) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
@@ -1064,6 +1144,220 @@ def cmd_scheduler_audit(args: argparse.Namespace) -> None:
         "findings": findings,
         "dry_run_repair_plan": repairs,
         "mutation_performed": False,
+    }
+    print_json_or_text(payload, args.json)
+
+
+def readiness_repair(action: str, subject: str, expected_effect: str, source_evidence: str = "", risk: str = "medium") -> dict[str, Any]:
+    return {
+        "action": action,
+        "subject": subject,
+        "expected_effect": expected_effect,
+        "risk": risk,
+        "source_evidence": source_evidence or subject,
+        "apply_supported_now": False,
+        "requires_later_gate": True,
+    }
+
+
+def readiness_contract_summary(item: dict[str, Any], needs: set[str]) -> dict[str, Any]:
+    labels = label_names(item)
+    contract = validate_execution_contract(item.get("body") or "")
+    testing = validate_testing_contract(item.get("body") or "", labels)
+    findings, repairs = audit_issue(item, None, needs, project_requested=False, default_stage=None)
+    return {
+        "number": issue_number(item),
+        "title": item.get("title"),
+        "state": item.get("state"),
+        "labels": labels,
+        "contract_validation": contract["status"],
+        "testing_contract_validation": testing["status"],
+        "findings": findings,
+        "repair_plan": [
+            readiness_repair(
+                repair_item.get("action", "review"),
+                f"issue:{repair_item.get('issue')}",
+                f"{repair_item.get('field', 'routing')} -> {repair_item.get('value', 'review required')}",
+                source_evidence="issue_contract_or_label_state",
+            )
+            for repair_item in repairs
+        ],
+    }
+
+
+def project_availability(project_status: dict[str, Any]) -> str:
+    status = project_status.get("status")
+    if status == "ok":
+        return "ok"
+    if status == "config_missing":
+        return "config_missing"
+    if status in {"permission_denied", "auth_unavailable"}:
+        return status
+    if status == "skipped":
+        return "skipped"
+    if status:
+        return "unavailable"
+    return "unknown"
+
+
+def source_status(source: str, status: dict[str, Any], attempts: dict[str, Any], fallback: str = "none") -> dict[str, Any]:
+    raw_status = status.get("status", "unknown")
+    mapped = raw_status
+    if raw_status in {"config_missing", "skipped"}:
+        mapped = raw_status
+    elif raw_status not in {"ok", "unavailable", "permission_denied", "auth_unavailable", "transient_failure"}:
+        mapped = "unavailable" if raw_status not in {"fixture"} else "ok"
+    return {
+        "source": source,
+        "status": mapped,
+        "attempts": attempts.get("attempts", "unknown"),
+        "fallback_used": fallback,
+        "error": status.get("error"),
+    }
+
+
+def cmd_collaboration_readiness(args: argparse.Namespace) -> None:
+    repo, repo_source = resolve_repo(args)
+    config = parse_simple_yaml(Path(args.config)) if args.config else {}
+    config_errors = role_config_errors(config) if config else ["role routing config missing"]
+    expected_needs = set(config.get("needs_labels", [])) or set(READINESS_NEEDS_LABELS)
+
+    labels, labels_status, labels_attempts = read_readiness_labels(repo, args)
+    issues, issues_status, issues_attempts = read_readiness_issues(repo, args)
+    prs, prs_status, prs_attempts = read_readiness_prs(repo, args)
+    project_items, project_status, project_attempts = read_project_items(args)
+
+    findings: list[dict[str, Any]] = []
+    repairs: list[dict[str, Any]] = []
+    for error in config_errors:
+        findings.append(
+            {
+                "severity": "error",
+                "code": "role_config_invalid",
+                "subject": "local_template",
+                "expected": {"config": "valid role routing template"},
+                "actual": {"error": error},
+            }
+        )
+        repairs.append(readiness_repair("update_role_config", "routing_template", error, "local_template"))
+
+    label_set = set(labels)
+    for label in sorted(expected_needs):
+        if label not in label_set:
+            findings.append(
+                {
+                    "severity": "error",
+                    "code": "missing_needs_label",
+                    "subject": f"label:{label}",
+                    "expected": {"label": label},
+                    "actual": {"present": False},
+                }
+            )
+            repairs.append(readiness_repair("create_label", f"label:{label}", f"create missing role label {label}", "github_rest_labels"))
+
+    issue_rows = [readiness_contract_summary(issue, expected_needs) for issue in issues[: args.limit]]
+    pr_rows = [readiness_contract_summary(pr, expected_needs) for pr in prs[: args.limit]]
+    for row in (*issue_rows, *pr_rows):
+        findings.extend(row["findings"])
+        repairs.extend(row["repair_plan"])
+
+    project_fields_seen = sorted({field for item in project_items for field in READINESS_PROJECT_FIELDS if project_field_value(item, field)})
+    project_ok = project_status.get("status") == "ok"
+    if project_status.get("source") == "live_gh" and not project_ok:
+        findings.append(
+            {
+                "severity": "warning",
+                "code": "project_v2_degraded",
+                "subject": "project_v2",
+                "expected": {"availability": "ok or config_missing"},
+                "actual": {"availability": project_availability(project_status), "error": project_status.get("error")},
+            }
+        )
+
+    status = "ok"
+    degraded = any(
+        source.get("status") in {"unavailable", "permission_denied", "auth_unavailable", "transient_failure"}
+        for source in (labels_status, issues_status, prs_status)
+    ) or project_availability(project_status) in {"unavailable", "permission_denied", "auth_unavailable", "degraded"}
+    if findings:
+        status = "findings"
+    if degraded:
+        status = "degraded"
+
+    payload = {
+        "schema_version": 1,
+        "command": "collaboration-readiness",
+        "repo": repo,
+        "repo_source": repo_source,
+        "status": status,
+        "mutation_performed": False,
+        "mode": "read_only",
+        "checked_at": "unknown",
+        "expected_collaboration_model": {
+            "roles": READINESS_ROLES,
+            "needs_labels": sorted(expected_needs),
+            "project_fields": READINESS_PROJECT_FIELDS,
+            "project_options": READINESS_PROJECT_OPTIONS,
+            "execution_contract_values": {
+                "Owner role": sorted(VALID_ROLE_VALUES_BY_FIELD["Owner role"]),
+                "Review role": sorted(VALID_ROLE_VALUES_BY_FIELD["Review role"]),
+                "Acceptance role": sorted(VALID_ROLE_VALUES_BY_FIELD["Acceptance role"]),
+                "Completion handoff": sorted(VALID_COMPLETION_HANDOFFS),
+            },
+            "testing_contract_values": {
+                "Testing Responsibility": ["tester"],
+                "Test Evidence Handoff.to": ["reviewer", "architect", "implementer", "human"],
+            },
+        },
+        "observed_github_state": {
+            "labels": sorted(labels),
+            "issues_sampled": [row["number"] for row in issue_rows],
+            "prs_sampled": [row["number"] for row in pr_rows],
+            "project_v2": {
+                "availability": project_availability(project_status),
+                "fields_seen": project_fields_seen,
+                "options_seen": [],
+                "item_count": project_status.get("item_count", "unknown"),
+                "source": project_status.get("source"),
+                "error": project_status.get("error"),
+            },
+        },
+        "routing_state": {
+            "issues": issue_rows,
+            "prs": pr_rows,
+        },
+        "findings": findings,
+        "dry_run_repair_plan": repairs,
+        "degraded_sources": [
+            source_status("github_rest_labels", labels_status, labels_attempts),
+            source_status("github_rest_issues", issues_status, issues_attempts),
+            source_status("github_rest_prs", prs_status, prs_attempts),
+            source_status("github_graphql_project_v2", {"status": project_availability(project_status), **project_status}, project_attempts),
+            source_status("local_template", {"status": "ok" if not config_errors else "unavailable"}, {"attempts": 1 if args.config else 0}),
+        ],
+        "network": {
+            "strategy": "rest_first_targeted_graphql",
+            "bounded_retries": True,
+            "full_project_scan_performed": False,
+        },
+        "v2_migration": {
+            "local_ledger_candidate": True,
+            "backfill_keys": [
+                "issue_number",
+                "pr_number",
+                "role",
+                "needs_label",
+                "contract_values",
+                "project_mirror_values",
+                "findings",
+            ],
+        },
+        "residual_risks": [
+            "Project v2 is an optional visual mirror and may be unavailable without blocking issue/PR readiness findings."
+        ],
+        "next_safe_actions": [
+            "Review findings and dry_run_repair_plan; apply remains unsupported in AF15 readiness reports."
+        ],
     }
     print_json_or_text(payload, args.json)
 
@@ -1421,6 +1715,25 @@ def build_parser() -> argparse.ArgumentParser:
     audit.add_argument("--project-retry-backoff", type=float, default=0.5, help="Seconds between transient Project read retries.")
     audit.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON for scheduler-audit.")
     audit.set_defaults(func=cmd_scheduler_audit)
+
+    readiness = sub.add_parser("collaboration-readiness")
+    readiness.add_argument("--config")
+    readiness.add_argument("--labels-json", help="Fixture repo labels as a list or object with labels.")
+    readiness.add_argument("--fixture-json", help="Legacy single-issue fixture; prefer --issues-json for new tests.")
+    readiness.add_argument("--issues-json", help="Fixture issue object, list, or object with issues/items.")
+    readiness.add_argument("--prs-json", help="Fixture PR object, list, or object with issues/items.")
+    readiness.add_argument("--project-items-json", help="Fixture Project item list or gh project item-list JSON.")
+    readiness.add_argument("--issues", help="Comma-separated explicit issue numbers for bounded live readiness audit.")
+    readiness.add_argument("--prs", help="Comma-separated explicit PR numbers for bounded live readiness audit.")
+    readiness.add_argument("--stage", help="Stage value or label for bounded live issue audit.")
+    readiness.add_argument("--limit", type=int, default=20, help="Maximum issues/PRs to audit.")
+    readiness.add_argument("--project-owner", help="Project owner for targeted live Project item-list, such as @me or an org.")
+    readiness.add_argument("--project-number", type=int, help="Project number for targeted live Project item-list.")
+    readiness.add_argument("--project-limit", type=int, default=50, help="Maximum Project items to read when explicitly configured.")
+    readiness.add_argument("--project-retries", type=int, default=2, help="Bounded retries for transient Project reads.")
+    readiness.add_argument("--project-retry-backoff", type=float, default=0.5, help="Seconds between transient Project read retries.")
+    readiness.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON for collaboration-readiness.")
+    readiness.set_defaults(func=cmd_collaboration_readiness)
 
     activation = sub.add_parser("activation-report")
     activation.add_argument("--core-root", help="Agent Foundry Core root. Defaults to this helper's checkout.")
