@@ -71,9 +71,9 @@ check collaboration readiness for this repo
 检查这个 repo 的 collaboration readiness
 ```
 
-The readiness report tells you whether role labels, routing templates, Execution Contracts, Testing Contracts, issue/PR routing, and optional Project/Kanban visibility are present or drifted. It is read-only: it reports `mutation_performed: false`, does not repair labels or Project fields, and treats Project v2 as an optional visual mirror rather than source of truth.
+The readiness report tells you whether role labels, routing templates, Execution Contracts, Testing Contracts, issue/PR routing, and optional Project/Kanban visibility are present or drifted. Normal users should read the action-plan layer first: `readiness_status`, a short summary, and `recommended_next_actions`. Raw JSON remains evidence/debug output for review, fixtures, and future migration.
 
-Readiness report 会告诉你 role labels、routing templates、Execution Contracts、Testing Contracts、issue/PR routing 和可选 Project/Kanban visibility 是否存在或 drift。它是 read-only：报告 `mutation_performed: false`，不 repair labels 或 Project fields，并把 Project v2 当作 optional visual mirror，而不是 source of truth。
+Readiness report 会告诉你 role labels、routing templates、Execution Contracts、Testing Contracts、issue/PR routing 和可选 Project/Kanban visibility 是否存在或 drift。普通用户优先阅读 action-plan layer：`readiness_status`、简短 summary 和 `recommended_next_actions`。Raw JSON 仍是 review、fixtures 和 future migration 使用的 evidence/debug output。
 
 For a new project, ask the agent to prepare the setup checklist first:
 
@@ -84,18 +84,40 @@ prepare this repo for multi-agent collaboration
 为这个 repo 准备 multi-agent collaboration
 ```
 
-Expected setup items are role labels, the role-routing config template, optional Project fields and role options, Execution Contract examples, Testing Contract examples, and a readiness audit. For an existing project, use:
+Expected setup items are role labels, the role-routing config template, optional Project fields and role options, Execution Contract examples, Testing Contract examples, human-gate examples, residual risks, and the first safe workflow action. Project v2 is optional; missing Project setup should be visible, not guessed healthy.
 
-预期 setup items 包括 role labels、role-routing config template、可选 Project fields 和 role options、Execution Contract examples、Testing Contract examples，以及 readiness audit。已有项目使用：
+预期 setup items 包括 role labels、role-routing config template、可选 Project fields 和 role options、Execution Contract examples、Testing Contract examples、human-gate examples、residual risks，以及第一个安全 workflow action。Project v2 是 optional；缺少 Project setup 时应明确显示，而不是猜测为健康。
+
+For an existing project, use:
+
+已有项目使用：
 
 ```text
 audit existing collaboration setup
 审计现有 collaboration setup
 ```
 
-That audit should report drift, degraded GitHub or Project access, dry-run repair ideas, and next safe actions. Raw helper commands such as `python3 scripts/github_collaboration_helper.py collaboration-readiness --json` are debug details; prefer the Skill-facing requests above during normal use.
+That audit should report drift, degraded GitHub or Project access, dry-run repair ideas, and next safe actions. `recommended_next_actions` use four categories:
 
-该 audit 应报告 drift、degraded GitHub 或 Project access、dry-run repair ideas 和 next safe actions。`python3 scripts/github_collaboration_helper.py collaboration-readiness --json` 这类 raw helper commands 是 debug details；日常使用优先使用上面的 Skill-facing requests。
+- `informational_only`: record evidence or degraded optional mirrors; no mutation is needed.
+- `agent_handled_existing_workflow`: route through normal Agent Foundry issue, comment, label, PR, or role handoff workflow.
+- `explicit_human_gate`: use a Human Decision Contract for product, governance, privacy, final integration, closure, or meaningful Project policy choices.
+- `unsupported_deferred_repair_apply`: describe the repair but do not execute it in AF15.
+
+Raw helper commands such as `python3 scripts/github_collaboration_helper.py collaboration-readiness --json` are debug details; prefer the Skill-facing requests above during normal use.
+
+该 audit 应报告 drift、degraded GitHub 或 Project access、dry-run repair ideas 和 next safe actions。`recommended_next_actions` 使用四类：
+
+- `informational_only`：记录 evidence 或 degraded optional mirrors；不需要 mutation。
+- `agent_handled_existing_workflow`：通过正常 Agent Foundry issue、comment、label、PR 或 role handoff workflow 路由。
+- `explicit_human_gate`：对 product、governance、privacy、final integration、closure 或有意义的 Project policy choices 使用 Human Decision Contract。
+- `unsupported_deferred_repair_apply`：描述 repair，但 AF15 不执行。
+
+`python3 scripts/github_collaboration_helper.py collaboration-readiness --json` 这类 raw helper commands 是 debug details；日常使用优先使用上面的 Skill-facing requests。
+
+The action-plan report stays read-only: `mutation_performed: false`, repair entries keep `apply_supported_now: false`, and the workflow does not perform live repair/apply, Project v2 mutation, generated Skill/adapter publish, or capability-pack deploy/apply. Its telemetry-compatible shape can support future local-first or V2 backfill, but AF15 does not implement V2 and does not make GitHub Project the source of truth.
+
+Action-plan report 保持 read-only：`mutation_performed: false`，repair entries 保持 `apply_supported_now: false`，workflow 不执行 live repair/apply、Project v2 mutation、generated Skill/adapter publish 或 capability-pack deploy/apply。它的 telemetry-compatible shape 可以支持未来 local-first 或 V2 backfill，但 AF15 不实现 V2，也不把 GitHub Project 变成 source of truth。
 
 ## First-Time Setup / 首次设置
 
