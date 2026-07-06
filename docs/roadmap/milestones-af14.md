@@ -47,13 +47,13 @@ AF-14 is V1.x maintenance.
 
 | Milestone | GitHub records | Purpose | Status |
 | --- | --- | --- | --- |
-| AF-14 Epic | #302 | Coordinate Tester role and test planning workflow. | Active |
+| AF-14 Epic | #302 | Coordinate Tester role and test planning workflow. | Done |
 | AF-14 A Tester role and workflow gates | #303 | Define role boundaries, routing gates, test evidence taxonomy, and research-backed design. | Done |
 | AF-14 B Testing Contract and evidence taxonomy | #304 | Define test plan/test matrix fields and evidence categories. | Done |
 | AF-14 C Scheduler and Project workflow support | #305 | Decide `needs:tester`, Project Owner Role=Tester, and Execution Contract validation shape. | Done |
-| AF-14 D Workflow docs and templates | #306 | Implement accepted docs and templates. | Active; Implementer |
-| AF-14 E Helper validation and fixtures | #307 | Implement accepted helper/schema/test validation. | Active; Implementer |
-| AF-14 F Readiness and pilot review | #308 | Run bounded pilot and readiness review. | Dependency-gated |
+| AF-14 D Workflow docs and templates | #306 | Implement accepted docs and templates. | Done |
+| AF-14 E Helper validation and fixtures | #307 | Implement accepted helper/schema/test validation. | Done |
+| AF-14 F Readiness and pilot review | #308 | Run bounded pilot and readiness review. | Done |
 
 ## Non-Goals
 
