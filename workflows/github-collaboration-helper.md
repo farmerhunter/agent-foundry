@@ -345,28 +345,56 @@ agent-foundry-github-collab --repo <owner>/<repo> collaboration-readiness \
 
 The report is read-only and must include `mutation_performed: false`. It checks
 role labels, routing config, Execution Contract values, Testing Contract values,
-issue/PR routing state, and optional Project/Kanban visibility. It may include
-`dry_run_repair_plan` items, but every item must keep
+issue/PR routing state, and optional Project/Kanban visibility. Raw JSON remains
+the evidence/debug layer; user-facing guidance comes from `readiness_status`,
+`summary`, and `user_readiness_action_plan.recommended_next_actions`.
+
+Valid `readiness_status` values are:
+
+- `ready`: sampled evidence is ready for normal collaboration workflow.
+- `needs_setup`: missing labels, routing template, contracts, or other setup
+  gaps should be routed through existing Agent Foundry workflow.
+- `needs_human_decision`: a Project/governance/product/privacy/final
+  integration/closure choice needs a Human Decision Contract.
+- `degraded`: at least one source is unavailable or partial, and the report
+  records what is unknown instead of guessing.
+- `blocked`: core GitHub evidence is unavailable enough that the user should
+  unblock source access before relying on the report.
+
+The report may include `dry_run_repair_plan` items, but every item must keep
 `apply_supported_now` set to `false` until a later reviewed repair/apply issue
 changes that boundary.
 
-For new-project setup, use the report to confirm:
+Recommended actions use these categories:
+
+| Category | Meaning | Current handling |
+| --- | --- | --- |
+| `informational_only` | Evidence, status, or degraded optional mirrors that do not need mutation. | Explain and record; no workflow mutation required. |
+| `agent_handled_existing_workflow` | A bounded issue/comment/label/PR/role-handoff action can proceed through existing Agent Foundry gates. | Route with durable issue or PR comments and `needs:*` labels. |
+| `explicit_human_gate` | The action changes product, governance, privacy/security, final integration, closure, or meaningful Project policy. | Post a Human Decision Contract before action. |
+| `unsupported_deferred_repair_apply` | The helper can describe the repair, but AF15 must not execute it. | Leave deferred or create a later gated issue. |
+
+For new-project setup, use the action plan to confirm:
 
 - standard role labels exist: `needs:architect`, `needs:implementer`,
   `needs:reviewer`, `needs:tester`, `needs:harvester`, and `needs:human`;
 - the role-routing config is present and uses lowercase role tokens;
 - Execution Contract and Testing Contract examples use machine-readable role
   and handoff values;
+- human gates are named for product, governance, privacy/security, final
+  integration, closure, or destructive decisions;
 - optional Project fields and role options are visible if a Project mirror is
-  configured.
+  configured;
+- residual risks and the next safe workflow action are explicit.
 
-For existing-project audit, use the report to identify drift:
+For existing-project audit, use the action plan to identify drift:
 
 - missing or extra `needs:*` routing labels;
 - malformed Execution Contract or Testing Contract values;
 - issue/PR routing that does not match next-owner state;
 - missing or degraded Project v2 visibility;
-- safe next actions that are still preview-only.
+- safe next actions grouped as informational, agent-handled, human-gated, or
+  unsupported/deferred.
 
 Project v2 remains an optional visual mirror. A degraded or unavailable Project
 read should appear in the report without blocking issue/PR/label findings that
@@ -374,6 +402,12 @@ can still be read through REST. The helper must not perform full Project scans
 by default, Project writes, label repair, comments, merges, closure, runtime
 writes, Vault writes, generated adapter publishing, capability-pack publishing,
 or V2 local-ledger implementation.
+
+The action-plan shape is compatible with future local-first telemetry/backfill
+work: it separates observed facts, unknown/degraded sources, action category,
+owner role, and workflow route. AF15 does not implement V2, does not create a
+Foundry Board or Local Collaboration Ledger, and does not make GitHub Project
+the source of truth.
 
 ## Dispatch Evidence Modes
 
