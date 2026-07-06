@@ -62,6 +62,41 @@ For the full role-based issue and PR development flow, including Coordinator, Ar
 
 完整 role-based issue 和 PR 开发流程，包括 Coordinator、Architect、Implementer、Tester、Reviewer 和 Human gates，见 `docs/multi-agent-collaboration.md`。
 
+For GitHub issue/PR collaboration setup, ask for a collaboration readiness check before using the repo for multi-agent work.
+
+对于 GitHub issue/PR collaboration setup，在用该 repo 做 multi-agent work 前，先要求 collaboration readiness check。
+
+```text
+check collaboration readiness for this repo
+检查这个 repo 的 collaboration readiness
+```
+
+The readiness report tells you whether role labels, routing templates, Execution Contracts, Testing Contracts, issue/PR routing, and optional Project/Kanban visibility are present or drifted. It is read-only: it reports `mutation_performed: false`, does not repair labels or Project fields, and treats Project v2 as an optional visual mirror rather than source of truth.
+
+Readiness report 会告诉你 role labels、routing templates、Execution Contracts、Testing Contracts、issue/PR routing 和可选 Project/Kanban visibility 是否存在或 drift。它是 read-only：报告 `mutation_performed: false`，不 repair labels 或 Project fields，并把 Project v2 当作 optional visual mirror，而不是 source of truth。
+
+For a new project, ask the agent to prepare the setup checklist first:
+
+新项目先让 agent 准备 setup checklist：
+
+```text
+prepare this repo for multi-agent collaboration
+为这个 repo 准备 multi-agent collaboration
+```
+
+Expected setup items are role labels, the role-routing config template, optional Project fields and role options, Execution Contract examples, Testing Contract examples, and a readiness audit. For an existing project, use:
+
+预期 setup items 包括 role labels、role-routing config template、可选 Project fields 和 role options、Execution Contract examples、Testing Contract examples，以及 readiness audit。已有项目使用：
+
+```text
+audit existing collaboration setup
+审计现有 collaboration setup
+```
+
+That audit should report drift, degraded GitHub or Project access, dry-run repair ideas, and next safe actions. Raw helper commands such as `python3 scripts/github_collaboration_helper.py collaboration-readiness --json` are debug details; prefer the Skill-facing requests above during normal use.
+
+该 audit 应报告 drift、degraded GitHub 或 Project access、dry-run repair ideas 和 next safe actions。`python3 scripts/github_collaboration_helper.py collaboration-readiness --json` 这类 raw helper commands 是 debug details；日常使用优先使用上面的 Skill-facing requests。
+
 ## First-Time Setup / 首次设置
 
 On a new machine, use `docs/deployment.md` for the full split Core/Vault install flow.
