@@ -65,6 +65,13 @@ def deploy_bootstrap(vault_root: Path) -> subprocess.CompletedProcess[str]:
     )
 
 
+def manifest_version(pack_root: Path) -> str:
+    for line in (pack_root / "manifest.yaml").read_text(encoding="utf-8").splitlines():
+        if line.startswith("version:"):
+            return line.split(":", 1)[1].strip().strip('"')
+    raise AssertionError(f"{pack_root / 'manifest.yaml'} missing version")
+
+
 def tree_digest(root: Path) -> str:
     digest = hashlib.sha256()
     for path in sorted(p for p in root.rglob("*") if p.is_file()):
@@ -254,6 +261,7 @@ def main() -> int:
         deploy_result = deploy_bootstrap(vault)
         errors.extend(expect("deploy-bootstrap", deploy_result, True, "added: 25"))
         errors.extend(expect("deploy-bootstrap-validates", deploy_result, True, "selected Vault validated"))
+        bootstrap_version = manifest_version(BOOTSTRAP_PACK)
         for expected in [
             vault / "practices" / "meta" / "BOOT-001-bootstrap-orientation.md",
             vault / "practices" / "meta" / "META-001-canonical-practices-source-of-truth.md",
@@ -266,10 +274,10 @@ def main() -> int:
             else:
                 text = expected.read_text(encoding="utf-8")
                 for marker in [
-                    "provenance: \"Deployed from capability pack pack.bootstrap.minimal version 0.2.0",
+                    f"provenance: \"Deployed from capability pack pack.bootstrap.minimal version {bootstrap_version}",
                     "pack_membership",
                     "pack.bootstrap.minimal",
-                    "pack_source_version: \"0.2.0\"",
+                    f"pack_source_version: \"{bootstrap_version}\"",
                 ]:
                     if marker not in text:
                         errors.append(f"deploy-bootstrap: {expected} missing deployment metadata marker {marker}")

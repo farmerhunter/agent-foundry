@@ -3,7 +3,7 @@ pack_id: pack.bootstrap.minimal
 title: Minimal Agent Foundry Bootstrap Pack
 description: Minimal public bootstrap snapshot for first-run harvest, review, refresh, publish, root, and runtime-boundary workflows.
 lifecycle_status: reviewed
-version: 0.2.0
+version: 0.3.0
 exported_at: 2026-06-12
 distribution_type: mandatory_bootstrap
 source_provenance: "Agent Foundry public Core fixture for issue #77"
@@ -19,11 +19,11 @@ compatibility:
   requires_bootstrap_pack: false
 
 selection_review:
-  rationale: "Provide the smallest usable blank-Vault baseline: bootstrap orientation plus the public Practice Harvester asset and its canonical meta, governance, runtime, and source-of-truth boundary practices."
+  rationale: "Provide the smallest usable blank-Vault baseline: bootstrap orientation plus the public Practice Harvester asset and its canonical meta, governance, runtime, import-review, and source-of-truth boundary practices."
   included_groups:
     - bootstrap orientation and status records
     - Practice Harvester skill asset
-    - meta practices required for harvest, asset discovery, import review, dedupe, and adapter publishing
+    - meta practices required for harvest, asset discovery, external skill import/reference review, dedupe, and adapter publishing
     - governance practices required for source-of-truth, architecture boundary, and maintainability decisions
     - runtime practices required for root, adapter, sync, and privacy boundaries
     - Generated and Runtime downstream-status orientation plus Local Private evidence exclusion
@@ -112,8 +112,8 @@ included_records:
     kind: practice
     lifecycle_status: active
     path: records/practices/META-003-borrow-external-skills-through-review.md
-    source_version: 1
-    content_sha256: "ee3c7c051f185bc3b7d3747a5dac140effb8284933f30ecb151dd25f1db2f7b7"
+    source_version: 2
+    content_sha256: "b7b1ec65490050045ca61380ab31d964b91084d3d8b04bd9b0c71bfb73a97b41"
     destination_layer: canonical_vault_record
     membership_role: bootstrap_required
     activation_default: active

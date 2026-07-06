@@ -1,9 +1,9 @@
 manifest_schema_version: 1
 pack_id: pack.multi-agent.optional
 title: Optional Multi-Agent Collaboration Pack
-description: Reviewed optional first-party starter pack for role-generic GitHub issue and PR collaboration helpers, collaboration readiness, and dry-run repair planning.
+description: Reviewed optional first-party starter pack for role-generic GitHub issue and PR collaboration helpers, Testing Contract routing, collaboration readiness action plans, and dry-run repair planning.
 lifecycle_status: reviewed
-version: 0.3.0
+version: 0.4.0
 exported_at: 2026-07-06
 distribution_type: optional_capability
 source_provenance: "Agent Foundry public Core fixture reviewed through AF12-3 issue #253."
@@ -13,7 +13,7 @@ sensitivity: public
 review_state: reviewed
 
 pack_contract:
-  promised_use_case: "Help a project operate GitHub issues, PRs, labels, comments, collaboration readiness reports, dry-run repair plans, and optional visual status mirrors as a lightweight multi-agent scheduler."
+  promised_use_case: "Help a project operate GitHub issues, PRs, labels, comments, Testing Contract evidence routing, collaboration readiness action plans, dry-run repair plans, and optional visual status mirrors as a lightweight multi-agent scheduler."
   deployment_role: "optional user-selected capability after bootstrap"
   source_authority_after_deployment: "selected User Vault records"
   non_authority_boundaries: [generated adapters are downstream only, runtime installs are downstream only, pack staging is transfer evidence only, Core fixtures are schema and test evidence only]
@@ -23,6 +23,7 @@ evidence_sources:
   - "Agent Foundry issue 253 public starter-pack implementation review"
   - "Agent Foundry issue 315 collaboration readiness model decision"
   - "Agent Foundry issues 316-319 AF15 helper, docs, dry-run repair, and dogfood review"
+  - "Agent Foundry issues 328-331 AF15 action-plan UX completion and dogfood review"
   - "Agent Foundry public first-party starter-pack review"
 
 export_policy:
@@ -51,7 +52,9 @@ starter_contents:
     - "Testing Contract evidence routing when explicit testing is needed"
     - "dependency-gated ready queues"
     - "collaboration readiness before new project adoption"
-    - "existing project drift audit and dry-run repair planning"
+    - "existing project drift audit and readiness action plans"
+    - "recommended next action categories for informational, workflow-routed, human-gated, and deferred repair/apply cases"
+    - "raw JSON evidence/debug alongside user-facing summaries"
     - "degraded GitHub/Project access reporting"
     - "read-only audit before write automation"
   assets:
@@ -102,8 +105,8 @@ included_records:
     kind: practice
     lifecycle_status: candidate
     path: records/practices/COLLAB-PACK-001-review-handoff.md
-    source_version: 3
-    content_sha256: "463e006672c02dcc98a7e606ddb76fecd8a29539b7720e8d26c4cb2839942c18"
+    source_version: 4
+    content_sha256: "cc4c37f24d443c473586e3824176ff4eff7d5c3043ff444823d8cbf07d218093"
     destination_layer: canonical_vault_record
     membership_role: optional_member
     activation_default: manual_review
@@ -112,8 +115,8 @@ included_records:
     kind: asset
     lifecycle_status: candidate
     path: records/assets/ASSET-COLLAB-PACK-001-review-handoff-helper.asset.yaml
-    source_version: 3
-    content_sha256: "fc2e79c4696d519af319a070fbbccd11d6f860ae932bd6b6956391066981e6ea"
+    source_version: 4
+    content_sha256: "00d901a71a4f0a9e6db3b88e10b9cbda01b75ed4284bec3e354a026e6c77d5c9"
     destination_layer: canonical_vault_record
     membership_role: optional_member
     activation_default: manual_review

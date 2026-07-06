@@ -6,9 +6,9 @@ entries:
     title: Minimal Agent Foundry Bootstrap Pack
     channel: official
     catalog_status: available
-    latest_version: 0.2.0
+    latest_version: 0.3.0
     manifest_path: fixtures/capability-packs/bootstrap-minimal/manifest.yaml
-    manifest_sha256: a9c940d7ed56759b70082b973f1fd1591f27dcc6e8b6f7354ce91c297e97240e
+    manifest_sha256: 79d7f579c0be89eac443dce005dde4750004099505d0d3a2b677b5c1bb2809c4
     compatibility_summary: "Core schema 1; Vault layout [1]; bootstrap not required."
     compatibility_metadata:
       core_schema_version_min: 1
@@ -17,7 +17,7 @@ entries:
       requires_bootstrap_pack: false
     changelog_path: catalog/capability-packs/pack.bootstrap.minimal/CHANGELOG.md
     readme_path: catalog/capability-packs/pack.bootstrap.minimal/README.md
-    review_evidence: https://github.com/farmerhunter/agent-foundry/issues/232
+    review_evidence: https://github.com/farmerhunter/agent-foundry/issues/337
     authority_after_deployment: selected_user_vault
     private_local_evidence: excluded
     core_release_axis: independent
@@ -27,9 +27,9 @@ entries:
     title: Optional GitHub Collaboration Starter Pack
     channel: official
     catalog_status: available
-    latest_version: 0.3.0
+    latest_version: 0.4.0
     manifest_path: fixtures/capability-packs/optional-multi-agent/manifest.yaml
-    manifest_sha256: e5a92fffe31c3065564ce43aae6daa0b029ba3a4e2490061cfd7fc0d4d1d8cb6
+    manifest_sha256: 95eeae82c6836905a28c4d48e4a2ce7598d2f0c300ca1401465ec1d45f6adaff
     compatibility_summary: "Core schema 1; Vault layout [1]; bootstrap required; selected Vault review required."
     compatibility_metadata:
       core_schema_version_min: 1
@@ -38,7 +38,7 @@ entries:
       requires_bootstrap_pack: true
     changelog_path: catalog/capability-packs/pack.multi-agent.optional/CHANGELOG.md
     readme_path: catalog/capability-packs/pack.multi-agent.optional/README.md
-    review_evidence: https://github.com/farmerhunter/agent-foundry/issues/253
+    review_evidence: https://github.com/farmerhunter/agent-foundry/issues/337
     authority_after_deployment: selected_user_vault
     private_local_evidence: excluded
     core_release_axis: independent

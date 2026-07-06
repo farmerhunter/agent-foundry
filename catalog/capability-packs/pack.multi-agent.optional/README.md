@@ -35,11 +35,13 @@ dependency-gated queues、review handoffs，以及 write automation 前的 read-
 
 ## Collaboration Readiness / 协作就绪检查
 
-The current starter guidance includes the AF15 collaboration readiness model:
-new projects can check whether role labels, routing templates, Execution
-Contracts, Testing Contracts, and optional Project/Kanban mirrors are present
-before they start multi-agent work. Existing projects can audit drift and get a
-dry-run repair plan without changing GitHub or Project state.
+The current starter guidance includes the AF14 Testing Contract path and the
+AF15 collaboration readiness action-plan model. New projects can check whether
+role labels, routing templates, Execution Contracts, Testing Contracts, and
+optional Project/Kanban mirrors are present before they start multi-agent work.
+Existing projects can audit drift and get a readiness summary, recommended
+next actions, and a dry-run repair plan without changing GitHub or Project
+state.
 
 当前 starter guidance 包含 AF15 collaboration readiness model：新项目可以先检查
 role labels、routing templates、Execution Contracts、Testing Contracts 和可选的
@@ -47,13 +49,23 @@ Project/Kanban mirrors 是否齐备；已有项目可以 audit drift，并获得
 plan，而不会修改 GitHub 或 Project state。
 
 Readiness reports are expected to stay read-only. They should show
-`mutation_performed: false`, use REST-first GitHub access, query Project v2 only
-when configured and needed, avoid default full Project scans, and report
-degraded GitHub or Project access instead of hiding it.
+`readiness_status`, `summary`, `user_readiness_action_plan`, and
+`recommended_next_actions`; raw JSON remains evidence/debug output. Action
+categories are `informational_only`, `agent_handled_existing_workflow`,
+`explicit_human_gate`, and `unsupported_deferred_repair_apply`. Repair entries
+must show `mutation_performed: false` and `apply_supported_now: false`.
 
-Readiness reports 应保持 read-only。它们应显示 `mutation_performed: false`，
-优先使用 REST 访问 GitHub，仅在配置且必要时查询 Project v2，避免默认 full Project
-scan，并在 GitHub 或 Project 访问 degraded 时明确报告。
+Readiness reports 应保持 read-only。它们应显示 `readiness_status`、`summary`、
+`user_readiness_action_plan` 和 `recommended_next_actions`；raw JSON 仍是
+evidence/debug output。Action categories 是 `informational_only`、
+`agent_handled_existing_workflow`、`explicit_human_gate` 和
+`unsupported_deferred_repair_apply`。Repair entries 必须显示
+`mutation_performed: false` 和 `apply_supported_now: false`。
+
+The pack uses REST-first GitHub access, queries Project v2 only when configured
+and needed, avoids default full Project scans, and reports degraded GitHub or
+Project access instead of hiding it. Project v2 remains an optional visual
+mirror, not scheduler authority.
 
 ## What Remains Manual Or Review-Gated / 仍需手动或 Review-Gated 的内容
 
@@ -103,9 +115,9 @@ labels 和 issue comments 作为 workflow record，可以跳过它。
 
 The pack covers a base GitHub collaboration workflow: role labels, durable
 issue/PR comments, explicit Execution Contract fields, dependency-gated queues,
-Testing Contract evidence when needed, collaboration readiness audit, dry-run
-repair planning, degraded GitHub/Project access reporting, and read-only audit
-before write automation.
+Testing Contract evidence when needed, collaboration readiness action plans,
+dry-run repair planning, degraded GitHub/Project access reporting, and
+read-only audit before write automation.
 
 Project v2 status may be a configured visual mirror, but it is not the scheduler
 source of truth. Runtime helper install, generated Skill publish, and mutating
@@ -124,8 +136,10 @@ receipts remain downstream status surfaces, not catalog or pack authority.
 
 ## Versioning
 
-Pack version `0.3.0` identifies the reviewed GitHub collaboration readiness
-starter contract. Pack version `0.2.0` identified the earlier GitHub
+Pack version `0.4.0` identifies the reviewed GitHub collaboration readiness
+action-plan starter contract. Pack version `0.3.0` identified the earlier
+AF15 readiness and dry-run repair starter contract. Pack version `0.2.0`
+identified the earlier GitHub
 collaboration starter contract. Core git tags and releases identify repository
 snapshots. These are related but independent axes.
 
@@ -140,3 +154,9 @@ Review evidence:
 - https://github.com/farmerhunter/agent-foundry/issues/317
 - https://github.com/farmerhunter/agent-foundry/issues/318
 - https://github.com/farmerhunter/agent-foundry/issues/319
+- https://github.com/farmerhunter/agent-foundry/issues/328
+- https://github.com/farmerhunter/agent-foundry/issues/329
+- https://github.com/farmerhunter/agent-foundry/issues/330
+- https://github.com/farmerhunter/agent-foundry/issues/331
+- https://github.com/farmerhunter/agent-foundry/issues/336
+- https://github.com/farmerhunter/agent-foundry/issues/337

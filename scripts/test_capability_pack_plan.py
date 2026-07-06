@@ -579,7 +579,7 @@ def main() -> int:
         write_deployed_index(
             vault,
             "pack.multi-agent.optional",
-            "0.3.0",
+            "0.4.0",
             "0" * 64,
             "COLLAB-PACK-001",
             "",
@@ -592,7 +592,7 @@ def main() -> int:
         write_deployed_index(
             vault,
             "pack.bootstrap.minimal",
-            "0.2.0",
+            "0.3.0",
             sha256(BOOTSTRAP_PACK / "manifest.yaml"),
             "BOOT-001",
             current_hash,
@@ -605,7 +605,7 @@ def main() -> int:
         write_reordered_deployed_index(
             vault,
             "pack.bootstrap.minimal",
-            "0.2.0",
+            "0.3.0",
             sha256(BOOTSTRAP_PACK / "manifest.yaml"),
             "BOOT-001",
             sha256(target),

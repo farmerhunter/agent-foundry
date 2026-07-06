@@ -25,6 +25,12 @@ deployment target, Core as public catalog/tooling, Generated and Runtime as
 downstream status or install surfaces, and Local Private evidence as excluded
 from pack authority.
 
+The bootstrap baseline also includes the reviewed external-skill import and
+reference safety model. External sources are reviewed with the outcomes
+`discard`, `reference_only`, `defer`, `merge_into_existing`,
+`propose_practice`, or `propose_asset`; `publish_after_approval` is a later
+post-approval action, not an import outcome.
+
 这个 pack 携带 bootstrap capability 和 `ASSET-META-001` governance baseline。
 它让用户明确 selected User Vault 是 accepted deployment target，Core 是 public
 catalog/tooling，Generated 和 Runtime 是 downstream status 或 install surfaces，
@@ -47,6 +53,11 @@ This pack does not create a separate architecture-boundary starter pack, install
 runtime files, publish generated adapters, export a private Vault, or make
 project-specific governance decisions. It does not duplicate `ASSET-META-001`;
 it preserves that baseline in the bootstrap path.
+
+`reference_only` import evidence stays sanitized selected Vault `imports/inbox/`
+review evidence for manual lookup and future re-review. It does not create
+active behavior, generated/runtime output, dedupe bypasses, or practice, asset,
+or capability-pack authority.
 
 这个 pack 不会创建单独的 architecture-boundary starter pack，不会安装 runtime
 files、发布 generated adapters、export private Vault，也不会替项目做 project-specific
@@ -96,7 +107,8 @@ authority.
 
 ## Versioning
 
-Pack version `0.2.0` identifies the reviewed bootstrap pack contract. Core git
+Pack version `0.3.0` identifies the reviewed bootstrap pack contract. Pack
+version `0.2.0` identified the AF12-3 starter-pack catalog baseline. Core git
 tags and releases identify repository snapshots. These are related but
 independent axes.
 
@@ -109,3 +121,5 @@ Review evidence:
 - https://github.com/farmerhunter/agent-foundry/issues/232#issuecomment-4787780757
 - https://github.com/farmerhunter/agent-foundry/issues/232#issuecomment-4787793177
 - https://github.com/farmerhunter/agent-foundry/issues/253
+- https://github.com/farmerhunter/agent-foundry/issues/336
+- https://github.com/farmerhunter/agent-foundry/issues/337

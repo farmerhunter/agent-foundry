@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.3.0
+
+- Updated `META-003` to carry the AF13 external skill import/reference outcome
+  model: `discard`, `reference_only`, `defer`, `merge_into_existing`,
+  `propose_practice`, and `propose_asset`.
+- Clarified that `publish_after_approval` is a post-approval action, not a
+  terminal import outcome.
+- Clarified that `reference_only` is sanitized selected Vault `imports/inbox/`
+  review evidence only and cannot create active behavior, generated/runtime
+  output, dedupe bypasses, or practice, asset, or capability-pack authority.
+- No capability-pack deploy/apply, generated Skill publish, runtime mutation,
+  Vault mutation, release artifact publishing, or private/local evidence export
+  is authorized by this catalog entry.
+
 ## 0.2.0
 
 - Cataloged as the first minimal official Core-hosted capability pack entry.

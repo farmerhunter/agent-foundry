@@ -2,12 +2,12 @@ id: ASSET-COLLAB-PACK-001
 title: Role-Generic GitHub Scheduler Helper Set
 asset_type: skill
 status: candidate
-version: 3
+version: 4
 created: 2026-06-11
 updated: 2026-07-06
-purpose: Provide reviewed helper surfaces for role-generic GitHub issue/PR coordination and collaboration readiness reporting.
-responsibility: Support inbox, ready-queue, pickup, handoff, audit, collaboration readiness, dry-run repair planning, degraded GitHub/Project access reporting, label routing, issue context, PR context, and retry wrappers after managed install.
-non_responsibility: Does not decide product scope, override issue contracts, make Project v2 the scheduler authority, install helpers, execute from pack staging, apply dry-run repairs, publish generated Skills, or mutate Project v2 by default.
+purpose: Provide reviewed helper surfaces for role-generic GitHub issue/PR coordination, Testing Contract routing, and collaboration readiness action-plan reporting.
+responsibility: Support inbox, ready-queue, pickup, handoff, audit, Testing Contract evidence routing, collaboration readiness action plans, dry-run repair planning, degraded GitHub/Project access reporting, label routing, issue context, PR context, and retry wrappers after managed install.
+non_responsibility: Does not decide product scope, override issue contracts, make Project v2 the scheduler authority, install helpers, execute from pack staging, apply dry-run repairs, publish generated Skills, mutate Project v2 by default, or treat action plans as live repair/apply authorization.
 inputs:
   - issue number
   - PR number
@@ -20,6 +20,9 @@ process:
   - Resolve role labels and completion handoff from explicit configuration and contracts.
   - Report collaboration readiness for new or existing projects before multi-agent work relies on the setup.
   - Include Execution Contract validation and Testing Contract validation where the workflow asks for explicit test evidence.
+  - Include user-facing readiness_status, summary, user_readiness_action_plan, and recommended_next_actions.
+  - Use recommended action categories informational_only, agent_handled_existing_workflow, explicit_human_gate, and unsupported_deferred_repair_apply.
+  - Keep raw JSON as evidence/debug output for review, fixtures, and future migration.
   - Print dry-run plans before any mutating helper behavior is allowed.
   - Keep dry-run repair entries report-only with mutation_performed false and apply_supported_now false.
   - Prefer REST-first GitHub reads and targeted Project v2 GraphQL only when configured and needed.
@@ -32,6 +35,7 @@ outputs:
   - pickup or handoff dry-run
   - audit report
   - collaboration readiness report
+  - user-facing readiness action plan
   - dry-run repair plan
   - degraded-source summary
   - issue or PR context summary
@@ -51,4 +55,5 @@ success_criteria:
   - Project-specific defaults are represented as overlays rather than reusable pack defaults.
   - Mutating actions remain disabled until managed install, permissions, and receipts exist.
   - Readiness reports identify missing or drifted setup without mutating GitHub or Project state.
+  - Readiness action plans separate informational, existing-workflow, human-gated, and unsupported/deferred repair/apply next actions.
   - Degraded GitHub or Project access is visible in reports instead of hidden by inferred success.
