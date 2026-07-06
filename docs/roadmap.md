@@ -150,7 +150,7 @@ Agent Foundry `v1.0.0` is published. The active planning area is now V2.0 local-
 | Milestone | GitHub records | User-facing reason | Status |
 | --- | --- | --- | --- |
 | Agent Foundry `v1.0.0` release | #267 | First downloadable public Core release for external users. | Completed; GitHub Release and tag published |
-| AF-14 Tester Role And Test Planning Workflow | #302 Epic; #303 through #308 | Users need test planning and evidence that answer what was tested, why it is enough, which risks remain, and when human trial is still needed. | Active; #303 released to Architect |
+| AF-14 Tester Role And Test Planning Workflow | #302 Epic; #303 through #308 | Users need test planning and evidence that answer what was tested, why it is enough, which risks remain, and when human trial is still needed. | Active; #306/#307 implementation |
 | V2.0 Local-First Orchestration And Foundry Board | #292 Epic; #293 through #299; #266 telemetry window | Users need a local source of truth for multi-agent orchestration that can still sync to GitHub Project, plus migration from the current GitHub-first workflow. | Planning and decomposition; first milestone held |
 
 V2.0 does not authorize memory-system work, automatic token capture, live Vault/private/runtime/generated mutation, generated adapter publish, or broad implementation outside reviewed child issues. It must preserve the V1 Core/User Vault/Generated/Runtime/Local Private boundaries.
@@ -188,12 +188,12 @@ Issue types:
 
 Recommended labels:
 
-- `stage:AF-1` through `stage:AF-12`
-- `stage:AF-13`, `stage:v1.0`, `stage:v2.0`
+- `stage:AF-1` through `stage:AF-14`
+- `stage:v1.0`, `stage:v2.0`
 - `stage:MS-01`, `stage:MS-02`
 - `type:epic`, `type:task`, `type:decision`, `type:review`, `type:evidence`
 - `area:core`, `area:vault`, `area:generated`, `area:runtime`, `area:privacy`, `area:memory-readiness`, `area:adapters`
-- `needs:architect`, `needs:implementer`, `needs:reviewer`, `needs:harvester`
+- `needs:architect`, `needs:implementer`, `needs:reviewer`, `needs:tester`, `needs:harvester`
 - `risk:low`, `risk:medium`, `risk:high`
 
 Multi-agent rule:
@@ -201,6 +201,7 @@ Multi-agent rule:
 - Architect creates or updates Epics and Decision issues.
 - Implementer works only from Ready issues with clear scope, dependencies, branch strategy, and acceptance criteria.
 - Reviewer checks against the Epic exit criteria and relevant practices.
+- Tester plans or gathers testing evidence when a task has explicit user-visible, stateful, runtime, import, Vault, generated, or scheduler risk; Tester does not replace Reviewer, Architect, or Human acceptance.
 - Harvester extracts reusable practices or asset candidates after meaningful work, using the harvest workflow.
 
 Create GitHub Project/Epic items for the active stage and its immediate successor. Completed stage detail should stay in the split milestone files and durable GitHub records rather than expanding this overview. AF-10 work may collect readiness and workflow-optimization evidence. MS-01 planning lives on a separate milestone axis, but MS-01 execution should wait until AF10 workflow optimization evidence is accepted or explicitly waived by the user.

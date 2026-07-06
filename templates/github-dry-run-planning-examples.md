@@ -43,6 +43,25 @@ Reviewer target: separate Reviewer agent, focused on contract validation
 Human verification needed: no
 ```
 
+Tester pickup examples use Tester as the owner or handoff target, not as the
+review authority:
+
+```markdown
+## Execution Contract
+
+Owner role: tester
+Review role: reviewer
+Acceptance role: architect
+Completion handoff: to:reviewer
+
+## Testing Contract
+
+Testing Responsibility: tester
+Tester Trigger:
+  - stateful workflow evidence is required before review
+user_value_or_risk: user can see what was tested and what remains risky
+```
+
 ```yaml
 dry_run_planning_example:
   mode: generated_note

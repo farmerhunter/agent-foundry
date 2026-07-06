@@ -119,6 +119,66 @@ instructions in separate fields such as `Reviewer target:`, `Human verification
 needed:`, or `Human review prompt:`. Do not encode them in `Owner role:`,
 `Review role:`, `Acceptance role:`, or `Completion handoff:`.
 
+## Tester Routing
+
+Use `needs:tester` only when a task needs explicit test planning, a test
+matrix, evidence execution, or residual-risk handoff before the next decision.
+Tester is an evidence role. Tester does not approve, reject, merge, close,
+replace Reviewer acceptance, decide Architect-owned product semantics, or
+replace Human trial.
+
+Use Tester when risk comes from user-visible state, route mocks versus real
+backend behavior, imported data shape, runtime/generated/Vault boundaries,
+unsafe writes, stale state, copy leaks, answer leaks, or a human trial that
+needs objective evidence first. Skip Tester when a small static, unit, docs, or
+copy check fully answers the user confidence question.
+
+Tester-oriented Execution Contracts use `Owner role: tester` or
+`Completion handoff: to:tester`. Do not use `Review role: tester`; route
+accepted Tester evidence to Reviewer, product ambiguity to Architect, defects
+to Implementer, and subjective trial to Human.
+
+```markdown
+## Execution Contract
+
+Owner role: tester
+Review role: reviewer
+Acceptance role: architect
+Completion handoff: to:reviewer
+
+## Testing Contract
+
+Testing Responsibility: tester
+Tester Trigger:
+  - user-visible state changes need evidence before review
+user_value_or_risk: user can trust the workflow does not leak stale or unsafe state
+user_journey_or_state_chain: preview -> apply -> verify
+evidence_required:
+  - route_mocked_browser
+  - negative_adversarial
+test_matrix:
+  - scenario: preview keeps writes disabled
+    risk: unsafe_write
+    evidence_type: route_mocked_browser
+    fixture: route_mock
+    command_or_method: not_available
+    expected_signal: preview reports writes none
+    owner: tester
+    residual_gap: does not prove backend persistence
+
+## Test Evidence Handoff
+
+to: reviewer
+commands:
+  - python3 scripts/check_consistency.py
+environment: local
+artifacts:
+  - not_available
+result_summary: passed
+residual_risks:
+  - human wording acceptance still requires Human trial
+```
+
 ## GitHub Auth And Retry Expectations
 
 Agents should verify GitHub readiness before making claims about available
