@@ -150,7 +150,7 @@ Agent Foundry `v1.0.0` is published. The active planning area is now V2.0 local-
 | Milestone | GitHub records | User-facing reason | Status |
 | --- | --- | --- | --- |
 | Agent Foundry `v1.0.0` release | #267 | First downloadable public Core release for external users. | Completed; GitHub Release and tag published |
-| AF-14 Tester Role And Test Planning Workflow | #302 Epic; #303 through #308 | Users need test planning and evidence that answer what was tested, why it is enough, which risks remain, and when human trial is still needed. | Active; #306/#307 implementation |
+| AF-14 Tester Role And Test Planning Workflow | #302 Epic; #303 through #308; PR #311 | Users need test planning and evidence that answer what was tested, why it is enough, which risks remain, and when human trial is still needed. | Completed; integrated into `main` as V1.x maintenance |
 | V2.0 Local-First Orchestration And Foundry Board | #292 Epic; #293 through #299; #266 telemetry window | Users need a local source of truth for multi-agent orchestration that can still sync to GitHub Project, plus migration from the current GitHub-first workflow. | Planning and decomposition; first milestone held |
 
 V2.0 does not authorize memory-system work, automatic token capture, live Vault/private/runtime/generated mutation, generated adapter publish, or broad implementation outside reviewed child issues. It must preserve the V1 Core/User Vault/Generated/Runtime/Local Private boundaries.
@@ -237,7 +237,7 @@ Expected scope will be defined by MS-01 and MS-02. AF-10 may optimize the collab
 
 ## Immediate Next Planning Tasks
 
-1. Complete AF-14 #303 Tester role and workflow-gate design using tiny-ipa #230 plus independent web research.
-2. Keep V2 #293 and #266 held while AF-14 proceeds as V1.x maintenance.
+1. Keep V2 #293 and #266 held until the next explicit V2 kickoff decision.
+2. Treat V1.x maintenance work, including harvest-compatible Core/docs/workflow/test improvements, as `main`-targeted unless it changes V2-only orchestration behavior.
 3. Keep memory-system planning on the MS milestone axis: MS-01 for readiness design and MS-02 for implementation-home decision. MS work remains gated on explicit human authorization.
 4. Do not create memory directories, schemas, MCP write tools, or automatic memory writing before explicit user authorization.
