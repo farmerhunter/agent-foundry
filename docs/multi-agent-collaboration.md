@@ -1,51 +1,38 @@
-# Multi-Agent Collaboration Workflow / 多 Agent 协作开发流程
+# Multi-Agent Collaboration Workflow
 
 This document describes Agent Foundry's role-based issue and PR workflow. It is
 an operating guide for humans and agents. Helper commands, schemas, and
 template details remain in `workflows/github-collaboration-helper.md` and
 `templates/`.
 
-本文描述 Agent Foundry 的 role-based issue / PR 工作流。它是给人和 agent
-使用的操作指南。Helper commands、schemas 和 template 细节仍以
-`workflows/github-collaboration-helper.md` 和 `templates/` 为准。
+**中文要点：** 本文是 multi-agent collaboration 的操作指南。它解释 role、流程、
+handoff、readiness 和 gate，不替代 helper/template 的机器合约。
 
-## Purpose / 目的
+## Purpose
 
 Multi-agent collaboration separates different kinds of work so each decision is
 made by the right role. A good workflow keeps status visible, ownership clear,
 handoffs durable, and human attention focused on real judgment.
-
-多 Agent 协作把不同性质的工作分开，让每类决定由合适的 role 处理。好的流程让
-状态可见、owner 清楚、handoff 可追溯，并把人的注意力留给真正需要判断的地方。
 
 Durable state comes from GitHub issues, PRs, comments, labels, exact heads,
 Execution Contracts, optional Testing Contracts, and closure evidence. Project
 fields are visual mirrors and scheduler metadata; they do not outrank issue/PR
 durable state.
 
-Durable state 来自 GitHub issues、PRs、comments、labels、exact heads、
-Execution Contracts、可选 Testing Contracts 和 closure evidence。Project
-fields 是 visual mirrors 和 scheduler metadata，不能高于 issue/PR durable
-state。
+**中文要点：** 多 Agent 协作的价值是把设计、实现、测试证据、独立审查、调度和人的
+产品判断分开。GitHub issue/PR/comment/label/contract 是 durable state；
+Project/Kanban 只是可视化镜像。
 
-## Collaboration Readiness / 协作就绪检查
+## Collaboration Readiness
 
 Before a repo adopts this workflow, or when an existing project shows routing
-drift, run a collaboration readiness audit. The goal is to answer what is ready,
-what is missing, what is inconsistent, and what the next safe action is.
+drift, run a collaboration readiness audit. The audit should answer what is
+ready, what is missing, what is inconsistent, and what the next safe action is.
 
-在 repo 采用这套流程前，或已有项目出现 routing drift 时，先做 collaboration
-readiness audit。它要回答：什么已经 ready、缺什么、哪里不一致、下一步安全动作是
-什么。
-
-The audit should be read-only. It may inspect labels, role routing templates,
+The audit is read-only. It may inspect labels, role routing templates,
 Execution Contract values, Testing Contract values, issue and PR routing state,
 Project/Kanban visibility, and handoff evidence. Its report should state
 `mutation_performed: false`.
-
-Audit 应保持 read-only。它可以检查 labels、role routing templates、Execution
-Contract values、Testing Contract values、issue/PR routing state、Project/Kanban
-visibility 和 handoff evidence。报告必须说明 `mutation_performed: false`。
 
 Use a low-cost GitHub strategy:
 
@@ -61,18 +48,15 @@ Dry-run repair plans can name possible fixes, such as adding a missing
 field. They do not apply those fixes. Real repair/apply needs a later explicit
 gate.
 
-Dry-run repair plan 可以列出可能修复项，例如添加缺失的 `needs:*` label、修正
-malformed contract field，或设置 Project mirror field。它不执行这些修复。真正
-repair/apply 需要后续明确 gate。
-
 The report shape should be stable enough for future local-first orchestration
 and Foundry Board backfill. GitHub Project remains a sync or visibility surface;
 it does not become the authority.
 
-报告结构应足够稳定，以便未来 local-first orchestration 和 Foundry Board backfill
-复用。GitHub Project 仍是 sync 或 visibility surface，不是 authority。
+**中文要点：** readiness audit 用来判断 repo 是否具备 role-based collaboration 条件。
+它只读、低成本、可 degraded；可以给 dry-run repair plan，但不执行修复。报告结构要能
+服务未来 Foundry Board / local-first backfill，同时明确 GitHub Project 不是权威状态。
 
-## Roles / 角色
+## Roles
 
 | Role | Triggered by | Main output | Hands off to | Boundary |
 | --- | --- | --- | --- | --- |
@@ -84,7 +68,11 @@ it does not become the authority.
 | Human | Product direction, subjective trial, final integration, Epic/stage closure, privacy/security, destructive, or high-risk decision is required. | Approval, rejection, revision, or trial result. | Coordinator or Architect. | Should not be asked to approve routine low-risk mechanics. |
 | Harvester | Real work should be converted into reusable practices, assets, or candidate capability material. | Evidence inventory, candidate packet, reuse recommendation. | Reviewer or Architect. | Does not activate/publish without review and approval. |
 
-## Standard Flow / 标准流程
+**中文要点：** 每个 role 的核心边界不同。Coordinator 管流程，Architect 管形状和 gate，
+Implementer 做 scoped change，Tester 提供测试证据，Reviewer 做独立审查，Human 做真实
+产品/风险决策，Harvester 把经验整理成候选资产。
+
+## Standard Flow
 
 | Step | Owner | What happens | Exit signal |
 | --- | --- | --- | --- |
@@ -100,10 +88,11 @@ Low-risk work may stay in one thread if the role stance remains clear. Separate
 role handoffs are useful when independent review, product judgment, testing
 evidence, or durable scheduling outweighs coordination cost.
 
-低风险工作可以留在一个 thread 中完成，前提是 role stance 清楚。需要独立 review、
-产品判断、测试证据或 durable scheduling 时，分 role handoff 才值得付出协作成本。
+**中文要点：** 标准流程是 intake -> design/contract -> implementation/evidence ->
+review -> architect acceptance/routing -> human gate when needed -> completion。
+低风险工作可以单线程完成；需要独立判断或 durable handoff 时再拆 role。
 
-## Role Rules / 角色规则
+## Role Rules
 
 ### Coordinator
 
@@ -112,13 +101,12 @@ dependency order, repairs mechanical routing drift, and records callbacks.
 Coordinator may dispatch work, but it should not turn itself into a hidden
 authority role.
 
-Coordinator 维护流程连续性。它读取 durable state，判断 dependency order，修复机械
-routing drift，并记录 callback。Coordinator 可以 dispatch work，但不能变成隐藏的
-authority role。
-
 Use Coordinator for queue management, stale labels, Project/label mismatch,
 cross-thread handoff, Epic sequencing, callback consolidation, and status
 readback.
+
+**中文要点：** Coordinator 负责流程连续性和状态同步，不负责产品验收，也不引入
+`needs:coordinator` 这种隐藏 authority。
 
 ### Architect
 
@@ -126,12 +114,12 @@ Architect protects the shape of the work. It decides what problem is being
 solved, what is out of scope, which role owns the next step, and which gates
 must remain human-owned.
 
-Architect 保护工作的形状。它决定要解决什么问题、什么不在范围内、下一步由哪个 role
-负责，以及哪些 gate 必须由 human 决定。
-
 Use Architect for design, taxonomy, privacy/security boundaries, issue
 decomposition, branch/integration strategy, acceptance after review, and Human
 Decision Contracts.
+
+**中文要点：** Architect 决定 scope、architecture、dependency、gate 和 downstream
+release，不在 design gate 里顺手做大范围 implementation。
 
 ### Implementer
 
@@ -139,20 +127,17 @@ Implementer changes the repository under an accepted contract. It should keep
 the diff focused, write or update required tests, avoid unrelated cleanup, and
 handoff with exact verification.
 
-Implementer 在 accepted contract 下修改 repo。它应保持 diff 聚焦，编写或更新要求的
-tests，避免无关 cleanup，并用准确 verification 交接。
-
 Use Implementer only after the issue names allowed scope, dependencies, branch
 target, acceptance criteria, and required evidence. If scope changes while
 implementing, route back to Architect instead of expanding silently.
+
+**中文要点：** Implementer 在明确 contract 下写 production change 和 required tests。
+如果发现 scope 需要扩大，应回到 Architect，而不是静默扩展。
 
 ### Tester
 
 Tester protects confidence in behavior. It designs or executes evidence when
 ordinary implementation tests are not enough to explain risk.
-
-Tester 保护对行为的信心。当普通实现测试不足以说明风险时，Tester 负责设计或执行
-evidence。
 
 Use Tester for user-visible state, browser flows, route-mocked versus
 real-backend behavior, runtime/Generated/Vault/Local Private boundaries,
@@ -166,17 +151,20 @@ Tester output routes to Reviewer when evidence is ready, to Implementer when
 defects or missing tests are found, to Architect when criteria are unclear, and
 to Human when objective evidence is ready but subjective acceptance remains.
 
+**中文要点：** Tester 不是另一个 Reviewer。它负责回答“测了什么、为什么足够、还剩
+什么风险”，并把证据交给 Reviewer/Implementer/Architect/Human。
+
 ### Reviewer
 
 Reviewer protects independent judgment. It checks the issue contract, exact PR
 head, diff, tests, risk, and user-visible behavior. Findings come first; a
 short acceptance is enough only when no meaningful risks remain.
 
-Reviewer 保护独立判断。它检查 issue contract、exact PR head、diff、tests、risk 和
-user-visible behavior。Findings 优先；只有没有实质风险时，简短 acceptance 才足够。
-
 Reviewer acceptance routes to Architect for acceptance/routing unless the issue
 contract explicitly defines another next owner.
+
+**中文要点：** Reviewer 做独立审查，先报 findings。Reviewer acceptance 通常不是最终
+closure，而是交给 Architect 做 acceptance/routing。
 
 ### Human
 
@@ -184,14 +172,13 @@ Human handles product direction and meaningful approval. A good human gate names
 the concrete decision, evidence, allowed actions, still-forbidden actions,
 consequences, and exact approval phrase.
 
-Human 处理产品方向和真正有意义的 approval。好的 human gate 会说明具体 decision、
-evidence、approval 后允许的动作、仍然禁止的动作、后果，以及 exact approval
-phrase。
-
 Use Human gates for final `main` integration when not delegated, Epic/stage
 closure, product/distribution choices, subjective trial acceptance,
 privacy/security boundaries, destructive operations, data migration, direct
 runtime/private/generated mutation, and unclear user-specific choices.
+
+**中文要点：** Human gate 用在真正需要人的判断处。好的控制感来自状态、owner、下一步、
+禁止动作和恢复路径清楚，而不是每一步都弹确认。
 
 ### Harvester
 
@@ -199,11 +186,10 @@ Harvester converts real work into candidate reusable value. It can inventory
 lessons, patterns, and artifacts, but canonical practice/asset activation still
 requires review and approval.
 
-Harvester 把真实工作转成 candidate reusable value。它可以 inventory lessons、
-patterns 和 artifacts，但 canonical practice/asset activation 仍需要 review 和
-approval。
+**中文要点：** Harvester 负责把经验整理成 candidate reusable value。是否进入 canonical
+practice/asset 仍要 review 和 approval。
 
-## Contracts / 合约
+## Contracts
 
 ### Execution Contract
 
@@ -264,7 +250,10 @@ Every meaningful handoff should record:
 - forbidden actions preserved;
 - callback target when work came from another thread.
 
-## Merge And Closure Rules / Merge 和 Closure 规则
+**中文要点：** Contract 里的 role fields 必须 machine-readable。自然语言说明放在单独
+字段。Handoff comment 要能让下一个 role 不靠聊天上下文也能继续工作。
+
+## Merge And Closure Rules
 
 - Child PRs may merge into authorized non-main integration branches when the
   issue/Epic contract delegates it, latest-head checks pass, and review is
@@ -277,7 +266,11 @@ Every meaningful handoff should record:
 - Exact-head protection applies to review and merge. A changed head resets the
   relevant checks or review.
 
-## Collaboration Modes / 协作模式
+**中文要点：** child PR 可以在授权的 non-main integration branch 内合并；final `main`
+integration、Epic/stage closure、隐私/安全/破坏性动作仍需要相应更高 gate。review/merge
+必须保护 exact head。
+
+## Collaboration Modes
 
 | Mode | Use when |
 | --- | --- |
@@ -287,7 +280,10 @@ Every meaningful handoff should record:
 | Batch checkpoint | Related low-risk issues should be reviewed or accepted together. |
 | Human-gated close | Final integration, Epic closure, product distribution, privacy, or irreversible action is under review. |
 
-## Anti-Patterns / 反模式
+**中文要点：** 不要为了形式感拆 agent。只有当独立判断、测试证据、批量 checkpoint 或
+human gate 的价值超过协调成本时，才使用更重的协作模式。
+
+## Anti-Patterns
 
 - routing every non-Implementer transition to Human;
 - using Tester as another Reviewer;
@@ -300,3 +296,6 @@ Every meaningful handoff should record:
 - using role labels to mask unclear ownership;
 - letting Implementer expand scope instead of routing back to Architect;
 - treating passing tests as a substitute for product acceptance.
+
+**中文要点：** 常见错误是过度 human-gate、把 Tester 当 Reviewer、把 Project 当权威、
+忽略 exact head、用 label 掩盖 owner 不清，以及把 tests passing 当成产品验收。
