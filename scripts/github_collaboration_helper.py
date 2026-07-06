@@ -729,6 +729,71 @@ def normalize_project_items(data: Any) -> list[dict[str, Any]]:
     return [item for item in data if isinstance(item, dict)]
 
 
+def project_metadata_from_fixture(data: Any, items: list[dict[str, Any]]) -> dict[str, Any]:
+    fields_seen: set[str] = set()
+    options_seen: set[str] = set()
+    explicit_metadata = False
+    if isinstance(data, dict):
+        fields = data.get("fields")
+        if isinstance(fields, list):
+            explicit_metadata = True
+            for field in fields:
+                if isinstance(field, dict):
+                    name = field.get("name")
+                    if name:
+                        fields_seen.add(str(name))
+                    for option in field.get("options") or []:
+                        if isinstance(option, dict):
+                            option_name = option.get("name")
+                        else:
+                            option_name = option
+                        if field.get("name") == "Owner Role" and option_name:
+                            options_seen.add(str(option_name))
+                elif field:
+                    fields_seen.add(str(field))
+        options = data.get("options")
+        if isinstance(options, dict):
+            explicit_metadata = True
+            for option in options.get("Owner Role") or options.get("owner_role") or []:
+                if isinstance(option, dict):
+                    option = option.get("name")
+                if option:
+                    options_seen.add(str(option))
+        elif isinstance(options, list):
+            explicit_metadata = True
+            for option in options:
+                if isinstance(option, dict):
+                    option = option.get("name")
+                if option:
+                    options_seen.add(str(option))
+    for item in items:
+        for field in READINESS_PROJECT_FIELDS:
+            if project_field_value(item, field):
+                fields_seen.add(field)
+        field_values = item.get("fieldValues") or item.get("field_values")
+        if isinstance(field_values, list):
+            for value in field_values:
+                if not isinstance(value, dict):
+                    continue
+                name = value.get("fieldName") or value.get("name")
+                if name:
+                    fields_seen.add(str(name))
+                if name == "Owner Role":
+                    raw = value.get("value") or value.get("text") or value.get("name")
+                    if isinstance(raw, dict):
+                        raw = raw.get("name") or raw.get("text") or raw.get("title")
+                    if raw:
+                        options_seen.add(str(raw))
+        owner = project_field_value(item, "Owner Role")
+        if owner:
+            options_seen.add(owner)
+    return {
+        "fields_seen": sorted(fields_seen),
+        "options_seen": sorted(options_seen),
+        "explicit_metadata": explicit_metadata,
+    }
+
+
 def normalize_label_collection(data: Any) -> list[str]:
     if data is None:
         return []
@@ -919,7 +984,17 @@ def read_project_items(args: argparse.Namespace) -> tuple[list[dict[str, Any]], 
     if args.project_items_json:
         data = load_json(args.project_items_json)
         items = normalize_project_items(data)
-        return items, {"source": "fixture", "status": "ok", "item_count": len(items)}, {"attempts": 0, "transient_failures": []}
+        metadata = project_metadata_from_fixture(data, items)
+        return (
+            items,
+            {
+                "source": "fixture",
+                "status": "ok",
+                "item_count": len(items),
+                **metadata,
+            },
+            {"attempts": 0, "transient_failures": []},
+        )
     if not args.project_owner and not args.project_number:
         return [], {"source": "skipped", "status": "config_missing", "item_count": 0}, {"attempts": 0, "transient_failures": []}
     if not args.project_owner or not args.project_number:
@@ -943,6 +1018,7 @@ def read_project_items(args: argparse.Namespace) -> tuple[list[dict[str, Any]], 
         )
         if result["ok"]:
             items = normalize_project_items(result["data"])
+            metadata = project_metadata_from_fixture(result["data"], items)
             return (
                 items,
                 {
@@ -951,6 +1027,7 @@ def read_project_items(args: argparse.Namespace) -> tuple[list[dict[str, Any]], 
                     "owner": args.project_owner,
                     "number": args.project_number,
                     "item_count": len(items),
+                    **metadata,
                 },
                 {"attempts": attempt, "transient_failures": transient_failures},
             )
@@ -965,6 +1042,8 @@ def read_project_items(args: argparse.Namespace) -> tuple[list[dict[str, Any]], 
         availability = "permission_denied"
     elif last_result and last_result["error_type"] == "auth_unavailable":
         availability = "auth_unavailable"
+    elif last_result and last_result["error_type"] == "transient":
+        availability = "degraded"
     return (
         [],
         {
@@ -1160,11 +1239,17 @@ def readiness_repair(action: str, subject: str, expected_effect: str, source_evi
     }
 
 
-def readiness_contract_summary(item: dict[str, Any], needs: set[str]) -> dict[str, Any]:
+def readiness_contract_summary(
+    item: dict[str, Any],
+    needs: set[str],
+    project_item: dict[str, Any] | None = None,
+    project_requested: bool = False,
+    default_stage: str | None = None,
+) -> dict[str, Any]:
     labels = label_names(item)
     contract = validate_execution_contract(item.get("body") or "")
     testing = validate_testing_contract(item.get("body") or "", labels)
-    findings, repairs = audit_issue(item, None, needs, project_requested=False, default_stage=None)
+    findings, repairs = audit_issue(item, project_item, needs, project_requested=project_requested, default_stage=default_stage)
     return {
         "number": issue_number(item),
         "title": item.get("title"),
@@ -1178,7 +1263,7 @@ def readiness_contract_summary(item: dict[str, Any], needs: set[str]) -> dict[st
                 repair_item.get("action", "review"),
                 f"issue:{repair_item.get('issue')}",
                 f"{repair_item.get('field', 'routing')} -> {repair_item.get('value', 'review required')}",
-                source_evidence="issue_contract_or_label_state",
+                source_evidence="issue_contract_label_or_project_state",
             )
             for repair_item in repairs
         ],
@@ -1189,6 +1274,8 @@ def project_availability(project_status: dict[str, Any]) -> str:
     status = project_status.get("status")
     if status == "ok":
         return "ok"
+    if status == "degraded":
+        return "degraded"
     if status == "config_missing":
         return "config_missing"
     if status in {"permission_denied", "auth_unavailable"}:
@@ -1205,7 +1292,7 @@ def source_status(source: str, status: dict[str, Any], attempts: dict[str, Any],
     mapped = raw_status
     if raw_status in {"config_missing", "skipped"}:
         mapped = raw_status
-    elif raw_status not in {"ok", "unavailable", "permission_denied", "auth_unavailable", "transient_failure"}:
+    elif raw_status not in {"ok", "unavailable", "degraded", "permission_denied", "auth_unavailable", "transient_failure"}:
         mapped = "unavailable" if raw_status not in {"fixture"} else "ok"
     return {
         "source": source,
@@ -1255,14 +1342,59 @@ def cmd_collaboration_readiness(args: argparse.Namespace) -> None:
             )
             repairs.append(readiness_repair("create_label", f"label:{label}", f"create missing role label {label}", "github_rest_labels"))
 
-    issue_rows = [readiness_contract_summary(issue, expected_needs) for issue in issues[: args.limit]]
+    project_requested = project_status.get("source") in ("fixture", "live_gh") and project_status.get("status") == "ok"
+    project_by_issue = {project_item_issue_number(item): item for item in project_items if project_item_issue_number(item) is not None}
+    issue_rows = [
+        readiness_contract_summary(
+            issue,
+            expected_needs,
+            project_item=project_by_issue.get(issue_number(issue)),
+            project_requested=project_requested,
+            default_stage=args.stage,
+        )
+        for issue in issues[: args.limit]
+    ]
     pr_rows = [readiness_contract_summary(pr, expected_needs) for pr in prs[: args.limit]]
     for row in (*issue_rows, *pr_rows):
         findings.extend(row["findings"])
         repairs.extend(row["repair_plan"])
 
-    project_fields_seen = sorted({field for item in project_items for field in READINESS_PROJECT_FIELDS if project_field_value(item, field)})
+    project_fields_seen = project_status.get("fields_seen") or sorted({field for item in project_items for field in READINESS_PROJECT_FIELDS if project_field_value(item, field)})
+    project_options_seen = project_status.get("options_seen") or []
     project_ok = project_status.get("status") == "ok"
+    if project_ok:
+        missing_project_fields = sorted(set(READINESS_PROJECT_FIELDS) - set(project_fields_seen))
+        for field in missing_project_fields:
+            findings.append(
+                {
+                    "severity": "error",
+                    "code": "missing_project_field",
+                    "subject": f"project_field:{field}",
+                    "expected": {"field": field},
+                    "actual": {"present": False},
+                }
+            )
+            repairs.append(readiness_repair("create_project_field", f"project_field:{field}", f"create Project mirror field {field}", "github_graphql_project_v2"))
+        if project_status.get("explicit_metadata"):
+            missing_role_options = sorted(set(READINESS_PROJECT_OPTIONS) - set(project_options_seen))
+            for option in missing_role_options:
+                findings.append(
+                    {
+                        "severity": "error",
+                        "code": "missing_project_role_option",
+                        "subject": f"project_option:Owner Role:{option}",
+                        "expected": {"Owner Role": option},
+                        "actual": {"present": False},
+                    }
+                )
+                repairs.append(
+                    readiness_repair(
+                        "create_project_option",
+                        f"project_option:Owner Role:{option}",
+                        f"create Owner Role option {option}",
+                        "github_graphql_project_v2",
+                    )
+                )
     if project_status.get("source") == "live_gh" and not project_ok:
         findings.append(
             {
@@ -1316,10 +1448,11 @@ def cmd_collaboration_readiness(args: argparse.Namespace) -> None:
             "project_v2": {
                 "availability": project_availability(project_status),
                 "fields_seen": project_fields_seen,
-                "options_seen": [],
+                "options_seen": project_options_seen,
                 "item_count": project_status.get("item_count", "unknown"),
                 "source": project_status.get("source"),
                 "error": project_status.get("error"),
+                "metadata_source": "explicit" if project_status.get("explicit_metadata") else "observed_items",
             },
         },
         "routing_state": {
