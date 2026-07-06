@@ -58,6 +58,10 @@ Use Tester when the question is "what did we test, why is that enough, and what 
 
 当问题是“测试了什么、为什么足够、还剩什么风险”时使用 Tester。如果简单 docs check、static check 或 unit test 已经能回答信心问题，就跳过 Tester。
 
+For the full role-based issue and PR development flow, including Coordinator, Architect, Implementer, Tester, Reviewer, and Human gates, see `docs/multi-agent-collaboration.md`.
+
+完整 role-based issue 和 PR 开发流程，包括 Coordinator、Architect、Implementer、Tester、Reviewer 和 Human gates，见 `docs/multi-agent-collaboration.md`。
+
 ## First-Time Setup / 首次设置
 
 On a new machine, use `docs/deployment.md` for the full split Core/Vault install flow.

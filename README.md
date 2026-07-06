@@ -140,6 +140,7 @@ DeepSeek, MiniMax, and similar model providers are treated as underlying models 
 
 - [Philosophy](docs/philosophy.md): why this project exists.
 - [Usage](docs/usage.md): day-to-day commands and prompts.
+- [Multi-Agent Collaboration](docs/multi-agent-collaboration.md): role-based issue/PR development flow, including Tester gates.
 - [Deployment](docs/deployment.md): fresh install, runtime changes, sync, and offline operation.
 - [System Design](docs/system-design.md): architecture, boundaries, lifecycle, and governance model.
 - [Roadmap](docs/roadmap.md): productization, repository hygiene, and memory-system readiness plan.
