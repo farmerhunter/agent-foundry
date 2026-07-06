@@ -119,6 +119,9 @@ def main() -> int:
         readiness_project = base / "readiness-project.json"
         readiness_labels = base / "readiness-labels.json"
         readiness_prs = base / "readiness-prs.json"
+        new_repo_labels = base / "new-repo-labels.json"
+        new_repo_issues = base / "new-repo-issues.json"
+        new_repo_prs = base / "new-repo-prs.json"
         inbox = base / "inbox.json"
         auth = base / "auth.json"
         runtime_skill = base / "runtime-skill.md"
@@ -365,6 +368,9 @@ def main() -> int:
                 }
             ),
         )
+        write(new_repo_labels, json.dumps({"labels": []}))
+        write(new_repo_issues, json.dumps({"issues": []}))
+        write(new_repo_prs, json.dumps({"items": []}))
         write(
             readiness_prs,
             json.dumps(
@@ -649,6 +655,13 @@ def main() -> int:
             ("collaboration-readiness-missing-project-item", '"code": "missing_project_item"'),
             ("collaboration-readiness-missing-project-field", '"code": "missing_project_field"'),
             ("collaboration-readiness-missing-role-option", '"code": "missing_project_role_option"'),
+            ("collaboration-readiness-action-plan", '"user_readiness_action_plan"'),
+            ("collaboration-readiness-status", '"readiness_status"'),
+            ("collaboration-readiness-summary", "Raw JSON remains evidence/debug output"),
+            ("collaboration-readiness-human-readable-summary", '"summary"'),
+            ("collaboration-readiness-agent-action", '"category": "agent_handled_existing_workflow"'),
+            ("collaboration-readiness-human-gate-action", '"category": "explicit_human_gate"'),
+            ("collaboration-readiness-deferred-action", '"category": "unsupported_deferred_repair_apply"'),
             ("collaboration-readiness-pr-sampled", '"prs_sampled"'),
             ("collaboration-readiness-repair-not-supported", '"apply_supported_now": false'),
             ("collaboration-readiness-project-option-repair", '"action": "create_project_option"'),
@@ -656,6 +669,28 @@ def main() -> int:
             ("collaboration-readiness-v2-shape", '"local_ledger_candidate": true'),
         ):
             errors.extend(expect_ok(name, readiness_json, expected))
+        new_repo_readiness = run(
+            [
+                "collaboration-readiness",
+                "--labels-json",
+                str(new_repo_labels),
+                "--issues-json",
+                str(new_repo_issues),
+                "--prs-json",
+                str(new_repo_prs),
+                "--json",
+            ],
+            base,
+            {"AGENT_REPO": "farmerhunter/new-repo"},
+        )
+        for name, expected in (
+            ("collaboration-readiness-new-repo-needs-setup", '"readiness_status": "needs_setup"'),
+            ("collaboration-readiness-new-repo-label-action", '"label:needs:architect"'),
+            ("collaboration-readiness-new-repo-project-informational", '"category": "informational_only"'),
+            ("collaboration-readiness-new-repo-raw-json-debug", "Raw JSON remains evidence/debug output"),
+            ("collaboration-readiness-new-repo-no-mutation", '"mutation_performed": false'),
+        ):
+            errors.extend(expect_ok(name, new_repo_readiness, expected))
         degraded = run(
             [
                 "scheduler-audit",

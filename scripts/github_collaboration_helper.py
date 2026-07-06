@@ -1303,6 +1303,223 @@ def source_status(source: str, status: dict[str, Any], attempts: dict[str, Any],
     }
 
 
+def readiness_action_category(finding_item: dict[str, Any]) -> str:
+    code = str(finding_item.get("code", ""))
+    subject = str(finding_item.get("subject", ""))
+    if code in {"project_v2_degraded"}:
+        return "informational_only"
+    if code.startswith("missing_project") or code in {
+        "empty_project_field",
+        "project_field_mismatch",
+        "closed_issue_not_done",
+        "open_needs_label_status_mismatch",
+    }:
+        return "explicit_human_gate"
+    if "project_" in subject:
+        return "explicit_human_gate"
+    return "agent_handled_existing_workflow"
+
+
+def readiness_owner_for_category(category: str) -> str:
+    return {
+        "informational_only": "coordinator",
+        "agent_handled_existing_workflow": "architect",
+        "explicit_human_gate": "human",
+        "unsupported_deferred_repair_apply": "architect",
+    }.get(category, "architect")
+
+
+def readiness_workflow_for_category(category: str) -> str:
+    return {
+        "informational_only": "none",
+        "agent_handled_existing_workflow": "child_issue",
+        "explicit_human_gate": "hdc",
+        "unsupported_deferred_repair_apply": "hold",
+    }.get(category, "hold")
+
+
+def readiness_action(
+    title: str,
+    category: str,
+    why: str,
+    evidence_source: str,
+    allowed_now: bool,
+) -> dict[str, Any]:
+    return {
+        "title": title,
+        "category": category,
+        "owner_role": readiness_owner_for_category(category),
+        "why": why,
+        "existing_workflow": readiness_workflow_for_category(category),
+        "allowed_now": allowed_now,
+        "evidence_source": evidence_source,
+    }
+
+
+def build_readiness_action_plan(payload: dict[str, Any]) -> dict[str, Any]:
+    findings = payload.get("findings") or []
+    repairs = payload.get("dry_run_repair_plan") or []
+    degraded_sources = [
+        source
+        for source in payload.get("degraded_sources") or []
+        if source.get("status") in {"unavailable", "degraded", "permission_denied", "auth_unavailable", "transient_failure"}
+    ]
+    project_state = payload.get("observed_github_state", {}).get("project_v2", {})
+    mutation_performed = bool(payload.get("mutation_performed"))
+    unsupported_repairs = [repair for repair in repairs if repair.get("apply_supported_now") is False]
+    human_gate_findings = [
+        finding_item for finding_item in findings if readiness_action_category(finding_item) == "explicit_human_gate"
+    ]
+
+    if any(source.get("source") in {"github_rest_labels", "github_rest_issues"} for source in degraded_sources):
+        readiness_status = "blocked"
+    elif degraded_sources:
+        readiness_status = "degraded"
+    elif human_gate_findings:
+        readiness_status = "needs_human_decision"
+    elif findings or repairs:
+        readiness_status = "needs_setup"
+    else:
+        readiness_status = "ready"
+
+    ready_now = [
+        "Readiness report is read-only and keeps raw JSON as evidence/debug output.",
+        "GitHub issue/PR durable state remains the source of truth.",
+    ]
+    if project_state.get("availability") in {"config_missing", "skipped"}:
+        ready_now.append("Project v2 mirror is optional; missing Project config does not block issue/PR readiness checks.")
+    if payload.get("network", {}).get("full_project_scan_performed") is False:
+        ready_now.append("No default full Project scan was performed.")
+
+    blocking_gaps = [
+        {
+            "code": finding_item.get("code"),
+            "subject": finding_item.get("subject") or finding_item.get("issue"),
+            "consequence": finding_item.get("message") or "Readiness gap needs routing before the repo is fully ready.",
+            "recommended_action": readiness_action_category(finding_item),
+        }
+        for finding_item in findings
+        if readiness_action_category(finding_item) != "informational_only"
+    ]
+    unknown_or_degraded = [
+        {
+            "source": source.get("source"),
+            "status": source.get("status"),
+            "impact": "Recorded as degraded/unknown; do not infer this source is healthy.",
+            "safe_fallback": source.get("fallback_used") or "none",
+            "error": source.get("error"),
+        }
+        for source in degraded_sources
+    ]
+    if project_state.get("availability") in {"config_missing", "skipped", "unknown"}:
+        unknown_or_degraded.append(
+            {
+                "source": "github_graphql_project_v2",
+                "status": project_state.get("availability"),
+                "impact": "Optional Project mirror was not evaluated; issue/PR evidence may still be usable.",
+                "safe_fallback": "github_rest_issue_pr_labels",
+                "error": project_state.get("error"),
+            }
+        )
+
+    recommended_next_actions: list[dict[str, Any]] = []
+    if not findings and not degraded_sources:
+        recommended_next_actions.append(
+            readiness_action(
+                "Continue with normal Agent Foundry collaboration workflow.",
+                "informational_only",
+                "No readiness blocker was found in the sampled evidence.",
+                "readiness_summary",
+                True,
+            )
+        )
+    for finding_item in findings:
+        category = readiness_action_category(finding_item)
+        recommended_next_actions.append(
+            readiness_action(
+                f"Resolve {finding_item.get('code', 'readiness finding')} for {finding_item.get('subject') or finding_item.get('issue')}.",
+                category,
+                finding_item.get("message") or "Finding needs a routed follow-up before readiness is complete.",
+                f"finding:{finding_item.get('code', 'unknown')}",
+                category in {"informational_only", "agent_handled_existing_workflow"},
+            )
+        )
+    for source in degraded_sources:
+        recommended_next_actions.append(
+            readiness_action(
+                f"Treat {source.get('source')} as degraded evidence, not a healthy source.",
+                "informational_only",
+                source.get("error") or "Source was unavailable or degraded during readiness inspection.",
+                f"degraded_source:{source.get('source')}",
+                True,
+            )
+        )
+    if project_state.get("availability") in {"config_missing", "skipped", "unknown"}:
+        recommended_next_actions.append(
+            readiness_action(
+                "Treat Project v2 mirror setup as optional unless the repo chooses to configure it.",
+                "informational_only",
+                "Project v2 is not the source of truth for collaboration readiness.",
+                "observed_github_state:project_v2",
+                True,
+            )
+        )
+    for repair in unsupported_repairs:
+        recommended_next_actions.append(
+            readiness_action(
+                f"Defer live apply for {repair.get('subject')}.",
+                "unsupported_deferred_repair_apply",
+                "AF15 readiness reports may preview repairs but must not execute them.",
+                f"dry_run_repair_plan:{repair.get('action')}",
+                False,
+            )
+        )
+
+    action_categories = sorted({action["category"] for action in recommended_next_actions})
+    summary_bits = [
+        f"Readiness status: {readiness_status}.",
+        f"{len(findings)} finding(s), {len(degraded_sources)} degraded source(s), {len(repairs)} dry-run repair item(s).",
+        "Raw JSON remains evidence/debug output; this action plan is the user-facing interpretation layer.",
+    ]
+    if readiness_status == "ready":
+        summary_bits.append("The sampled repo state is ready for normal collaboration workflow.")
+    elif readiness_status == "needs_setup":
+        summary_bits.append("Setup gaps can be routed through existing Agent Foundry issue/comment workflow.")
+    elif readiness_status == "needs_human_decision":
+        summary_bits.append("At least one readiness gap touches a Project/governance surface and should use a Human Decision Contract or equivalent review gate.")
+    elif readiness_status == "degraded":
+        summary_bits.append("Some optional or remote sources were degraded; do not guess hidden state.")
+    else:
+        summary_bits.append("Core GitHub readiness sources were unavailable; unblock source access before relying on the report.")
+
+    return {
+        "readiness_status": readiness_status,
+        "summary": " ".join(summary_bits),
+        "ready_now": ready_now,
+        "blocking_gaps": blocking_gaps,
+        "unknown_or_degraded": unknown_or_degraded,
+        "recommended_next_actions": recommended_next_actions,
+        "action_categories": action_categories,
+        "forbidden_actions": [
+            "live repair/apply",
+            "Project v2 mutation",
+            "Vault/private/runtime/generated mutation",
+            "generated Skill/adapter publish",
+            "capability-pack deploy/apply",
+            "V2 implementation",
+        ],
+        "telemetry": {
+            "unknown_not_available_fields": [item["source"] for item in unknown_or_degraded],
+            "source_counts": {
+                "findings": len(findings),
+                "degraded_sources": len(degraded_sources),
+                "dry_run_repair_items": len(repairs),
+            },
+            "mutation_performed": mutation_performed,
+        },
+    }
+
+
 def cmd_collaboration_readiness(args: argparse.Namespace) -> None:
     repo, repo_source = resolve_repo(args)
     config = parse_simple_yaml(Path(args.config)) if args.config else {}
@@ -1416,6 +1633,10 @@ def cmd_collaboration_readiness(args: argparse.Namespace) -> None:
     if degraded:
         status = "degraded"
 
+    local_template_status = "ok" if not config_errors else "unavailable"
+    if not args.config:
+        local_template_status = "config_missing"
+
     payload = {
         "schema_version": 1,
         "command": "collaboration-readiness",
@@ -1466,7 +1687,7 @@ def cmd_collaboration_readiness(args: argparse.Namespace) -> None:
             source_status("github_rest_issues", issues_status, issues_attempts),
             source_status("github_rest_prs", prs_status, prs_attempts),
             source_status("github_graphql_project_v2", {"status": project_availability(project_status), **project_status}, project_attempts),
-            source_status("local_template", {"status": "ok" if not config_errors else "unavailable"}, {"attempts": 1 if args.config else 0}),
+            source_status("local_template", {"status": local_template_status}, {"attempts": 1 if args.config else 0}),
         ],
         "network": {
             "strategy": "rest_first_targeted_graphql",
@@ -1492,6 +1713,10 @@ def cmd_collaboration_readiness(args: argparse.Namespace) -> None:
             "Review findings and dry_run_repair_plan; apply remains unsupported in AF15 readiness reports."
         ],
     }
+    action_plan = build_readiness_action_plan(payload)
+    payload["readiness_status"] = action_plan["readiness_status"]
+    payload["summary"] = action_plan["summary"]
+    payload["user_readiness_action_plan"] = action_plan
     print_json_or_text(payload, args.json)
 
 
