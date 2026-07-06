@@ -82,6 +82,12 @@ def main() -> int:
                 "Workflow authorization does not override product/runtime approval prompts",
                 "Tester Routing",
                 "Do not use `Review role: tester`",
+                "Collaboration Readiness",
+                "check collaboration readiness for this repo",
+                "prepare this repo for multi-agent collaboration",
+                "audit existing collaboration setup",
+                "`apply_supported_now` set to `false`",
+                "Project v2 remains an optional visual mirror",
             ],
         )
     )
@@ -110,6 +116,8 @@ def main() -> int:
         fixture = base / "issue.json"
         audit_issues = base / "audit-issues.json"
         audit_project = base / "audit-project.json"
+        readiness_labels = base / "readiness-labels.json"
+        readiness_prs = base / "readiness-prs.json"
         inbox = base / "inbox.json"
         auth = base / "auth.json"
         runtime_skill = base / "runtime-skill.md"
@@ -298,6 +306,46 @@ def main() -> int:
                             "stage": {"name": "AF-11"},
                             "owner Role": {"name": "Implementer"},
                             "risk": {"name": "Medium"},
+                        },
+                    ]
+                }
+            ),
+        )
+        write(
+            readiness_labels,
+            json.dumps(
+                {
+                    "labels": [
+                        {"name": "needs:architect"},
+                        {"name": "needs:implementer"},
+                        {"name": "needs:reviewer"},
+                        {"name": "needs:tester"},
+                        {"name": "needs:human"},
+                        {"name": "stage:AF-15"},
+                    ]
+                }
+            ),
+        )
+        write(
+            readiness_prs,
+            json.dumps(
+                {
+                    "items": [
+                        {
+                            "number": 42,
+                            "title": "Ready PR",
+                            "state": "OPEN",
+                            "labels": [{"name": "needs:reviewer"}],
+                            "body": "## Execution Contract\n\nOwner role: implementer\nReview role: reviewer\nAcceptance role: architect\nCompletion handoff: to:reviewer\n",
+                            "headRefOid": "abc123",
+                        },
+                        {
+                            "number": 43,
+                            "title": "Bad PR contract",
+                            "state": "OPEN",
+                            "labels": [{"name": "needs:reviewer"}],
+                            "body": "## Execution Contract\n\nOwner role: Implementer\nCompletion handoff: move to Review\n",
+                            "headRefOid": "def456",
                         },
                     ]
                 }
@@ -533,6 +581,38 @@ def main() -> int:
             errors.extend(expect_ok(name, scheduler_json, expected))
         errors.extend(expect_ok("scheduler-audit-json-status", scheduler_json, '"status": "findings"'))
         errors.extend(expect_ok("scheduler-audit-json-no-mutation", scheduler_json, '"mutation_performed": false'))
+        readiness_json = run(
+            [
+                "collaboration-readiness",
+                "--config",
+                str(TEMPLATE),
+                "--labels-json",
+                str(readiness_labels),
+                "--issues-json",
+                str(audit_issues),
+                "--prs-json",
+                str(readiness_prs),
+                "--project-items-json",
+                str(audit_project),
+                "--json",
+            ],
+            base,
+            {"AGENT_REPO": "farmerhunter/agent-foundry"},
+        )
+        for name, expected in (
+            ("collaboration-readiness-command", '"command": "collaboration-readiness"'),
+            ("collaboration-readiness-no-mutation", '"mutation_performed": false'),
+            ("collaboration-readiness-read-only", '"mode": "read_only"'),
+            ("collaboration-readiness-missing-label", '"code": "missing_needs_label"'),
+            ("collaboration-readiness-missing-harvester", '"label:needs:harvester"'),
+            ("collaboration-readiness-contract-invalid", '"code": "execution_contract_invalid"'),
+            ("collaboration-readiness-testing-invalid", '"code": "testing_contract_invalid"'),
+            ("collaboration-readiness-pr-sampled", '"prs_sampled"'),
+            ("collaboration-readiness-repair-not-supported", '"apply_supported_now": false'),
+            ("collaboration-readiness-no-full-project-scan", '"full_project_scan_performed": false'),
+            ("collaboration-readiness-v2-shape", '"local_ledger_candidate": true'),
+        ):
+            errors.extend(expect_ok(name, readiness_json, expected))
         degraded = run(
             [
                 "scheduler-audit",
@@ -554,6 +634,30 @@ def main() -> int:
         errors.extend(expect_ok("scheduler-audit-project-degraded", degraded, '"status": "degraded"'))
         errors.extend(expect_ok("scheduler-audit-project-unavailable", degraded, '"availability": "unavailable"'))
         errors.extend(expect_ok("scheduler-audit-project-read-once", degraded, '"attempts": 1'))
+        readiness_degraded = run(
+            [
+                "collaboration-readiness",
+                "--config",
+                str(TEMPLATE),
+                "--labels-json",
+                str(readiness_labels),
+                "--issues-json",
+                str(audit_issues),
+                "--project-owner",
+                "@me",
+                "--project-number",
+                "3",
+                "--project-retries",
+                "1",
+                "--json",
+            ],
+            base,
+            {"AGENT_REPO": "farmerhunter/agent-foundry", "PATH": f"{fake_bin}{os.pathsep}{os.environ.get('PATH', '')}"},
+        )
+        errors.extend(expect_ok("collaboration-readiness-project-degraded", readiness_degraded, '"status": "degraded"'))
+        errors.extend(expect_ok("collaboration-readiness-project-unavailable", readiness_degraded, '"availability": "unavailable"'))
+        errors.extend(expect_ok("collaboration-readiness-project-read-once", readiness_degraded, '"attempts": 1'))
+        errors.extend(expect_ok("collaboration-readiness-no-project-write", readiness_degraded, '"apply_supported_now": false'))
         errors.extend(
             expect_ok(
                 "activation-report-fixture",
