@@ -78,6 +78,18 @@ READINESS_NEEDS_LABELS = [
 ]
 READINESS_PROJECT_FIELDS = ["Status", "Roadmap Status", "Stage", "Owner Role", "Risk"]
 READINESS_PROJECT_OPTIONS = ["Architect", "Implementer", "Tester", "Reviewer", "Human", "Harvester"]
+V2_INTEGRATION_BRANCH = "codex/v2-local-first-orchestration"
+BRANCH_CONTRACT_FIELDS = (
+    "Release line",
+    "Target branch",
+    "Base branch verified from",
+    "Working branch",
+    "Worktree expectation",
+    "PR target",
+    "Merge rule",
+    "Forward-merge expectation",
+)
+LEGACY_BRANCH_TARGET_FIELD = "Branch target"
 
 
 def fail(code: str, detail: str, exit_code: int = 2) -> None:
@@ -340,6 +352,25 @@ def validate_execution_contract(body: str) -> dict[str, Any]:
         "fields": {key: value for key, value in fields.items() if value is not None},
         "natural_language_fields_present": sorted(key for key, value in natural_fields.items() if value),
         "errors": errors,
+    }
+
+
+def extract_branch_contract(body: str) -> dict[str, Any]:
+    heading, contract = extract_execution_contract(body)
+    fields: dict[str, str] = {}
+    if heading:
+        for field in BRANCH_CONTRACT_FIELDS:
+            value = markdown_field(contract, field)
+            if value:
+                fields[field] = value
+        legacy_target = markdown_field(contract, LEGACY_BRANCH_TARGET_FIELD)
+        if legacy_target and "Target branch" not in fields:
+            fields["Target branch"] = legacy_target
+            fields["legacy_target_field"] = LEGACY_BRANCH_TARGET_FIELD
+    return {
+        "heading": heading,
+        "fields": fields,
+        "status": "present" if fields else "missing",
     }
 
 
@@ -812,6 +843,106 @@ def normalize_label_collection(data: Any) -> list[str]:
     return labels
 
 
+def run_git_read(args: list[str], cwd: Path | None = None) -> dict[str, Any]:
+    result = subprocess.run(
+        ["git", *args],
+        cwd=cwd or Path.cwd(),
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if result.returncode != 0:
+        return {"ok": False, "error": (result.stderr or result.stdout).strip()}
+    return {"ok": True, "stdout": result.stdout}
+
+
+def parse_git_status_short(output: str) -> dict[str, Any]:
+    lines = output.splitlines()
+    branch_line = lines[0] if lines and lines[0].startswith("## ") else ""
+    branch = None
+    upstream = None
+    ahead = 0
+    behind = 0
+    if branch_line:
+        status_text = branch_line[3:]
+        branch_part = status_text.split(" [", 1)[0]
+        if "..." in branch_part:
+            branch, upstream = branch_part.split("...", 1)
+        else:
+            branch = branch_part
+        match = re.search(r"ahead (\d+)", branch_line)
+        if match:
+            ahead = int(match.group(1))
+        match = re.search(r"behind (\d+)", branch_line)
+        if match:
+            behind = int(match.group(1))
+    change_lines = [line for line in lines[1:] if line]
+    staged = [
+        line
+        for line in change_lines
+        if len(line) >= 2 and line[:2] != "??" and line[0] not in {" ", "?"}
+    ]
+    unstaged = [
+        line
+        for line in change_lines
+        if len(line) >= 2 and line[:2] != "??" and line[1] not in {" ", "?"}
+    ]
+    untracked = [line for line in change_lines if line.startswith("??")]
+    return {
+        "branch": branch,
+        "upstream": upstream,
+        "ahead": ahead,
+        "behind": behind,
+        "dirty": bool(change_lines),
+        "staged_count": len(staged),
+        "unstaged_count": len(unstaged),
+        "untracked_count": len(untracked),
+        "raw_status": lines,
+    }
+
+
+def read_local_git_state(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    if getattr(args, "local_git_json", None):
+        data = load_json(args.local_git_json)
+        if not isinstance(data, dict):
+            fail("invalid_local_git_json", "local git JSON must be an object")
+        return (
+            {
+                "source": "fixture",
+                "status": data.get("status", "ok"),
+                "branch": data.get("branch"),
+                "upstream": data.get("upstream"),
+                "ahead": int(data.get("ahead", 0) or 0),
+                "behind": int(data.get("behind", 0) or 0),
+                "dirty": bool(data.get("dirty")),
+                "staged_count": int(data.get("staged_count", 0) or 0),
+                "unstaged_count": int(data.get("unstaged_count", 0) or 0),
+                "untracked_count": int(data.get("untracked_count", 0) or 0),
+                "commit": data.get("commit"),
+                "worktree_path": data.get("worktree_path"),
+            },
+            {"source": "fixture", "status": data.get("status", "ok"), "error": data.get("error")},
+            {"attempts": 0},
+        )
+    status_result = run_git_read(["status", "--short", "--branch"])
+    if not status_result["ok"]:
+        return (
+            {"source": "local_git", "status": "unavailable", "error": status_result.get("error")},
+            {"source": "local_git", "status": "unavailable", "error": status_result.get("error")},
+            {"attempts": 1},
+        )
+    state = parse_git_status_short(status_result["stdout"])
+    state.update({"source": "local_git", "status": "ok", "worktree_path": str(Path.cwd())})
+    commit_result = run_git_read(["rev-parse", "HEAD"])
+    if commit_result["ok"]:
+        state["commit"] = commit_result["stdout"].strip()
+    worktree_result = run_git_read(["worktree", "list", "--porcelain"])
+    if worktree_result["ok"]:
+        state["worktrees"] = [line.split(" ", 1)[1] for line in worktree_result["stdout"].splitlines() if line.startswith("worktree ")]
+    return state, {"source": "local_git", "status": "ok"}, {"attempts": 1}
+
+
 def project_item_issue_number(item: dict[str, Any]) -> int | None:
     candidates = [
         item.get("number"),
@@ -964,7 +1095,8 @@ def read_readiness_prs(repo: str, args: argparse.Namespace) -> tuple[list[dict[s
             ]
         )
         if not result["ok"]:
-            return [], {"source": "github_rest", "status": result["error_type"], "error": result["message"]}, {"attempts": 1}
+            status = "transient_failure" if result["error_type"] == "transient" else result["error_type"]
+            return [], {"source": "github_rest", "status": status, "error": result["message"]}, {"attempts": 1}
         prs.append(result["data"])
     return prs, {"source": "github_rest", "status": "ok", "count": len(prs)}, {"attempts": len(prs)}
 
@@ -1245,11 +1377,16 @@ def readiness_contract_summary(
     project_item: dict[str, Any] | None = None,
     project_requested: bool = False,
     default_stage: str | None = None,
+    item_type: str = "issue",
+    local_git: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     labels = label_names(item)
     contract = validate_execution_contract(item.get("body") or "")
     testing = validate_testing_contract(item.get("body") or "", labels)
     findings, repairs = audit_issue(item, project_item, needs, project_requested=project_requested, default_stage=default_stage)
+    branch = evaluate_branch_contract(item, item_type, local_git)
+    findings.extend(branch["findings"])
+    repairs.extend(branch["repair_plan"])
     return {
         "number": issue_number(item),
         "title": item.get("title"),
@@ -1257,6 +1394,7 @@ def readiness_contract_summary(
         "labels": labels,
         "contract_validation": contract["status"],
         "testing_contract_validation": testing["status"],
+        "branch_readiness": {key: value for key, value in branch.items() if key not in {"findings", "repair_plan"}},
         "findings": findings,
         "repair_plan": [
             readiness_repair(
@@ -1265,7 +1403,263 @@ def readiness_contract_summary(
                 f"{repair_item.get('field', 'routing')} -> {repair_item.get('value', 'review required')}",
                 source_evidence="issue_contract_label_or_project_state",
             )
+            if "apply_supported_now" not in repair_item
+            else repair_item
             for repair_item in repairs
+        ],
+    }
+
+
+def branch_family(branch: str | None) -> str:
+    if not branch:
+        return "unknown"
+    if branch == "main":
+        return "v1.x-maintenance"
+    if branch == V2_INTEGRATION_BRANCH or branch.startswith(f"{V2_INTEGRATION_BRANCH}/"):
+        return "v2-integration"
+    if branch.startswith("codex/v2-"):
+        return "v2-integration"
+    return "integration-or-task"
+
+
+def pr_base_name(item: dict[str, Any]) -> str | None:
+    base = item.get("baseRefName") or item.get("base_ref_name")
+    if base:
+        return str(base)
+    base_ref = item.get("baseRef") or item.get("base")
+    if isinstance(base_ref, dict):
+        return base_ref.get("name") or base_ref.get("ref") or base_ref.get("label")
+    return None
+
+
+def pr_head_name(item: dict[str, Any]) -> str | None:
+    head = item.get("headRefName") or item.get("head_ref_name")
+    if head:
+        return str(head)
+    head_ref = item.get("headRef") or item.get("head")
+    if isinstance(head_ref, dict):
+        return head_ref.get("name") or head_ref.get("ref") or head_ref.get("label")
+    return None
+
+
+def pr_head_oid(item: dict[str, Any]) -> str | None:
+    oid = item.get("headRefOid") or item.get("head_ref_oid")
+    if oid:
+        return str(oid)
+    head_ref = item.get("headRef") or item.get("head")
+    if isinstance(head_ref, dict):
+        return head_ref.get("oid") or head_ref.get("sha")
+    return None
+
+
+def branch_readiness_repair(action: str, subject: str, expected_effect: str) -> dict[str, Any]:
+    return readiness_repair(action, subject, expected_effect, "branch_readiness", risk="medium")
+
+
+def evaluate_branch_contract(item: dict[str, Any], item_type: str, local_git: dict[str, Any] | None = None) -> dict[str, Any]:
+    number = issue_number(item)
+    branch_contract = extract_branch_contract(item.get("body") or "")
+    fields = branch_contract["fields"]
+    release_line = fields.get("Release line")
+    target_branch = fields.get("Target branch")
+    pr_target = fields.get("PR target")
+    actual_pr_base = pr_base_name(item) if item_type == "pr" else None
+    actual_pr_head = pr_head_name(item) if item_type == "pr" else None
+    head_oid = pr_head_oid(item) if item_type == "pr" else None
+    findings: list[dict[str, Any]] = []
+    repairs: list[dict[str, Any]] = []
+    status = "branch_ready"
+
+    if not release_line or not target_branch:
+        status = "branch_needs_contract"
+        findings.append(
+            finding(
+                "branch_contract_missing",
+                number,
+                "error",
+                "Execution Contract must include Release line and Target branch before branch-sensitive work is pickup-ready.",
+                expected={"Release line": "v1.x-maintenance | v2-integration | cross-line", "Target branch": "main | codex/v2-local-first-orchestration | <integration-branch>"},
+                actual={"Release line": release_line, "Target branch": target_branch},
+            )
+        )
+        repairs.append(branch_readiness_repair("add_branch_contract_fields", f"{item_type}:{number}", "add Release line and Target branch through issue/PR workflow"))
+    if fields.get("legacy_target_field"):
+        findings.append(
+            finding(
+                "legacy_branch_target_field",
+                number,
+                "warning",
+                "Legacy Branch target field was mapped as Target branch; prefer Target branch in new contracts.",
+                expected="Target branch",
+                actual="Branch target",
+            )
+        )
+
+    if release_line == "v2-integration" and target_branch == "main":
+        status = "branch_mismatch"
+        findings.append(
+            finding(
+                "v2_work_targets_main",
+                number,
+                "error",
+                "V2 integration work must not target main.",
+                expected={"Target branch": V2_INTEGRATION_BRANCH},
+                actual={"Target branch": target_branch},
+            )
+        )
+    if release_line == "v1.x-maintenance" and target_branch == V2_INTEGRATION_BRANCH:
+        status = "branch_mismatch"
+        findings.append(
+            finding(
+                "v1_work_targets_v2",
+                number,
+                "error",
+                "V1.x maintenance work must not target the V2 integration branch unless Architect accepts cross-line scope.",
+                expected={"Target branch": "main"},
+                actual={"Target branch": target_branch},
+            )
+        )
+
+    expected_pr_base = pr_target or target_branch
+    if item_type == "pr" and expected_pr_base and actual_pr_base and expected_pr_base != "none" and actual_pr_base != expected_pr_base:
+        status = "branch_mismatch"
+        findings.append(
+            finding(
+                "wrong_pr_base",
+                number,
+                "error",
+                "PR base does not match the branch contract.",
+                expected={"PR base": expected_pr_base},
+                actual={"PR base": actual_pr_base},
+            )
+        )
+        repairs.append(branch_readiness_repair("defer_pr_retarget", f"pr:{number}", "PR retarget is unsupported in AF16; route to Architect/Human if product consequences exist"))
+    if item_type == "pr" and release_line == "v2-integration" and actual_pr_base == "main":
+        status = "branch_mismatch"
+        findings.append(
+            finding(
+                "v2_pr_targets_main",
+                number,
+                "error",
+                "V2 PR targets main; final V2-to-main integration remains a later readiness and Human gate.",
+                expected={"PR base": V2_INTEGRATION_BRANCH},
+                actual={"PR base": actual_pr_base},
+            )
+        )
+
+    local_status = None
+    if local_git and local_git.get("status") == "ok":
+        local_status = {
+            "branch": local_git.get("branch"),
+            "branch_family": branch_family(local_git.get("branch")),
+            "upstream": local_git.get("upstream"),
+            "ahead": local_git.get("ahead", 0),
+            "behind": local_git.get("behind", 0),
+            "dirty": local_git.get("dirty", False),
+            "staged_count": local_git.get("staged_count", 0),
+            "unstaged_count": local_git.get("unstaged_count", 0),
+            "untracked_count": local_git.get("untracked_count", 0),
+            "commit": local_git.get("commit"),
+            "worktree_path": local_git.get("worktree_path"),
+        }
+        if local_git.get("dirty") or local_git.get("staged_count") or local_git.get("unstaged_count") or local_git.get("untracked_count"):
+            status = "dirty_or_ambiguous_worktree" if status == "branch_ready" else status
+            findings.append(
+                finding(
+                    "local_worktree_dirty",
+                    number,
+                    "warning",
+                    "Local checkout has dirty, staged, unstaged, or untracked state; do not silently checkout, reset, clean, merge, or review from it.",
+                    expected={"dirty": False, "staged_count": 0, "unstaged_count": 0, "untracked_count": 0},
+                    actual=local_status,
+                )
+            )
+        if local_git.get("ahead") or local_git.get("behind"):
+            status = "dirty_or_ambiguous_worktree" if status == "branch_ready" else status
+            findings.append(
+                finding(
+                    "local_branch_ahead_or_behind",
+                    number,
+                    "warning",
+                    "Local branch is ahead or behind upstream; report before review, dispatch, or merge requests.",
+                    expected={"ahead": 0, "behind": 0},
+                    actual={"ahead": local_git.get("ahead", 0), "behind": local_git.get("behind", 0), "upstream": local_git.get("upstream")},
+                )
+            )
+    elif local_git and local_git.get("status") not in {None, "skipped"}:
+        status = "remote_degraded" if status == "branch_ready" else status
+        findings.append(
+            finding(
+                "local_git_degraded",
+                number,
+                "warning",
+                "Local git state could not be read; branch readiness must treat local checkout as unknown.",
+                expected={"local_git": "ok"},
+                actual={"status": local_git.get("status"), "error": local_git.get("error")},
+            )
+        )
+
+    return {
+        "number": number,
+        "item_type": item_type,
+        "status": status,
+        "release_line": release_line,
+        "target_branch": target_branch,
+        "target_branch_source": "legacy:Branch target" if fields.get("legacy_target_field") else ("Target branch" if target_branch else "missing"),
+        "pr_target": pr_target,
+        "actual_pr_base": actual_pr_base,
+        "actual_pr_head": actual_pr_head,
+        "head_oid": head_oid,
+        "expected_branch_family": release_line or "unknown",
+        "actual_pr_base_family": branch_family(actual_pr_base),
+        "local_checkout": local_status,
+        "findings": findings,
+        "repair_plan": repairs,
+    }
+
+
+def build_branch_readiness(
+    issue_rows: list[dict[str, Any]],
+    pr_rows: list[dict[str, Any]],
+    local_git: dict[str, Any],
+    remote_statuses: list[dict[str, Any]],
+) -> dict[str, Any]:
+    rows = [*(row.get("branch_readiness") for row in issue_rows), *(row.get("branch_readiness") for row in pr_rows)]
+    rows = [row for row in rows if isinstance(row, dict)]
+    statuses = [row.get("status") for row in rows]
+    remote_degraded = any(status.get("status") not in {"ok", "skipped", "config_missing"} for status in remote_statuses)
+    if remote_degraded:
+        overall = "remote_degraded"
+    elif any(status == "branch_mismatch" for status in statuses):
+        overall = "branch_mismatch"
+    elif any(status == "dirty_or_ambiguous_worktree" for status in statuses):
+        overall = "dirty_or_ambiguous_worktree"
+    elif any(status == "branch_needs_contract" for status in statuses):
+        overall = "branch_needs_contract"
+    elif rows:
+        overall = "branch_ready"
+    else:
+        overall = "blocked" if local_git.get("status") not in {"ok", "skipped"} else "branch_needs_contract"
+    return {
+        "status": overall,
+        "mutation_performed": False,
+        "apply_supported_now": False,
+        "summary": "Branch readiness is read-only; AF16 reports branch/worktree/PR-target evidence and refuses automated repair/apply.",
+        "local_git": local_git,
+        "items": rows,
+        "forbidden_actions": [
+            "checkout/switch",
+            "branch/worktree creation",
+            "PR retarget",
+            "rebase",
+            "merge",
+            "pull",
+            "push except normal task branch push/PR creation",
+            "reset",
+            "clean",
+            "force push",
+            "Project repair/apply",
+            "V2 implementation",
         ],
     }
 
@@ -1306,6 +1700,21 @@ def source_status(source: str, status: dict[str, Any], attempts: dict[str, Any],
 def readiness_action_category(finding_item: dict[str, Any]) -> str:
     code = str(finding_item.get("code", ""))
     subject = str(finding_item.get("subject", ""))
+    if code in {
+        "wrong_pr_base",
+        "v2_pr_targets_main",
+        "v2_work_targets_main",
+        "v1_work_targets_v2",
+    }:
+        return "unsupported_deferred_repair_apply"
+    if code in {
+        "branch_contract_missing",
+        "legacy_branch_target_field",
+        "local_worktree_dirty",
+        "local_branch_ahead_or_behind",
+        "local_git_degraded",
+    }:
+        return "agent_handled_existing_workflow"
     if code in {"project_v2_degraded"}:
         return "informational_only"
     if code.startswith("missing_project") or code in {
@@ -1365,6 +1774,7 @@ def build_readiness_action_plan(payload: dict[str, Any]) -> dict[str, Any]:
         if source.get("status") in {"unavailable", "degraded", "permission_denied", "auth_unavailable", "transient_failure"}
     ]
     project_state = payload.get("observed_github_state", {}).get("project_v2", {})
+    branch_state = payload.get("branch_readiness") or {}
     mutation_performed = bool(payload.get("mutation_performed"))
     unsupported_repairs = [repair for repair in repairs if repair.get("apply_supported_now") is False]
     human_gate_findings = [
@@ -1390,6 +1800,8 @@ def build_readiness_action_plan(payload: dict[str, Any]) -> dict[str, Any]:
         ready_now.append("Project v2 mirror is optional; missing Project config does not block issue/PR readiness checks.")
     if payload.get("network", {}).get("full_project_scan_performed") is False:
         ready_now.append("No default full Project scan was performed.")
+    if branch_state:
+        ready_now.append("Branch/worktree/PR-target checks are report-only and do not checkout, retarget, merge, rebase, reset, or clean.")
 
     blocking_gaps = [
         {
@@ -1481,6 +1893,8 @@ def build_readiness_action_plan(payload: dict[str, Any]) -> dict[str, Any]:
         f"{len(findings)} finding(s), {len(degraded_sources)} degraded source(s), {len(repairs)} dry-run repair item(s).",
         "Raw JSON remains evidence/debug output; this action plan is the user-facing interpretation layer.",
     ]
+    if branch_state:
+        summary_bits.append(f"Branch readiness: {branch_state.get('status', 'unknown')}.")
     if readiness_status == "ready":
         summary_bits.append("The sampled repo state is ready for normal collaboration workflow.")
     elif readiness_status == "needs_setup":
@@ -1503,11 +1917,16 @@ def build_readiness_action_plan(payload: dict[str, Any]) -> dict[str, Any]:
         "forbidden_actions": [
             "live repair/apply",
             "Project v2 mutation",
+            "branch repair/apply",
+            "PR retarget",
+            "checkout/switch",
+            "rebase/merge/reset/clean",
             "Vault/private/runtime/generated mutation",
             "generated Skill/adapter publish",
             "capability-pack deploy/apply",
             "V2 implementation",
-        ],
+        ]
+        + [action for action in branch_state.get("forbidden_actions", []) if action not in {"Project repair/apply", "V2 implementation"}],
         "telemetry": {
             "unknown_not_available_fields": [item["source"] for item in unknown_or_degraded],
             "source_counts": {
@@ -1530,6 +1949,7 @@ def cmd_collaboration_readiness(args: argparse.Namespace) -> None:
     issues, issues_status, issues_attempts = read_readiness_issues(repo, args)
     prs, prs_status, prs_attempts = read_readiness_prs(repo, args)
     project_items, project_status, project_attempts = read_project_items(args)
+    local_git, local_git_status, local_git_attempts = read_local_git_state(args)
 
     findings: list[dict[str, Any]] = []
     repairs: list[dict[str, Any]] = []
@@ -1568,10 +1988,15 @@ def cmd_collaboration_readiness(args: argparse.Namespace) -> None:
             project_item=project_by_issue.get(issue_number(issue)),
             project_requested=project_requested,
             default_stage=args.stage,
+            item_type="issue",
+            local_git=local_git,
         )
         for issue in issues[: args.limit]
     ]
-    pr_rows = [readiness_contract_summary(pr, expected_needs) for pr in prs[: args.limit]]
+    pr_rows = [
+        readiness_contract_summary(pr, expected_needs, item_type="pr", local_git=local_git)
+        for pr in prs[: args.limit]
+    ]
     for row in (*issue_rows, *pr_rows):
         findings.extend(row["findings"])
         repairs.extend(row["repair_plan"])
@@ -1636,6 +2061,12 @@ def cmd_collaboration_readiness(args: argparse.Namespace) -> None:
     local_template_status = "ok" if not config_errors else "unavailable"
     if not args.config:
         local_template_status = "config_missing"
+    branch_readiness = build_branch_readiness(
+        issue_rows,
+        pr_rows,
+        local_git,
+        [labels_status, issues_status, prs_status],
+    )
 
     payload = {
         "schema_version": 1,
@@ -1661,6 +2092,11 @@ def cmd_collaboration_readiness(args: argparse.Namespace) -> None:
                 "Testing Responsibility": ["tester"],
                 "Test Evidence Handoff.to": ["reviewer", "architect", "implementer", "human"],
             },
+            "branch_contract_values": {
+                "Release line": ["v1.x-maintenance", "v2-integration", "cross-line"],
+                "Target branch": ["main", V2_INTEGRATION_BRANCH, "<integration-branch>"],
+                "legacy_input_mapping": {"Branch target": "Target branch"},
+            },
         },
         "observed_github_state": {
             "labels": sorted(labels),
@@ -1675,11 +2111,13 @@ def cmd_collaboration_readiness(args: argparse.Namespace) -> None:
                 "error": project_status.get("error"),
                 "metadata_source": "explicit" if project_status.get("explicit_metadata") else "observed_items",
             },
+            "local_git": local_git,
         },
         "routing_state": {
             "issues": issue_rows,
             "prs": pr_rows,
         },
+        "branch_readiness": branch_readiness,
         "findings": findings,
         "dry_run_repair_plan": repairs,
         "degraded_sources": [
@@ -1688,6 +2126,7 @@ def cmd_collaboration_readiness(args: argparse.Namespace) -> None:
             source_status("github_rest_prs", prs_status, prs_attempts),
             source_status("github_graphql_project_v2", {"status": project_availability(project_status), **project_status}, project_attempts),
             source_status("local_template", {"status": local_template_status}, {"attempts": 1 if args.config else 0}),
+            source_status("local_git", local_git_status, local_git_attempts),
         ],
         "network": {
             "strategy": "rest_first_targeted_graphql",
@@ -1703,14 +2142,24 @@ def cmd_collaboration_readiness(args: argparse.Namespace) -> None:
                 "needs_label",
                 "contract_values",
                 "project_mirror_values",
+                "release_line",
+                "target_branch",
+                "pr_target",
+                "actual_pr_base",
+                "actual_pr_head",
+                "local_branch",
+                "local_worktree_path",
+                "local_commit",
                 "findings",
             ],
         },
         "residual_risks": [
-            "Project v2 is an optional visual mirror and may be unavailable without blocking issue/PR readiness findings."
+            "Project v2 is an optional visual mirror and may be unavailable without blocking issue/PR readiness findings.",
+            "Branch readiness is report-only and cannot prove hidden remote branch state beyond sampled issue/PR/local git evidence.",
         ],
         "next_safe_actions": [
-            "Review findings and dry_run_repair_plan; apply remains unsupported in AF15 readiness reports."
+            "Review findings and dry_run_repair_plan; apply remains unsupported in AF15/AF16 readiness reports.",
+            "Use existing issue/PR workflow for branch contract fixes; branch repair/apply and PR retarget remain unsupported.",
         ],
     }
     action_plan = build_readiness_action_plan(payload)
@@ -2080,6 +2529,7 @@ def build_parser() -> argparse.ArgumentParser:
     readiness.add_argument("--fixture-json", help="Legacy single-issue fixture; prefer --issues-json for new tests.")
     readiness.add_argument("--issues-json", help="Fixture issue object, list, or object with issues/items.")
     readiness.add_argument("--prs-json", help="Fixture PR object, list, or object with issues/items.")
+    readiness.add_argument("--local-git-json", help="Fixture local git state for branch-readiness tests.")
     readiness.add_argument("--project-items-json", help="Fixture Project item list or gh project item-list JSON.")
     readiness.add_argument("--issues", help="Comma-separated explicit issue numbers for bounded live readiness audit.")
     readiness.add_argument("--prs", help="Comma-separated explicit PR numbers for bounded live readiness audit.")

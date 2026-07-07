@@ -119,6 +119,10 @@ def main() -> int:
         readiness_project = base / "readiness-project.json"
         readiness_labels = base / "readiness-labels.json"
         readiness_prs = base / "readiness-prs.json"
+        branch_readiness_issues = base / "branch-readiness-issues.json"
+        branch_readiness_prs = base / "branch-readiness-prs.json"
+        branch_local_git = base / "branch-local-git.json"
+        branch_local_clean = base / "branch-local-clean.json"
         new_repo_labels = base / "new-repo-labels.json"
         new_repo_issues = base / "new-repo-issues.json"
         new_repo_prs = base / "new-repo-prs.json"
@@ -396,6 +400,137 @@ def main() -> int:
                 }
             ),
         )
+        branch_contract_base = "\n".join(
+            [
+                "Owner role: implementer",
+                "Review role: reviewer",
+                "Acceptance role: architect",
+                "Completion handoff: to:reviewer",
+                "Base branch verified from: durable issue contract",
+                "Working branch: codex/example-task",
+                "Worktree expectation: current checkout must be reported before review",
+                "Merge rule: no final main merge without delegated gate",
+                "Forward-merge expectation: route through later readiness gate",
+            ]
+        )
+        write(
+            branch_readiness_issues,
+            json.dumps(
+                {
+                    "issues": [
+                        {
+                            "number": 350,
+                            "title": "AF16 branch readiness",
+                            "state": "OPEN",
+                            "labels": [{"name": "needs:implementer"}],
+                            "body": "## Execution Contract\n\n"
+                            + branch_contract_base
+                            + "\nRelease line: v1.x-maintenance\nTarget branch: main\nPR target: main\n",
+                        },
+                        {
+                            "number": 351,
+                            "title": "Missing branch contract",
+                            "state": "OPEN",
+                            "labels": [{"name": "needs:implementer"}],
+                            "body": "## Execution Contract\n\nOwner role: implementer\nReview role: reviewer\nAcceptance role: architect\nCompletion handoff: to:reviewer\n",
+                        },
+                        {
+                            "number": 352,
+                            "title": "V2 targeting main",
+                            "state": "OPEN",
+                            "labels": [{"name": "needs:implementer"}],
+                            "body": "## Execution Contract\n\n"
+                            + branch_contract_base
+                            + "\nRelease line: v2-integration\nTarget branch: main\nPR target: main\n",
+                        },
+                        {
+                            "number": 353,
+                            "title": "V1 targeting V2",
+                            "state": "OPEN",
+                            "labels": [{"name": "needs:implementer"}],
+                            "body": "## Execution Contract\n\n"
+                            + branch_contract_base
+                            + "\nRelease line: v1.x-maintenance\nTarget branch: codex/v2-local-first-orchestration\nPR target: codex/v2-local-first-orchestration\n",
+                        },
+                        {
+                            "number": 354,
+                            "title": "Legacy branch target",
+                            "state": "OPEN",
+                            "labels": [{"name": "needs:implementer"}],
+                            "body": "## Execution Contract\n\n"
+                            + branch_contract_base
+                            + "\nRelease line: v1.x-maintenance\nBranch target: main\nPR target: main\n",
+                        },
+                    ]
+                }
+            ),
+        )
+        write(
+            branch_readiness_prs,
+            json.dumps(
+                {
+                    "items": [
+                        {
+                            "number": 501,
+                            "title": "Wrong V2 PR base",
+                            "state": "OPEN",
+                            "labels": [{"name": "needs:reviewer"}],
+                            "baseRefName": "main",
+                            "headRefName": "codex/v2-feature",
+                            "headRefOid": "abc501",
+                            "body": "## Execution Contract\n\n"
+                            + branch_contract_base
+                            + "\nRelease line: v2-integration\nTarget branch: codex/v2-local-first-orchestration\nPR target: codex/v2-local-first-orchestration\n",
+                        },
+                        {
+                            "number": 502,
+                            "title": "Correct V2 PR base",
+                            "state": "OPEN",
+                            "labels": [{"name": "needs:reviewer"}],
+                            "baseRefName": "codex/v2-local-first-orchestration",
+                            "headRefName": "codex/v2-safe",
+                            "headRefOid": "abc502",
+                            "body": "## Execution Contract\n\n"
+                            + branch_contract_base
+                            + "\nRelease line: v2-integration\nTarget branch: codex/v2-local-first-orchestration\nPR target: codex/v2-local-first-orchestration\n",
+                        },
+                    ]
+                }
+            ),
+        )
+        write(
+            branch_local_git,
+            json.dumps(
+                {
+                    "status": "ok",
+                    "branch": "codex/af16-350-branch-readiness",
+                    "upstream": "origin/codex/af16-350-branch-readiness",
+                    "ahead": 1,
+                    "behind": 1,
+                    "dirty": True,
+                    "staged_count": 1,
+                    "unstaged_count": 1,
+                    "untracked_count": 1,
+                    "commit": "abc-local",
+                    "worktree_path": "/tmp/agent-foundry-task",
+                }
+            ),
+        )
+        write(
+            branch_local_clean,
+            json.dumps(
+                {
+                    "status": "ok",
+                    "branch": "main",
+                    "upstream": "origin/main",
+                    "ahead": 0,
+                    "behind": 0,
+                    "dirty": False,
+                    "commit": "abc-clean",
+                    "worktree_path": "/tmp/agent-foundry-clean",
+                }
+            ),
+        )
         write(
             inbox,
             json.dumps(
@@ -669,6 +804,73 @@ def main() -> int:
             ("collaboration-readiness-v2-shape", '"local_ledger_candidate": true'),
         ):
             errors.extend(expect_ok(name, readiness_json, expected))
+        branch_readiness_json = run(
+            [
+                "collaboration-readiness",
+                "--config",
+                str(TEMPLATE),
+                "--labels-json",
+                str(readiness_labels),
+                "--issues-json",
+                str(branch_readiness_issues),
+                "--prs-json",
+                str(branch_readiness_prs),
+                "--local-git-json",
+                str(branch_local_git),
+                "--json",
+            ],
+            base,
+            {"AGENT_REPO": "farmerhunter/agent-foundry"},
+        )
+        for name, expected in (
+            ("branch-readiness-surface", '"branch_readiness"'),
+            ("branch-readiness-target-branch", '"Target branch"'),
+            ("branch-readiness-legacy-mapping", '"target_branch_source": "legacy:Branch target"'),
+            ("branch-readiness-missing-contract", '"code": "branch_contract_missing"'),
+            ("branch-readiness-v2-main", '"code": "v2_work_targets_main"'),
+            ("branch-readiness-v1-v2", '"code": "v1_work_targets_v2"'),
+            ("branch-readiness-wrong-pr-base", '"code": "wrong_pr_base"'),
+            ("branch-readiness-v2-pr-main", '"code": "v2_pr_targets_main"'),
+            ("branch-readiness-dirty-worktree", '"code": "local_worktree_dirty"'),
+            ("branch-readiness-ahead-behind", '"code": "local_branch_ahead_or_behind"'),
+            ("branch-readiness-actual-base", '"actual_pr_base": "main"'),
+            ("branch-readiness-no-apply", '"apply_supported_now": false'),
+            ("branch-readiness-no-mutation", '"mutation_performed": false'),
+            ("branch-readiness-no-retarget", "PR retarget"),
+            ("branch-readiness-no-checkout", "checkout/switch"),
+            ("branch-readiness-no-reset-clean", "rebase/merge/reset/clean"),
+            ("branch-readiness-action-plan", "Branch readiness: branch_mismatch."),
+            ("branch-readiness-agent-action", '"category": "agent_handled_existing_workflow"'),
+            ("branch-readiness-deferred-action", '"category": "unsupported_deferred_repair_apply"'),
+            ("branch-readiness-no-full-scan", '"full_project_scan_performed": false'),
+        ):
+            errors.extend(expect_ok(name, branch_readiness_json, expected))
+        write(fake_gh, "#!/bin/sh\nprintf '%s\\n' 'TLS handshake timeout while reading PR base' >&2\nexit 1\n")
+        fake_gh.chmod(0o755)
+        pr_degraded_json = run(
+            [
+                "collaboration-readiness",
+                "--config",
+                str(TEMPLATE),
+                "--labels-json",
+                str(readiness_labels),
+                "--issues-json",
+                str(branch_readiness_issues),
+                "--prs",
+                "501",
+                "--local-git-json",
+                str(branch_local_clean),
+                "--json",
+            ],
+            base,
+            {"AGENT_REPO": "farmerhunter/agent-foundry", "PATH": f"{fake_bin}{os.pathsep}{os.environ.get('PATH', '')}"},
+        )
+        for name, expected in (
+            ("branch-readiness-pr-read-degraded", '"source": "github_rest_prs"'),
+            ("branch-readiness-pr-read-transient", '"status": "transient_failure"'),
+            ("branch-readiness-pr-read-recorded", "TLS handshake timeout while reading PR base"),
+        ):
+            errors.extend(expect_ok(name, pr_degraded_json, expected))
         new_repo_readiness = run(
             [
                 "collaboration-readiness",
@@ -678,6 +880,8 @@ def main() -> int:
                 str(new_repo_issues),
                 "--prs-json",
                 str(new_repo_prs),
+                "--local-git-json",
+                str(branch_local_clean),
                 "--json",
             ],
             base,
@@ -691,6 +895,8 @@ def main() -> int:
             ("collaboration-readiness-new-repo-no-mutation", '"mutation_performed": false'),
         ):
             errors.extend(expect_ok(name, new_repo_readiness, expected))
+        write(fake_gh, "#!/bin/sh\nprintf '%s\\n' 'EOF while reading Project v2' >&2\nexit 1\n")
+        fake_gh.chmod(0o755)
         degraded = run(
             [
                 "scheduler-audit",
