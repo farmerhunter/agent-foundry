@@ -425,7 +425,7 @@ def main() -> int:
                             "labels": [{"name": "needs:implementer"}],
                             "body": "## Execution Contract\n\n"
                             + branch_contract_base
-                            + "\nRelease line: v1.x-maintenance\nTarget branch: main\nPR target: main\n",
+                            + "\nBranch strategy: mainline-maintenance\nRelease line: v1.x-maintenance\nTarget branch: main\nPR target: main\n",
                         },
                         {
                             "number": 351,
@@ -441,7 +441,7 @@ def main() -> int:
                             "labels": [{"name": "needs:implementer"}],
                             "body": "## Execution Contract\n\n"
                             + branch_contract_base
-                            + "\nRelease line: v2-integration\nTarget branch: main\nPR target: main\n",
+                            + "\nBranch strategy: integration-branch\nRelease line: v2-integration\nTarget branch: main\nPR target: main\n",
                         },
                         {
                             "number": 353,
@@ -450,7 +450,7 @@ def main() -> int:
                             "labels": [{"name": "needs:implementer"}],
                             "body": "## Execution Contract\n\n"
                             + branch_contract_base
-                            + "\nRelease line: v1.x-maintenance\nTarget branch: codex/v2-local-first-orchestration\nPR target: codex/v2-local-first-orchestration\n",
+                            + "\nBranch strategy: mainline-maintenance\nRelease line: v1.x-maintenance\nTarget branch: codex/v2-local-first-orchestration\nPR target: codex/v2-local-first-orchestration\n",
                         },
                         {
                             "number": 354,
@@ -459,7 +459,34 @@ def main() -> int:
                             "labels": [{"name": "needs:implementer"}],
                             "body": "## Execution Contract\n\n"
                             + branch_contract_base
-                            + "\nRelease line: v1.x-maintenance\nBranch target: main\nPR target: main\n",
+                            + "\nBranch strategy: mainline-maintenance\nRelease line: v1.x-maintenance\nBranch target: main\nPR target: main\n",
+                        },
+                        {
+                            "number": 355,
+                            "title": "Generic integration branch",
+                            "state": "OPEN",
+                            "labels": [{"name": "needs:implementer"}],
+                            "body": "## Execution Contract\n\n"
+                            + branch_contract_base
+                            + "\nBranch strategy: integration-branch\nTarget branch: codex/customer-integration\nPR target: codex/customer-integration\n",
+                        },
+                        {
+                            "number": 356,
+                            "title": "Custom strategy",
+                            "state": "OPEN",
+                            "labels": [{"name": "needs:implementer"}],
+                            "body": "## Execution Contract\n\n"
+                            + branch_contract_base
+                            + "\nBranch strategy: custom\nTarget branch: maintainer/special-flow\nPR target: maintainer/special-flow\n",
+                        },
+                        {
+                            "number": 357,
+                            "title": "Multi-line evidence",
+                            "state": "OPEN",
+                            "labels": [{"name": "needs:implementer"}],
+                            "body": "## Execution Contract\n\n"
+                            + branch_contract_base
+                            + "\nBranch strategy: multi-branch\nTarget branch: main\nAffected branches: main, codex/v2-local-first-orchestration\nVerification branches: main, codex/v2-local-first-orchestration\nPR target: main\nForward-merge expectation: verify and forward-merge after main acceptance\n",
                         },
                     ]
                 }
@@ -480,7 +507,7 @@ def main() -> int:
                             "headRefOid": "abc501",
                             "body": "## Execution Contract\n\n"
                             + branch_contract_base
-                            + "\nRelease line: v2-integration\nTarget branch: codex/v2-local-first-orchestration\nPR target: codex/v2-local-first-orchestration\n",
+                            + "\nBranch strategy: integration-branch\nRelease line: v2-integration\nTarget branch: codex/v2-local-first-orchestration\nPR target: codex/v2-local-first-orchestration\n",
                         },
                         {
                             "number": 502,
@@ -492,7 +519,19 @@ def main() -> int:
                             "headRefOid": "abc502",
                             "body": "## Execution Contract\n\n"
                             + branch_contract_base
-                            + "\nRelease line: v2-integration\nTarget branch: codex/v2-local-first-orchestration\nPR target: codex/v2-local-first-orchestration\n",
+                            + "\nBranch strategy: integration-branch\nRelease line: v2-integration\nTarget branch: codex/v2-local-first-orchestration\nPR target: codex/v2-local-first-orchestration\n",
+                        },
+                        {
+                            "number": 503,
+                            "title": "Stacked PR",
+                            "state": "OPEN",
+                            "labels": [{"name": "needs:reviewer"}],
+                            "baseRefName": "codex/parent-feature",
+                            "headRefName": "codex/child-feature",
+                            "headRefOid": "abc503",
+                            "body": "## Execution Contract\n\n"
+                            + branch_contract_base
+                            + "\nBranch strategy: stacked-pr\nTarget branch: main\nPR target: codex/parent-feature\n",
                         },
                     ]
                 }
@@ -824,6 +863,8 @@ def main() -> int:
         )
         for name, expected in (
             ("branch-readiness-surface", '"branch_readiness"'),
+            ("branch-readiness-strategy-field", '"Branch strategy"'),
+            ("branch-readiness-strategy-values", '"multi-branch"'),
             ("branch-readiness-target-branch", '"Target branch"'),
             ("branch-readiness-legacy-mapping", '"target_branch_source": "legacy:Branch target"'),
             ("branch-readiness-missing-contract", '"code": "branch_contract_missing"'),
@@ -834,6 +875,16 @@ def main() -> int:
             ("branch-readiness-dirty-worktree", '"code": "local_worktree_dirty"'),
             ("branch-readiness-ahead-behind", '"code": "local_branch_ahead_or_behind"'),
             ("branch-readiness-actual-base", '"actual_pr_base": "main"'),
+            ("branch-readiness-generic-integration", '"target_branch": "codex/customer-integration"'),
+            ("branch-readiness-custom-strategy", '"code": "branch_strategy_custom"'),
+            ("branch-readiness-stacked-pr", '"branch_strategy": "stacked-pr"'),
+            ("branch-readiness-multi-branch", '"branch_strategy": "multi-branch"'),
+            ("branch-readiness-current-branch-ok", '"current_branch_ok"'),
+            ("branch-readiness-switch-context", '"switch_context_required"'),
+            ("branch-readiness-split-work", '"split_work_recommended"'),
+            ("branch-readiness-forward-merge", '"forward_merge_needed_later"'),
+            ("branch-readiness-multiple-lines", '"verify_on_multiple_lines"'),
+            ("branch-readiness-architect-decision", '"architect_decision_required"'),
             ("branch-readiness-no-apply", '"apply_supported_now": false'),
             ("branch-readiness-no-mutation", '"mutation_performed": false'),
             ("branch-readiness-no-retarget", "PR retarget"),

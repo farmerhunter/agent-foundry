@@ -79,9 +79,21 @@ READINESS_NEEDS_LABELS = [
 READINESS_PROJECT_FIELDS = ["Status", "Roadmap Status", "Stage", "Owner Role", "Risk"]
 READINESS_PROJECT_OPTIONS = ["Architect", "Implementer", "Tester", "Reviewer", "Human", "Harvester"]
 V2_INTEGRATION_BRANCH = "codex/v2-local-first-orchestration"
+BRANCH_STRATEGIES = [
+    "mainline-maintenance",
+    "integration-branch",
+    "release-branch",
+    "trunk-based",
+    "stacked-pr",
+    "multi-branch",
+    "custom",
+]
 BRANCH_CONTRACT_FIELDS = (
+    "Branch strategy",
     "Release line",
     "Target branch",
+    "Affected branches",
+    "Verification branches",
     "Base branch verified from",
     "Working branch",
     "Worktree expectation",
@@ -1422,6 +1434,29 @@ def branch_family(branch: str | None) -> str:
     return "integration-or-task"
 
 
+def infer_branch_strategy(release_line: str | None, target_branch: str | None, pr_target: str | None) -> tuple[str | None, str]:
+    if release_line == "v1.x-maintenance":
+        return "mainline-maintenance", "inferred_from_release_line"
+    if release_line == "v2-integration":
+        return "integration-branch", "inferred_from_release_line"
+    if target_branch == "main":
+        return "mainline-maintenance", "inferred_from_target_branch"
+    if target_branch and target_branch.startswith("release/"):
+        return "release-branch", "inferred_from_target_branch"
+    if pr_target and target_branch and pr_target != target_branch:
+        return "stacked-pr", "inferred_from_pr_target"
+    if target_branch:
+        return "integration-branch", "inferred_from_target_branch"
+    return None, "missing"
+
+
+def split_branch_list(value: str | None) -> list[str]:
+    if not value:
+        return []
+    parts = re.split(r"[,;\n]+", value)
+    return [part.strip() for part in parts if part.strip()]
+
+
 def pr_base_name(item: dict[str, Any]) -> str | None:
     base = item.get("baseRefName") or item.get("base_ref_name")
     if base:
@@ -1460,9 +1495,18 @@ def evaluate_branch_contract(item: dict[str, Any], item_type: str, local_git: di
     number = issue_number(item)
     branch_contract = extract_branch_contract(item.get("body") or "")
     fields = branch_contract["fields"]
+    configured_strategy = fields.get("Branch strategy")
     release_line = fields.get("Release line")
     target_branch = fields.get("Target branch")
     pr_target = fields.get("PR target")
+    branch_strategy, branch_strategy_source = (
+        (configured_strategy, "Branch strategy")
+        if configured_strategy
+        else infer_branch_strategy(release_line, target_branch, pr_target)
+    )
+    affected_branches = split_branch_list(fields.get("Affected branches"))
+    verification_branches = split_branch_list(fields.get("Verification branches"))
+    forward_merge_expectation = fields.get("Forward-merge expectation")
     actual_pr_base = pr_base_name(item) if item_type == "pr" else None
     actual_pr_head = pr_head_name(item) if item_type == "pr" else None
     head_oid = pr_head_oid(item) if item_type == "pr" else None
@@ -1470,19 +1514,47 @@ def evaluate_branch_contract(item: dict[str, Any], item_type: str, local_git: di
     repairs: list[dict[str, Any]] = []
     status = "branch_ready"
 
-    if not release_line or not target_branch:
+    action_plan_concepts: list[str] = []
+
+    if not branch_strategy or not target_branch:
         status = "branch_needs_contract"
         findings.append(
             finding(
                 "branch_contract_missing",
                 number,
                 "error",
-                "Execution Contract must include Release line and Target branch before branch-sensitive work is pickup-ready.",
-                expected={"Release line": "v1.x-maintenance | v2-integration | cross-line", "Target branch": "main | codex/v2-local-first-orchestration | <integration-branch>"},
-                actual={"Release line": release_line, "Target branch": target_branch},
+                "Execution Contract must include Branch strategy and Target branch before branch-sensitive work is pickup-ready.",
+                expected={"Branch strategy": " | ".join(BRANCH_STRATEGIES), "Target branch": "main | <integration-branch> | <release-branch>"},
+                actual={"Branch strategy": branch_strategy, "Target branch": target_branch},
             )
         )
-        repairs.append(branch_readiness_repair("add_branch_contract_fields", f"{item_type}:{number}", "add Release line and Target branch through issue/PR workflow"))
+        repairs.append(branch_readiness_repair("add_branch_contract_fields", f"{item_type}:{number}", "add Branch strategy and Target branch through issue/PR workflow"))
+    elif branch_strategy not in BRANCH_STRATEGIES:
+        status = "architect_decision_required"
+        action_plan_concepts.append("architect_decision_required")
+        findings.append(
+            finding(
+                "branch_strategy_unknown",
+                number,
+                "warning",
+                "Unknown Branch strategy is treated as custom/unknown and must route to Architect instead of failing as a V1/V2 mismatch.",
+                expected={"Branch strategy": BRANCH_STRATEGIES},
+                actual={"Branch strategy": branch_strategy},
+            )
+        )
+    elif branch_strategy == "custom":
+        status = "architect_decision_required"
+        action_plan_concepts.append("architect_decision_required")
+        findings.append(
+            finding(
+                "branch_strategy_custom",
+                number,
+                "warning",
+                "Custom Branch strategy requires Architect interpretation before branch-sensitive work is considered ready.",
+                expected={"strategy": "documented repo-specific branch policy"},
+                actual={"Branch strategy": branch_strategy},
+            )
+        )
     if fields.get("legacy_target_field"):
         findings.append(
             finding(
@@ -1547,6 +1619,15 @@ def evaluate_branch_contract(item: dict[str, Any], item_type: str, local_git: di
             )
         )
 
+    if branch_strategy in {"stacked-pr", "multi-branch"}:
+        action_plan_concepts.append("split_work_recommended")
+    if branch_strategy == "stacked-pr":
+        action_plan_concepts.append("current_branch_ok" if item_type == "pr" and actual_pr_base == expected_pr_base else "architect_decision_required")
+    if branch_strategy == "multi-branch" or len(set([*affected_branches, *verification_branches])) > 1:
+        action_plan_concepts.extend(["verify_on_multiple_lines", "split_work_recommended"])
+    if forward_merge_expectation and forward_merge_expectation.lower() not in {"none", "n/a", "not required"}:
+        action_plan_concepts.append("forward_merge_needed_later")
+
     local_status = None
     if local_git and local_git.get("status") == "ok":
         local_status = {
@@ -1562,6 +1643,10 @@ def evaluate_branch_contract(item: dict[str, Any], item_type: str, local_git: di
             "commit": local_git.get("commit"),
             "worktree_path": local_git.get("worktree_path"),
         }
+        if target_branch and local_git.get("branch") == target_branch:
+            action_plan_concepts.append("current_branch_ok")
+        elif target_branch:
+            action_plan_concepts.append("switch_context_required")
         if local_git.get("dirty") or local_git.get("staged_count") or local_git.get("unstaged_count") or local_git.get("untracked_count"):
             status = "dirty_or_ambiguous_worktree" if status == "branch_ready" else status
             findings.append(
@@ -1603,9 +1688,13 @@ def evaluate_branch_contract(item: dict[str, Any], item_type: str, local_git: di
         "number": number,
         "item_type": item_type,
         "status": status,
+        "branch_strategy": branch_strategy,
+        "branch_strategy_source": branch_strategy_source,
         "release_line": release_line,
         "target_branch": target_branch,
         "target_branch_source": "legacy:Branch target" if fields.get("legacy_target_field") else ("Target branch" if target_branch else "missing"),
+        "affected_branches": affected_branches,
+        "verification_branches": verification_branches,
         "pr_target": pr_target,
         "actual_pr_base": actual_pr_base,
         "actual_pr_head": actual_pr_head,
@@ -1613,6 +1702,7 @@ def evaluate_branch_contract(item: dict[str, Any], item_type: str, local_git: di
         "expected_branch_family": release_line or "unknown",
         "actual_pr_base_family": branch_family(actual_pr_base),
         "local_checkout": local_status,
+        "action_plan_concepts": sorted(set(action_plan_concepts)),
         "findings": findings,
         "repair_plan": repairs,
     }
@@ -1627,6 +1717,13 @@ def build_branch_readiness(
     rows = [*(row.get("branch_readiness") for row in issue_rows), *(row.get("branch_readiness") for row in pr_rows)]
     rows = [row for row in rows if isinstance(row, dict)]
     statuses = [row.get("status") for row in rows]
+    action_plan_concepts = sorted(
+        {
+            concept
+            for row in rows
+            for concept in row.get("action_plan_concepts", [])
+        }
+    )
     remote_degraded = any(status.get("status") not in {"ok", "skipped", "config_missing"} for status in remote_statuses)
     if remote_degraded:
         overall = "remote_degraded"
@@ -1636,6 +1733,8 @@ def build_branch_readiness(
         overall = "dirty_or_ambiguous_worktree"
     elif any(status == "branch_needs_contract" for status in statuses):
         overall = "branch_needs_contract"
+    elif any(status == "architect_decision_required" for status in statuses):
+        overall = "architect_decision_required"
     elif rows:
         overall = "branch_ready"
     else:
@@ -1647,6 +1746,7 @@ def build_branch_readiness(
         "summary": "Branch readiness is read-only; AF16 reports branch/worktree/PR-target evidence and refuses automated repair/apply.",
         "local_git": local_git,
         "items": rows,
+        "action_plan_concepts": action_plan_concepts,
         "forbidden_actions": [
             "checkout/switch",
             "branch/worktree creation",
@@ -1713,6 +1813,8 @@ def readiness_action_category(finding_item: dict[str, Any]) -> str:
         "local_worktree_dirty",
         "local_branch_ahead_or_behind",
         "local_git_degraded",
+        "branch_strategy_unknown",
+        "branch_strategy_custom",
     }:
         return "agent_handled_existing_workflow"
     if code in {"project_v2_degraded"}:
@@ -1802,6 +1904,8 @@ def build_readiness_action_plan(payload: dict[str, Any]) -> dict[str, Any]:
         ready_now.append("No default full Project scan was performed.")
     if branch_state:
         ready_now.append("Branch/worktree/PR-target checks are report-only and do not checkout, retarget, merge, rebase, reset, or clean.")
+        if "current_branch_ok" in (branch_state.get("action_plan_concepts") or []):
+            ready_now.append("Current branch evidence matches at least one sampled branch contract.")
 
     blocking_gaps = [
         {
@@ -1874,6 +1978,26 @@ def build_readiness_action_plan(payload: dict[str, Any]) -> dict[str, Any]:
                 "Project v2 is not the source of truth for collaboration readiness.",
                 "observed_github_state:project_v2",
                 True,
+            )
+        )
+    for concept in branch_state.get("action_plan_concepts") or []:
+        concept_title = concept.replace("_", " ")
+        if concept == "architect_decision_required":
+            category = "agent_handled_existing_workflow"
+            allowed_now = True
+        elif concept in {"switch_context_required", "forward_merge_needed_later"}:
+            category = "unsupported_deferred_repair_apply"
+            allowed_now = False
+        else:
+            category = "agent_handled_existing_workflow"
+            allowed_now = True
+        recommended_next_actions.append(
+            readiness_action(
+                f"Branch action plan: {concept_title}.",
+                category,
+                "Branch readiness reports the safe next-action concept only; it does not perform checkout, merge, retarget, or repair.",
+                f"branch_readiness:{concept}",
+                allowed_now,
             )
         )
     for repair in unsupported_repairs:
@@ -2093,9 +2217,16 @@ def cmd_collaboration_readiness(args: argparse.Namespace) -> None:
                 "Test Evidence Handoff.to": ["reviewer", "architect", "implementer", "human"],
             },
             "branch_contract_values": {
+                "Branch strategy": BRANCH_STRATEGIES,
                 "Release line": ["v1.x-maintenance", "v2-integration", "cross-line"],
                 "Target branch": ["main", V2_INTEGRATION_BRANCH, "<integration-branch>"],
+                "Affected branches": ["optional comma-separated branch list for multi-branch work"],
+                "Verification branches": ["optional comma-separated branch list for ordered verification"],
                 "legacy_input_mapping": {"Branch target": "Target branch"},
+                "agent_foundry_presets": {
+                    "v1.x-maintenance": {"Branch strategy": "mainline-maintenance", "Target branch": "main"},
+                    "v2-integration": {"Branch strategy": "integration-branch", "Target branch": V2_INTEGRATION_BRANCH},
+                },
             },
         },
         "observed_github_state": {
