@@ -21,9 +21,7 @@ work session
 
 The goal is not to maintain a pile of prompts. The goal is to make hard-won working judgment portable across sessions, agents, machines, and projects without losing human review or source-of-truth discipline.
 
-For the motivation and collaboration philosophy behind this project, see [docs/philosophy.md](docs/philosophy.md).
-
-**中文要点：** 项目的动机和人-agent 协作反思主要写在 [docs/philosophy.md](docs/philosophy.md)。
+在开发的过程中最重要的收获是做了很多思考和反思，有关人和agent的协作，都写进了这篇文档： [docs/philosophy.md](docs/philosophy.md).
 
 ## What It Does
 
@@ -52,6 +50,17 @@ Agent memory, session summaries, and external skills are treated as evidence sou
 | `docs/` | Human-readable philosophy, usage, design, deployment, and compatibility notes. |
 
 Vault-owned paths such as `practices/`, `assets/`, `indexes/`, `imports/`, and `usage/usage-aggregate.yaml` live in the selected User Vault, not in the clean public Core checkout.
+
+## Supported Targets
+
+| Target | Status |
+| --- | --- |
+| Codex | Local `SKILL.md` adapter. |
+| Claude Code | `CLAUDE.md` and related adapter files. |
+| Hermes | Local `SKILL.md` adapter. |
+| ChatGPT | Manual import through custom/project instructions and knowledge files. |
+
+DeepSeek, MiniMax, and similar model providers are treated as underlying models used through programming agents, not direct Agent Foundry adapters.
 
 ## Quick Start
 
@@ -84,32 +93,30 @@ Use short commands instead of remembering internal workflows:
 
 Detailed prompts and Chinese equivalents are in [docs/usage.md](docs/usage.md) and [docs/commands.md](docs/commands.md).
 
-## Optional Starter Packs
+## Recommended Starter Packs
 
-After the first-value path above works, you can ask Agent Foundry to list or
-preview optional first-party starter packs. They are not required setup choices.
+For a new Agent Foundry setup, install these two first-party capability packs after the Core/Vault locator and status checks work.
 
-**中文要点：** Starter packs 是 first-value path 之后的可选项，不是新用户必须先做的安装选择。
+| Pack | Why install it |
+| --- | --- |
+| `pack.bootstrap.minimal` | Gives the selected User Vault the minimal reviewed baseline for safe harvest, review, refresh, status, source-of-truth boundaries, and external-skill import/reference review. Install this first. |
+| `pack.multi-agent.optional` | Adds GitHub issue/PR collaboration habits: role labels, durable handoffs, Execution Contracts, Tester evidence routing, collaboration readiness audit, and safe action-plan guidance. Install this when you coordinate work through GitHub. |
 
-| Pack | What you get | Choose it when |
-| --- | --- | --- |
-| `pack.bootstrap.minimal` | A small baseline for safe harvest, review, refresh, status, source-of-truth boundaries, and external-skill import/reference review. | Accept it for a new selected Vault or before any optional pack; it does not install runtimes or publish generated adapters by itself. |
-| `pack.multi-agent.optional` | GitHub issue/PR collaboration habits: role labels, durable comments, Execution Contracts, Tester evidence routing, collaboration readiness, and action-plan guidance. | Install it when you coordinate work through GitHub issues and PRs; skip it for solo local usage or projects without GitHub collaboration. |
+Quick-start install path:
 
-**中文要点：** `pack.bootstrap.minimal` 是最小基础包；`pack.multi-agent.optional`
-适合需要 GitHub issue/PR 协作、Tester evidence、collaboration readiness 和 action plan 的项目。
+```text
+preview capability pack deployment catalog/capability-packs/pack.bootstrap.minimal
+apply reviewed capability pack catalog/capability-packs/pack.bootstrap.minimal
+verify capability pack pack.bootstrap.minimal
 
-Use Skill-facing requests first: `list capability packs`, `recommend capability packs for my setup`, `preview capability pack deployment <pack-path>`, `apply reviewed capability pack <pack-path>`, `verify capability pack <pack-id>`, `update capability pack <pack-id-or-path>`, and `disable capability pack <pack-id>`.
+preview capability pack deployment catalog/capability-packs/pack.multi-agent.optional
+apply reviewed capability pack catalog/capability-packs/pack.multi-agent.optional
+verify capability pack pack.multi-agent.optional
+```
 
-Architecture-boundary and source-of-truth orientation is folded into `pack.bootstrap.minimal`.
+The preview step should report the selected Vault impact before any apply. After an accepted apply, the selected User Vault is canonical; generated adapters and runtime installs remain separate follow-up surfaces.
 
-Core catalog entries make packs discoverable, but the selected User Vault remains canonical after accepted deployment. Generated adapters, runtime installs, local receipts, and Local Private evidence remain downstream or excluded surfaces.
-
-**中文要点：** architecture-boundary guidance 由 `pack.bootstrap.minimal` 承载；accepted deployment 后 selected User Vault 仍是 canonical，Generated/Runtime 只是 downstream surfaces。
-
-For ordinary and complete details, see [docs/usage.md](docs/usage.md), [docs/commands.md](docs/commands.md), and the catalog pages under `catalog/capability-packs/`.
-
-**中文要点：** 完整细节见 [docs/usage.md](docs/usage.md)、[docs/commands.md](docs/commands.md)，以及 `catalog/capability-packs/` 下的 catalog pages。
+For full capability-pack behavior, see [docs/usage.md](docs/usage.md), [docs/commands.md](docs/commands.md), and the catalog pages under `catalog/capability-packs/`.
 
 ## Design Principles
 
@@ -121,17 +128,6 @@ For ordinary and complete details, see [docs/usage.md](docs/usage.md), [docs/com
 - The smallest maintainable mechanism is preferred over heavier machinery.
 
 See [docs/system-design.md](docs/system-design.md) and [docs/lifecycle-compatibility.md](docs/lifecycle-compatibility.md).
-
-## Supported Targets
-
-| Target | Status |
-| --- | --- |
-| Codex | Local `SKILL.md` adapter. |
-| Claude Code | `CLAUDE.md` and related adapter files. |
-| Hermes | Local `SKILL.md` adapter. |
-| ChatGPT | Manual import through custom/project instructions and knowledge files. |
-
-DeepSeek, MiniMax, and similar model providers are treated as underlying models used through programming agents, not direct Agent Foundry adapters.
 
 ## Documentation
 
