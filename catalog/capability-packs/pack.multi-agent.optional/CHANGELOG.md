@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.2
+
+- Added AF16 branch-aware collaboration guidance to the optional collaboration
+  starter contract.
+- Documented canonical `Target branch`, `Branch strategy`, generic strategy
+  families, Agent Foundry V1/V2 presets, and multi-branch action-plan concepts.
+- Kept branch repair/apply, checkout/switch, worktree creation, PR retarget,
+  rebase, merge, reset, clean, force-push, V2 merge-back, generated Skill
+  publish, runtime install, Vault mutation, and Project mutation outside pack
+  authority.
+
 ## 0.3.1
 
 - Added AF15 user-facing readiness action-plan semantics to the optional
