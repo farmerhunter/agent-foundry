@@ -56,6 +56,14 @@ check collaboration readiness for this repo
 
 The report should tell you whether role labels, routing templates, Execution Contracts, Testing Contracts, issue/PR routing, and optional Project/Kanban visibility are present or drifted. Normal users should read `readiness_status`, the short summary, and `recommended_next_actions` first. Raw JSON is evidence/debug output.
 
+Branch-aware readiness also tells you whether work appears to belong on `main`,
+an integration branch, a release branch, a stacked PR, or a multi-branch flow.
+Use `main` for V1.x maintenance in Agent Foundry, and
+`codex/v2-local-first-orchestration` for V2 integration. If a generic Core
+update belongs on `main` while V2 work is active, split the work, land the
+generic update on `main`, record the later forward-merge need, and verify every
+branch line named by the action plan.
+
 For a new project, ask for setup planning:
 
 ```text
@@ -79,7 +87,23 @@ Recommended actions use four categories:
 
 The action-plan report is read-only: `mutation_performed: false`, repair entries keep `apply_supported_now: false`, and the workflow does not perform live repair/apply, Project v2 mutation, generated Skill/adapter publish, or capability-pack deploy/apply.
 
+Branch action-plan concepts are also read-only:
+
+- `current_branch_ok`: continue normal scoped work.
+- `switch_context_required`: stop editing in this checkout and route or prepare
+  a separate reviewed context.
+- `split_work_recommended`: split mixed branch-line work instead of hiding it
+  in one PR.
+- `forward_merge_needed_later`: record the later merge need; do not merge
+  automatically.
+- `verify_on_multiple_lines`: verify every named branch line before claiming
+  cross-line readiness.
+- `architect_decision_required`: route custom or policy-sensitive branch
+  strategy to Architect.
+
 **中文要点：** 新 repo 先要 setup checklist；老 repo 先 audit drift。Action plan 只读，给出下一步，不自动 repair/apply。
+Branch action plan 也只读：它可以提示 split、switch context、forward-merge 或多线验证，
+但不会自动 checkout、retarget、merge、reset 或 clean。
 
 ## First-Time Setup
 

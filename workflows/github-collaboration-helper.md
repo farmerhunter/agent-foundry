@@ -110,6 +110,8 @@ Owner role: implementer
 Review role: reviewer
 Acceptance role: architect
 Completion handoff: to:reviewer
+Branch strategy: mainline-maintenance
+Target branch: main
 Reviewer target: separate Reviewer agent, contract-validation focused
 Human review prompt: only when a real human gate is needed
 ```
@@ -118,6 +120,33 @@ Keep natural-language reviewer descriptions, human prompts, and trial
 instructions in separate fields such as `Reviewer target:`, `Human verification
 needed:`, or `Human review prompt:`. Do not encode them in `Owner role:`,
 `Review role:`, `Acceptance role:`, or `Completion handoff:`.
+
+Branch-aware Execution Contract fields are also machine-readable:
+
+```markdown
+Branch strategy: mainline-maintenance | integration-branch | release-branch | trunk-based | stacked-pr | multi-branch | custom
+Target branch: main | <integration-branch> | <release-branch>
+Affected branches: <optional comma-separated branch list>
+Verification branches: <optional comma-separated branch list>
+PR target: <expected PR base branch>
+Forward-merge expectation: none | record later forward-merge | verify on multiple lines
+```
+
+`Target branch` is canonical. Treat `Branch target` only as a legacy
+compatibility input when reading old issues; do not use it in new examples.
+
+Agent Foundry presets:
+
+- V1.x maintenance uses `Branch strategy: mainline-maintenance` and
+  `Target branch: main`.
+- V2 integration uses `Branch strategy: integration-branch` and
+  `Target branch: codex/v2-local-first-orchestration`.
+- V2 merge-back to `main` remains a later readiness and Human-gated decision.
+
+For custom or unknown branch strategies, route to Architect rather than
+guessing. For stacked PRs or multi-branch work, emit review/action-plan
+guidance; do not checkout, create a worktree, retarget the PR, rebase, merge,
+reset, clean, or apply a repair.
 
 ## Tester Routing
 
@@ -349,6 +378,15 @@ issue/PR routing state, and optional Project/Kanban visibility. Raw JSON remains
 the evidence/debug layer; user-facing guidance comes from `readiness_status`,
 `summary`, and `user_readiness_action_plan.recommended_next_actions`.
 
+Branch-aware readiness also checks generic branch strategy fields before any
+Agent Foundry-specific preset. Supported strategies are
+`mainline-maintenance`, `integration-branch`, `release-branch`, `trunk-based`,
+`stacked-pr`, `multi-branch`, and `custom`. The generic checks cover required
+branch fields, expected PR base versus actual PR base, local dirty/staged/
+unstaged/untracked/ahead/behind state, degraded or unknown remote reads, and
+forbidden repair/apply actions. V1/V2 rules are an additional preset layer, not
+the only branch model.
+
 Valid `readiness_status` values are:
 
 - `ready`: sampled evidence is ready for normal collaboration workflow.
@@ -373,6 +411,27 @@ Recommended actions use these categories:
 | `agent_handled_existing_workflow` | A bounded issue/comment/label/PR/role-handoff action can proceed through existing Agent Foundry gates. | Route with durable issue or PR comments and `needs:*` labels. |
 | `explicit_human_gate` | The action changes product, governance, privacy/security, final integration, closure, or meaningful Project policy. | Post a Human Decision Contract before action. |
 | `unsupported_deferred_repair_apply` | The helper can describe the repair, but AF15 must not execute it. | Leave deferred or create a later gated issue. |
+
+Branch action-plan concepts:
+
+| Concept | Meaning | Current handling |
+| --- | --- | --- |
+| `current_branch_ok` | Current branch evidence matches a sampled contract. | Continue normal scoped work. |
+| `switch_context_required` | Current checkout is not the target branch. | Stop editing here; route or prepare a separately reviewed context. |
+| `split_work_recommended` | Request mixes branch lines, stacked work, or cross-line effects. | Split work or record ordered sub-work. |
+| `forward_merge_needed_later` | Another line needs the accepted change later. | Record follow-up; do not merge automatically. |
+| `verify_on_multiple_lines` | Cross-line readiness needs evidence on every named line. | Verify each branch line before acceptance. |
+| `architect_decision_required` | Strategy is custom, unknown, or policy-sensitive. | Route to Architect before implementation or merge. |
+
+Safe multi-branch UX for V2 work interleaved with generic Core updates:
+
+1. Split the generic Core update from V2-only work.
+2. Land the generic Core update on `main` first through the normal reviewed
+   path.
+3. Record `forward_merge_needed_later` for V2.
+4. Use `verify_on_multiple_lines` before claiming cross-line readiness.
+5. Keep checkout/switch, branch/worktree creation, PR retarget, rebase, merge,
+   reset, clean, and repair/apply unsupported in the helper.
 
 For new-project setup, use the action plan to confirm:
 

@@ -77,7 +77,7 @@ Implementer 做 scoped change，Tester 提供测试证据，Reviewer 做独立�
 | Step | Owner | What happens | Exit signal |
 | --- | --- | --- | --- |
 | 1. Intake | Coordinator | Rehydrate durable state, check dependencies, choose the next owner. | Issue has one clear next `needs:*` label or a recorded hold. |
-| 2. Design / Contract | Architect | Define scope, risk, allowed actions, forbidden actions, branch target, acceptance criteria, and whether Tester is needed. | Execution Contract is durable; next owner is released. |
+| 2. Design / Contract | Architect | Define scope, risk, allowed actions, forbidden actions, branch strategy, target branch, acceptance criteria, and whether Tester is needed. | Execution Contract is durable; next owner is released. |
 | 3. Implementation or Evidence | Implementer, Tester, or Harvester | Produce the scoped change or evidence packet. | Handoff names scope, verification, residual risks, and next owner. |
 | 4. Review | Reviewer | Review exact issue evidence or exact PR head. Findings lead; acceptance is not final closure. | Accepted, requested changes, or blocked with reasons. |
 | 5. Acceptance / Routing | Architect | Decide whether review evidence satisfies the contract and route merge, closure, human gate, or next issue. | Durable acceptance, hold, HDC, merge decision, or release decision. |
@@ -128,7 +128,7 @@ the diff focused, write or update required tests, avoid unrelated cleanup, and
 handoff with exact verification.
 
 Use Implementer only after the issue names allowed scope, dependencies, branch
-target, acceptance criteria, and required evidence. If scope changes while
+strategy, target branch, acceptance criteria, and required evidence. If scope changes while
 implementing, route back to Architect instead of expanding silently.
 
 **中文要点：** Implementer 在明确 contract 下写 production change 和 required tests。
@@ -202,7 +202,10 @@ Owner role: implementer
 Review role: reviewer
 Acceptance role: architect
 Completion handoff: to:reviewer
-Branch target: main | <integration-branch>
+Branch strategy: mainline-maintenance | integration-branch | release-branch | trunk-based | stacked-pr | multi-branch | custom
+Target branch: main | <integration-branch> | <release-branch>
+Affected branches: <optional comma-separated branch list>
+Verification branches: <optional comma-separated branch list>
 Merge rule: human-gated | delegated-child | delegated-main
 Forbidden actions:
   - live Vault/private/runtime/generated mutation
@@ -212,6 +215,64 @@ Forbidden actions:
 Natural-language details belong in separate fields such as `Reviewer target:`,
 `Human verification needed:`, or `Acceptance criteria:`. Do not hide prose
 inside role fields.
+
+`Target branch` is the canonical field. Older `Branch target` text may appear
+in legacy issues, but new contracts should not use it except to document
+compatibility mapping.
+
+**中文要点：** 新 contract 使用 `Branch strategy` 和 `Target branch`。`Branch target`
+只作为旧字段兼容说明，不再作为新示例。
+
+### Branch-Aware Collaboration
+
+Branch-aware collaboration helps a human decide where work should land before an
+agent starts editing or reviewing. It is an action-plan surface, not an
+automatic branch operator. The helper may report the current branch, expected PR
+base, local dirty/ahead/behind state, and degraded remote evidence, but it must
+not checkout, create worktrees, retarget PRs, rebase, merge, reset, clean, or
+apply repairs.
+
+Choose the branch strategy from the user's intent:
+
+| User intent | Branch strategy | Typical target |
+| --- | --- | --- |
+| Maintain the current stable product line. | `mainline-maintenance` | `main` |
+| Build on a shared feature/integration line. | `integration-branch` | named integration branch |
+| Prepare a release branch. | `release-branch` | release branch |
+| Land directly through a trunk-style flow. | `trunk-based` | trunk branch chosen by the repo |
+| Build a child PR on top of a parent PR. | `stacked-pr` | parent PR branch as `PR target` |
+| Change more than one maintained line. | `multi-branch` | primary target plus affected/verification branches |
+| Use a repo-specific policy. | `custom` | Architect-defined |
+
+Agent Foundry's current presets are:
+
+- V1.x maintenance: `Branch strategy: mainline-maintenance`,
+  `Target branch: main`.
+- V2 integration: `Branch strategy: integration-branch`,
+  `Target branch: codex/v2-local-first-orchestration`.
+- V2 merge-back to `main` remains a later readiness and Human-gated decision.
+
+When V2 work is active but a generic Core update belongs on `main`, split the
+work. Land the generic Core update on `main`, record a later forward-merge need,
+and verify on both lines before claiming cross-line readiness. Multi-branch work
+should name `Affected branches` and `Verification branches`; it should not hide
+ordered verification inside a single vague target.
+
+Action-plan concepts mean:
+
+| Concept | Human-facing meaning | Safe next step |
+| --- | --- | --- |
+| `current_branch_ok` | The sampled local branch matches at least one branch contract. | Continue normal scoped work. |
+| `switch_context_required` | The current local branch is not the target branch. | Stop editing in this checkout; route or prepare a separate reviewed context. |
+| `split_work_recommended` | The request mixes branch lines or stacked work. | Split the issue/PR or record ordered sub-work. |
+| `forward_merge_needed_later` | A later line needs the accepted change. | Record follow-up evidence; do not merge automatically. |
+| `verify_on_multiple_lines` | Readiness claim spans more than one branch line. | Run or request verification on every named line. |
+| `architect_decision_required` | Strategy is custom, unknown, or policy-sensitive. | Route to Architect before implementation or merge. |
+
+**中文要点：** Branch-aware collaboration 先帮人判断 work 应该落在哪条 branch line。
+它只给 action plan，不自动 checkout、retarget、merge 或 repair。V2 work 和通用 Core
+update 交错时，优先 split work：通用更新先落 `main`，记录后续 forward-merge，并在多条
+line 上验证。
 
 ### Testing Contract
 

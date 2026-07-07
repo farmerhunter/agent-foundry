@@ -39,6 +39,8 @@ Owner role: implementer
 Review role: reviewer
 Acceptance role: architect
 Completion handoff: to:reviewer
+Branch strategy: mainline-maintenance
+Target branch: main
 Reviewer target: separate Reviewer agent, focused on contract validation
 Human verification needed: no
 ```
@@ -53,6 +55,8 @@ Owner role: tester
 Review role: reviewer
 Acceptance role: architect
 Completion handoff: to:reviewer
+Branch strategy: integration-branch
+Target branch: codex/v2-local-first-orchestration
 
 ## Testing Contract
 
@@ -61,6 +65,36 @@ Tester Trigger:
   - stateful workflow evidence is required before review
 user_value_or_risk: user can see what was tested and what remains risky
 ```
+
+Branch-aware examples use `Target branch` as the canonical field. `Branch
+target` is legacy compatibility text only and should not appear in new dispatch
+examples.
+
+Use these branch strategy values:
+
+- `mainline-maintenance`: stable line maintenance, usually `main`.
+- `integration-branch`: shared integration line, such as
+  `codex/v2-local-first-orchestration`.
+- `release-branch`: release branch preparation.
+- `trunk-based`: repo-defined trunk flow.
+- `stacked-pr`: child PR built on a parent PR branch.
+- `multi-branch`: work affects more than one maintained line.
+- `custom`: repo-specific policy; route to Architect.
+
+Agent Foundry presets:
+
+- V1.x maintenance: `Branch strategy: mainline-maintenance`,
+  `Target branch: main`.
+- V2 integration: `Branch strategy: integration-branch`,
+  `Target branch: codex/v2-local-first-orchestration`.
+- V2 merge-back remains a later readiness and Human-gated decision.
+
+Action-plan concepts are report-only: `current_branch_ok`,
+`switch_context_required`, `split_work_recommended`,
+`forward_merge_needed_later`, `verify_on_multiple_lines`, and
+`architect_decision_required`. Do not use a dispatch preview to checkout,
+create a worktree, retarget a PR, rebase, merge, reset, clean, or apply branch
+repair.
 
 ```yaml
 dry_run_planning_example:
@@ -72,7 +106,9 @@ dry_run_planning_example:
     pull_request: 212
     parent_issue: 201
     stage: AF-11
+    branch_strategy: mainline-maintenance
     branch: codex/af11-unit-b-helper
+    target_branch: main
     head_sha: a0615b81b8457d004cc20a8153f487f249781498
     base_branch: main
   next_owner: Reviewer
@@ -81,8 +117,10 @@ dry_run_planning_example:
     - read PR body/diff/head SHA
     - run scoped verification
     - draft findings or acceptance recommendation
+    - report branch action-plan concepts without changing branches
   forbidden_actions:
     - write GitHub comments or labels from this preview
+    - checkout, create worktrees, retarget PRs, rebase, merge, reset, or clean
     - mutate Project v2 fields
     - merge or close
     - publish generated Skills or install runtime files
@@ -91,6 +129,7 @@ dry_run_planning_example:
   stop_condition:
     - blocking finding found
     - head SHA changed
+    - branch action plan reports architect_decision_required
     - authority sources disagree with this preview
   callback_required:
     - findings or no-findings statement
@@ -112,7 +151,11 @@ compact_rehydration_packet:
     pull_request: "<pr-number-or-null>"
     parent_issue: "<parent-issue-or-null>"
     stage: "<stage-label>"
+    branch_strategy: "<mainline-maintenance|integration-branch|release-branch|trunk-based|stacked-pr|multi-branch|custom>"
     branch: "<branch-name-or-null>"
+    target_branch: "<target-branch-or-null>"
+    affected_branches: []
+    verification_branches: []
     head_sha: "<head-sha-or-null>"
     base_branch: "<base-branch-or-null>"
   current_owner: Implementer
