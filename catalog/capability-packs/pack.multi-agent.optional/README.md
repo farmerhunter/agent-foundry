@@ -31,6 +31,38 @@ of truth.
 dependency-gated queues、review handoffs，以及 write automation 前的 read-only
 audit。
 
+## Branch-Aware Collaboration / Branch-Aware 协作
+
+The current starter guidance includes the AF16 branch-aware collaboration
+model. Execution Contracts should use `Target branch` as the canonical field
+and `Branch strategy` to describe the workflow family:
+`mainline-maintenance`, `integration-branch`, `release-branch`, `trunk-based`,
+`stacked-pr`, `multi-branch`, or `custom`. Older `Branch target` wording is
+legacy compatibility input, not the preferred field.
+
+**中文要点：** AF16 后，Execution Contract 使用 `Target branch` 和
+`Branch strategy`。`Branch target` 只作为旧字段兼容，不是新 contract 的推荐写法。
+
+Agent Foundry's V1/V2 behavior is a project preset on top of the generic
+strategy model: V1.x maintenance targets `main`; V2 integration targets
+`codex/v2-local-first-orchestration`; V2 merge-back remains a later readiness
+and Human-gated decision. Other projects may use custom, integration, release,
+trunk-based, stacked PR, or multi-branch strategies without being forced into
+the Agent Foundry preset.
+
+**中文要点：** Agent Foundry 的 V1/V2 只是项目 preset：V1.x 走 `main`，V2 走
+`codex/v2-local-first-orchestration`。其他项目可使用 generic strategy，不应被硬编码成
+Agent Foundry 分支模型。
+
+Branch readiness reports should be action plans only. They can say
+`current_branch_ok`, `switch_context_required`, `split_work_recommended`,
+`forward_merge_needed_later`, `verify_on_multiple_lines`, or
+`architect_decision_required`, but they must not switch branches, create
+worktrees, retarget PRs, rebase, merge, reset, clean, or repair branches.
+
+**中文要点：** Branch readiness 只给 action plan，不执行 checkout/switch、worktree
+creation、PR retarget、rebase、merge、reset、clean 或 branch repair。
+
 ## Collaboration Readiness / 协作就绪检查
 
 The current starter guidance includes the AF15 collaboration readiness model:
@@ -111,8 +143,8 @@ comments as the workflow record.
 The pack covers a base GitHub collaboration workflow: role labels, durable
 issue/PR comments, explicit Execution Contract fields, dependency-gated queues,
 Testing Contract evidence when needed, collaboration readiness audit, dry-run
-repair planning, degraded GitHub/Project access reporting, and read-only audit
-before write automation.
+repair planning, branch-aware action plans, degraded GitHub/Project access
+reporting, and read-only audit before write automation.
 
 Project v2 status may be a configured visual mirror, but it is not the scheduler
 source of truth. Runtime helper install, generated Skill publish, and mutating
@@ -131,10 +163,11 @@ receipts remain downstream status surfaces, not catalog or pack authority.
 
 ## Versioning
 
-Pack version `0.3.1` identifies the reviewed GitHub collaboration readiness
-starter contract. Pack version `0.2.0` identified the earlier GitHub
-collaboration starter contract. Core git tags and releases identify repository
-snapshots. These are related but independent axes.
+Pack version `0.3.2` identifies the reviewed branch-aware GitHub collaboration
+starter contract. Pack version `0.3.1` identified the AF15 collaboration
+readiness action-plan contract. Pack version `0.2.0` identified the earlier
+GitHub collaboration starter contract. Core git tags and releases identify
+repository snapshots. These are related but independent axes.
 
 ## Review
 
@@ -147,3 +180,6 @@ Review evidence:
 - https://github.com/farmerhunter/agent-foundry/issues/317
 - https://github.com/farmerhunter/agent-foundry/issues/318
 - https://github.com/farmerhunter/agent-foundry/issues/319
+- https://github.com/farmerhunter/agent-foundry/issues/350
+- https://github.com/farmerhunter/agent-foundry/issues/351
+- https://github.com/farmerhunter/agent-foundry/issues/352
