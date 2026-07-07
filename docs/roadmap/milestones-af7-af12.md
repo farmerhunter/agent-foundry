@@ -1,6 +1,6 @@
 # Roadmap Milestones AF-7 Through AF-12
 
-This file contains detailed milestone plans moved out of `docs/roadmap.md` to keep the main roadmap readable.
+This file contains detailed AF-7 through AF-12 milestone plans moved out of `docs/roadmap.md` to keep the main roadmap readable.
 
 Return to the main roadmap: ../roadmap.md
 
@@ -317,35 +317,3 @@ Acceptance criteria:
 - Raw scripts remain implementation/debug substrate rather than the primary user interface.
 - Final release notes can point to README, usage, commands, deployment, catalog docs, and readiness evidence.
 - No memory-system directories, schemas, storage, MCP tools, or automatic memory writing are introduced.
-
-### AF-13: External Skills Import And Reference Workflow
-
-Goal: support the independent external-skills use case before the public `v1.0.0` release.
-
-This work is tracked as GitHub milestone `AF-13: External Skills Import and Reference Workflow` with Epic #286 and child issues #276 through #281.
-
-Current scheduler state: the human hold is lifted, #276 is accepted as the completed planning/decomposition record, and #277 is the active next issue.
-
-Why it is an independent AF milestone:
-
-- Agent Foundry already exposes `import skill <source>` to users.
-- External skills, prompt packs, articles, repos, and local skill folders can be valuable, but they are reviewed inputs rather than authorities.
-- Users need a clear review result: discard, reference-only, defer, merge into existing, propose practice, propose asset, or publish after approval.
-- Reference-only material must be searchable or manually useful without becoming active practice/asset authority or adapter output.
-
-Planned issue sequence:
-
-1. #276 plan end-to-end import, reference, and user-facing workflow hardening.
-2. #277 define outcome taxonomy and reference-only contract.
-3. #278 harden import workflow and review packet template.
-4. #279 add user-facing import/reference workflow docs.
-5. #280 add fixture-backed validation for import outcomes.
-6. #281 run final readiness walkthrough for the import/reference workflow.
-
-Acceptance criteria:
-
-- External-skill import has a complete lifecycle from source review through approval, canonicalization, adapter publish, and verification.
-- User-facing docs explain when to import, what the report means, what approval changes, and what remains blocked.
-- Script-bearing or unsafe external material remains inert unless explicitly reviewed and approved.
-- Fixture coverage proves safe public skill, local folder, script-bearing skill, duplicate practice, reference-only material, unknown/unsafe license, and prompt-injection cases.
-- No real external skill import, external script execution, Vault/private/runtime/generated mutation, generated adapter publish, capability-pack operation, or memory-system work occurs without a later reviewed issue and explicit authorization where required.
