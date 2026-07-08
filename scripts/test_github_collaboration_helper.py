@@ -129,6 +129,8 @@ def main() -> int:
         branch_local_clean = base / "branch-local-clean.json"
         foundry_board_issues = base / "foundry-board-issues.json"
         foundry_board_project = base / "foundry-board-project.json"
+        foundry_board_ledger_root = base / "foundry-board-ledger"
+        foundry_board_candidate_events = base / "foundry-board-candidate-events.json"
         new_repo_labels = base / "new-repo-labels.json"
         new_repo_issues = base / "new-repo-issues.json"
         new_repo_prs = base / "new-repo-prs.json"
@@ -933,6 +935,53 @@ def main() -> int:
             ("collaboration-readiness-v2-shape", '"local_ledger_candidate": true'),
         ):
             errors.extend(expect_ok(name, readiness_json, expected))
+        board_accepted_events = [
+            {
+                "schema_version": 1,
+                "event_id": "board-accepted-297",
+                "event_type": "assignment",
+                "occurred_at": "2026-07-08T11:10:00Z",
+                "work_item": {"id": "farmerhunter/agent-foundry#issue:297", "repo": "farmerhunter/agent-foundry", "type": "issue", "number": 297},
+                "actor_role": "coordinator",
+                "confidence": "observed",
+                "provenance": {"links": ["https://github.com/farmerhunter/agent-foundry/issues/297#ledger"]},
+                "payload": {"owner_role": "implementer"},
+            },
+            {
+                "schema_version": 1,
+                "event_id": "board-accepted-299",
+                "event_type": "assignment",
+                "occurred_at": "2026-07-08T11:11:00Z",
+                "work_item": {"id": "farmerhunter/agent-foundry#issue:299", "repo": "farmerhunter/agent-foundry", "type": "issue", "number": 299},
+                "actor_role": "coordinator",
+                "confidence": "observed",
+                "provenance": {"links": ["https://github.com/farmerhunter/agent-foundry/issues/299#ledger"]},
+                "payload": {"owner_role": "human"},
+            },
+        ]
+        for event in board_accepted_events:
+            event_path = base / f"{event['event_id']}.json"
+            write(event_path, json.dumps(event))
+            errors.extend(
+                expect_ok(
+                    f"foundry-board-ledger-append-{event['event_id']}",
+                    run(["local-ledger-append", "--ledger-root", str(foundry_board_ledger_root), "--event-json", str(event_path), "--json"], base),
+                    '"mutation_performed": true',
+                )
+            )
+        candidate_event = {
+            "schema_version": 1,
+            "event_id": "board-candidate-296",
+            "event_type": "assignment",
+            "occurred_at": "2026-07-08T11:12:00Z",
+            "work_item": {"id": "farmerhunter/agent-foundry#issue:296", "repo": "farmerhunter/agent-foundry", "type": "issue", "number": 296},
+            "actor_role": "coordinator",
+            "confidence": "inferred",
+            "provenance": {"links": ["https://github.com/farmerhunter/agent-foundry/issues/296#candidate"]},
+            "payload": {"owner_role": "architect"},
+        }
+        write(foundry_board_candidate_events, json.dumps({"candidate_imported_events": [candidate_event]}))
+        board_ledger_before = (foundry_board_ledger_root / "events.jsonl").read_text(encoding="utf-8")
         foundry_board_json = run(
             [
                 "foundry-board",
@@ -942,6 +991,10 @@ def main() -> int:
                 str(foundry_board_project),
                 "--local-git-json",
                 str(branch_local_clean),
+                "--ledger-root",
+                str(foundry_board_ledger_root),
+                "--candidate-events-json",
+                str(foundry_board_candidate_events),
                 "--json",
             ],
             base,
@@ -957,15 +1010,49 @@ def main() -> int:
             ("foundry-board-ready-lane", '"lane": "ready"'),
             ("foundry-board-human-gate-lane", '"lane": "human_gate"'),
             ("foundry-board-stale-conflict", '"lane": "stale_conflict"'),
-            ("foundry-board-candidate", '"state_authority": "candidate"'),
+            ("foundry-board-accepted", '"state_authority": "accepted_local_ledger"'),
+            ("foundry-board-candidate", '"state_authority": "candidate_import"'),
             ("foundry-board-confidence", '"confidence": "inferred"'),
             ("foundry-board-mirror-drift", '"mirror_status": "drift"'),
+            ("foundry-board-remote-mirror", '"remote_mirror_state"'),
             ("foundry-board-human-action", '"category": "explicit_human_gate"'),
             ("foundry-board-branch-target", '"target_branch": "codex/v2-local-first-orchestration"'),
             ("foundry-board-forbidden-project", "Project v2 mutation"),
-            ("foundry-board-telemetry", '"implementation_slice": "V2-5 read-only Foundry Board MVP"'),
+            ("foundry-board-telemetry", '"implementation_slice": "V2-5B ledger-backed Foundry Board"'),
+            ("foundry-board-telemetry-issue", '"telemetry_issue": "#266"'),
+            ("foundry-board-remote-only-count", '"remote_mirror_only_count": 0'),
         ):
             errors.extend(expect_ok(name, foundry_board_json, expected))
+        board_ledger_after = (foundry_board_ledger_root / "events.jsonl").read_text(encoding="utf-8")
+        if board_ledger_before == board_ledger_after:
+            print("foundry-board-no-ledger-write: ok")
+        else:
+            errors.append("foundry-board-no-ledger-write: board mutated accepted ledger")
+        degraded_foundry_board = run(
+            [
+                "foundry-board",
+                "--issues-json",
+                str(foundry_board_issues),
+                "--local-git-json",
+                str(branch_local_clean),
+                "--ledger-root",
+                str(foundry_board_ledger_root),
+                "--project-owner",
+                "@me",
+                "--project-number",
+                "3",
+                "--json",
+            ],
+            base,
+            {"AGENT_REPO": "farmerhunter/agent-foundry", "PATH": str(fake_bin) + os.pathsep + os.environ.get("PATH", "")},
+        )
+        for name, expected in (
+            ("foundry-board-project-degraded-renders-local", '"accepted_count": 2'),
+            ("foundry-board-project-degraded-status", '"mirror_status": "degraded"'),
+            ("foundry-board-project-degraded-count", '"remote_read_degradation_count": 1'),
+            ("foundry-board-project-degraded-fallback", "accepted_local_ledger_replay"),
+        ):
+            errors.extend(expect_ok(name, degraded_foundry_board, expected))
         branch_readiness_json = run(
             [
                 "collaboration-readiness",

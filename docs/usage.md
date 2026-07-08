@@ -114,18 +114,18 @@ show Foundry Board
 显示 Foundry Board
 ```
 
-The preview turns issue, PR, branch contract, optional Project mirror, and later local ledger evidence into a board-shaped report. Normal users should look first at lanes, owner role, latest evidence, blocking reason, mirror status, branch readiness, and recommended next actions.
+The preview reads accepted Local Collaboration Ledger replay first and turns it into a board-shaped report. GitHub issue, PR, and Project evidence are shown as provenance, mirror state, or drift signals. Normal users should look first at lanes, owner role, latest evidence, blocking reason, mirror status, branch readiness, and recommended next actions.
 
-The current MVP is read-only. It can show candidate migration state, accepted state, stale/conflicting evidence, human gates, degraded Project visibility, and whether the current checkout is on the expected branch line. It does not perform GitHub write-back, Project v2 mutation, real migration/backfill writes, branch repair/apply, checkout/switch, PR retarget, runtime/Vault/private/generated mutation, generated Skill publish, or capability-pack deploy/apply.
+The current MVP is read-only. It can show accepted local state, imported candidate migration state, remote mirror-only items, stale/conflicting evidence, human gates, degraded Project visibility, and whether the current checkout is on the expected branch line. It does not perform GitHub write-back, Project v2 mutation, real migration/backfill writes, branch repair/apply, checkout/switch, PR retarget, runtime/Vault/private/generated mutation, generated Skill publish, or capability-pack deploy/apply.
 
 Use the board preview to decide the next workflow action:
 
 - if an item is `ready`, dispatch the named owner through the normal issue workflow;
 - if it is `human_gate`, read the decision basis and approve, reject, or revise explicitly;
 - if it is `stale_conflict`, rehydrate issue/PR/branch evidence before advancing;
-- if Project visibility is degraded or drifted, treat Project as a mirror and use durable issue/PR evidence as the safer source.
+- if Project visibility is degraded or drifted, treat Project as a mirror and use accepted local ledger replay plus durable issue/PR evidence as the safer source.
 
-**中文要点：** Foundry Board preview 是 V2 的只读操作面板。它帮助你看当前工作、owner、证据、阻塞、branch 状态和下一步；它不会自动写 GitHub/Project，也不会做真实 sync、backfill 或 branch 操作。
+**中文要点：** Foundry Board preview 是 V2 的只读操作面板。它优先读取 accepted local ledger replay，把 GitHub/Project 当作 mirror/drift 证据；它不会自动写 GitHub/Project，也不会做真实 sync、backfill 或 branch 操作。
 
 ## Local Collaboration Ledger Report
 

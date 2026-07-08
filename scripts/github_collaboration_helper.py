@@ -2949,6 +2949,25 @@ def board_state_from_issue(issue: dict[str, Any], labels: list[str], project_ite
     return "planned"
 
 
+def board_state_from_ledger_state(state: str) -> str:
+    mapping = {
+        "unknown": "planned",
+        "assigned": "ready",
+        "dispatched": "in_progress",
+        "callback_received": "in_progress",
+        "evidence_recorded": "in_progress",
+        "review_changes_requested": "ready",
+        "reviewed": "architect_acceptance",
+        "accepted": "architect_acceptance",
+        "human_approved": "in_progress",
+        "merged": "architect_acceptance",
+        "closed": "done",
+        "blocked": "blocked",
+        "stale_conflict": "stale_conflict",
+    }
+    return mapping.get(state, "planned")
+
+
 def board_action_for_state(state: str, next_owner: str | None, conflicts: list[dict[str, Any]]) -> dict[str, Any]:
     if conflicts:
         return readiness_action(
@@ -3020,6 +3039,121 @@ def board_mirror_status(issue: dict[str, Any], project_item: dict[str, Any] | No
             }
         )
     return ("drift" if conflicts else "in_sync"), conflicts
+
+
+def remote_issue_key(repo: str, issue: dict[str, Any]) -> str | None:
+    number = issue_number(issue)
+    if number is None:
+        return None
+    return f"{repo}#issue:{number}"
+
+
+def remote_mirror_from_issue(
+    repo: str,
+    issue: dict[str, Any] | None,
+    project_item: dict[str, Any] | None,
+    project_status: dict[str, Any],
+) -> dict[str, Any]:
+    if issue is None:
+        return {
+            "status": "not_available",
+            "issue_state": "not_available",
+            "labels": [],
+            "project_status": project_status.get("status", "not_configured"),
+            "project_item": "not_available",
+        }
+    labels = label_names(issue)
+    issue_state = board_state_from_issue(issue, labels, project_item)
+    return {
+        "status": "available",
+        "issue_state": issue_state,
+        "github_state": issue.get("state", "unknown"),
+        "labels": labels,
+        "needs_owner": owner_from_needs(next((label for label in labels if label.startswith("needs:")), None)),
+        "project_status": project_status.get("status", "unknown"),
+        "project_lane": project_field_value(project_item or {}, "Status"),
+        "project_roadmap_status": project_field_value(project_item or {}, "Roadmap Status"),
+        "project_owner_role": project_field_value(project_item or {}, "Owner Role"),
+    }
+
+
+def mirror_conflicts_for_ledger_item(
+    ledger_item: dict[str, Any],
+    issue: dict[str, Any] | None,
+    project_item: dict[str, Any] | None,
+    project_status: dict[str, Any],
+    board_state: str,
+) -> tuple[str, list[dict[str, Any]]]:
+    conflicts: list[dict[str, Any]] = []
+    if project_status.get("status") in {"config_missing", "skipped"}:
+        mirror_status = "not_configured"
+    elif project_status.get("status") not in {"ok", None}:
+        mirror_status = "degraded"
+        conflicts.append(
+            {
+                "type": "degraded_source",
+                "severity": "warning",
+                "message": "Project mirror could not be evaluated; local ledger replay remains the board source of truth.",
+                "source": "github_graphql_project_v2",
+            }
+        )
+    elif not project_item:
+        mirror_status = "unknown"
+    else:
+        mirror_status = "in_sync"
+
+    if issue is not None:
+        labels = label_names(issue)
+        issue_state = board_state_from_issue(issue, labels, project_item)
+        if issue_state != board_state and not (board_state == "done" and issue_state == "done"):
+            conflicts.append(
+                {
+                    "type": "github_issue_label_drift",
+                    "severity": "warning",
+                    "message": "GitHub issue labels/state disagree with accepted local ledger replay.",
+                    "local_board_state": board_state,
+                    "remote_issue_state": issue_state,
+                    "labels": labels,
+                }
+            )
+        remote_owner = owner_from_needs(next((label for label in labels if label.startswith("needs:")), None))
+        local_owner = ledger_item.get("next_owner_role") or ledger_item.get("owner_role")
+        if remote_owner and local_owner and str(remote_owner).lower() != str(local_owner).lower():
+            conflicts.append(
+                {
+                    "type": "github_issue_owner_drift",
+                    "severity": "warning",
+                    "message": "GitHub needs label owner disagrees with accepted local ledger owner.",
+                    "local_owner_role": local_owner,
+                    "remote_owner_role": remote_owner,
+                }
+            )
+
+    if project_item and project_status.get("status") == "ok":
+        project_lane = project_field_value(project_item, "Status")
+        project_roadmap = project_field_value(project_item, "Roadmap Status")
+        if board_state == "done" and (project_lane != "Done" or project_roadmap != "Done"):
+            conflicts.append(
+                {
+                    "type": "project_mirror_drift",
+                    "severity": "warning",
+                    "message": "Local ledger says done, but Project mirror is not Done.",
+                    "observed_remote": {"Status": project_lane, "Roadmap Status": project_roadmap},
+                }
+            )
+        if board_state != "done" and (project_lane == "Done" or project_roadmap == "Done"):
+            conflicts.append(
+                {
+                    "type": "project_mirror_drift",
+                    "severity": "warning",
+                    "message": "Project mirror says Done, but accepted local ledger is not done.",
+                    "observed_remote": {"Status": project_lane, "Roadmap Status": project_roadmap},
+                    "local_board_state": board_state,
+                }
+            )
+    if conflicts and mirror_status == "in_sync":
+        mirror_status = "drift"
+    return mirror_status, conflicts
 
 
 def board_item_from_issue(
@@ -3109,6 +3243,102 @@ def board_item_from_issue(
     }
 
 
+def board_item_from_ledger_item(
+    repo: str,
+    ledger_item: dict[str, Any],
+    state_authority: str,
+    issue: dict[str, Any] | None,
+    project_item: dict[str, Any] | None,
+    project_status: dict[str, Any],
+) -> dict[str, Any]:
+    work_item = ledger_item.get("work_item") if isinstance(ledger_item.get("work_item"), dict) else {}
+    number = work_item.get("number")
+    item_type = work_item.get("type", "issue")
+    local_state = str(ledger_item.get("state", "unknown"))
+    board_state = board_state_from_ledger_state(local_state)
+    if board_state == "ready" and str(ledger_item.get("owner_role", "")).lower() == "human":
+        board_state = "human_gate"
+    mirror_status, conflicts = mirror_conflicts_for_ledger_item(ledger_item, issue, project_item, project_status, board_state)
+    if conflicts and board_state not in {"blocked", "done", "superseded"}:
+        board_state = "stale_conflict"
+    next_owner = ledger_item.get("owner_role")
+    if board_state in {"review", "architect_acceptance"}:
+        next_owner = "reviewer" if board_state == "review" else "architect"
+    branch_fields = (extract_branch_contract((issue or {}).get("body") or "").get("fields") or {}) if issue else {}
+    latest_evidence = None
+    evidence_refs = []
+    for link in ledger_item.get("provenance_links", []):
+        evidence_refs.append({"label": "Local ledger provenance", "source_type": "local_ledger_provenance", "url_or_path": link, "availability": "available"})
+    if issue and issue_url(issue):
+        evidence_refs.append({"label": f"GitHub mirror issue #{issue_number(issue)}", "source_type": "github_issue_mirror", "url_or_path": issue_url(issue), "availability": "available"})
+    if evidence_refs:
+        latest_evidence = evidence_refs[0]
+    else:
+        latest_evidence = {"label": "Local ledger replay", "source_type": "local_ledger", "availability": "available"}
+    action = board_action_for_state(board_state, str(next_owner) if next_owner else None, conflicts)
+    return {
+        "board_item_id": f"{state_authority}:{ledger_item.get('work_item_key', work_item.get('id', 'unknown'))}",
+        "work_item_id": ledger_item.get("work_item_key") or work_item.get("id") or f"{repo}#{item_type}:{number if number is not None else 'unknown'}",
+        "title": (issue or {}).get("title") or work_item.get("title") or ledger_item.get("work_item_key"),
+        "item_kind": "migration_candidate" if state_authority.startswith("candidate") else item_type,
+        "github_issue_url": issue_url(issue or {}) or item_url(repo, item_type, number if isinstance(number, int) else None),
+        "github_pr_url": issue_pr_url(issue or {}),
+        "labels": label_names(issue or {}),
+        "state": board_state,
+        "local_replay_state": local_state,
+        "lane": board_state if board_state in BOARD_LANES else "planned",
+        "owner_role": str(ledger_item.get("owner_role", "unknown")).title() if ledger_item.get("owner_role") else "Unknown",
+        "next_owner_role": next_owner,
+        "roadmap_status": project_field_value(project_item or {}, "Roadmap Status"),
+        "stage": stage_from_labels(label_names(issue or {})),
+        "risk": risk_from_labels(label_names(issue or {})),
+        "target_branch": branch_fields.get("Target branch"),
+        "branch_readiness": "not_evaluated_from_ledger_board",
+        "latest_evidence": latest_evidence,
+        "evidence_refs": evidence_refs,
+        "blocking_reason": ledger_item.get("blocking_reason"),
+        "conflicts": conflicts + list(ledger_item.get("conflicts", [])),
+        "conflict_count": len(conflicts) + len(ledger_item.get("conflicts", [])),
+        "mirror_status": mirror_status,
+        "remote_mirror_state": remote_mirror_from_issue(repo, issue, project_item, project_status),
+        "confidence": ledger_item.get("confidence", "unknown"),
+        "state_authority": state_authority,
+        "unknown_fields": ledger_item.get("unknown_fields", []),
+        "not_available_fields": ledger_item.get("not_available_fields", []),
+        "degraded_evidence": ledger_item.get("degraded_evidence", []),
+        "recommended_next_actions": [action],
+        "forbidden_actions": [
+            "live repair/apply",
+            "Project v2 mutation",
+            "GitHub write-back",
+            "real sync/apply",
+            "issue closure automation",
+            "runtime/Vault/private/generated mutation",
+            "generated publish or capability-pack deploy/apply",
+        ],
+    }
+
+
+def normalize_candidate_events(data: Any) -> list[dict[str, Any]]:
+    if data is None:
+        return []
+    if isinstance(data, dict) and "candidate_imported_events" in data:
+        data = data["candidate_imported_events"]
+    elif isinstance(data, dict) and "events" in data:
+        data = data["events"]
+    elif isinstance(data, dict):
+        data = [data]
+    if not isinstance(data, list):
+        fail("invalid_candidate_events_json", "candidate events JSON must be a list or object with candidate_imported_events/events")
+    events: list[dict[str, Any]] = []
+    for raw in data:
+        normalized, _errors, status = validate_local_ledger_event(raw)
+        if normalized is not None:
+            normalized["validation_status"] = status
+            events.append(normalized)
+    return events
+
+
 def build_foundry_board(
     repo: str,
     issues: list[dict[str, Any]],
@@ -3117,12 +3347,57 @@ def build_foundry_board(
     local_git: dict[str, Any],
     board_name: str,
     scope: dict[str, Any],
+    accepted_replay: dict[str, Any] | None = None,
+    candidate_events: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     project_by_issue = {project_item_issue_number(item): item for item in project_items if project_item_issue_number(item) is not None}
-    items = [
+    issue_by_key = {key: issue for issue in issues if (key := remote_issue_key(repo, issue))}
+    accepted_replay = accepted_replay or {"derived_work_items": [], "summary": {"replay_time_ms": 0, "event_count": 0, "conflict_count": 0}}
+    accepted_items = [
+        board_item_from_ledger_item(
+            repo,
+            item,
+            "accepted_local_ledger",
+            issue_by_key.get(item.get("work_item_key")),
+            project_by_issue.get((item.get("work_item") or {}).get("number")),
+            project_status,
+        )
+        for item in accepted_replay.get("derived_work_items", [])
+    ]
+    candidate_replay = replay_local_ledger(candidate_events or [])
+    candidate_items = [
+        board_item_from_ledger_item(
+            repo,
+            item,
+            "candidate_import",
+            issue_by_key.get(item.get("work_item_key")),
+            project_by_issue.get((item.get("work_item") or {}).get("number")),
+            project_status,
+        )
+        for item in candidate_replay.get("derived_work_items", [])
+    ]
+    accepted_keys = {item["work_item_id"] for item in accepted_items}
+    candidate_keys = {item["work_item_id"] for item in candidate_items}
+    remote_only_items = [
         board_item_from_issue(issue, project_by_issue.get(issue_number(issue)), project_status, local_git)
         for issue in issues
+        if (remote_issue_key(repo, issue) not in accepted_keys and remote_issue_key(repo, issue) not in candidate_keys)
     ]
+    for item in remote_only_items:
+        item["state_authority"] = "remote_mirror_only"
+        item["mirror_status"] = "mirror_only"
+        item["conflicts"].append(
+            {
+                "type": "missing_local_ledger_state",
+                "severity": "warning",
+                "message": "Remote mirror item is visible, but no accepted local ledger replay state exists for it.",
+            }
+        )
+        item["conflict_count"] = len(item["conflicts"])
+        if item["state"] not in {"done", "superseded", "blocked"}:
+            item["state"] = "stale_conflict"
+            item["lane"] = "stale_conflict"
+    items = accepted_items + candidate_items + remote_only_items
     lanes = [
         {
             "lane": lane,
@@ -3133,8 +3408,9 @@ def build_foundry_board(
     ]
     conflict_items = [item for item in items if item["conflict_count"]]
     human_gate_items = [item for item in items if item["state"] == "human_gate"]
-    candidate_items = [item for item in items if item["state_authority"] == "candidate"]
-    accepted_items = [item for item in items if item["state_authority"] == "accepted"]
+    candidate_board_items = [item for item in items if item["state_authority"] == "candidate_import"]
+    accepted_board_items = [item for item in items if item["state_authority"] == "accepted_local_ledger"]
+    mirror_only_items = [item for item in items if item["state_authority"] == "remote_mirror_only"]
     mirror_statuses = sorted({item["mirror_status"] for item in items})
     return {
         "schema_version": 1,
@@ -3142,7 +3418,7 @@ def build_foundry_board(
         "repo": repo,
         "board": {
             "name": board_name,
-            "authority_statement": "local_ledger_authoritative_when_available_read_only_preview_now",
+            "authority_statement": "accepted_local_ledger_replay_is_board_source_of_truth",
             "source_of_truth": "local_collaboration_ledger_events",
             "github_project_role": "optional_visual_mirror",
             "scope": scope,
@@ -3154,11 +3430,13 @@ def build_foundry_board(
         "lanes": lanes,
         "summary": {
             "item_count": len(items),
-            "candidate_count": len(candidate_items),
-            "accepted_count": len(accepted_items),
+            "candidate_count": len(candidate_board_items),
+            "accepted_count": len(accepted_board_items),
+            "remote_mirror_only_count": len(mirror_only_items),
             "conflict_count": len(conflict_items),
             "human_gate_count": len(human_gate_items),
             "mirror_statuses": mirror_statuses,
+            "local_replay_time_ms": accepted_replay.get("summary", {}).get("replay_time_ms", 0),
             "read_only_board_ready": True,
         },
         "user_next_actions": [
@@ -3170,8 +3448,8 @@ def build_foundry_board(
             {
                 "source": "github_graphql_project_v2",
                 "status": project_status.get("status"),
-                "impact": "Project mirror is optional; Board can still render issue-derived state.",
-                "safe_fallback": "github_issue_pr_evidence",
+                "impact": "Project mirror is optional; Board still renders from accepted local ledger replay.",
+                "safe_fallback": "accepted_local_ledger_replay",
                 "error": project_status.get("error"),
             }
         ]
@@ -3193,7 +3471,20 @@ def build_foundry_board(
         "telemetry": {
             "full_project_scan_performed": False,
             "mutation_performed": False,
-            "implementation_slice": "V2-5 read-only Foundry Board MVP",
+            "implementation_slice": "V2-5B ledger-backed Foundry Board",
+            "item_count": len(items),
+            "conflict_count": len(conflict_items),
+            "local_replay_time_ms": accepted_replay.get("summary", {}).get("replay_time_ms", 0),
+            "remote_read_degradation_count": len(
+                [
+                    source
+                    for source in [
+                        project_status
+                    ]
+                    if source.get("status") in {"degraded", "unavailable", "permission_denied", "auth_unavailable"}
+                ]
+            ),
+            "telemetry_issue": "#266",
             "unknown_not_available_fields": ["exact_elapsed_time", "exact_api_call_count", "billing_grade_token_count"],
         },
     }
@@ -3214,7 +3505,19 @@ def cmd_foundry_board(args: argparse.Namespace) -> None:
         issues, scope = read_live_issues(repo, args)
         project_items, project_status, _project_attempts = read_project_items(args)
     local_git, _local_git_status, _local_git_attempts = read_local_git_state(args)
-    board = build_foundry_board(repo, issues[: args.limit], project_items, project_status, local_git, args.name, {"repo_source": repo_source, **scope})
+    ledger_report = build_local_ledger_report(local_ledger_root(args))
+    candidate_events = normalize_candidate_events(load_json(args.candidate_events_json)) if args.candidate_events_json else []
+    board = build_foundry_board(
+        repo,
+        issues[: args.limit],
+        project_items,
+        project_status,
+        local_git,
+        args.name,
+        {"repo_source": repo_source, **scope, "ledger_root": ledger_report["ledger_root"]},
+        accepted_replay={"derived_work_items": ledger_report["derived_work_items"], "summary": ledger_report["summary"]},
+        candidate_events=candidate_events,
+    )
     print_json_or_text(board, args.json)
 
 
@@ -3839,6 +4142,8 @@ def build_parser() -> argparse.ArgumentParser:
     board.add_argument("--board-items-json", help="Fixture board items in issue-like or board item form.")
     board.add_argument("--project-items-json", help="Fixture Project item list or gh project item-list JSON.")
     board.add_argument("--local-git-json", help="Fixture local git state for branch/readiness display.")
+    board.add_argument("--ledger-root", help="Accepted local ledger root. Defaults to usage/local/collaboration-ledger.")
+    board.add_argument("--candidate-events-json", help="Read-only candidate event list or backfill preview output for board display.")
     board.add_argument("--issues", help="Comma-separated explicit issue numbers for bounded live board report.")
     board.add_argument("--stage", help="Stage value or label for bounded live issue report.")
     board.add_argument("--limit", type=int, default=20, help="Maximum issues/items to render.")
