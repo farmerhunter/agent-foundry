@@ -153,6 +153,17 @@ The preview converts bounded issue/PR/comment/label/milestone/Project mirror evi
 
 **中文要点：** Backfill preview 只生成 candidate events 给 review；不会写 GitHub/Project，不会把 candidate 变成 accepted ledger state，也不会启动 #361 board 或 #362 sync。
 
+For GitHub Project mirroring, ask for a dry-run sync plan:
+
+```text
+preview GitHub Project sync plan
+预览 GitHub Project sync plan
+```
+
+The plan reads the ledger-backed Foundry Board and reports what Project fields would change, conflicts, Human gates, unsupported actions, and readback requirements. It is dry-run only: `mutation_performed: false`, `writes_supported_now: false`, and no Project/GitHub/branch/runtime/Vault/generated writes.
+
+**中文要点：** Project sync plan 只说明如果同步会改什么、哪里冲突、哪些需要 Human gate；它不会真正改 Project、GitHub issue、branch、runtime 或 Vault。
+
 ## First-Time Setup
 
 On a new machine, use `docs/deployment.md` for the full split Core/Vault install flow. Short version:

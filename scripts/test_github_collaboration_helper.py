@@ -92,6 +92,8 @@ def main() -> int:
                 "usage/local/collaboration-ledger/events.jsonl",
                 "local-ledger-report",
                 "local-ledger-backfill-preview",
+                "project-sync-plan",
+                "writes_supported_now: false",
             ],
         )
     )
@@ -131,6 +133,10 @@ def main() -> int:
         foundry_board_project = base / "foundry-board-project.json"
         foundry_board_ledger_root = base / "foundry-board-ledger"
         foundry_board_candidate_events = base / "foundry-board-candidate-events.json"
+        sync_plan_issues = base / "sync-plan-issues.json"
+        sync_plan_project = base / "sync-plan-project.json"
+        sync_plan_ledger_root = base / "sync-plan-ledger"
+        sync_plan_candidate_events = base / "sync-plan-candidate-events.json"
         new_repo_labels = base / "new-repo-labels.json"
         new_repo_issues = base / "new-repo-issues.json"
         new_repo_prs = base / "new-repo-prs.json"
@@ -1053,6 +1059,273 @@ def main() -> int:
             ("foundry-board-project-degraded-fallback", "accepted_local_ledger_replay"),
         ):
             errors.extend(expect_ok(name, degraded_foundry_board, expected))
+        v2_contract = "\n".join(
+            [
+                "Owner role: implementer",
+                "Review role: reviewer",
+                "Acceptance role: architect",
+                "Completion handoff: to:reviewer",
+                "Branch strategy: integration-branch",
+                "Release line: v2.0",
+                "Target branch: codex/v2-local-first-orchestration",
+                "Base branch: codex/v2-local-first-orchestration",
+                "PR target: codex/v2-local-first-orchestration",
+            ]
+        )
+        main_contract = v2_contract.replace("Target branch: codex/v2-local-first-orchestration", "Target branch: main").replace(
+            "PR target: codex/v2-local-first-orchestration",
+            "PR target: main",
+        )
+        write(
+            sync_plan_issues,
+            json.dumps(
+                {
+                    "issues": [
+                        {
+                            "number": 420,
+                            "title": "Open local work item",
+                            "state": "OPEN",
+                            "url": "https://github.com/farmerhunter/agent-foundry/issues/420",
+                            "labels": [{"name": "stage:v2.0"}, {"name": "risk:high"}, {"name": "needs:implementer"}],
+                            "body": "## Execution Contract\n\n" + v2_contract + "\n",
+                        },
+                        {
+                            "number": 421,
+                            "title": "Closed local work item",
+                            "state": "CLOSED",
+                            "url": "https://github.com/farmerhunter/agent-foundry/issues/421",
+                            "labels": [{"name": "stage:v2.0"}, {"name": "risk:high"}],
+                            "body": "## Execution Contract\n\n" + v2_contract + "\n",
+                        },
+                        {
+                            "number": 422,
+                            "title": "Wrong branch line",
+                            "state": "OPEN",
+                            "url": "https://github.com/farmerhunter/agent-foundry/issues/422",
+                            "labels": [{"name": "stage:v2.0"}, {"name": "risk:high"}, {"name": "needs:implementer"}],
+                            "body": "## Execution Contract\n\n" + main_contract + "\n",
+                        },
+                        {
+                            "number": 424,
+                            "title": "Ambiguous Project item",
+                            "state": "OPEN",
+                            "url": "https://github.com/farmerhunter/agent-foundry/issues/424",
+                            "labels": [{"name": "stage:v2.0"}, {"name": "risk:medium"}, {"name": "needs:reviewer"}],
+                            "body": "## Execution Contract\n\n" + v2_contract + "\n",
+                        },
+                    ]
+                }
+            ),
+        )
+        write(
+            sync_plan_project,
+            json.dumps(
+                {
+                    "fields": [
+                        {"name": "Status"},
+                        {"name": "Roadmap Status"},
+                        {"name": "Owner Role", "options": [{"name": "Architect"}, {"name": "Implementer"}]},
+                    ],
+                    "items": [
+                        {
+                            "id": "P420A",
+                            "content": {"number": 420},
+                            "status": {"name": "Done"},
+                            "roadmap Status": {"name": "Done"},
+                            "owner Role": {"name": "Reviewer"},
+                            "updatedAt": "2026-07-08T11:00:00Z",
+                        },
+                        {
+                            "id": "P421A",
+                            "content": {"number": 421},
+                            "status": {"name": "Todo"},
+                            "roadmap Status": {"name": "Ready"},
+                            "owner Role": {"name": "Reviewer"},
+                            "updatedAt": "2026-07-08T13:00:00Z",
+                        },
+                        {
+                            "id": "P422A",
+                            "content": {"number": 422},
+                            "status": {"name": "Todo"},
+                            "roadmap Status": {"name": "Ready"},
+                            "owner Role": {"name": "Implementer"},
+                            "updatedAt": "2026-07-08T11:00:00Z",
+                        },
+                        {
+                            "id": "P424A",
+                            "content": {"number": 424},
+                            "status": {"name": "Todo"},
+                            "roadmap Status": {"name": "Ready"},
+                            "owner Role": {"name": "Reviewer"},
+                            "updatedAt": "2026-07-08T11:00:00Z",
+                        },
+                        {
+                            "id": "P424B",
+                            "content": {"number": 424},
+                            "status": {"name": "Todo"},
+                            "roadmap Status": {"name": "Ready"},
+                            "owner Role": {"name": "Reviewer"},
+                            "updatedAt": "2026-07-08T11:01:00Z",
+                        },
+                    ],
+                }
+            ),
+        )
+        sync_plan_events = [
+            {
+                "schema_version": 1,
+                "event_id": "sync-accepted-420",
+                "event_type": "assignment",
+                "occurred_at": "2026-07-08T12:00:00Z",
+                "work_item": {"id": "farmerhunter/agent-foundry#issue:420", "repo": "farmerhunter/agent-foundry", "type": "issue", "number": 420},
+                "actor_role": "coordinator",
+                "confidence": "observed",
+                "provenance": {"links": ["https://github.com/farmerhunter/agent-foundry/issues/420#ledger"]},
+                "payload": {"owner_role": "implementer"},
+            },
+            {
+                "schema_version": 1,
+                "event_id": "sync-accepted-421",
+                "event_type": "closure",
+                "occurred_at": "2026-07-08T12:01:00Z",
+                "work_item": {"id": "farmerhunter/agent-foundry#issue:421", "repo": "farmerhunter/agent-foundry", "type": "issue", "number": 421},
+                "actor_role": "architect",
+                "confidence": "observed",
+                "provenance": {"links": ["https://github.com/farmerhunter/agent-foundry/issues/421#closed"]},
+                "payload": {"state": "closed"},
+            },
+            {
+                "schema_version": 1,
+                "event_id": "sync-accepted-422",
+                "event_type": "assignment",
+                "occurred_at": "2026-07-08T12:02:00Z",
+                "work_item": {"id": "farmerhunter/agent-foundry#issue:422", "repo": "farmerhunter/agent-foundry", "type": "issue", "number": 422},
+                "actor_role": "coordinator",
+                "confidence": "observed",
+                "provenance": {"links": ["/Users/private/token.txt"]},
+                "payload": {"owner_role": "implementer"},
+            },
+            {
+                "schema_version": 1,
+                "event_id": "sync-accepted-424",
+                "event_type": "review",
+                "occurred_at": "2026-07-08T12:03:00Z",
+                "work_item": {"id": "farmerhunter/agent-foundry#issue:424", "repo": "farmerhunter/agent-foundry", "type": "issue", "number": 424},
+                "actor_role": "reviewer",
+                "confidence": "observed",
+                "provenance": {"links": ["https://github.com/farmerhunter/agent-foundry/issues/424#review"]},
+                "payload": {"decision": "approved"},
+            },
+        ]
+        for event in sync_plan_events:
+            event_path = base / f"{event['event_id']}.json"
+            write(event_path, json.dumps(event))
+            errors.extend(
+                expect_ok(
+                    f"project-sync-plan-ledger-append-{event['event_id']}",
+                    run(["local-ledger-append", "--ledger-root", str(sync_plan_ledger_root), "--event-json", str(event_path), "--json"], base),
+                    '"mutation_performed": true',
+                )
+            )
+        write(
+            sync_plan_candidate_events,
+            json.dumps(
+                {
+                    "candidate_imported_events": [
+                        {
+                            "schema_version": 1,
+                            "event_id": "sync-candidate-423",
+                            "event_type": "assignment",
+                            "occurred_at": "2026-07-08T12:04:00Z",
+                            "work_item": {"id": "farmerhunter/agent-foundry#issue:423", "repo": "farmerhunter/agent-foundry", "type": "issue", "number": 423},
+                            "actor_role": "coordinator",
+                            "confidence": "inferred",
+                            "provenance": {"links": ["https://github.com/farmerhunter/agent-foundry/issues/423#candidate"]},
+                            "payload": {"owner_role": "architect"},
+                        }
+                    ]
+                }
+            ),
+        )
+        sync_plan = run(
+            [
+                "project-sync-plan",
+                "--issues-json",
+                str(sync_plan_issues),
+                "--project-items-json",
+                str(sync_plan_project),
+                "--ledger-root",
+                str(sync_plan_ledger_root),
+                "--candidate-events-json",
+                str(sync_plan_candidate_events),
+                "--json",
+            ],
+            base,
+            {"AGENT_REPO": "farmerhunter/agent-foundry"},
+        )
+        for name, expected in (
+            ("project-sync-plan-command", '"command": "project-sync-plan"'),
+            ("project-sync-plan-dry-run", '"mode": "dry_run"'),
+            ("project-sync-plan-no-mutation", '"mutation_performed": false'),
+            ("project-sync-plan-no-writes", '"writes_supported_now": false'),
+            ("project-sync-plan-source", '"source_of_truth": "local_collaboration_ledger_board"'),
+            ("project-sync-plan-operation", '"operation": "set_project_field"'),
+            ("project-sync-plan-before", '"before": "Done"'),
+            ("project-sync-plan-after", '"after": "Blocked"'),
+            ("project-sync-plan-idempotency", '"idempotency_key"'),
+            ("project-sync-plan-evidence", '"evidence_refs"'),
+            ("project-sync-plan-readback", '"readback_required"'),
+            ("project-sync-plan-human-gate", '"gate": "explicit_human_gate"'),
+            ("project-sync-plan-missing-field", "missing_project_field"),
+            ("project-sync-plan-missing-option", "missing_project_option"),
+            ("project-sync-plan-ambiguous-item", "ambiguous_project_item"),
+            ("project-sync-plan-project-done-open", "project_done_while_issue_open"),
+            ("project-sync-plan-closed-not-done", "issue_closed_project_not_done"),
+            ("project-sync-plan-owner-mismatch", "owner_mismatch"),
+            ("project-sync-plan-newer", "local_remote_newer"),
+            ("project-sync-plan-privacy", "privacy_sensitive_value"),
+            ("project-sync-plan-branch-line", "branch_line_mismatch"),
+            ("project-sync-plan-candidate", "candidate_state_not_authoritative"),
+            ("project-sync-plan-built-in-gate", "built_in_status_side_effect"),
+            ("project-sync-plan-issue-gate", "issue_closure_or_reopen_side_effect"),
+            ("project-sync-plan-privacy-gate", "privacy_security_sensitive_sync"),
+            ("project-sync-plan-policy-gate", "broad_project_policy_change"),
+            ("project-sync-plan-future-write-gate", "future_write_apply_transition"),
+            ("project-sync-plan-user-report", '"user_facing_report"'),
+            ("project-sync-plan-telemetry", '"telemetry_issue": "#266"'),
+            ("project-sync-plan-api-attempts", '"api_attempts"'),
+            ("project-sync-plan-elapsed", '"elapsed_time_ms"'),
+            ("project-sync-plan-item-count", '"item_count"'),
+            ("project-sync-plan-operation-count", '"planned_operation_count"'),
+            ("project-sync-plan-conflict-count", '"conflict_count"'),
+            ("project-sync-plan-human-count", '"human_gate_count"'),
+            ("project-sync-plan-no-full-scan", '"full_project_scan_performed": false'),
+            ("project-sync-plan-unsupported-project-write", "live Project mutation"),
+            ("project-sync-plan-unsupported-branch", "checkout/switch"),
+        ):
+            errors.extend(expect_ok(name, sync_plan, expected))
+        degraded_sync_plan = run(
+            [
+                "project-sync-plan",
+                "--issues-json",
+                str(sync_plan_issues),
+                "--ledger-root",
+                str(sync_plan_ledger_root),
+                "--project-owner",
+                "@me",
+                "--project-number",
+                "3",
+                "--json",
+            ],
+            base,
+            {"AGENT_REPO": "farmerhunter/agent-foundry", "PATH": str(fake_bin) + os.pathsep + os.environ.get("PATH", "")},
+        )
+        for name, expected in (
+            ("project-sync-plan-degraded", "degraded_project_readback"),
+            ("project-sync-plan-partial", '"partial_results"'),
+            ("project-sync-plan-degraded-source", "github_graphql_project_v2"),
+        ):
+            errors.extend(expect_ok(name, degraded_sync_plan, expected))
         branch_readiness_json = run(
             [
                 "collaboration-readiness",

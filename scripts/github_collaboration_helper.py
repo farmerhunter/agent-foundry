@@ -42,6 +42,7 @@ READ_ONLY_ACTIONS = {
     "scheduler-audit",
     "collaboration-readiness",
     "foundry-board",
+    "project-sync-plan",
     "local-ledger-report",
     "local-ledger-backfill-preview",
     "activation-report",
@@ -739,6 +740,7 @@ def empty_derived_work_item(key: str, event: dict[str, Any]) -> dict[str, Any]:
         "blocked": False,
         "blocking_reason": None,
         "latest_event_id": None,
+        "latest_occurred_at": None,
         "latest_evidence": [],
         "provenance_links": [],
         "confidence": "unknown",
@@ -766,6 +768,7 @@ def apply_local_ledger_event(item: dict[str, Any], event: dict[str, Any]) -> Non
     event_type = event["event_type"]
     payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
     item["latest_event_id"] = event["event_id"]
+    item["latest_occurred_at"] = event.get("occurred_at", item.get("latest_occurred_at"))
     item["event_ids"].append(event["event_id"])
     item["confidence"] = event.get("confidence", item["confidence"])
     item["unknown_fields"] = merge_unique(item["unknown_fields"], event.get("unknown_fields", []))
@@ -1796,6 +1799,9 @@ def project_field_value(item: dict[str, Any], field: str) -> str | None:
         "Stage": ["Stage", "stage"],
         "Owner Role": ["Owner Role", "owner Role", "owner_role", "ownerRole"],
         "Risk": ["Risk", "risk"],
+        "Target Branch": ["Target Branch", "target Branch", "target_branch", "targetBranch"],
+        "Branch Readiness": ["Branch Readiness", "branch Readiness", "branch_readiness", "branchReadiness"],
+        "Evidence Links": ["Evidence Links", "evidence Links", "evidence_links", "evidenceLinks"],
     }
     for key in aliases[field]:
         if key not in item:
@@ -3301,6 +3307,7 @@ def board_item_from_ledger_item(
         "conflict_count": len(conflicts) + len(ledger_item.get("conflicts", [])),
         "mirror_status": mirror_status,
         "remote_mirror_state": remote_mirror_from_issue(repo, issue, project_item, project_status),
+        "local_updated_at": ledger_item.get("latest_occurred_at"),
         "confidence": ledger_item.get("confidence", "unknown"),
         "state_authority": state_authority,
         "unknown_fields": ledger_item.get("unknown_fields", []),
@@ -3488,6 +3495,309 @@ def build_foundry_board(
             "unknown_not_available_fields": ["exact_elapsed_time", "exact_api_call_count", "billing_grade_token_count"],
         },
     }
+
+
+SYNC_PLAN_FIELDS = ["Status", "Roadmap Status", "Owner Role", "Stage", "Risk", "Target Branch", "Branch Readiness", "Evidence Links"]
+SYNC_PLAN_OWNER_OPTIONS = ["Architect", "Implementer", "Tester", "Reviewer", "Human", "Harvester"]
+
+
+def board_state_to_project_status(state: str) -> str:
+    if state == "done":
+        return "Done"
+    if state in {"in_progress", "tester_evidence", "review", "architect_acceptance", "human_gate"}:
+        return "In Progress"
+    if state in {"blocked", "stale_conflict"}:
+        return "Blocked"
+    return "Todo"
+
+
+def board_state_to_roadmap_status(state: str) -> str:
+    if state == "done":
+        return "Done"
+    if state in {"in_progress", "tester_evidence", "review", "architect_acceptance", "human_gate"}:
+        return "In Progress"
+    if state in {"ready"}:
+        return "Ready"
+    if state in {"blocked", "stale_conflict"}:
+        return "Blocked"
+    return "Planned"
+
+
+def project_item_identity(item: dict[str, Any] | None) -> str | None:
+    if not item:
+        return None
+    for key in ("id", "item_id", "project_item_id"):
+        if item.get(key):
+            return str(item[key])
+    number = project_item_issue_number(item)
+    return f"project-item-for-{number}" if number is not None else None
+
+
+def field_value_for_sync_item(item: dict[str, Any], field: str) -> str | None:
+    if field == "Status":
+        return board_state_to_project_status(str(item.get("state", "planned")))
+    if field == "Roadmap Status":
+        return board_state_to_roadmap_status(str(item.get("state", "planned")))
+    if field == "Owner Role":
+        owner = item.get("next_owner_role") or item.get("owner_role")
+        return str(owner).replace("_", " ").title().replace(" ", "") if owner else None
+    if field == "Stage":
+        stage = item.get("stage")
+        return str(stage) if stage else None
+    if field == "Risk":
+        risk = item.get("risk")
+        return str(risk) if risk else None
+    if field == "Target Branch":
+        return item.get("target_branch")
+    if field == "Branch Readiness":
+        return item.get("branch_readiness")
+    if field == "Evidence Links":
+        refs = item.get("evidence_refs") or []
+        links = [ref.get("url_or_path") for ref in refs if isinstance(ref, dict) and ref.get("url_or_path")]
+        return ", ".join(links) if links else None
+    return None
+
+
+def contains_sensitive_value(value: Any) -> bool:
+    text = json.dumps(value, sort_keys=True) if isinstance(value, (dict, list)) else str(value or "")
+    lowered = text.lower()
+    sensitive_markers = ("token", "secret", "credential", "private", "/users/", "~/.ssh", "ssh-rsa", "begin private key")
+    return any(marker in lowered for marker in sensitive_markers)
+
+
+def sync_conflict(code: str, item: dict[str, Any] | None, message: str, severity: str = "warning", details: dict[str, Any] | None = None) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "code": code,
+        "severity": severity,
+        "message": message,
+    }
+    if item is not None:
+        payload["work_item_id"] = item.get("work_item_id")
+        payload["board_item_id"] = item.get("board_item_id")
+    if details:
+        payload.update(details)
+    return payload
+
+
+def sync_human_gate(reason: str, item: dict[str, Any] | None, message: str, details: dict[str, Any] | None = None) -> dict[str, Any]:
+    gate: dict[str, Any] = {
+        "reason": reason,
+        "message": message,
+        "required_decision": "human_review_before_any_future_write_apply",
+    }
+    if item is not None:
+        gate["work_item_id"] = item.get("work_item_id")
+    if details:
+        gate.update(details)
+    return gate
+
+
+def compare_isoish(left: str | None, right: str | None) -> str | None:
+    if not left or not right or left == right:
+        return None
+    return "local_newer" if left > right else "remote_newer"
+
+
+def build_project_sync_plan(
+    repo: str,
+    board: dict[str, Any],
+    project_items: list[dict[str, Any]],
+    project_status: dict[str, Any],
+    project_attempts: dict[str, Any],
+    elapsed_time_ms: float,
+) -> dict[str, Any]:
+    fields_seen = set(project_status.get("fields_seen") or [])
+    options_seen = set(project_status.get("options_seen") or [])
+    project_by_issue: dict[int, list[dict[str, Any]]] = {}
+    for project_item in project_items:
+        number = project_item_issue_number(project_item)
+        if number is not None:
+            project_by_issue.setdefault(number, []).append(project_item)
+    conflicts: list[dict[str, Any]] = []
+    human_gates: list[dict[str, Any]] = [
+        sync_human_gate(
+            "future_write_apply_transition",
+            None,
+            "This helper only generates a dry-run plan; any future Project write/apply transition requires Human authorization.",
+        )
+    ]
+    operations: list[dict[str, Any]] = []
+    partial_results = []
+    if project_status.get("status") in {"config_missing", "skipped"}:
+        partial_results.append({"source": "github_graphql_project_v2", "status": project_status.get("status"), "impact": "Project mirror was not configured; plan reports local desired state only."})
+    elif project_status.get("status") != "ok":
+        conflicts.append(sync_conflict("degraded_project_readback", None, "Project readback is degraded; sync plan is partial.", details={"project_status": project_status.get("status"), "error": project_status.get("error")}))
+        partial_results.append({"source": "github_graphql_project_v2", "status": project_status.get("status"), "error": project_status.get("error")})
+    for field in SYNC_PLAN_FIELDS:
+        if field not in fields_seen and project_status.get("explicit_metadata"):
+            conflicts.append(sync_conflict("missing_project_field", None, f"Project field `{field}` is missing from configured metadata.", details={"field": field}))
+    if project_status.get("explicit_metadata"):
+        for option in SYNC_PLAN_OWNER_OPTIONS:
+            if option not in options_seen:
+                conflicts.append(sync_conflict("missing_project_option", None, f"Owner Role option `{option}` is missing.", details={"field": "Owner Role", "option": option}))
+    for item in board.get("items", []):
+        if item.get("state_authority") == "candidate_import":
+            conflicts.append(sync_conflict("candidate_state_not_authoritative", item, "Imported candidate state cannot be synced until a later migration acceptance gate."))
+            continue
+        number = None
+        match = re.search(r"#(?:issue|pr):(\d+)$", str(item.get("work_item_id", "")))
+        if match:
+            number = int(match.group(1))
+        project_matches = project_by_issue.get(number, []) if number is not None else []
+        if len(project_matches) > 1:
+            conflicts.append(sync_conflict("ambiguous_project_item", item, "Multiple Project items match the same work item.", details={"project_item_count": len(project_matches)}))
+            continue
+        project_item = project_matches[0] if project_matches else None
+        if project_status.get("status") == "ok" and project_item is None:
+            conflicts.append(sync_conflict("missing_project_item", item, "No Project mirror item exists for this local board item."))
+        remote_state = item.get("remote_mirror_state") if isinstance(item.get("remote_mirror_state"), dict) else {}
+        project_lane = project_field_value(project_item or {}, "Status")
+        project_roadmap = project_field_value(project_item or {}, "Roadmap Status")
+        github_state = str(remote_state.get("github_state") or "").upper()
+        if project_lane == "Done" and github_state == "OPEN":
+            conflicts.append(sync_conflict("project_done_while_issue_open", item, "Project is Done while GitHub issue is still open.", details={"project_status": project_lane, "github_state": github_state}))
+            human_gates.append(sync_human_gate("issue_closure_or_reopen_side_effect", item, "Do not infer issue closure/reopen from Project Done mismatch."))
+        if github_state == "CLOSED" and project_lane != "Done":
+            conflicts.append(sync_conflict("issue_closed_project_not_done", item, "GitHub issue is closed but Project mirror is not Done.", details={"project_status": project_lane, "github_state": github_state}))
+            human_gates.append(sync_human_gate("built_in_status_side_effect", item, "Changing built-in Project Status to Done can imply workflow movement and needs review."))
+        remote_owner = project_field_value(project_item or {}, "Owner Role")
+        desired_owner = field_value_for_sync_item(item, "Owner Role")
+        if remote_owner and desired_owner and remote_owner.lower() != desired_owner.lower():
+            conflicts.append(sync_conflict("owner_mismatch", item, "Project Owner Role differs from local board owner.", details={"remote_owner": remote_owner, "desired_owner": desired_owner}))
+        freshness = compare_isoish(item.get("local_updated_at"), (project_item or {}).get("updatedAt") or (project_item or {}).get("updated_at"))
+        if freshness:
+            conflicts.append(sync_conflict("local_remote_newer", item, "Local and remote mirror timestamps differ; review before any future apply.", details={"freshness": freshness, "local_updated_at": item.get("local_updated_at"), "remote_updated_at": (project_item or {}).get("updatedAt") or (project_item or {}).get("updated_at")}))
+        if contains_sensitive_value(item.get("evidence_refs")) or contains_sensitive_value(item.get("target_branch")):
+            conflicts.append(sync_conflict("privacy_sensitive_value", item, "Potentially private evidence or branch value would need redaction before sync.", severity="error"))
+            human_gates.append(sync_human_gate("privacy_security_sensitive_sync", item, "Privacy/security-sensitive values require Human review before any future write."))
+        target_branch = item.get("target_branch")
+        if target_branch:
+            release_line = "v2" if target_branch == V2_INTEGRATION_BRANCH else "v1" if target_branch == "main" else "custom"
+            stage = str(item.get("stage") or "").lower()
+            if (stage.startswith("v2") and release_line == "v1") or (stage in {"af-13", "af-14", "af-15", "v1.1"} and release_line == "v2"):
+                conflicts.append(sync_conflict("branch_line_mismatch", item, "Target branch does not match the item's stage/release line.", details={"target_branch": target_branch, "stage": item.get("stage")}))
+        for field in SYNC_PLAN_FIELDS:
+            desired = field_value_for_sync_item(item, field)
+            if desired is None:
+                continue
+            if contains_sensitive_value(desired):
+                conflicts.append(sync_conflict("privacy_sensitive_value", item, f"Desired `{field}` value may contain private data.", severity="error", details={"field": field}))
+                human_gates.append(sync_human_gate("privacy_security_sensitive_sync", item, f"Desired `{field}` value requires Human privacy review."))
+                continue
+            before = project_field_value(project_item or {}, field) if project_item else None
+            if before == desired:
+                continue
+            gate = "explicit_human_gate" if field == "Status" else "agent_handled_existing_workflow"
+            if field == "Status":
+                human_gates.append(sync_human_gate("built_in_status_side_effect", item, "Built-in Project Status changes are dry-run only and need Human review before any future write.", details={"before": before, "after": desired}))
+            operations.append(
+                {
+                    "operation": "set_project_field",
+                    "project_item_id": project_item_identity(project_item),
+                    "work_item_id": item.get("work_item_id"),
+                    "field": field,
+                    "before": before,
+                    "after": desired,
+                    "idempotency_key": f"{item.get('work_item_id')}::{field}::{desired}",
+                    "gate": gate,
+                    "evidence_refs": item.get("evidence_refs", []),
+                    "readback_required": {
+                        "source": "github_graphql_project_v2",
+                        "field": field,
+                        "expected": desired,
+                    },
+                    "mutation_performed": False,
+                }
+            )
+    broad_policy_fields = {"Status", "Roadmap Status", "Owner Role", "Stage", "Risk"} - fields_seen if project_status.get("explicit_metadata") else set()
+    if broad_policy_fields:
+        human_gates.append(sync_human_gate("broad_project_policy_change", None, "Creating or changing Project schema/options is out of scope for dry-run sync.", details={"fields": sorted(broad_policy_fields)}))
+    payload = {
+        "schema_version": 1,
+        "command": "project-sync-plan",
+        "repo": repo,
+        "mode": "dry_run",
+        "mutation_performed": False,
+        "writes_supported_now": False,
+        "apply_supported_now": False,
+        "source_of_truth": "local_collaboration_ledger_board",
+        "project_role": "optional_visual_mirror",
+        "field_mapping": {field: {"source": "foundry_board_item", "target": f"GitHub Project {field}"} for field in SYNC_PLAN_FIELDS},
+        "planned_operations": operations,
+        "conflicts": conflicts,
+        "human_gates": human_gates,
+        "unsupported_actions": [
+            "live Project mutation",
+            "GitHub write-back",
+            "issue closure automation",
+            "real sync/apply",
+            "branch repair/apply",
+            "checkout/switch",
+            "PR retarget",
+            "rebase",
+            "merge to main",
+            "reset/clean/force push/destructive action",
+            "runtime/Vault/private/generated mutation",
+            "generated publish or capability-pack deploy/apply",
+            "memory-system work",
+            "release/tag work",
+            "final V2 readiness closure",
+        ],
+        "readback": {
+            "project_status": project_status,
+            "project_attempts": project_attempts,
+            "partial_results": partial_results,
+            "full_project_scan_performed": False,
+        },
+        "user_facing_report": {
+            "summary": f"Dry-run Project sync plan prepared {len(operations)} would-change operations, {len(conflicts)} conflicts, and {len(human_gates)} Human gates.",
+            "next_actions": [
+                "review_conflicts_before_any_future_apply",
+                "collect_human_decision_for_human_gates",
+                "rerun_after_project_readback_if_degraded",
+            ],
+            "writes": "none",
+        },
+        "telemetry": {
+            "telemetry_issue": "#266",
+            "api_attempts": project_attempts.get("attempts", 0),
+            "elapsed_time_ms": elapsed_time_ms,
+            "item_count": len(board.get("items", [])),
+            "planned_operation_count": len(operations),
+            "conflict_count": len(conflicts),
+            "human_gate_count": len(human_gates),
+            "full_project_scan_performed": False,
+        },
+    }
+    return payload
+
+
+def cmd_project_sync_plan(args: argparse.Namespace) -> None:
+    start = time.perf_counter()
+    repo, repo_source = resolve_repo(args)
+    if args.issues_json or args.fixture_json:
+        issues = normalize_issue_collection(load_json(args.issues_json or args.fixture_json))
+        scope = {"mode": "fixture", "issue_numbers": [issue_number(issue) for issue in issues if issue_number(issue) is not None]}
+        project_items, project_status, project_attempts = read_project_items(args)
+    else:
+        issues, scope = read_live_issues(repo, args)
+        project_items, project_status, project_attempts = read_project_items(args)
+    local_git, _local_git_status, _local_git_attempts = read_local_git_state(args)
+    ledger_report = build_local_ledger_report(local_ledger_root(args))
+    candidate_events = normalize_candidate_events(load_json(args.candidate_events_json)) if args.candidate_events_json else []
+    board = build_foundry_board(
+        repo,
+        issues[: args.limit],
+        project_items,
+        project_status,
+        local_git,
+        args.name,
+        {"repo_source": repo_source, **scope, "ledger_root": ledger_report["ledger_root"], "sync_plan_source": True},
+        accepted_replay={"derived_work_items": ledger_report["derived_work_items"], "summary": ledger_report["summary"]},
+        candidate_events=candidate_events,
+    )
+    elapsed_time_ms = round((time.perf_counter() - start) * 1000, 3)
+    print_json_or_text(build_project_sync_plan(repo, board, project_items, project_status, project_attempts, elapsed_time_ms), args.json)
 
 
 def cmd_foundry_board(args: argparse.Namespace) -> None:
@@ -4155,6 +4465,25 @@ def build_parser() -> argparse.ArgumentParser:
     board.add_argument("--name", default="Foundry Board", help="Board name shown in the read-only report.")
     board.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON for foundry-board.")
     board.set_defaults(func=cmd_foundry_board)
+
+    sync_plan = sub.add_parser("project-sync-plan")
+    sync_plan.add_argument("--fixture-json", help="Legacy issue fixture; prefer --issues-json.")
+    sync_plan.add_argument("--issues-json", help="Fixture issue object, list, or object with issues/items.")
+    sync_plan.add_argument("--project-items-json", help="Fixture Project item list or gh project item-list JSON.")
+    sync_plan.add_argument("--local-git-json", help="Fixture local git state for branch/readiness display.")
+    sync_plan.add_argument("--ledger-root", help="Accepted local ledger root. Defaults to usage/local/collaboration-ledger.")
+    sync_plan.add_argument("--candidate-events-json", help="Read-only candidate event list or backfill preview output for conflict display.")
+    sync_plan.add_argument("--issues", help="Comma-separated explicit issue numbers for bounded live sync plan.")
+    sync_plan.add_argument("--stage", help="Stage value or label for bounded live issue report.")
+    sync_plan.add_argument("--limit", type=int, default=20, help="Maximum issues/items to inspect.")
+    sync_plan.add_argument("--project-owner", help="Project owner for targeted live Project item-list, such as @me or an org.")
+    sync_plan.add_argument("--project-number", type=int, help="Project number for targeted live Project item-list.")
+    sync_plan.add_argument("--project-limit", type=int, default=50, help="Maximum Project items to read when explicitly configured.")
+    sync_plan.add_argument("--project-retries", type=int, default=2, help="Bounded retries for transient Project reads.")
+    sync_plan.add_argument("--project-retry-backoff", type=float, default=0.5, help="Seconds between transient Project read retries.")
+    sync_plan.add_argument("--name", default="Foundry Board", help="Board name for the internal read-only board source.")
+    sync_plan.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON for project-sync-plan.")
+    sync_plan.set_defaults(func=cmd_project_sync_plan)
 
     ledger_append = sub.add_parser("local-ledger-append")
     ledger_append.add_argument("--ledger-root", help="Local ledger root. Defaults to usage/local/collaboration-ledger.")

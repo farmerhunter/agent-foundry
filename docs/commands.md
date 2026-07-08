@@ -37,6 +37,7 @@ Use these short commands in day-to-day agent work. English command text is canon
 | `show Foundry Board` | `显示 Foundry Board` | Render a read-only local-first board/report from accepted ledger replay first, with GitHub/Project as mirror drift evidence. It does not write GitHub, Project, ledger, runtime, or Vault state. |
 | `show local collaboration ledger report` | `显示 local collaboration ledger report` | Replay local append-only ledger events from `usage/local/collaboration-ledger/` or a supplied test root into derived work-item state. Read-only; no GitHub dependency or write-back. |
 | `preview existing project ledger backfill` | `预览 existing project ledger backfill` | Convert bounded existing GitHub-first issue/PR/comment/label/milestone/Project evidence into candidate local ledger events for review only. No authoritative migration or writes. |
+| `preview GitHub Project sync plan` | `预览 GitHub Project sync plan` | Generate a dry-run Project mirror plan from ledger-backed board state with before/after values, conflicts, Human gates, and readback requirements. No Project/GitHub writes. |
 | `publish practices` | `发布 practices` | Publish adapters from current active practices; usually not needed manually. |
 | `check operation context` | `检查操作上下文` | Show current Agent Foundry Core/Vault/evidence/runtime context before writes. |
 | `check Agent Foundry status` | `检查 Agent Foundry 状态` | Run a read-only status pass for Core, selected Vault, generated output, runtime receipts, and manual targets. |
