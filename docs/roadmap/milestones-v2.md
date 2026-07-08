@@ -1,7 +1,7 @@
 # Roadmap Milestones V2
 
 Status: planning document
-Updated: 2026-07-03
+Updated: 2026-07-08
 Scope: V2 local-first orchestration, Foundry Board, Local Collaboration Ledger, GitHub Project remote sync, and migration from existing GitHub-first projects.
 
 ## V2 Goal
@@ -17,6 +17,10 @@ GitHub Project remains useful, but it becomes a remote sync and collaboration su
 - Start from end-to-end user journeys before building storage or board features.
 - Support both new projects and existing issue-driven projects.
 - Build read-only visibility before write or sync automation.
+- Treat design acceptance as a gate, not as capability completion. A V2
+  capability is not complete until the user can run the relevant local-first
+  workflow, inspect evidence, and understand next actions without relying on a
+  design comment.
 - Preserve GitHub issue and PR evidence as durable public collaboration records.
 - Preserve Agent Foundry layer boundaries: Core, User Vault, Generated, Runtime, and Local Private.
 - Keep memory-system work out of V2 unless a later explicit decision changes that.
@@ -41,16 +45,24 @@ Release rules:
 
 ## V2 Milestone Sequence
 
+V2 uses separate design and implementation gates. Closed design issues such as
+#294 and #298 are accepted architecture decisions; they do not by themselves
+complete the user-facing capability.
+
 | Milestone | GitHub records | Purpose | Status |
 | --- | --- | --- | --- |
-| V2-0 User Journey And UX Contract | #293 | Define the end-to-end experience before implementation: new project setup, existing project migration, day-to-day orchestration, review, recovery, sync, and completion. | Planned; not released |
-| V2-1 Telemetry Evidence Window | #266 | Collect meaningful telemetry across selected V2 work so ledger and board design are based on real coordination overhead rather than guesses. | Held until V2-0 acceptance |
-| V2-2 Local Collaboration Ledger | #294 | Define the local durable event model for assignments, dispatches, evidence, reviews, approvals, merges, closures, blockers, and handoffs. | Dependency-gated |
-| V2-3 Foundry Board Domain Model | #295 | Define board state, columns, filters, issue/project/thread relationships, and user-visible status without binding too early to UI implementation. | Dependency-gated |
-| V2-4 Existing Project Migration And Backfill | #296 | Convert current GitHub-first projects into local-first orchestration state with provenance and conflict handling. | Dependency-gated |
-| V2-5 Foundry Board Read-Only MVP | #297 | Give users a working read-only board that explains current work, evidence, owner, next action, and blocked states from local durable data. | Dependency-gated |
-| V2-6 GitHub Project Remote Sync | #298 | Sync local orchestration state to GitHub Project safely, with conflict rules, dry-run/readback behavior, and no hidden source-of-truth reversal. | Dependency-gated |
-| V2-7 V2 Readiness And Release Gate | #299 | Verify end-to-end journeys, migration, board visibility, sync behavior, docs, and release readiness. | Dependency-gated |
+| V2-0 User Journey And UX Contract | #293 | Define the end-to-end experience before implementation: new project setup, existing project migration, day-to-day orchestration, review, recovery, sync, and completion. | Accepted design |
+| V2-1 Telemetry Evidence Window | #266 | Collect meaningful telemetry across selected V2 work so ledger and board design are based on real coordination overhead rather than guesses. | Open evidence window |
+| V2-2 Local Collaboration Ledger Design | #294 | Define the local durable event model for assignments, dispatches, evidence, reviews, approvals, merges, closures, blockers, and handoffs. | Accepted design |
+| V2-2A Local Collaboration Ledger Storage/Replay | #359 | Implement local ledger event storage and replay so local state can become durable source-of-truth evidence. | Held implementation |
+| V2-3 Foundry Board Domain Model | #295 | Define board state, columns, filters, issue/project/thread relationships, and user-visible status without binding too early to UI implementation. | Accepted design |
+| V2-4 Existing Project Migration And Backfill Design | #296 | Define how current GitHub-first projects become candidate local-first orchestration state with provenance and conflict handling. | Accepted design |
+| V2-4A Existing Project Backfill Implementation | #360 | Produce read-only candidate local ledger events from bounded GitHub issue/PR/Project evidence. | Held implementation |
+| V2-5 Foundry Board GitHub-Evidence MVP | #297 | Provide a working read-only board/report from issue/PR/contract evidence while local ledger storage is not yet available. | Completed MVP slice |
+| V2-5B Ledger-Backed Foundry Board | #361 | Make the Foundry Board read from local ledger replay first, with GitHub as provenance/mirror evidence. | Held implementation |
+| V2-6 GitHub Project Remote Sync Design | #298 | Define safe remote mirror sync, dry-run/readback behavior, field mapping, conflict rules, and human gates. | Accepted design |
+| V2-6A GitHub Project Dry-Run Sync Plan | #362 | Implement read-only sync-plan generation that shows would-change/conflict/human-gate outcomes without writing Project. | Held implementation |
+| V2-7 V2 Readiness And Release Gate | #299 | Verify end-to-end journeys, migration, ledger replay, board visibility, dry-run sync behavior, docs, telemetry, and residual risks. | Held until implementation gates complete |
 
 ## V2-0 User Journey And UX Contract
 
@@ -108,6 +120,10 @@ Expected event categories include:
 
 The ledger must support audit and replay before it supports automation.
 
+#294 accepted the event model only. Capability closure requires #359 to provide
+actual local storage and replay. Until #359 is accepted, V2 still depends on
+GitHub issue/PR evidence for durable collaboration state.
+
 ## V2-3 Foundry Board Domain Model
 
 The Foundry Board is the user-facing view over local orchestration state.
@@ -136,7 +152,12 @@ Migration should:
 - avoid changing GitHub state during read-only backfill;
 - produce a migration report users can review before any write-back.
 
-This milestone is required for V2 because Agent Foundry already has substantial durable GitHub history.
+This milestone is required for V2 because Agent Foundry already has substantial
+durable GitHub history.
+
+#296 accepted the migration/backfill design only. Capability closure requires
+#360 to produce read-only candidate ledger events with provenance, confidence,
+contradiction handling, and no GitHub mutation.
 
 ## V2-5 Foundry Board Read-Only MVP
 
@@ -170,6 +191,10 @@ remain routed through existing issue/PR gates.
 
 Write automation should wait until read-only behavior is trusted.
 
+#297 completed a useful GitHub-evidence-backed board/report MVP. It is not the
+final local-first board capability because it does not yet read local ledger
+replay as the primary source. Capability closure requires #361 after #359.
+
 ## V2-6 GitHub Project Remote Sync
 
 GitHub Project sync should treat GitHub as a collaboration mirror, not the canonical local orchestration store.
@@ -187,6 +212,11 @@ The sync design must define:
 
 Project sync must not silently close issues, overwrite human edits, or hide discrepancies between local and remote state.
 
+#298 accepted the remote sync design only. Capability closure requires #362 to
+implement read-only dry-run sync-plan generation that shows what would change,
+where conflicts exist, and which actions require Human gates, without writing
+GitHub Project.
+
 ## V2-7 V2 Readiness And Release Gate
 
 V2 readiness should verify:
@@ -197,8 +227,13 @@ V2 readiness should verify:
 - review and human approval journey;
 - blocked/recovery journey;
 - local-first source-of-truth behavior;
-- GitHub Project sync behavior;
+- ledger storage/replay behavior;
+- ledger-backed Foundry Board behavior;
+- GitHub Project dry-run sync-plan behavior;
 - docs and user-facing walkthrough;
 - telemetry evidence and residual risks.
+
+#299 must remain held until #359, #360, #361, and #362 are accepted or explicitly
+deferred by a Human-gated V2 scope decision.
 
 V2 release should remain separate from memory-system implementation.
