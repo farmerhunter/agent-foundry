@@ -142,6 +142,17 @@ The report is read-only and does not need live GitHub access. Append mode writes
 
 **中文要点：** Local ledger report 会 replay 本地 append-only events，显示 work item state、证据、conflict、unknown/not_available 和 telemetry。它不依赖 GitHub live read，也不会做 #360 backfill、#361 board、#362 sync 或任何 GitHub/Project 写入。
 
+For existing GitHub-first projects, ask for a read-only backfill preview:
+
+```text
+preview existing project ledger backfill
+预览 existing project ledger backfill
+```
+
+The preview converts bounded issue/PR/comment/label/milestone/Project mirror evidence into candidate local ledger events with provenance, confidence, conflicts, manual review needs, and #266 telemetry. Candidate events are not authoritative and are kept separate from accepted local ledger state until a later reviewed migration/apply gate accepts them.
+
+**中文要点：** Backfill preview 只生成 candidate events 给 review；不会写 GitHub/Project，不会把 candidate 变成 accepted ledger state，也不会启动 #361 board 或 #362 sync。
+
 ## First-Time Setup
 
 On a new machine, use `docs/deployment.md` for the full split Core/Vault install flow. Short version:

@@ -91,6 +91,7 @@ def main() -> int:
                 "Local Collaboration Ledger Storage And Replay",
                 "usage/local/collaboration-ledger/events.jsonl",
                 "local-ledger-report",
+                "local-ledger-backfill-preview",
             ],
         )
     )
@@ -1580,6 +1581,193 @@ def main() -> int:
             print("local-ledger-write-scope-temp-only: ok")
         else:
             errors.append("local-ledger-write-scope-temp-only: ledger did not write inside explicit temp root")
+        backfill_issues = base / "backfill-issues.json"
+        backfill_prs = base / "backfill-prs.json"
+        backfill_project = base / "backfill-project.json"
+        write(
+            backfill_issues,
+            json.dumps(
+                {
+                    "issues": [
+                        {
+                            "number": 410,
+                            "title": "Open but Project Done",
+                            "state": "OPEN",
+                            "url": "https://github.com/farmerhunter/agent-foundry/issues/410",
+                            "labels": [{"name": "needs:implementer"}, {"name": "stage:v2.0"}],
+                            "updatedAt": "2026-07-08T11:00:00Z",
+                            "comments": [
+                                {"body": "Dispatch evidence sent to implementer thread.", "url": "https://github.com/farmerhunter/agent-foundry/issues/410#dispatch"},
+                                {"body": "Callback: implementation evidence returned.", "url": "https://github.com/farmerhunter/agent-foundry/issues/410#callback"},
+                                {"body": "Reviewer requested changes.", "url": "https://github.com/farmerhunter/agent-foundry/issues/410#review"},
+                                {"body": "Architect acceptance after fix.", "url": "https://github.com/farmerhunter/agent-foundry/issues/410#acceptance"},
+                                {"body": "Superseded by issue #411.", "url": "https://github.com/farmerhunter/agent-foundry/issues/410#superseded"},
+                            ],
+                        },
+                        {
+                            "number": 411,
+                            "title": "Closed but Project Todo",
+                            "state": "CLOSED",
+                            "url": "https://github.com/farmerhunter/agent-foundry/issues/411",
+                            "labels": [{"name": "needs:reviewer"}, {"name": "stage:v2.0"}],
+                            "updatedAt": "2026-07-08T11:01:00Z",
+                            "comments": [],
+                        },
+                        {
+                            "number": 412,
+                            "title": "Ambiguous owner and missing Project item",
+                            "state": "OPEN",
+                            "url": "https://github.com/farmerhunter/agent-foundry/issues/412",
+                            "labels": [{"name": "needs:architect"}, {"name": "needs:reviewer"}, {"name": "stage:v2.0"}],
+                            "updatedAt": "2026-07-08T11:02:00Z",
+                            "comments": [],
+                        },
+                    ]
+                }
+            ),
+        )
+        write(
+            backfill_prs,
+            json.dumps(
+                {
+                    "items": [
+                        {
+                            "number": 413,
+                            "title": "Merged PR",
+                            "state": "MERGED",
+                            "url": "https://github.com/farmerhunter/agent-foundry/pull/413",
+                            "labels": [{"name": "stage:v2.0"}],
+                            "updatedAt": "2026-07-08T11:03:00Z",
+                            "merged": True,
+                            "merge_sha": "def456",
+                        }
+                    ]
+                }
+            ),
+        )
+        write(
+            backfill_project,
+            json.dumps(
+                {
+                    "items": [
+                        {
+                            "content": {"number": 410},
+                            "status": {"name": "Done"},
+                            "owner Role": {"name": "Reviewer"},
+                            "stage": {"name": "v2.0"},
+                        },
+                        {
+                            "content": {"number": 411},
+                            "status": {"name": "Todo"},
+                            "owner Role": {"name": "Reviewer"},
+                            "stage": {"name": "v2.0"},
+                        },
+                    ]
+                }
+            ),
+        )
+        accepted_ledger_root = base / "accepted-ledger"
+        accepted_event = base / "accepted-410.json"
+        write(
+            accepted_event,
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "event_id": "accepted-410",
+                    "event_type": "assignment",
+                    "occurred_at": "2026-07-08T10:00:00Z",
+                    "work_item": {"id": "farmerhunter/agent-foundry#issue:410", "repo": "farmerhunter/agent-foundry", "type": "issue", "number": 410},
+                    "actor_role": "coordinator",
+                    "confidence": "observed",
+                    "provenance": {"links": ["https://github.com/farmerhunter/agent-foundry/issues/410#accepted-local"]},
+                    "payload": {"owner_role": "implementer"},
+                }
+            ),
+        )
+        errors.extend(
+            expect_ok(
+                "local-ledger-backfill-accepted-fixture",
+                run(["local-ledger-append", "--ledger-root", str(accepted_ledger_root), "--event-json", str(accepted_event), "--json"], base),
+                '"mutation_performed": true',
+            )
+        )
+        before_preview = (accepted_ledger_root / "events.jsonl").read_text(encoding="utf-8")
+        backfill_preview = run(
+            [
+                "--repo",
+                "farmerhunter/agent-foundry",
+                "local-ledger-backfill-preview",
+                "--issues-json",
+                str(backfill_issues),
+                "--prs-json",
+                str(backfill_prs),
+                "--project-items-json",
+                str(backfill_project),
+                "--ledger-root",
+                str(accepted_ledger_root),
+                "--json",
+            ],
+            base,
+        )
+        for name, expected in (
+            ("local-ledger-backfill-command", '"command": "local-ledger-backfill-preview"'),
+            ("local-ledger-backfill-read-only", '"mode": "read_only"'),
+            ("local-ledger-backfill-no-mutation", '"mutation_performed": false'),
+            ("local-ledger-backfill-no-apply", '"apply_supported_now": false'),
+            ("local-ledger-backfill-candidates-not-authority", '"candidate_events_are_authoritative": false'),
+            ("local-ledger-backfill-accepted-separate", '"state_authority": "accepted_local_ledger"'),
+            ("local-ledger-backfill-assignment", '"event_type": "assignment"'),
+            ("local-ledger-backfill-dispatch", '"event_type": "dispatch"'),
+            ("local-ledger-backfill-callback", '"event_type": "callback"'),
+            ("local-ledger-backfill-review", '"event_type": "requested_changes"'),
+            ("local-ledger-backfill-acceptance", '"event_type": "acceptance"'),
+            ("local-ledger-backfill-merge", '"event_type": "merge"'),
+            ("local-ledger-backfill-closure", '"event_type": "closure"'),
+            ("local-ledger-backfill-sync", '"event_type": "sync_readback"'),
+            ("local-ledger-backfill-owner-mismatch", "owner_mismatch"),
+            ("local-ledger-backfill-closed-not-done", "closed_issue_not_mirrored_done"),
+            ("local-ledger-backfill-project-done-open", "project_done_while_item_open"),
+            ("local-ledger-backfill-stale-labels", "stale_or_conflicting_needs_labels"),
+            ("local-ledger-backfill-superseded", "superseded_work"),
+            ("local-ledger-backfill-missing-project", "missing_project_item"),
+            ("local-ledger-backfill-partial-evidence", "partial existing-project evidence requires manual review"),
+            ("local-ledger-backfill-accepted-conflict", "accepted_local_state_differs_from_candidate"),
+            ("local-ledger-backfill-telemetry", '"telemetry_issue": "#266"'),
+            ("local-ledger-backfill-candidate-count", '"candidate_count"'),
+            ("local-ledger-backfill-manual-review", '"manual_review_count"'),
+            ("local-ledger-backfill-writes-none", '"writes": "none"'),
+            ("local-ledger-backfill-forbidden-project", "Project v2 mutation"),
+            ("local-ledger-backfill-forbidden-board", "#361 ledger-backed Foundry Board"),
+            ("local-ledger-backfill-next-action", "review_candidate_events_before_acceptance"),
+        ):
+            errors.extend(expect_ok(name, backfill_preview, expected))
+        after_preview = (accepted_ledger_root / "events.jsonl").read_text(encoding="utf-8")
+        if before_preview == after_preview:
+            print("local-ledger-backfill-no-ledger-write: ok")
+        else:
+            errors.append("local-ledger-backfill-no-ledger-write: preview mutated accepted ledger")
+        degraded_backfill = run(
+            [
+                "--repo",
+                "farmerhunter/agent-foundry",
+                "local-ledger-backfill-preview",
+                "--issues-json",
+                str(backfill_issues),
+                "--project-owner",
+                "@me",
+                "--project-number",
+                "3",
+                "--json",
+            ],
+            base,
+            {"PATH": str(fake_bin) + os.pathsep + os.environ.get("PATH", "")},
+        )
+        for name, expected in (
+            ("local-ledger-backfill-degraded-source", "github_graphql_project_v2"),
+            ("local-ledger-backfill-degraded-count", '"degraded_source_count": 1'),
+            ("local-ledger-backfill-degraded-events", '"degraded_evidence"'),
+        ):
+            errors.extend(expect_ok(name, degraded_backfill, expected))
 
     if errors:
         print("GitHub collaboration helper fixture tests failed:")
