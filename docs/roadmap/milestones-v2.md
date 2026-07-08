@@ -25,6 +25,10 @@ GitHub Project remains useful, but it becomes a remote sync and collaboration su
 - Preserve Agent Foundry layer boundaries: Core, User Vault, Generated, Runtime, and Local Private.
 - Keep memory-system work out of V2 unless a later explicit decision changes that.
 - Make migration and backfill first-class work, not a cleanup afterthought.
+- Treat testing as part of capability closure, not as final paperwork. Each
+  implementation gate must carry focused automated tests, degraded-state tests,
+  no-write assertions, and user-facing output checks; V2-7 then verifies the
+  end-to-end journeys across those accepted slices.
 
 ## Branch Policy
 
@@ -63,6 +67,39 @@ complete the user-facing capability.
 | V2-6 GitHub Project Remote Sync Design | #298 | Define safe remote mirror sync, dry-run/readback behavior, field mapping, conflict rules, and human gates. | Accepted design |
 | V2-6A GitHub Project Dry-Run Sync Plan | #362 | Implement read-only sync-plan generation that shows would-change/conflict/human-gate outcomes without writing Project. | Held implementation |
 | V2-7 V2 Readiness And Release Gate | #299 | Verify end-to-end journeys, migration, ledger replay, board visibility, dry-run sync behavior, docs, telemetry, and residual risks. | Held until implementation gates complete |
+
+## V2 Testing Contract
+
+V2 cannot close on design acceptance, partial helper output, or isolated unit
+tests. Testing is part of the user capability:
+
+- each implementation issue owns its own focused automated tests;
+- read-only and dry-run commands must assert `mutation_performed: false` and no
+  unintended Project, GitHub, Vault, runtime, generated, branch, or filesystem
+  writes;
+- ledger-backed behavior must prove replay determinism and source-of-truth
+  boundaries, not only JSON shape;
+- migration and sync tests must include degraded GitHub/Project access,
+  contradictory evidence, stale state, idempotency, and human-gate
+  classification;
+- user-facing report tests must prove that a maintainer can see status, evidence,
+  conflicts, next actions, unknown/degraded sources, and forbidden actions;
+- #299 must run the end-to-end walkthrough only after #359-#362 have accepted
+  implementation evidence, unless the user explicitly approves a scoped V2
+  deferral.
+
+The testing bar for #359-#362 is:
+
+- deterministic fixture tests for the new local-first behavior;
+- negative/adversarial tests for malformed, missing, stale, contradictory, or
+  degraded inputs;
+- no-write tests for every read-only or dry-run path;
+- branch-aware tests on the V2 integration branch where branch state affects the
+  output;
+- telemetry hooks for #266 that record useful scale and cost signals without
+  claiming billing-grade counters;
+- at least one user-facing command/report smoke path that reads like a practical
+  maintainer workflow, not just a raw debug payload.
 
 ## V2-0 User Journey And UX Contract
 
@@ -124,6 +161,11 @@ The ledger must support audit and replay before it supports automation.
 actual local storage and replay. Until #359 is accepted, V2 still depends on
 GitHub issue/PR evidence for durable collaboration state.
 
+#359 testing must cover event schema validation, append/replay determinism,
+supersession, corrupt or unknown events, conflict/degraded evidence handling,
+idempotency, no GitHub dependency for local replay, and user-facing report
+output that explains what local state exists and what still needs review.
+
 ## V2-3 Foundry Board Domain Model
 
 The Foundry Board is the user-facing view over local orchestration state.
@@ -158,6 +200,12 @@ durable GitHub history.
 #296 accepted the migration/backfill design only. Capability closure requires
 #360 to produce read-only candidate ledger events with provenance, confidence,
 contradiction handling, and no GitHub mutation.
+
+#360 testing must cover bounded GitHub evidence conversion into candidate
+events, provenance/confidence preservation, contradictory and stale history,
+superseded work, degraded GraphQL/Project access, no GitHub writes, and report
+output that clearly separates accepted local state from candidate imported
+state.
 
 ## V2-5 Foundry Board Read-Only MVP
 
@@ -195,6 +243,11 @@ Write automation should wait until read-only behavior is trusted.
 final local-first board capability because it does not yet read local ledger
 replay as the primary source. Capability closure requires #361 after #359.
 
+#361 testing must prove that board lanes, owner, next actions, conflicts, and
+mirror drift are derived from ledger replay first. GitHub issue/PR/Project
+evidence may enrich provenance, but Project degradation or absence must not make
+the local board unusable.
+
 ## V2-6 GitHub Project Remote Sync
 
 GitHub Project sync should treat GitHub as a collaboration mirror, not the canonical local orchestration store.
@@ -217,6 +270,12 @@ implement read-only dry-run sync-plan generation that shows what would change,
 where conflicts exist, and which actions require Human gates, without writing
 GitHub Project.
 
+#362 testing must cover dry-run-only behavior, would-change before/after values,
+idempotency keys, conflict classes, human-gate classification, degraded
+GraphQL/Project readback, retry/readback metadata, partial results, and explicit
+proof that Project writes, issue closure/reopen, and repair/apply are not
+performed.
+
 ## V2-7 V2 Readiness And Release Gate
 
 V2 readiness should verify:
@@ -232,6 +291,19 @@ V2 readiness should verify:
 - GitHub Project dry-run sync-plan behavior;
 - docs and user-facing walkthrough;
 - telemetry evidence and residual risks.
+
+The final readiness walkthrough must include a test matrix for:
+
+- new local-first project setup and first board view;
+- existing GitHub-first project backfill into candidate ledger events;
+- daily orchestration from local replay through board next actions;
+- Reviewer/Architect/Human gate visibility;
+- blocked, stale, superseded, and recovery states;
+- degraded GitHub Project access with useful local output;
+- dry-run sync-plan review with conflicts and human gates;
+- branch-aware V2 integration behavior;
+- no-write guarantees for read-only/dry-run paths;
+- docs and command examples matching the tested user flow.
 
 #299 must remain held until #359, #360, #361, and #362 are accepted or explicitly
 deferred by a Human-gated V2 scope decision.
