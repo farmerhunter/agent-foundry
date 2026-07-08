@@ -483,13 +483,15 @@ Debug/helper surface:
 
 ```text
 agent-foundry-github-collab --repo <owner>/<repo> foundry-board \
+  --ledger-root usage/local/collaboration-ledger \
   --issues 293,294,295 \
   --json
 ```
 
-The report is a read-only MVP. It may read bounded issue/PR evidence, Execution
-Contracts, branch readiness, optional Project item fields, local git state, and
-fixture or future ledger-shaped evidence. It must keep:
+The report is read-only. It reads accepted Local Collaboration Ledger replay as
+the board source of truth, may show imported candidate events as separate
+review state, and treats bounded issue/PR/Project reads as remote mirror or
+drift evidence only. It must keep:
 
 ```text
 mutation_performed: false
@@ -505,15 +507,18 @@ The user-facing board should include:
 - owner role and next owner role;
 - target branch and branch-readiness status;
 - latest evidence and evidence refs;
-- candidate versus accepted state authority;
+- accepted local ledger, imported candidate, and remote mirror state authority;
 - confidence for migrated or inferred records;
 - Project mirror status such as `in_sync`, `drift`, `degraded`,
   `not_configured`, or `unknown`;
 - recommended next actions and forbidden actions.
 
-GitHub Project remains an optional visual mirror. A Project mismatch should
-appear as mirror drift or conflict evidence; it should not cause the helper to
-write Project fields, close issues, retarget PRs, or repair branch state.
+GitHub issue/PR/Project evidence remains optional mirror evidence. A label,
+issue-state, or Project mismatch should appear as mirror drift or conflict
+evidence; it should not replace accepted local ledger replay and should not
+cause the helper to write Project fields, close issues, retarget PRs, or repair
+branch state. #360 candidate backfill events stay candidate/imported state until
+a later reviewed migration gate accepts them.
 
 The read-only MVP is allowed to say what a user or agent should do next through
 existing workflow gates. It is not allowed to perform live repair/apply, Project
