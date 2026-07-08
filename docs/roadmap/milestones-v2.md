@@ -58,15 +58,15 @@ complete the user-facing capability.
 | V2-0 User Journey And UX Contract | #293 | Define the end-to-end experience before implementation: new project setup, existing project migration, day-to-day orchestration, review, recovery, sync, and completion. | Accepted design |
 | V2-1 Telemetry Evidence Window | #266 | Collect meaningful telemetry across selected V2 work so ledger and board design are based on real coordination overhead rather than guesses. | Open evidence window |
 | V2-2 Local Collaboration Ledger Design | #294 | Define the local durable event model for assignments, dispatches, evidence, reviews, approvals, merges, closures, blockers, and handoffs. | Accepted design |
-| V2-2A Local Collaboration Ledger Storage/Replay | #359 | Implement local ledger event storage and replay so local state can become durable source-of-truth evidence. | Held implementation |
+| V2-2A Local Collaboration Ledger Storage/Replay | #359 | Implement local ledger event storage and replay so local state can become durable source-of-truth evidence. | Completed implementation |
 | V2-3 Foundry Board Domain Model | #295 | Define board state, columns, filters, issue/project/thread relationships, and user-visible status without binding too early to UI implementation. | Accepted design |
 | V2-4 Existing Project Migration And Backfill Design | #296 | Define how current GitHub-first projects become candidate local-first orchestration state with provenance and conflict handling. | Accepted design |
-| V2-4A Existing Project Backfill Implementation | #360 | Produce read-only candidate local ledger events from bounded GitHub issue/PR/Project evidence. | Held implementation |
+| V2-4A Existing Project Backfill Implementation | #360 | Produce read-only candidate local ledger events from bounded GitHub issue/PR/Project evidence. | Completed implementation |
 | V2-5 Foundry Board GitHub-Evidence MVP | #297 | Provide a working read-only board/report from issue/PR/contract evidence while local ledger storage is not yet available. | Completed MVP slice |
-| V2-5B Ledger-Backed Foundry Board | #361 | Make the Foundry Board read from local ledger replay first, with GitHub as provenance/mirror evidence. | Held implementation |
+| V2-5B Ledger-Backed Foundry Board | #361 | Make the Foundry Board read from local ledger replay first, with GitHub as provenance/mirror evidence. | Completed implementation |
 | V2-6 GitHub Project Remote Sync Design | #298 | Define safe remote mirror sync, dry-run/readback behavior, field mapping, conflict rules, and human gates. | Accepted design |
-| V2-6A GitHub Project Dry-Run Sync Plan | #362 | Implement read-only sync-plan generation that shows would-change/conflict/human-gate outcomes without writing Project. | Held implementation |
-| V2-7 V2 Readiness And Release Gate | #299 | Verify end-to-end journeys, migration, ledger replay, board visibility, dry-run sync behavior, docs, telemetry, and residual risks. | Held until implementation gates complete |
+| V2-6A GitHub Project Dry-Run Sync Plan | #362 | Implement read-only sync-plan generation that shows would-change/conflict/human-gate outcomes without writing Project. | Completed implementation |
+| V2-7 V2 Readiness And Release Gate | #299 | Verify end-to-end journeys, migration, ledger replay, board visibility, dry-run sync behavior, docs, telemetry, and residual risks. | Accepted readiness |
 
 ## V2 Testing Contract
 
@@ -157,9 +157,9 @@ Expected event categories include:
 
 The ledger must support audit and replay before it supports automation.
 
-#294 accepted the event model only. Capability closure requires #359 to provide
-actual local storage and replay. Until #359 is accepted, V2 still depends on
-GitHub issue/PR evidence for durable collaboration state.
+#294 accepted the event model only. #359 completed the capability closure step
+for actual local storage and replay, so V2 can now use local ledger evidence as
+the durable collaboration state for the implemented workflow.
 
 #359 testing must cover event schema validation, append/replay determinism,
 supersession, corrupt or unknown events, conflict/degraded evidence handling,
@@ -197,8 +197,8 @@ Migration should:
 This milestone is required for V2 because Agent Foundry already has substantial
 durable GitHub history.
 
-#296 accepted the migration/backfill design only. Capability closure requires
-#360 to produce read-only candidate ledger events with provenance, confidence,
+#296 accepted the migration/backfill design only. #360 completed the capability
+closure step for read-only candidate ledger events with provenance, confidence,
 contradiction handling, and no GitHub mutation.
 
 #360 testing must cover bounded GitHub evidence conversion into candidate
@@ -239,9 +239,9 @@ remain routed through existing issue/PR gates.
 
 Write automation should wait until read-only behavior is trusted.
 
-#297 completed a useful GitHub-evidence-backed board/report MVP. It is not the
-final local-first board capability because it does not yet read local ledger
-replay as the primary source. Capability closure requires #361 after #359.
+#297 completed a useful GitHub-evidence-backed board/report MVP. #361 completed
+the ledger-backed board capability after #359, so the board now reads accepted
+local ledger replay first and treats GitHub as provenance and mirror evidence.
 
 #361 testing must prove that board lanes, owner, next actions, conflicts, and
 mirror drift are derived from ledger replay first. GitHub issue/PR/Project
@@ -265,10 +265,9 @@ The sync design must define:
 
 Project sync must not silently close issues, overwrite human edits, or hide discrepancies between local and remote state.
 
-#298 accepted the remote sync design only. Capability closure requires #362 to
-implement read-only dry-run sync-plan generation that shows what would change,
-where conflicts exist, and which actions require Human gates, without writing
-GitHub Project.
+#298 accepted the remote sync design only. #362 completed the read-only dry-run
+sync-plan generation capability that shows what would change, where conflicts
+exist, and which actions require Human gates, without writing GitHub Project.
 
 #362 testing must cover dry-run-only behavior, would-change before/after values,
 idempotency keys, conflict classes, human-gate classification, degraded
@@ -305,7 +304,7 @@ The final readiness walkthrough must include a test matrix for:
 - no-write guarantees for read-only/dry-run paths;
 - docs and command examples matching the tested user flow.
 
-#299 must remain held until #359, #360, #361, and #362 are accepted or explicitly
-deferred by a Human-gated V2 scope decision.
+#299 verified the end-to-end V2 readiness matrix after #359, #360, #361, and
+#362 were accepted.
 
 V2 release should remain separate from memory-system implementation.
