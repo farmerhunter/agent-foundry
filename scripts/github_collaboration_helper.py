@@ -43,6 +43,7 @@ READ_ONLY_ACTIONS = {
     "collaboration-readiness",
     "foundry-board",
     "local-ledger-report",
+    "local-ledger-backfill-preview",
     "activation-report",
 }
 DRY_RUN_ACTIONS = {
@@ -943,6 +944,446 @@ def build_local_ledger_report(root: Path) -> dict[str, Any]:
         "telemetry_issue": "#266",
     }
     return payload
+
+
+def item_url(repo: str, item_type: str, number: int | None, fallback: str | None = None) -> str:
+    if fallback:
+        return fallback
+    if number is None:
+        return f"https://github.com/{repo}"
+    if item_type == "pr":
+        return f"https://github.com/{repo}/pull/{number}"
+    return f"https://github.com/{repo}/issues/{number}"
+
+
+def issue_or_pr_state(item: dict[str, Any]) -> str:
+    state = item.get("state") or item.get("status") or "unknown"
+    return str(state).lower()
+
+
+def item_updated_at(item: dict[str, Any]) -> str:
+    return str(item.get("updatedAt") or item.get("updated_at") or item.get("createdAt") or item.get("created_at") or "unknown")
+
+
+def comments_for_item(item: dict[str, Any]) -> list[dict[str, Any]]:
+    comments = item.get("comments", [])
+    if isinstance(comments, dict):
+        comments = comments.get("nodes") or comments.get("items") or []
+    if not isinstance(comments, list):
+        return []
+    return [comment for comment in comments if isinstance(comment, dict)]
+
+
+def needs_owner_from_labels(labels: list[str]) -> str | None:
+    needs = [label for label in labels if label.startswith("needs:")]
+    if len(needs) == 1:
+        return needs[0].split(":", 1)[1]
+    return None
+
+
+def backfill_event(
+    repo: str,
+    item_type: str,
+    item: dict[str, Any],
+    event_type: str,
+    suffix: str,
+    confidence: str,
+    provenance_links: list[str],
+    payload: dict[str, Any],
+    unknown_fields: list[str] | None = None,
+    not_available_fields: list[str] | None = None,
+    degraded_evidence: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    number = issue_number(item)
+    key = f"{repo}#{item_type}:{number if number is not None else 'unknown'}"
+    return {
+        "schema_version": LOCAL_LEDGER_SCHEMA_VERSION,
+        "event_id": f"candidate-{item_type}-{number if number is not None else 'unknown'}-{suffix}",
+        "event_type": event_type,
+        "occurred_at": item_updated_at(item),
+        "work_item": {"id": key, "repo": repo, "type": item_type, "number": number},
+        "actor_role": payload.get("actor_role", "unknown"),
+        "confidence": confidence,
+        "unknown_fields": unknown_fields or [],
+        "not_available_fields": not_available_fields or [],
+        "degraded_evidence": degraded_evidence or [],
+        "provenance": {"links": provenance_links},
+        "payload": payload,
+    }
+
+
+def infer_candidate_events_for_item(
+    repo: str,
+    item_type: str,
+    item: dict[str, Any],
+    project_item: dict[str, Any] | None,
+    project_status: dict[str, Any],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
+    labels = label_names(item)
+    number = issue_number(item)
+    url = item_url(repo, item_type, number, item.get("url") or item.get("html_url"))
+    events: list[dict[str, Any]] = []
+    conflicts: list[dict[str, Any]] = []
+    manual_review: list[str] = []
+    unknown_fields: list[str] = []
+    not_available_fields: list[str] = []
+    owner = needs_owner_from_labels(labels)
+    present_needs = sorted(label for label in labels if label.startswith("needs:"))
+    if owner:
+        events.append(
+            backfill_event(
+                repo,
+                item_type,
+                item,
+                "assignment",
+                "assignment",
+                "inferred",
+                [url],
+                {"owner_role": owner, "source": "needs_label", "labels": present_needs},
+            )
+        )
+    else:
+        manual_review.append("missing_or_ambiguous_owner_label")
+        unknown_fields.append("owner_role")
+    if len(present_needs) > 1:
+        conflicts.append(
+            {
+                "work_item": f"{repo}#{item_type}:{number}",
+                "code": "stale_or_conflicting_needs_labels",
+                "labels": present_needs,
+                "review_needed": "choose one current owner before candidate import is accepted",
+            }
+        )
+    comments = comments_for_item(item)
+    for index, comment in enumerate(comments):
+        body = str(comment.get("body") or "")
+        comment_url = comment.get("url") or comment.get("html_url") or url
+        lower = body.lower()
+        if "dispatch" in lower or "dispatched" in lower:
+            events.append(
+                backfill_event(
+                    repo,
+                    item_type,
+                    item,
+                    "dispatch",
+                    f"dispatch-{index + 1}",
+                    "inferred",
+                    [comment_url],
+                    {"summary": "dispatch evidence imported from comment", "target_role": owner or "unknown"},
+                    unknown_fields=["target_thread_id"] if "thread" not in lower else [],
+                )
+            )
+        if "callback" in lower:
+            events.append(
+                backfill_event(
+                    repo,
+                    item_type,
+                    item,
+                    "callback",
+                    f"callback-{index + 1}",
+                    "inferred",
+                    [comment_url],
+                    {"summary": "callback evidence imported from comment"},
+                )
+            )
+        if "request changes" in lower or "requested changes" in lower:
+            events.append(
+                backfill_event(
+                    repo,
+                    item_type,
+                    item,
+                    "requested_changes",
+                    f"requested-changes-{index + 1}",
+                    "inferred",
+                    [comment_url],
+                    {"decision": "request_changes"},
+                )
+            )
+        elif "review" in lower:
+            events.append(
+                backfill_event(
+                    repo,
+                    item_type,
+                    item,
+                    "review",
+                    f"review-{index + 1}",
+                    "inferred",
+                    [comment_url],
+                    {"decision": "reviewed"},
+                )
+            )
+        if "accepted" in lower or "acceptance" in lower:
+            events.append(
+                backfill_event(
+                    repo,
+                    item_type,
+                    item,
+                    "acceptance",
+                    f"acceptance-{index + 1}",
+                    "inferred",
+                    [comment_url],
+                    {"decision": "accepted"},
+                )
+            )
+        if "superseded" in lower:
+            manual_review.append("superseded_work_detected")
+            conflicts.append(
+                {
+                    "work_item": f"{repo}#{item_type}:{number}",
+                    "code": "superseded_work",
+                    "evidence": comment_url,
+                    "review_needed": "confirm whether candidate events should be imported or skipped",
+                }
+            )
+    state = issue_or_pr_state(item)
+    if state in {"closed", "merged"}:
+        if item_type == "pr" and (item.get("merged") is True or item.get("mergedAt") or state == "merged"):
+            events.append(
+                backfill_event(
+                    repo,
+                    item_type,
+                    item,
+                    "merge",
+                    "merge",
+                    "observed",
+                    [url],
+                    {"merge_sha": item.get("mergeCommit", {}).get("oid") if isinstance(item.get("mergeCommit"), dict) else item.get("merge_sha", "unknown")},
+                    not_available_fields=[] if item.get("mergeCommit") or item.get("merge_sha") else ["merge_sha"],
+                )
+            )
+        events.append(
+            backfill_event(
+                repo,
+                item_type,
+                item,
+                "closure",
+                "closure",
+                "observed",
+                [url],
+                {"state": state},
+            )
+        )
+    if "needs:human" in labels or "blocked" in labels or "status:blocked" in labels:
+        events.append(
+            backfill_event(
+                repo,
+                item_type,
+                item,
+                "blocked",
+                "blocked",
+                "inferred",
+                [url],
+                {"reason": "blocking label or human gate present"},
+            )
+        )
+    if project_item is None:
+        manual_review.append("missing_project_item")
+        not_available_fields.append("project_item")
+    else:
+        project_status_value = project_field_value(project_item, "Status") or "unknown"
+        project_owner = project_field_value(project_item, "Owner Role")
+        expected_owner = owner.title() if owner else None
+        if project_owner and expected_owner and project_owner.lower() != expected_owner.lower():
+            conflicts.append(
+                {
+                    "work_item": f"{repo}#{item_type}:{number}",
+                    "code": "owner_mismatch",
+                    "needs_owner": expected_owner,
+                    "project_owner": project_owner,
+                    "review_needed": "choose accepted owner before candidate event import",
+                }
+            )
+        if state == "closed" and project_status_value.lower() != "done":
+            conflicts.append(
+                {
+                    "work_item": f"{repo}#{item_type}:{number}",
+                    "code": "closed_issue_not_mirrored_done",
+                    "issue_state": state,
+                    "project_status": project_status_value,
+                }
+            )
+        if state != "closed" and project_status_value.lower() == "done":
+            conflicts.append(
+                {
+                    "work_item": f"{repo}#{item_type}:{number}",
+                    "code": "project_done_while_item_open",
+                    "issue_state": state,
+                    "project_status": project_status_value,
+                }
+            )
+        events.append(
+            backfill_event(
+                repo,
+                item_type,
+                item,
+                "sync_readback",
+                "project-readback",
+                "observed",
+                [url],
+                {"local_state": state, "observed_state": project_status_value, "source": "project_mirror"},
+            )
+        )
+    if project_status.get("status") not in {"ok", "skipped", "config_missing"}:
+        degraded = [{"source": "github_graphql_project_v2", "status": project_status.get("status"), "error": project_status.get("error")}]
+        for event in events:
+            event["degraded_evidence"] = merge_unique(event.get("degraded_evidence", []), degraded)
+        manual_review.append("degraded_project_readback")
+    if unknown_fields or not_available_fields:
+        events.append(
+            backfill_event(
+                repo,
+                item_type,
+                item,
+                "evidence",
+                "partial-evidence",
+                "unknown" if unknown_fields else "not_available",
+                [url],
+                {"summary": "partial existing-project evidence requires manual review"},
+                unknown_fields=unknown_fields,
+                not_available_fields=not_available_fields,
+            )
+        )
+    return events, conflicts, sorted(set(manual_review))
+
+
+def build_local_ledger_backfill_preview(
+    repo: str,
+    repo_source: str,
+    issues: list[dict[str, Any]],
+    prs: list[dict[str, Any]],
+    project_items: list[dict[str, Any]],
+    project_status: dict[str, Any],
+    project_attempts: dict[str, Any],
+    ledger_root_arg: str | None,
+) -> dict[str, Any]:
+    project_by_issue = {project_item_issue_number(item): item for item in project_items if project_item_issue_number(item) is not None}
+    candidate_events: list[dict[str, Any]] = []
+    conflicts: list[dict[str, Any]] = []
+    manual_review_needs: list[str] = []
+    for issue in issues:
+        events, item_conflicts, item_review = infer_candidate_events_for_item(
+            repo,
+            "issue",
+            issue,
+            project_by_issue.get(issue_number(issue)),
+            project_status,
+        )
+        candidate_events.extend(events)
+        conflicts.extend(item_conflicts)
+        manual_review_needs.extend(item_review)
+    for pr in prs:
+        events, item_conflicts, item_review = infer_candidate_events_for_item(repo, "pr", pr, None, project_status)
+        candidate_events.extend(events)
+        conflicts.extend(item_conflicts)
+        manual_review_needs.extend(item_review)
+    accepted_local_state: dict[str, Any] = {
+        "status": "not_available",
+        "reason": "no ledger root supplied; candidate import remains separate from accepted local state",
+    }
+    if ledger_root_arg:
+        accepted_report = build_local_ledger_report(Path(ledger_root_arg).expanduser().resolve())
+        accepted_local_state = {
+            "status": "available",
+            "ledger_root": accepted_report["ledger_root"],
+            "derived_work_item_count": accepted_report["summary"]["work_item_count"],
+            "event_count": accepted_report["summary"]["event_count"],
+            "state_authority": "accepted_local_ledger",
+            "derived_work_items": accepted_report["derived_work_items"],
+        }
+        accepted_keys = {item["work_item_key"]: item for item in accepted_report["derived_work_items"]}
+        for event in candidate_events:
+            key = event["work_item"]["id"]
+            accepted = accepted_keys.get(key)
+            candidate_state = event["payload"].get("state") or event["payload"].get("observed_state")
+            if accepted and candidate_state and accepted.get("state") not in {candidate_state, "unknown"}:
+                conflicts.append(
+                    {
+                        "work_item": key,
+                        "code": "accepted_local_state_differs_from_candidate",
+                        "accepted_state": accepted.get("state"),
+                        "candidate_state": candidate_state,
+                        "review_needed": "manual migration review before candidate events become authoritative",
+                    }
+                )
+    degraded_sources = []
+    if project_status.get("status") not in {"ok", "skipped", "config_missing"}:
+        degraded_sources.append(
+            source_status(
+                "github_graphql_project_v2",
+                {"status": project_status.get("status"), **project_status},
+                project_attempts,
+            )
+        )
+    payload = {
+        "schema_version": 1,
+        "command": "local-ledger-backfill-preview",
+        "mode": "read_only",
+        "repo": repo,
+        "repo_source": repo_source,
+        "mutation_performed": False,
+        "apply_supported_now": False,
+        "github_write_back_supported_now": False,
+        "candidate_events_are_authoritative": False,
+        "accepted_local_state": accepted_local_state,
+        "candidate_imported_events": candidate_events,
+        "candidate_event_count": len(candidate_events),
+        "conflicts": conflicts,
+        "manual_review_needs": sorted(set(manual_review_needs + (["conflicts_present"] if conflicts else []))),
+        "degraded_sources": degraded_sources,
+        "user_migration_report": {
+            "summary": f"Prepared {len(candidate_events)} candidate local ledger events from existing GitHub-first evidence.",
+            "next_actions": [
+                "review_candidate_events_before_acceptance",
+                "resolve_conflicts_before_authoritative_import",
+                "use_local-ledger-append_only_after_later_approval",
+            ],
+            "writes": "none",
+        },
+        "forbidden_actions": [
+            "live GitHub mutation",
+            "Project v2 mutation",
+            "authoritative migration without later approval",
+            "branch repair/apply",
+            "PR retarget",
+            "runtime/Vault/private/generated mutation",
+            "generated publish or capability-pack deploy/apply",
+            "memory-system work",
+            "#361 ledger-backed Foundry Board",
+            "#362 Project sync-plan",
+            "final V2 readiness closure",
+        ],
+    }
+    payload["telemetry"] = {
+        "source_count": len(issues) + len(prs) + len(project_items),
+        "api_attempts": project_attempts.get("attempts", 0),
+        "degraded_source_count": len(degraded_sources),
+        "candidate_count": len(candidate_events),
+        "conflict_count": len(conflicts),
+        "manual_review_count": len(payload["manual_review_needs"]),
+        "telemetry_issue": "#266",
+    }
+    return payload
+
+
+def cmd_local_ledger_backfill_preview(args: argparse.Namespace) -> None:
+    repo, repo_source = resolve_repo(args)
+    if args.issues_json or args.fixture_json:
+        issues = normalize_issue_collection(load_json(args.issues_json or args.fixture_json))
+    else:
+        issues, _scope = read_live_issues(repo, args)
+    prs, _prs_status, _prs_attempts = read_readiness_prs(repo, args)
+    project_items, project_status, project_attempts = read_project_items(args)
+    payload = build_local_ledger_backfill_preview(
+        repo,
+        repo_source,
+        issues[: args.limit],
+        prs[: args.limit],
+        project_items,
+        project_status,
+        project_attempts,
+        args.ledger_root,
+    )
+    print_json_or_text(payload, args.json)
 
 
 def cmd_local_ledger_append(args: argparse.Namespace) -> None:
@@ -3420,6 +3861,24 @@ def build_parser() -> argparse.ArgumentParser:
     ledger_report.add_argument("--ledger-root", help="Local ledger root. Defaults to usage/local/collaboration-ledger.")
     ledger_report.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON for local-ledger-report.")
     ledger_report.set_defaults(func=cmd_local_ledger_report)
+
+    backfill = sub.add_parser("local-ledger-backfill-preview")
+    backfill.add_argument("--ledger-root", help="Optional accepted local ledger root for read-only comparison.")
+    backfill.add_argument("--fixture-json", help="Legacy issue fixture; prefer --issues-json.")
+    backfill.add_argument("--issues-json", help="Fixture issue object, list, or object with issues/items.")
+    backfill.add_argument("--prs-json", help="Fixture PR object, list, or object with issues/items.")
+    backfill.add_argument("--project-items-json", help="Fixture Project item list or gh project item-list JSON.")
+    backfill.add_argument("--issues", help="Comma-separated explicit issue numbers for bounded live preview.")
+    backfill.add_argument("--prs", help="Comma-separated explicit PR numbers for bounded live preview.")
+    backfill.add_argument("--stage", help="Stage value or label for bounded live issue preview.")
+    backfill.add_argument("--limit", type=int, default=20, help="Maximum issues/PRs to inspect.")
+    backfill.add_argument("--project-owner", help="Project owner for targeted live Project item-list.")
+    backfill.add_argument("--project-number", type=int, help="Project number for targeted live Project item-list.")
+    backfill.add_argument("--project-limit", type=int, default=50, help="Maximum Project items to read when explicitly configured.")
+    backfill.add_argument("--project-retries", type=int, default=2, help="Bounded retries for transient Project reads.")
+    backfill.add_argument("--project-retry-backoff", type=float, default=0.5, help="Seconds between transient Project read retries.")
+    backfill.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON for local-ledger-backfill-preview.")
+    backfill.set_defaults(func=cmd_local_ledger_backfill_preview)
 
     activation = sub.add_parser("activation-report")
     activation.add_argument("--core-root", help="Agent Foundry Core root. Defaults to this helper's checkout.")

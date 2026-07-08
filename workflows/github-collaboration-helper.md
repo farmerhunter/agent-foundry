@@ -569,6 +569,51 @@ Forbidden in this MVP:
 - release/tag work;
 - memory-system work.
 
+## Existing Project Ledger Backfill Preview
+
+Use `local-ledger-backfill-preview` when an existing GitHub-first project needs
+candidate Local Collaboration Ledger events for review before any authoritative
+migration.
+
+Skill-facing request:
+
+```text
+preview existing project ledger backfill
+```
+
+Debug/helper surface:
+
+```text
+agent-foundry-github-collab --repo <owner>/<repo> local-ledger-backfill-preview \
+  --issues <bounded-issue-list> \
+  --prs <bounded-pr-list> \
+  --project-owner @me \
+  --project-number <number> \
+  --json
+```
+
+The preview may read bounded issue, PR, comment, label, milestone, and optional
+Project mirror evidence. It produces candidate events compatible with
+`local-ledger-append`, but does not append them. The report must separate
+accepted local ledger state from candidate imported state and surface
+contradictory history, stale labels, superseded work, missing evidence, owner
+mismatches, closed issue not mirrored Done, Project Done while issue is open,
+and degraded Project readback.
+
+The report must include #266 telemetry for source count, API attempts, degraded
+source count, candidate count, conflict count, and manual review count.
+
+Forbidden in this preview:
+
+- authoritative migration of candidate events without later approval;
+- GitHub or Project mutation;
+- branch repair/apply or PR retarget;
+- #361 ledger-backed Foundry Board behavior;
+- #362 Project sync-plan generation;
+- runtime/Vault/private/generated mutation;
+- generated publish or capability-pack deploy/apply;
+- memory-system work.
+
 ## Dispatch Evidence Modes
 
 Dispatch evidence must name the mechanism actually used:
