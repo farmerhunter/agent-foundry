@@ -35,6 +35,7 @@ Use these short commands in day-to-day agent work. English command text is canon
 | `audit existing collaboration setup` | `审计现有 collaboration setup` | Review drift in an existing project and group next actions as informational, agent-handled, human-gated, or unsupported/deferred. Read-only. |
 | `check branch readiness for this issue or PR` | `检查这个 issue 或 PR 的 branch readiness` | Explain `Branch strategy`, `Target branch`, PR base, local branch state, and safe next action concepts such as split, switch context, forward-merge, or multi-line verification. Read-only. |
 | `show Foundry Board` | `显示 Foundry Board` | Render a read-only local-first board/report with lanes, owner, evidence, branch readiness, mirror drift, conflicts, and next actions. It does not write GitHub, Project, ledger, runtime, or Vault state. |
+| `show local collaboration ledger report` | `显示 local collaboration ledger report` | Replay local append-only ledger events from `usage/local/collaboration-ledger/` or a supplied test root into derived work-item state. Read-only; no GitHub dependency or write-back. |
 | `publish practices` | `发布 practices` | Publish adapters from current active practices; usually not needed manually. |
 | `check operation context` | `检查操作上下文` | Show current Agent Foundry Core/Vault/evidence/runtime context before writes. |
 | `check Agent Foundry status` | `检查 Agent Foundry 状态` | Run a read-only status pass for Core, selected Vault, generated output, runtime receipts, and manual targets. |

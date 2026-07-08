@@ -42,6 +42,7 @@ READ_ONLY_ACTIONS = {
     "scheduler-audit",
     "collaboration-readiness",
     "foundry-board",
+    "local-ledger-report",
     "activation-report",
 }
 DRY_RUN_ACTIONS = {
@@ -51,6 +52,7 @@ DRY_RUN_ACTIONS = {
     "permission-smoke",
     "comparison-draft",
 }
+LOCAL_WRITE_ACTIONS = {"local-ledger-append"}
 REMOTE_RE = re.compile(r"(?:github\.com[:/])([^/]+)/([^/.]+)(?:\.git)?$")
 CONTRACT_HEADINGS = ("Final Execution Contract", "Execution Contract", "Draft Execution Contract")
 ROLE_FIELDS = ("Owner role", "Review role", "Acceptance role")
@@ -103,6 +105,23 @@ BRANCH_CONTRACT_FIELDS = (
     "Forward-merge expectation",
 )
 LEGACY_BRANCH_TARGET_FIELD = "Branch target"
+LOCAL_LEDGER_SCHEMA_VERSION = 1
+LOCAL_LEDGER_EVENT_TYPES = {
+    "assignment",
+    "dispatch",
+    "callback",
+    "evidence",
+    "review",
+    "requested_changes",
+    "acceptance",
+    "human_approval",
+    "merge",
+    "closure",
+    "blocked",
+    "sync_readback",
+}
+LOCAL_LEDGER_CONFIDENCE_VALUES = {"observed", "inferred", "unknown", "not_available"}
+LOCAL_LEDGER_DEFAULT_ROOT = Path("usage") / "local" / "collaboration-ledger"
 
 
 def fail(code: str, detail: str, exit_code: int = 2) -> None:
@@ -577,6 +596,365 @@ def print_json_or_text(payload: dict[str, Any], as_json: bool) -> None:
             print(f"{key}: {json.dumps(value, sort_keys=True)}")
         else:
             print(f"{key}: {value}")
+
+
+def local_ledger_root(args: argparse.Namespace) -> Path:
+    root = Path(args.ledger_root) if args.ledger_root else default_core_root() / LOCAL_LEDGER_DEFAULT_ROOT
+    return root.expanduser().resolve()
+
+
+def local_ledger_events_path(root: Path) -> Path:
+    path = (root / "events.jsonl").resolve()
+    if root not in path.parents:
+        fail("ledger_path_escape", "ledger events path must stay inside ledger root")
+    return path
+
+
+def work_item_key(work_item: dict[str, Any]) -> str:
+    if work_item.get("id"):
+        return str(work_item["id"])
+    repo = work_item.get("repo", "unknown")
+    item_type = work_item.get("type", "issue")
+    number = work_item.get("number", "unknown")
+    return f"{repo}#{item_type}:{number}"
+
+
+def validate_local_ledger_event(event: Any) -> tuple[dict[str, Any] | None, list[str], str]:
+    errors: list[str] = []
+    if not isinstance(event, dict):
+        return None, ["event must be a JSON object"], "malformed"
+    schema_version = event.get("schema_version")
+    if not isinstance(schema_version, int) or schema_version < 1:
+        errors.append("schema_version must be a positive integer")
+    event_id = event.get("event_id")
+    if not isinstance(event_id, str) or not event_id.strip():
+        errors.append("event_id must be a non-empty string")
+    event_type = event.get("event_type")
+    if not isinstance(event_type, str) or not event_type.strip():
+        errors.append("event_type must be a non-empty string")
+    occurred_at = event.get("occurred_at")
+    if not isinstance(occurred_at, str) or not occurred_at.strip():
+        errors.append("occurred_at must be a non-empty string")
+    work_item = event.get("work_item")
+    if not isinstance(work_item, dict):
+        errors.append("work_item must be an object")
+    elif not work_item.get("id") and not (work_item.get("repo") and work_item.get("type") and work_item.get("number") is not None):
+        errors.append("work_item must include id or repo/type/number")
+    provenance = event.get("provenance")
+    if not isinstance(provenance, dict):
+        errors.append("provenance must be an object")
+    else:
+        links = provenance.get("links")
+        if links is not None and not isinstance(links, list):
+            errors.append("provenance.links must be a list when present")
+    confidence = event.get("confidence")
+    if confidence not in LOCAL_LEDGER_CONFIDENCE_VALUES:
+        errors.append(f"confidence must be one of {sorted(LOCAL_LEDGER_CONFIDENCE_VALUES)}")
+    unknown_fields = event.get("unknown_fields", [])
+    not_available_fields = event.get("not_available_fields", [])
+    degraded_evidence = event.get("degraded_evidence", [])
+    for field_name, value in (
+        ("unknown_fields", unknown_fields),
+        ("not_available_fields", not_available_fields),
+        ("degraded_evidence", degraded_evidence),
+    ):
+        if not isinstance(value, list):
+            errors.append(f"{field_name} must be a list")
+    supersedes = event.get("supersedes_event_ids", [])
+    if not isinstance(supersedes, list):
+        errors.append("supersedes_event_ids must be a list")
+    if errors:
+        return None, errors, "malformed"
+    normalized = dict(event)
+    normalized["event_id"] = event_id.strip()
+    normalized["event_type"] = event_type.strip()
+    normalized["occurred_at"] = occurred_at.strip()
+    normalized["work_item_key"] = work_item_key(work_item)
+    normalized["unknown_fields"] = unknown_fields
+    normalized["not_available_fields"] = not_available_fields
+    normalized["degraded_evidence"] = degraded_evidence
+    normalized["supersedes_event_ids"] = supersedes
+    if schema_version > LOCAL_LEDGER_SCHEMA_VERSION:
+        return normalized, [], "forward_compatible"
+    if event_type not in LOCAL_LEDGER_EVENT_TYPES:
+        return normalized, [], "unknown_event"
+    return normalized, [], "valid"
+
+
+def read_local_ledger_events(root: Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
+    events_path = local_ledger_events_path(root)
+    valid_events: list[dict[str, Any]] = []
+    invalid_events: list[dict[str, Any]] = []
+    if not events_path.exists():
+        return valid_events, invalid_events, {"path": str(events_path), "exists": False, "line_count": 0}
+    for lineno, line in enumerate(events_path.read_text(encoding="utf-8").splitlines(), start=1):
+        if not line.strip():
+            continue
+        try:
+            raw = json.loads(line)
+        except json.JSONDecodeError as exc:
+            invalid_events.append({"line": lineno, "status": "malformed", "errors": [str(exc)]})
+            continue
+        normalized, errors, status = validate_local_ledger_event(raw)
+        if normalized is None:
+            invalid_events.append({"line": lineno, "status": status, "errors": errors, "event_id": raw.get("event_id") if isinstance(raw, dict) else None})
+            continue
+        normalized["validation_status"] = status
+        normalized["line"] = lineno
+        valid_events.append(normalized)
+    return valid_events, invalid_events, {"path": str(events_path), "exists": True, "line_count": len(valid_events) + len(invalid_events)}
+
+
+def append_local_ledger_event(root: Path, event: dict[str, Any]) -> dict[str, Any]:
+    normalized, errors, status = validate_local_ledger_event(event)
+    if normalized is None:
+        return {"status": "invalid", "errors": errors, "mutation_performed": False}
+    root.mkdir(parents=True, exist_ok=True)
+    events_path = local_ledger_events_path(root)
+    with events_path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(event, sort_keys=True, separators=(",", ":")) + "\n")
+    return {
+        "status": status,
+        "event_id": normalized["event_id"],
+        "event_type": normalized["event_type"],
+        "ledger_root": str(root),
+        "events_path": str(events_path),
+        "mutation_performed": True,
+        "write_scope": "local_ledger_events_jsonl_only",
+    }
+
+
+def empty_derived_work_item(key: str, event: dict[str, Any]) -> dict[str, Any]:
+    work_item = event.get("work_item", {})
+    return {
+        "work_item_key": key,
+        "work_item": work_item,
+        "state": "unknown",
+        "owner_role": "unknown",
+        "review_state": "unknown",
+        "accepted": False,
+        "merged": False,
+        "closed": False,
+        "blocked": False,
+        "blocking_reason": None,
+        "latest_event_id": None,
+        "latest_evidence": [],
+        "provenance_links": [],
+        "confidence": "unknown",
+        "unknown_fields": [],
+        "not_available_fields": [],
+        "degraded_evidence": [],
+        "conflicts": [],
+        "event_ids": [],
+        "next_review_or_action_needed": "review_local_ledger_state",
+    }
+
+
+def merge_unique(existing: list[Any], additions: list[Any]) -> list[Any]:
+    seen = set(json.dumps(item, sort_keys=True) if isinstance(item, (dict, list)) else str(item) for item in existing)
+    output = list(existing)
+    for item in additions:
+        key = json.dumps(item, sort_keys=True) if isinstance(item, (dict, list)) else str(item)
+        if key not in seen:
+            seen.add(key)
+            output.append(item)
+    return output
+
+
+def apply_local_ledger_event(item: dict[str, Any], event: dict[str, Any]) -> None:
+    event_type = event["event_type"]
+    payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+    item["latest_event_id"] = event["event_id"]
+    item["event_ids"].append(event["event_id"])
+    item["confidence"] = event.get("confidence", item["confidence"])
+    item["unknown_fields"] = merge_unique(item["unknown_fields"], event.get("unknown_fields", []))
+    item["not_available_fields"] = merge_unique(item["not_available_fields"], event.get("not_available_fields", []))
+    item["degraded_evidence"] = merge_unique(item["degraded_evidence"], event.get("degraded_evidence", []))
+    provenance = event.get("provenance") if isinstance(event.get("provenance"), dict) else {}
+    item["provenance_links"] = merge_unique(item["provenance_links"], provenance.get("links", []))
+    if event.get("validation_status") in {"unknown_event", "forward_compatible"}:
+        item["latest_evidence"].append({"event_id": event["event_id"], "type": event.get("validation_status")})
+        if not item["conflicts"]:
+            item["next_review_or_action_needed"] = "review_forward_compatible_or_unknown_event"
+        return
+    if event_type == "assignment":
+        item["state"] = "assigned"
+        item["owner_role"] = payload.get("owner_role", event.get("actor_role", item["owner_role"]))
+        item["next_review_or_action_needed"] = "dispatch_or_start_work"
+    elif event_type == "dispatch":
+        item["state"] = "dispatched"
+        item["owner_role"] = payload.get("target_role", item["owner_role"])
+        item["thread_id"] = payload.get("thread_id", item.get("thread_id", "unknown"))
+        item["next_review_or_action_needed"] = "await_callback"
+    elif event_type == "callback":
+        item["state"] = "callback_received"
+        item["latest_evidence"].append({"event_id": event["event_id"], "summary": payload.get("summary", "callback_received")})
+        item["next_review_or_action_needed"] = "review_callback_evidence"
+    elif event_type == "evidence":
+        item["state"] = "evidence_recorded"
+        item["latest_evidence"].append({"event_id": event["event_id"], "summary": payload.get("summary", "evidence_recorded")})
+        item["next_review_or_action_needed"] = "review_evidence"
+    elif event_type == "review":
+        decision = payload.get("decision", "unknown")
+        item["review_state"] = decision
+        item["state"] = "review_changes_requested" if decision == "request_changes" else "reviewed"
+        item["next_review_or_action_needed"] = "address_review" if decision == "request_changes" else "await_acceptance"
+    elif event_type == "requested_changes":
+        item["review_state"] = "request_changes"
+        item["state"] = "review_changes_requested"
+        item["next_review_or_action_needed"] = "address_review"
+    elif event_type == "acceptance":
+        item["accepted"] = True
+        item["state"] = "accepted"
+        item["next_review_or_action_needed"] = "await_merge_or_closure_gate"
+    elif event_type == "human_approval":
+        item["human_approved"] = True
+        item["state"] = "human_approved"
+        item["next_review_or_action_needed"] = "perform_approved_gate"
+    elif event_type == "merge":
+        item["merged"] = True
+        item["state"] = "merged"
+        item["merge_sha"] = payload.get("merge_sha", item.get("merge_sha", "unknown"))
+        item["next_review_or_action_needed"] = "post_merge_verification_or_closure_gate"
+    elif event_type == "closure":
+        item["closed"] = True
+        item["state"] = "closed"
+        item["next_review_or_action_needed"] = "none"
+    elif event_type == "blocked":
+        if item.get("closed"):
+            item["conflicts"].append(
+                {
+                    "event_id": event["event_id"],
+                    "code": "blocked_after_closure",
+                    "local_state": "closed",
+                    "observed_state": "blocked",
+                }
+            )
+        item["blocked"] = True
+        item["state"] = "blocked"
+        item["blocking_reason"] = payload.get("reason", "unknown")
+        item["next_review_or_action_needed"] = "resolve_blocker"
+    elif event_type == "sync_readback":
+        observed_state = payload.get("observed_state")
+        local_state = payload.get("local_state")
+        if observed_state and local_state and observed_state != local_state:
+            item["conflicts"].append(
+                {
+                    "event_id": event["event_id"],
+                    "code": "sync_readback_state_mismatch",
+                    "local_state": local_state,
+                    "observed_state": observed_state,
+                }
+            )
+            item["state"] = "stale_conflict"
+            item["next_review_or_action_needed"] = "rehydrate_and_reconcile_evidence"
+        item["latest_evidence"].append({"event_id": event["event_id"], "summary": "sync_readback"})
+
+
+def replay_local_ledger(events: list[dict[str, Any]]) -> dict[str, Any]:
+    start = time.perf_counter()
+    superseded_ids = {str(event_id) for event in events for event_id in event.get("supersedes_event_ids", [])}
+    active_events = [event for event in events if event["event_id"] not in superseded_ids]
+    active_events.sort(key=lambda item: (item.get("occurred_at", ""), item.get("event_id", "")))
+    work_items: dict[str, dict[str, Any]] = {}
+    event_ids_seen: set[str] = set()
+    duplicate_ids: list[str] = []
+    unknown_or_forward = 0
+    for event in active_events:
+        if event["event_id"] in event_ids_seen:
+            duplicate_ids.append(event["event_id"])
+            continue
+        event_ids_seen.add(event["event_id"])
+        key = event["work_item_key"]
+        work_items.setdefault(key, empty_derived_work_item(key, event))
+        if event.get("validation_status") in {"unknown_event", "forward_compatible"}:
+            unknown_or_forward += 1
+        apply_local_ledger_event(work_items[key], event)
+    degraded_count = sum(len(event.get("degraded_evidence", [])) for event in active_events)
+    unknown_count = sum(len(event.get("unknown_fields", [])) + len(event.get("not_available_fields", [])) for event in active_events)
+    replay_time_ms = round((time.perf_counter() - start) * 1000, 3)
+    items = sorted(work_items.values(), key=lambda item: item["work_item_key"])
+    conflicts = [conflict for item in items for conflict in item["conflicts"]]
+    return {
+        "derived_work_items": items,
+        "summary": {
+            "event_count": len(events),
+            "active_event_count": len(active_events),
+            "superseded_event_count": len(superseded_ids),
+            "duplicate_event_ids": sorted(set(duplicate_ids)),
+            "work_item_count": len(items),
+            "conflict_count": len(conflicts),
+            "degraded_evidence_count": degraded_count,
+            "unknown_not_available_count": unknown_count,
+            "unknown_or_forward_compatible_event_count": unknown_or_forward,
+            "replay_time_ms": replay_time_ms,
+        },
+    }
+
+
+def build_local_ledger_report(root: Path) -> dict[str, Any]:
+    events, invalid_events, storage = read_local_ledger_events(root)
+    replay = replay_local_ledger(events)
+    payload = {
+        "schema_version": 1,
+        "command": "local-ledger-report",
+        "mode": "read_only",
+        "ledger_root": str(root),
+        "storage": storage,
+        "mutation_performed": False,
+        "apply_supported_now": False,
+        "github_dependency_for_replay": False,
+        "authority_statement": "local_collaboration_ledger_events_are_replay_authority_for_this_report",
+        "derived_work_items": replay["derived_work_items"],
+        "invalid_events": invalid_events,
+        "summary": replay["summary"],
+        "unknown_or_degraded": [
+            {
+                "source": "local_ledger_event",
+                "status": "degraded_or_incomplete",
+                "impact": "Replay continues with confidence, unknown, and not_available fields visible.",
+            }
+        ]
+        if replay["summary"]["degraded_evidence_count"] or replay["summary"]["unknown_not_available_count"] or invalid_events
+        else [],
+        "user_next_actions": [
+            item["next_review_or_action_needed"]
+            for item in replay["derived_work_items"]
+            if item.get("next_review_or_action_needed") and item.get("next_review_or_action_needed") != "none"
+        ],
+        "forbidden_actions": [
+            "#360 backfill",
+            "#361 ledger-backed board",
+            "#362 sync-plan generation",
+            "GitHub Project mutation",
+            "real GitHub write-back",
+            "issue closure automation",
+            "runtime/Vault/private/generated mutation",
+            "release/tag work",
+            "memory-system work",
+        ],
+    }
+    payload["telemetry"] = {
+        "event_count": replay["summary"]["event_count"],
+        "active_event_count": replay["summary"]["active_event_count"],
+        "replay_time_ms": replay["summary"]["replay_time_ms"],
+        "degraded_evidence_count": replay["summary"]["degraded_evidence_count"],
+        "user_facing_output_bytes": len(json.dumps(payload, sort_keys=True).encode("utf-8")),
+        "telemetry_issue": "#266",
+    }
+    return payload
+
+
+def cmd_local_ledger_append(args: argparse.Namespace) -> None:
+    event = load_json(args.event_json)
+    result = append_local_ledger_event(local_ledger_root(args), event)
+    print_json_or_text(result, args.json)
+    if result["status"] == "invalid":
+        raise SystemExit(6)
+
+
+def cmd_local_ledger_report(args: argparse.Namespace) -> None:
+    print_json_or_text(build_local_ledger_report(local_ledger_root(args)), args.json)
 
 
 def cmd_repo_resolve(args: argparse.Namespace) -> None:
@@ -2647,6 +3025,9 @@ def cmd_permission_smoke(args: argparse.Namespace) -> None:
     elif action in DRY_RUN_ACTIONS:
         status = "dry_run_allowed"
         code = "ok"
+    elif action in LOCAL_WRITE_ACTIONS:
+        status = "local_write_allowed"
+        code = "ok"
     else:
         status = "unknown_requires_architect_review"
         code = "unknown_action"
@@ -3028,6 +3409,17 @@ def build_parser() -> argparse.ArgumentParser:
     board.add_argument("--name", default="Foundry Board", help="Board name shown in the read-only report.")
     board.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON for foundry-board.")
     board.set_defaults(func=cmd_foundry_board)
+
+    ledger_append = sub.add_parser("local-ledger-append")
+    ledger_append.add_argument("--ledger-root", help="Local ledger root. Defaults to usage/local/collaboration-ledger.")
+    ledger_append.add_argument("--event-json", required=True, help="Path to one ledger event JSON object.")
+    ledger_append.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON for local-ledger-append.")
+    ledger_append.set_defaults(func=cmd_local_ledger_append)
+
+    ledger_report = sub.add_parser("local-ledger-report")
+    ledger_report.add_argument("--ledger-root", help="Local ledger root. Defaults to usage/local/collaboration-ledger.")
+    ledger_report.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON for local-ledger-report.")
+    ledger_report.set_defaults(func=cmd_local_ledger_report)
 
     activation = sub.add_parser("activation-report")
     activation.add_argument("--core-root", help="Agent Foundry Core root. Defaults to this helper's checkout.")
