@@ -619,6 +619,61 @@ Forbidden in this preview:
 - generated publish or capability-pack deploy/apply;
 - memory-system work.
 
+## Project Sync Plan Dry Run
+
+Use `project-sync-plan` when V2 local-first orchestration needs to preview how
+accepted local board/ledger state would mirror into GitHub Project fields.
+
+Skill-facing request:
+
+```text
+preview GitHub Project sync plan
+```
+
+Debug/helper surface:
+
+```text
+agent-foundry-github-collab --repo <owner>/<repo> project-sync-plan \
+  --ledger-root usage/local/collaboration-ledger \
+  --issues <bounded-issue-list> \
+  --project-owner @me \
+  --project-number <number> \
+  --json
+```
+
+The report must be dry-run only:
+
+```text
+mode: dry_run
+mutation_performed: false
+writes_supported_now: false
+```
+
+The sync plan reads the ledger-backed Foundry Board as local source of truth and
+uses GitHub Project as an optional mirror. It should describe proposed
+operations with before/after values, idempotency keys, evidence refs, gate
+classification, and readback requirements. It should classify conflicts for
+missing fields/options, ambiguous items, Project Done while issue open, issue
+closed while Project is not Done, owner mismatch, local/remote freshness,
+degraded Project readback, privacy-sensitive values, and branch-line mismatch.
+
+Human gates include built-in Project Status side effects, issue closure/reopen
+implications, privacy/security-sensitive sync, broad Project policy/schema
+changes, and any future transition from dry-run to write/apply.
+
+Forbidden in this dry-run:
+
+- live Project mutation or GitHub write-back;
+- issue closure automation;
+- real sync/apply;
+- branch repair/apply, checkout/switch, PR retarget, rebase, merge, reset,
+  clean, force push, or destructive action;
+- runtime/Vault/private/generated mutation;
+- generated publish or capability-pack deploy/apply;
+- memory-system work;
+- release/tag work;
+- final V2 readiness closure.
+
 ## Dispatch Evidence Modes
 
 Dispatch evidence must name the mechanism actually used:
