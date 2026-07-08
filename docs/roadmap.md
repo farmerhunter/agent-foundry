@@ -1,7 +1,7 @@
 # Agent Foundry Roadmap
 
 Status: planning document
-Updated: 2026-07-07
+Updated: 2026-07-08
 Scope: Agent Foundry productization, runtime adapter framework, Trae support, capability-system hardening, repository hygiene, role-orchestration optimization, V1.0 public release baseline, V2 local-first orchestration planning, and memory-system readiness.
 
 ## Purpose
@@ -117,7 +117,7 @@ Suggested mapping:
 | V1.0 readiness | `v1.0.0`: public Core release after AF-1 through AF-13 and the release checklist are accepted. |
 | AF-14 | `v1.1.0` candidate: Tester role, testing contract, and test-evidence workflow as V1.x maintenance. |
 | AF-15 | `v1.1.0` candidate: collaboration readiness audit, action-plan output, dry-run repair planning, and multi-agent optional pack enablement as V1.x maintenance. |
-| V2.0 | `v2.0.0`: local-first orchestration, Foundry Board, migration/backfill, GitHub Project sync, and readiness evidence after V2 milestones are accepted. |
+| V2.0 | `v2.0.0`: local-first orchestration, ledger storage/replay, ledger-backed Foundry Board, existing-project backfill, GitHub Project dry-run sync planning, and readiness evidence after V2 capability gates are accepted. |
 
 `v1.0` is the first public release target. It includes the accepted AF-1 through AF-13 baseline plus release notes, verification, tag, and GitHub Release work needed for external users to rely on Agent Foundry without understanding this repository's personal history.
 
@@ -156,16 +156,26 @@ Default harvest routing:
 
 ## Active Milestone
 
-Agent Foundry `v1.0.0` is published. The active planning area is now V2.0 local-first orchestration, but the first V2 implementation milestone is not released yet.
+Agent Foundry `v1.0.0` is published. The active planning area is now V2.0 local-first orchestration. V2 design gates have started landing, but design acceptance is not capability completion; V2 readiness stays held until local-first implementation gates are accepted.
 
 | Milestone | GitHub records | User-facing reason | Status |
 | --- | --- | --- | --- |
 | Agent Foundry `v1.0.0` release | #267 | First downloadable public Core release for external users. | Completed; GitHub Release and tag published |
 | AF-14 Tester Role And Test Planning Workflow | #302 Epic; #303 through #308; PR #311 | Users need test planning and evidence that answer what was tested, why it is enough, which risks remain, and when human trial is still needed. | Completed; integrated into `main` as V1.x maintenance |
 | AF-15 Collaboration Readiness And Action Workflow | #314 Epic; #315 through #321 plus #328 through #331 | Users need a clear audit and action plan for new/existing repo collaboration readiness before any live repair/apply behavior. | Completed; integrated into `main` as V1.x maintenance |
-| V2.0 Local-First Orchestration And Foundry Board | #292 Epic; #293 through #299; #266 telemetry window | Users need a local source of truth for multi-agent orchestration that can still sync to GitHub Project, plus migration from the current GitHub-first workflow. | Planning and decomposition; first milestone held |
+| V2.0 Local-First Orchestration And Foundry Board | #292 Epic; #293 through #299; #359 through #362; #266 telemetry window | Users need a local source of truth for multi-agent orchestration that can still sync to GitHub Project, plus migration from the current GitHub-first workflow. | Design gates partially accepted; implementation gates held; #299 readiness held |
 
 V2.0 does not authorize memory-system work, automatic token capture, live Vault/private/runtime/generated mutation, generated adapter publish, or broad implementation outside reviewed child issues. It must preserve the V1 Core/User Vault/Generated/Runtime/Local Private boundaries.
+
+Current V2 correction:
+
+- #294 and #298 are design gates, not complete user-facing capabilities.
+- #297 is a useful GitHub-evidence-backed read-only board/report MVP, not the final ledger-backed Foundry Board.
+- #359 must implement Local Collaboration Ledger storage/replay before local state can become durable source-of-truth evidence.
+- #360 must implement read-only existing-project backfill into candidate ledger events.
+- #361 must make Foundry Board read from ledger replay first.
+- #362 must implement read-only GitHub Project dry-run sync-plan generation.
+- #299 must remain held until #359 through #362 are accepted or explicitly deferred by a Human-gated V2 scope decision.
 
 ## GitHub Project and Epic Workflow
 
