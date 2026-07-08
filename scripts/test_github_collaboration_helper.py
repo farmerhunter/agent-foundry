@@ -80,6 +80,14 @@ def main() -> int:
                 "Do not document or imply that `agent-comment --apply`",
                 "Project v2 was not meaningfully evaluated",
                 "Workflow authorization does not override product/runtime approval prompts",
+                "Tester Routing",
+                "Do not use `Review role: tester`",
+                "Collaboration Readiness",
+                "check collaboration readiness for this repo",
+                "prepare this repo for multi-agent collaboration",
+                "audit existing collaboration setup",
+                "`apply_supported_now` set to `false`",
+                "Project v2 remains an optional visual mirror",
             ],
         )
     )
@@ -89,6 +97,9 @@ def main() -> int:
             template_text,
             [
                 "operation_policy: \"hybrid_runtime_discovery_then_connector_helper_api_bare_gh\"",
+                "tester:",
+                "inbox_label: \"needs:tester\"",
+                "needs:tester",
                 "runtime_discovery_required_per_session: true",
                 "connector_preferred_for_low_risk:",
                 "helper_first_for:",
@@ -105,6 +116,18 @@ def main() -> int:
         fixture = base / "issue.json"
         audit_issues = base / "audit-issues.json"
         audit_project = base / "audit-project.json"
+        readiness_project = base / "readiness-project.json"
+        readiness_labels = base / "readiness-labels.json"
+        readiness_prs = base / "readiness-prs.json"
+        branch_readiness_issues = base / "branch-readiness-issues.json"
+        branch_readiness_prs = base / "branch-readiness-prs.json"
+        branch_local_git = base / "branch-local-git.json"
+        branch_local_clean = base / "branch-local-clean.json"
+        foundry_board_issues = base / "foundry-board-issues.json"
+        foundry_board_project = base / "foundry-board-project.json"
+        new_repo_labels = base / "new-repo-labels.json"
+        new_repo_issues = base / "new-repo-issues.json"
+        new_repo_prs = base / "new-repo-prs.json"
         inbox = base / "inbox.json"
         auth = base / "auth.json"
         runtime_skill = base / "runtime-skill.md"
@@ -231,6 +254,20 @@ def main() -> int:
                             "labels": [{"name": "stage:AF-11"}, {"name": "risk:medium"}, {"name": "needs:implementer"}],
                             "body": "## Execution Contract\n\nOwner role: implementer\nReview role: reviewer\nAcceptance role: architect\nCompletion handoff: move to Review\n",
                         },
+                        {
+                            "number": 234,
+                            "title": "Tester missing contract",
+                            "state": "OPEN",
+                            "labels": [{"name": "stage:AF-14"}, {"name": "risk:high"}, {"name": "needs:tester"}],
+                            "body": "## Execution Contract\n\nOwner role: tester\nReview role: reviewer\nAcceptance role: architect\nCompletion handoff: to:reviewer\n",
+                        },
+                        {
+                            "number": 235,
+                            "title": "Tester as reviewer",
+                            "state": "OPEN",
+                            "labels": [{"name": "stage:AF-14"}, {"name": "risk:high"}, {"name": "needs:tester"}],
+                            "body": "## Execution Contract\n\nOwner role: implementer\nReview role: tester\nAcceptance role: architect\nCompletion handoff: to:tester\n\n## Testing Contract\n\nTesting Responsibility: tester\nTester Trigger:\n  - stateful workflow risk\nuser_value_or_risk: stale state\n\n## Test Evidence Handoff\n\nto: reviewer\nresult_summary: passed\nresidual_risks: none\n",
+                        },
                     ]
                 }
             ),
@@ -285,6 +322,341 @@ def main() -> int:
             ),
         )
         write(
+            readiness_project,
+            json.dumps(
+                {
+                    "fields": [
+                        {"name": "Status"},
+                        {"name": "Roadmap Status"},
+                        {"name": "Stage"},
+                        {
+                            "name": "Owner Role",
+                            "options": [
+                                {"name": "Architect"},
+                                {"name": "Implementer"},
+                                {"name": "Reviewer"},
+                                {"name": "Tester"},
+                                {"name": "Human"},
+                            ],
+                        },
+                    ],
+                    "items": [
+                        {
+                            "content": {"number": 225},
+                            "status": {"name": "Todo"},
+                            "roadmap Status": {"name": "Ready"},
+                            "stage": {"name": "AF-11"},
+                            "owner Role": None,
+                        },
+                        {
+                            "content": {"number": 227},
+                            "status": {"name": "Done"},
+                            "roadmap Status": {"name": "Done"},
+                            "stage": {"name": "AF-10"},
+                            "owner Role": {"name": "Reviewer"},
+                        },
+                    ],
+                }
+            ),
+        )
+        write(
+            readiness_labels,
+            json.dumps(
+                {
+                    "labels": [
+                        {"name": "needs:architect"},
+                        {"name": "needs:implementer"},
+                        {"name": "needs:reviewer"},
+                        {"name": "needs:tester"},
+                        {"name": "needs:human"},
+                        {"name": "stage:AF-15"},
+                    ]
+                }
+            ),
+        )
+        write(new_repo_labels, json.dumps({"labels": []}))
+        write(new_repo_issues, json.dumps({"issues": []}))
+        write(new_repo_prs, json.dumps({"items": []}))
+        write(
+            readiness_prs,
+            json.dumps(
+                {
+                    "items": [
+                        {
+                            "number": 42,
+                            "title": "Ready PR",
+                            "state": "OPEN",
+                            "labels": [{"name": "needs:reviewer"}],
+                            "body": "## Execution Contract\n\nOwner role: implementer\nReview role: reviewer\nAcceptance role: architect\nCompletion handoff: to:reviewer\n",
+                            "headRefOid": "abc123",
+                        },
+                        {
+                            "number": 43,
+                            "title": "Bad PR contract",
+                            "state": "OPEN",
+                            "labels": [{"name": "needs:reviewer"}],
+                            "body": "## Execution Contract\n\nOwner role: Implementer\nCompletion handoff: move to Review\n",
+                            "headRefOid": "def456",
+                        },
+                    ]
+                }
+            ),
+        )
+        branch_contract_base = "\n".join(
+            [
+                "Owner role: implementer",
+                "Review role: reviewer",
+                "Acceptance role: architect",
+                "Completion handoff: to:reviewer",
+                "Base branch verified from: durable issue contract",
+                "Working branch: codex/example-task",
+                "Worktree expectation: current checkout must be reported before review",
+                "Merge rule: no final main merge without delegated gate",
+                "Forward-merge expectation: route through later readiness gate",
+            ]
+        )
+        write(
+            branch_readiness_issues,
+            json.dumps(
+                {
+                    "issues": [
+                        {
+                            "number": 350,
+                            "title": "AF16 branch readiness",
+                            "state": "OPEN",
+                            "labels": [{"name": "needs:implementer"}],
+                            "body": "## Execution Contract\n\n"
+                            + branch_contract_base
+                            + "\nBranch strategy: mainline-maintenance\nRelease line: v1.x-maintenance\nTarget branch: main\nPR target: main\n",
+                        },
+                        {
+                            "number": 351,
+                            "title": "Missing branch contract",
+                            "state": "OPEN",
+                            "labels": [{"name": "needs:implementer"}],
+                            "body": "## Execution Contract\n\nOwner role: implementer\nReview role: reviewer\nAcceptance role: architect\nCompletion handoff: to:reviewer\n",
+                        },
+                        {
+                            "number": 352,
+                            "title": "V2 targeting main",
+                            "state": "OPEN",
+                            "labels": [{"name": "needs:implementer"}],
+                            "body": "## Execution Contract\n\n"
+                            + branch_contract_base
+                            + "\nBranch strategy: integration-branch\nRelease line: v2-integration\nTarget branch: main\nPR target: main\n",
+                        },
+                        {
+                            "number": 353,
+                            "title": "V1 targeting V2",
+                            "state": "OPEN",
+                            "labels": [{"name": "needs:implementer"}],
+                            "body": "## Execution Contract\n\n"
+                            + branch_contract_base
+                            + "\nBranch strategy: mainline-maintenance\nRelease line: v1.x-maintenance\nTarget branch: codex/v2-local-first-orchestration\nPR target: codex/v2-local-first-orchestration\n",
+                        },
+                        {
+                            "number": 354,
+                            "title": "Legacy branch target",
+                            "state": "OPEN",
+                            "labels": [{"name": "needs:implementer"}],
+                            "body": "## Execution Contract\n\n"
+                            + branch_contract_base
+                            + "\nBranch strategy: mainline-maintenance\nRelease line: v1.x-maintenance\nBranch target: main\nPR target: main\n",
+                        },
+                        {
+                            "number": 355,
+                            "title": "Generic integration branch",
+                            "state": "OPEN",
+                            "labels": [{"name": "needs:implementer"}],
+                            "body": "## Execution Contract\n\n"
+                            + branch_contract_base
+                            + "\nBranch strategy: integration-branch\nTarget branch: codex/customer-integration\nPR target: codex/customer-integration\n",
+                        },
+                        {
+                            "number": 356,
+                            "title": "Custom strategy",
+                            "state": "OPEN",
+                            "labels": [{"name": "needs:implementer"}],
+                            "body": "## Execution Contract\n\n"
+                            + branch_contract_base
+                            + "\nBranch strategy: custom\nTarget branch: maintainer/special-flow\nPR target: maintainer/special-flow\n",
+                        },
+                        {
+                            "number": 357,
+                            "title": "Multi-line evidence",
+                            "state": "OPEN",
+                            "labels": [{"name": "needs:implementer"}],
+                            "body": "## Execution Contract\n\n"
+                            + branch_contract_base
+                            + "\nBranch strategy: multi-branch\nTarget branch: main\nAffected branches: main, codex/v2-local-first-orchestration\nVerification branches: main, codex/v2-local-first-orchestration\nPR target: main\nForward-merge expectation: verify and forward-merge after main acceptance\n",
+                        },
+                    ]
+                }
+            ),
+        )
+        write(
+            branch_readiness_prs,
+            json.dumps(
+                {
+                    "items": [
+                        {
+                            "number": 501,
+                            "title": "Wrong V2 PR base",
+                            "state": "OPEN",
+                            "labels": [{"name": "needs:reviewer"}],
+                            "baseRefName": "main",
+                            "headRefName": "codex/v2-feature",
+                            "headRefOid": "abc501",
+                            "body": "## Execution Contract\n\n"
+                            + branch_contract_base
+                            + "\nBranch strategy: integration-branch\nRelease line: v2-integration\nTarget branch: codex/v2-local-first-orchestration\nPR target: codex/v2-local-first-orchestration\n",
+                        },
+                        {
+                            "number": 502,
+                            "title": "Correct V2 PR base",
+                            "state": "OPEN",
+                            "labels": [{"name": "needs:reviewer"}],
+                            "baseRefName": "codex/v2-local-first-orchestration",
+                            "headRefName": "codex/v2-safe",
+                            "headRefOid": "abc502",
+                            "body": "## Execution Contract\n\n"
+                            + branch_contract_base
+                            + "\nBranch strategy: integration-branch\nRelease line: v2-integration\nTarget branch: codex/v2-local-first-orchestration\nPR target: codex/v2-local-first-orchestration\n",
+                        },
+                        {
+                            "number": 503,
+                            "title": "Stacked PR",
+                            "state": "OPEN",
+                            "labels": [{"name": "needs:reviewer"}],
+                            "baseRefName": "codex/parent-feature",
+                            "headRefName": "codex/child-feature",
+                            "headRefOid": "abc503",
+                            "body": "## Execution Contract\n\n"
+                            + branch_contract_base
+                            + "\nBranch strategy: stacked-pr\nTarget branch: main\nPR target: codex/parent-feature\n",
+                        },
+                    ]
+                }
+            ),
+        )
+        board_contract = "\n".join(
+            [
+                "Owner role: architect",
+                "Review role: reviewer",
+                "Acceptance role: architect",
+                "Completion handoff: to:reviewer",
+                "Branch strategy: integration-branch",
+                "Release line: v2.0",
+                "Target branch: codex/v2-local-first-orchestration",
+                "Base branch: codex/v2-local-first-orchestration",
+                "PR target: codex/v2-local-first-orchestration",
+            ]
+        )
+        write(
+            foundry_board_issues,
+            json.dumps(
+                {
+                    "issues": [
+                        {
+                            "number": 297,
+                            "title": "Read-only Foundry Board MVP",
+                            "state": "OPEN",
+                            "url": "https://github.com/farmerhunter/agent-foundry/issues/297",
+                            "labels": [{"name": "stage:v2.0"}, {"name": "risk:high"}, {"name": "needs:implementer"}],
+                            "body": "## Execution Contract\n\n" + board_contract + "\n",
+                        },
+                        {
+                            "number": 296,
+                            "title": "Backfill candidate from existing project",
+                            "state": "OPEN",
+                            "url": "https://github.com/farmerhunter/agent-foundry/issues/296",
+                            "labels": [{"name": "stage:v2.0"}, {"name": "risk:high"}, {"name": "migration_candidate"}],
+                            "source_confidence": "inferred",
+                            "state_authority": "candidate",
+                            "board_state": "planned",
+                            "body": "## Execution Contract\n\n" + board_contract + "\n",
+                        },
+                        {
+                            "number": 299,
+                            "title": "Human-gated V2 readiness",
+                            "state": "OPEN",
+                            "url": "https://github.com/farmerhunter/agent-foundry/issues/299",
+                            "labels": [{"name": "stage:v2.0"}, {"name": "risk:high"}, {"name": "needs:human"}],
+                            "body": "## Execution Contract\n\n"
+                            + board_contract.replace("Owner role: architect", "Owner role: human").replace("Completion handoff: to:reviewer", "Completion handoff: to:human")
+                            + "\n",
+                        },
+                    ]
+                }
+            ),
+        )
+        write(
+            foundry_board_project,
+            json.dumps(
+                {
+                    "items": [
+                        {
+                            "content": {"number": 297},
+                            "status": {"name": "Todo"},
+                            "roadmap Status": {"name": "Ready"},
+                            "stage": {"name": "V2.0"},
+                            "owner Role": {"name": "Implementer"},
+                            "risk": {"name": "High"},
+                        },
+                        {
+                            "content": {"number": 296},
+                            "status": {"name": "Done"},
+                            "roadmap Status": {"name": "Done"},
+                            "stage": {"name": "V2.0"},
+                            "owner Role": {"name": "Architect"},
+                            "risk": {"name": "High"},
+                        },
+                        {
+                            "content": {"number": 299},
+                            "status": {"name": "Todo"},
+                            "roadmap Status": {"name": "In Progress"},
+                            "stage": {"name": "V2.0"},
+                            "owner Role": {"name": "Human"},
+                            "risk": {"name": "High"},
+                        },
+                    ]
+                }
+            ),
+        )
+        write(
+            branch_local_git,
+            json.dumps(
+                {
+                    "status": "ok",
+                    "branch": "codex/af16-350-branch-readiness",
+                    "upstream": "origin/codex/af16-350-branch-readiness",
+                    "ahead": 1,
+                    "behind": 1,
+                    "dirty": True,
+                    "staged_count": 1,
+                    "unstaged_count": 1,
+                    "untracked_count": 1,
+                    "commit": "abc-local",
+                    "worktree_path": "/tmp/agent-foundry-task",
+                }
+            ),
+        )
+        write(
+            branch_local_clean,
+            json.dumps(
+                {
+                    "status": "ok",
+                    "branch": "main",
+                    "upstream": "origin/main",
+                    "ahead": 0,
+                    "behind": 0,
+                    "dirty": False,
+                    "commit": "abc-clean",
+                    "worktree_path": "/tmp/agent-foundry-clean",
+                }
+            ),
+        )
+        write(
             inbox,
             json.dumps(
                 {
@@ -308,6 +680,13 @@ def main() -> int:
                             "title": "Evidence",
                             "labels": [{"name": "stage:AF-11"}],
                             "updatedAt": "2026-06-18T00:00:00Z",
+                        },
+                        {
+                            "number": 208,
+                            "title": "Tester evidence",
+                            "labels": [{"name": "needs:tester"}],
+                            "updatedAt": "2026-06-18T00:00:00Z",
+                            "body": "## Execution Contract\n\nOwner role: tester\nReview role: reviewer\nAcceptance role: architect\nCompletion handoff: to:reviewer\n\n## Testing Contract\n\nTesting Responsibility: tester\nTester Trigger:\n  - route mock does not prove backend persistence\nuser_value_or_risk: user can trust the preview does not write\n\n## Test Evidence Handoff\n\nto: reviewer\nresult_summary: passed\nresidual_risks: backend persistence not covered\n",
                         },
                     ]
                 }
@@ -437,6 +816,8 @@ def main() -> int:
         errors.extend(expect_ok("inbox-contract-validation-invalid", inbox_result, '"status": "invalid"'))
         errors.extend(expect_ok("inbox-contract-validation-role", inbox_result, '"actual": "Implementer"'))
         errors.extend(expect_ok("inbox-contract-validation-handoff", inbox_result, '"actual": "move to Review"'))
+        errors.extend(expect_ok("inbox-testing-contract-validation-surface", inbox_result, '"testing_contract_validation"'))
+        errors.extend(expect_ok("inbox-testing-contract-validation-ok", inbox_result, '"Testing Responsibility": "tester"'))
         issue_context_result = run(
             ["--repo", "farmerhunter/agent-foundry", "issue-context", "205", "--fixture-json", str(fixture)],
             base,
@@ -491,6 +872,7 @@ def main() -> int:
             "multiple_needs_labels",
             "no_next_owner_label",
             "execution_contract_invalid",
+            "testing_contract_invalid",
         ):
             errors.extend(expect_ok(f"scheduler-audit-{code}", scheduler_json, f'"code": "{code}"'))
         for name, expected in (
@@ -498,10 +880,193 @@ def main() -> int:
             ("scheduler-audit-compound-acceptance", '"Acceptance role": "architect / user"'),
             ("scheduler-audit-missing-review-role", "Reviewer target is present but Review role is missing."),
             ("scheduler-audit-legacy-handoff", '"Completion handoff": "move to Review"'),
+            ("scheduler-audit-tester-missing-contract", "needs:tester requires Testing Responsibility: tester."),
+            ("scheduler-audit-review-role-tester", '"Review role": "tester"'),
         ):
             errors.extend(expect_ok(name, scheduler_json, expected))
         errors.extend(expect_ok("scheduler-audit-json-status", scheduler_json, '"status": "findings"'))
         errors.extend(expect_ok("scheduler-audit-json-no-mutation", scheduler_json, '"mutation_performed": false'))
+        readiness_json = run(
+            [
+                "collaboration-readiness",
+                "--config",
+                str(TEMPLATE),
+                "--labels-json",
+                str(readiness_labels),
+                "--issues-json",
+                str(audit_issues),
+                "--prs-json",
+                str(readiness_prs),
+                "--project-items-json",
+                str(readiness_project),
+                "--json",
+            ],
+            base,
+            {"AGENT_REPO": "farmerhunter/agent-foundry"},
+        )
+        for name, expected in (
+            ("collaboration-readiness-command", '"command": "collaboration-readiness"'),
+            ("collaboration-readiness-no-mutation", '"mutation_performed": false'),
+            ("collaboration-readiness-read-only", '"mode": "read_only"'),
+            ("collaboration-readiness-missing-label", '"code": "missing_needs_label"'),
+            ("collaboration-readiness-missing-harvester", '"label:needs:harvester"'),
+            ("collaboration-readiness-contract-invalid", '"code": "execution_contract_invalid"'),
+            ("collaboration-readiness-testing-invalid", '"code": "testing_contract_invalid"'),
+            ("collaboration-readiness-missing-project-item", '"code": "missing_project_item"'),
+            ("collaboration-readiness-missing-project-field", '"code": "missing_project_field"'),
+            ("collaboration-readiness-missing-role-option", '"code": "missing_project_role_option"'),
+            ("collaboration-readiness-action-plan", '"user_readiness_action_plan"'),
+            ("collaboration-readiness-status", '"readiness_status"'),
+            ("collaboration-readiness-summary", "Raw JSON remains evidence/debug output"),
+            ("collaboration-readiness-human-readable-summary", '"summary"'),
+            ("collaboration-readiness-agent-action", '"category": "agent_handled_existing_workflow"'),
+            ("collaboration-readiness-human-gate-action", '"category": "explicit_human_gate"'),
+            ("collaboration-readiness-deferred-action", '"category": "unsupported_deferred_repair_apply"'),
+            ("collaboration-readiness-pr-sampled", '"prs_sampled"'),
+            ("collaboration-readiness-repair-not-supported", '"apply_supported_now": false'),
+            ("collaboration-readiness-project-option-repair", '"action": "create_project_option"'),
+            ("collaboration-readiness-no-full-project-scan", '"full_project_scan_performed": false'),
+            ("collaboration-readiness-v2-shape", '"local_ledger_candidate": true'),
+        ):
+            errors.extend(expect_ok(name, readiness_json, expected))
+        foundry_board_json = run(
+            [
+                "foundry-board",
+                "--issues-json",
+                str(foundry_board_issues),
+                "--project-items-json",
+                str(foundry_board_project),
+                "--local-git-json",
+                str(branch_local_clean),
+                "--json",
+            ],
+            base,
+            {"AGENT_REPO": "farmerhunter/agent-foundry"},
+        )
+        for name, expected in (
+            ("foundry-board-command", '"command": "foundry-board"'),
+            ("foundry-board-read-only", '"mode": "read_only"'),
+            ("foundry-board-no-mutation", '"mutation_performed": false'),
+            ("foundry-board-no-apply", '"apply_supported_now": false'),
+            ("foundry-board-source-of-truth", '"source_of_truth": "local_collaboration_ledger_events"'),
+            ("foundry-board-mirror-role", '"github_project_role": "optional_visual_mirror"'),
+            ("foundry-board-ready-lane", '"lane": "ready"'),
+            ("foundry-board-human-gate-lane", '"lane": "human_gate"'),
+            ("foundry-board-stale-conflict", '"lane": "stale_conflict"'),
+            ("foundry-board-candidate", '"state_authority": "candidate"'),
+            ("foundry-board-confidence", '"confidence": "inferred"'),
+            ("foundry-board-mirror-drift", '"mirror_status": "drift"'),
+            ("foundry-board-human-action", '"category": "explicit_human_gate"'),
+            ("foundry-board-branch-target", '"target_branch": "codex/v2-local-first-orchestration"'),
+            ("foundry-board-forbidden-project", "Project v2 mutation"),
+            ("foundry-board-telemetry", '"implementation_slice": "V2-5 read-only Foundry Board MVP"'),
+        ):
+            errors.extend(expect_ok(name, foundry_board_json, expected))
+        branch_readiness_json = run(
+            [
+                "collaboration-readiness",
+                "--config",
+                str(TEMPLATE),
+                "--labels-json",
+                str(readiness_labels),
+                "--issues-json",
+                str(branch_readiness_issues),
+                "--prs-json",
+                str(branch_readiness_prs),
+                "--local-git-json",
+                str(branch_local_git),
+                "--json",
+            ],
+            base,
+            {"AGENT_REPO": "farmerhunter/agent-foundry"},
+        )
+        for name, expected in (
+            ("branch-readiness-surface", '"branch_readiness"'),
+            ("branch-readiness-strategy-field", '"Branch strategy"'),
+            ("branch-readiness-strategy-values", '"multi-branch"'),
+            ("branch-readiness-target-branch", '"Target branch"'),
+            ("branch-readiness-legacy-mapping", '"target_branch_source": "legacy:Branch target"'),
+            ("branch-readiness-missing-contract", '"code": "branch_contract_missing"'),
+            ("branch-readiness-v2-main", '"code": "v2_work_targets_main"'),
+            ("branch-readiness-v1-v2", '"code": "v1_work_targets_v2"'),
+            ("branch-readiness-wrong-pr-base", '"code": "wrong_pr_base"'),
+            ("branch-readiness-v2-pr-main", '"code": "v2_pr_targets_main"'),
+            ("branch-readiness-dirty-worktree", '"code": "local_worktree_dirty"'),
+            ("branch-readiness-ahead-behind", '"code": "local_branch_ahead_or_behind"'),
+            ("branch-readiness-actual-base", '"actual_pr_base": "main"'),
+            ("branch-readiness-generic-integration", '"target_branch": "codex/customer-integration"'),
+            ("branch-readiness-custom-strategy", '"code": "branch_strategy_custom"'),
+            ("branch-readiness-stacked-pr", '"branch_strategy": "stacked-pr"'),
+            ("branch-readiness-multi-branch", '"branch_strategy": "multi-branch"'),
+            ("branch-readiness-current-branch-ok", '"current_branch_ok"'),
+            ("branch-readiness-switch-context", '"switch_context_required"'),
+            ("branch-readiness-split-work", '"split_work_recommended"'),
+            ("branch-readiness-forward-merge", '"forward_merge_needed_later"'),
+            ("branch-readiness-multiple-lines", '"verify_on_multiple_lines"'),
+            ("branch-readiness-architect-decision", '"architect_decision_required"'),
+            ("branch-readiness-no-apply", '"apply_supported_now": false'),
+            ("branch-readiness-no-mutation", '"mutation_performed": false'),
+            ("branch-readiness-no-retarget", "PR retarget"),
+            ("branch-readiness-no-checkout", "checkout/switch"),
+            ("branch-readiness-no-reset-clean", "rebase/merge/reset/clean"),
+            ("branch-readiness-action-plan", "Branch readiness: branch_mismatch."),
+            ("branch-readiness-agent-action", '"category": "agent_handled_existing_workflow"'),
+            ("branch-readiness-deferred-action", '"category": "unsupported_deferred_repair_apply"'),
+            ("branch-readiness-no-full-scan", '"full_project_scan_performed": false'),
+        ):
+            errors.extend(expect_ok(name, branch_readiness_json, expected))
+        write(fake_gh, "#!/bin/sh\nprintf '%s\\n' 'TLS handshake timeout while reading PR base' >&2\nexit 1\n")
+        fake_gh.chmod(0o755)
+        pr_degraded_json = run(
+            [
+                "collaboration-readiness",
+                "--config",
+                str(TEMPLATE),
+                "--labels-json",
+                str(readiness_labels),
+                "--issues-json",
+                str(branch_readiness_issues),
+                "--prs",
+                "501",
+                "--local-git-json",
+                str(branch_local_clean),
+                "--json",
+            ],
+            base,
+            {"AGENT_REPO": "farmerhunter/agent-foundry", "PATH": f"{fake_bin}{os.pathsep}{os.environ.get('PATH', '')}"},
+        )
+        for name, expected in (
+            ("branch-readiness-pr-read-degraded", '"source": "github_rest_prs"'),
+            ("branch-readiness-pr-read-transient", '"status": "transient_failure"'),
+            ("branch-readiness-pr-read-recorded", "TLS handshake timeout while reading PR base"),
+        ):
+            errors.extend(expect_ok(name, pr_degraded_json, expected))
+        new_repo_readiness = run(
+            [
+                "collaboration-readiness",
+                "--labels-json",
+                str(new_repo_labels),
+                "--issues-json",
+                str(new_repo_issues),
+                "--prs-json",
+                str(new_repo_prs),
+                "--local-git-json",
+                str(branch_local_clean),
+                "--json",
+            ],
+            base,
+            {"AGENT_REPO": "farmerhunter/new-repo"},
+        )
+        for name, expected in (
+            ("collaboration-readiness-new-repo-needs-setup", '"readiness_status": "needs_setup"'),
+            ("collaboration-readiness-new-repo-label-action", '"label:needs:architect"'),
+            ("collaboration-readiness-new-repo-project-informational", '"category": "informational_only"'),
+            ("collaboration-readiness-new-repo-raw-json-debug", "Raw JSON remains evidence/debug output"),
+            ("collaboration-readiness-new-repo-no-mutation", '"mutation_performed": false'),
+        ):
+            errors.extend(expect_ok(name, new_repo_readiness, expected))
+        write(fake_gh, "#!/bin/sh\nprintf '%s\\n' 'EOF while reading Project v2' >&2\nexit 1\n")
+        fake_gh.chmod(0o755)
         degraded = run(
             [
                 "scheduler-audit",
@@ -521,8 +1086,81 @@ def main() -> int:
             {"AGENT_REPO": "farmerhunter/agent-foundry", "PATH": f"{fake_bin}{os.pathsep}{os.environ.get('PATH', '')}"},
         )
         errors.extend(expect_ok("scheduler-audit-project-degraded", degraded, '"status": "degraded"'))
-        errors.extend(expect_ok("scheduler-audit-project-unavailable", degraded, '"availability": "unavailable"'))
+        errors.extend(expect_ok("scheduler-audit-project-degraded-availability", degraded, '"availability": "degraded"'))
         errors.extend(expect_ok("scheduler-audit-project-read-once", degraded, '"attempts": 1'))
+        readiness_degraded = run(
+            [
+                "collaboration-readiness",
+                "--config",
+                str(TEMPLATE),
+                "--labels-json",
+                str(readiness_labels),
+                "--issues-json",
+                str(audit_issues),
+                "--project-owner",
+                "@me",
+                "--project-number",
+                "3",
+                "--project-retries",
+                "1",
+                "--json",
+            ],
+            base,
+            {"AGENT_REPO": "farmerhunter/agent-foundry", "PATH": f"{fake_bin}{os.pathsep}{os.environ.get('PATH', '')}"},
+        )
+        errors.extend(expect_ok("collaboration-readiness-project-degraded", readiness_degraded, '"status": "degraded"'))
+        errors.extend(expect_ok("collaboration-readiness-project-degraded-availability", readiness_degraded, '"availability": "degraded"'))
+        errors.extend(expect_ok("collaboration-readiness-project-read-once", readiness_degraded, '"attempts": 1'))
+        errors.extend(expect_ok("collaboration-readiness-project-eof-recorded", readiness_degraded, "EOF while reading Project v2"))
+        errors.extend(expect_ok("collaboration-readiness-no-project-write", readiness_degraded, '"apply_supported_now": false'))
+        write(fake_gh, "#!/bin/sh\nprintf '%s\\n' 'GraphQL rate limit exceeded' >&2\nexit 1\n")
+        fake_gh.chmod(0o755)
+        readiness_rate_limited = run(
+            [
+                "collaboration-readiness",
+                "--config",
+                str(TEMPLATE),
+                "--labels-json",
+                str(readiness_labels),
+                "--issues-json",
+                str(audit_issues),
+                "--project-owner",
+                "@me",
+                "--project-number",
+                "3",
+                "--project-retries",
+                "1",
+                "--json",
+            ],
+            base,
+            {"AGENT_REPO": "farmerhunter/agent-foundry", "PATH": f"{fake_bin}{os.pathsep}{os.environ.get('PATH', '')}"},
+        )
+        errors.extend(expect_ok("collaboration-readiness-rate-limit-degraded", readiness_rate_limited, '"availability": "degraded"'))
+        errors.extend(expect_ok("collaboration-readiness-rate-limit-recorded", readiness_rate_limited, "GraphQL rate limit exceeded"))
+        write(fake_gh, "#!/bin/sh\nprintf '%s\\n' 'TLS handshake timeout while reading Project v2' >&2\nexit 1\n")
+        fake_gh.chmod(0o755)
+        readiness_tls = run(
+            [
+                "collaboration-readiness",
+                "--config",
+                str(TEMPLATE),
+                "--labels-json",
+                str(readiness_labels),
+                "--issues-json",
+                str(audit_issues),
+                "--project-owner",
+                "@me",
+                "--project-number",
+                "3",
+                "--project-retries",
+                "1",
+                "--json",
+            ],
+            base,
+            {"AGENT_REPO": "farmerhunter/agent-foundry", "PATH": f"{fake_bin}{os.pathsep}{os.environ.get('PATH', '')}"},
+        )
+        errors.extend(expect_ok("collaboration-readiness-tls-degraded", readiness_tls, '"availability": "degraded"'))
+        errors.extend(expect_ok("collaboration-readiness-tls-recorded", readiness_tls, "TLS handshake timeout"))
         errors.extend(
             expect_ok(
                 "activation-report-fixture",

@@ -1,10 +1,10 @@
 manifest_schema_version: 1
 pack_id: pack.multi-agent.optional
 title: Optional Multi-Agent Collaboration Pack
-description: Reviewed optional first-party starter pack for role-generic GitHub issue and PR collaboration helpers.
+description: Reviewed optional first-party starter pack for role-generic GitHub issue and PR collaboration helpers, collaboration readiness, branch-aware action plans, and dry-run repair planning.
 lifecycle_status: reviewed
-version: 0.2.0
-exported_at: 2026-06-12
+version: 0.3.2
+exported_at: 2026-07-07
 distribution_type: optional_capability
 source_provenance: "Agent Foundry public Core fixture reviewed through AF12-3 issue #253."
 maintainer_contact: "https://github.com/farmerhunter/agent-foundry"
@@ -13,7 +13,7 @@ sensitivity: public
 review_state: reviewed
 
 pack_contract:
-  promised_use_case: "Help a project operate GitHub issues, PRs, labels, comments, and optional visual status mirrors as a lightweight multi-agent scheduler."
+  promised_use_case: "Help a project operate GitHub issues, PRs, labels, comments, collaboration readiness reports, branch-aware action plans, dry-run repair plans, and optional visual status mirrors as a lightweight multi-agent scheduler."
   deployment_role: "optional user-selected capability after bootstrap"
   source_authority_after_deployment: "selected User Vault records"
   non_authority_boundaries: [generated adapters are downstream only, runtime installs are downstream only, pack staging is transfer evidence only, Core fixtures are schema and test evidence only]
@@ -21,6 +21,10 @@ pack_contract:
 evidence_sources:
   - "Agent Foundry issue 252 public starter-pack selection decision"
   - "Agent Foundry issue 253 public starter-pack implementation review"
+  - "Agent Foundry issue 315 collaboration readiness model decision"
+  - "Agent Foundry issues 316-319 AF15 helper, docs, dry-run repair, and dogfood review"
+  - "Agent Foundry issues 328-331 AF15 action-plan UX correction and dogfood review"
+  - "Agent Foundry issues 348-352 AF16 branch-aware collaboration readiness and docs/template enablement"
   - "Agent Foundry public first-party starter-pack review"
 
 export_policy:
@@ -46,20 +50,32 @@ starter_contents:
     - "role-generic needs:<role> routing"
     - "durable pickup and handoff comments"
     - "explicit Execution Contract role fields"
+    - "Testing Contract evidence routing when explicit testing is needed"
     - "dependency-gated ready queues"
+    - "collaboration readiness before new project adoption"
+    - "existing project drift audit and dry-run repair planning"
+    - "user-facing readiness action-plan output"
+    - "branch-aware Execution Contract fields: Branch strategy, Target branch, affected branches, and verification branches"
+    - "generic branch strategy families with Agent Foundry V1/V2 presets as project overlays"
+    - "multi-branch, stacked PR, split-work, forward-merge, and multi-line verification action-plan concepts"
+    - "degraded GitHub/Project access reporting"
     - "read-only audit before write automation"
   assets:
     - "role-generic GitHub scheduler helper set"
   docs_templates:
     - "role routing config example"
     - "Execution Contract template"
+    - "Testing Contract template"
     - "pickup and handoff comment templates"
+    - "collaboration readiness adoption guidance"
+    - "branch-aware Execution Contract and role dispatch examples"
   executable_payload_candidates:
     - "agent-inbox"
     - "agent-ready-queue"
     - "agent-pickup"
     - "agent-handoff"
     - "agent-audit"
+    - "agent-collaboration-readiness"
     - "agent-issue-context"
     - "agent-pr-context"
     - "agent-label"
@@ -80,6 +96,8 @@ rejected_as_pack:
   - "mutating apply behavior before managed helper install exists"
   - "execution from product project paths, pack staging, or canonical Vault payload paths"
   - "active Agent Foundry practices without separate harvest review"
+  - "live Project repair/apply behavior without later reviewed gate"
+  - "branch repair/apply, checkout/switch, worktree creation, PR retarget, rebase, merge, reset, clean, or force-push behavior"
 
 compatibility:
   core_schema_version_min: 1
@@ -92,8 +110,8 @@ included_records:
     kind: practice
     lifecycle_status: candidate
     path: records/practices/COLLAB-PACK-001-review-handoff.md
-    source_version: 2
-    content_sha256: "3d68186c067db71927fd4861842c8c7f446e435c1dc0f17176cfdc18222a2116"
+    source_version: 5
+    content_sha256: "316cbd91d14dee915b09561e8e9d2576582772f2ca25a1212ecde6a4872208bd"
     destination_layer: canonical_vault_record
     membership_role: optional_member
     activation_default: manual_review
@@ -102,8 +120,8 @@ included_records:
     kind: asset
     lifecycle_status: candidate
     path: records/assets/ASSET-COLLAB-PACK-001-review-handoff-helper.asset.yaml
-    source_version: 2
-    content_sha256: "e43c1f9205a51ccf796eba87ec16dc15f9a70255ad83e31322ffdd92f9495eb4"
+    source_version: 5
+    content_sha256: "8c8eb717577fac50cf0ee80cd16d1e6443f9a84340ff6c3dbe5798cf42a2069d"
     destination_layer: canonical_vault_record
     membership_role: optional_member
     activation_default: manual_review

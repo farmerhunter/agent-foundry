@@ -21,6 +21,9 @@ roles:
   reviewer:
     inbox_label: "needs:reviewer"
     review_target: "independent review and acceptance recommendation"
+  tester:
+    inbox_label: "needs:tester"
+    review_target: "test planning, test matrix, evidence execution, and residual risk handoff"
   harvester:
     inbox_label: "needs:harvester"
     review_target: "practice or asset harvest workflow"
@@ -32,6 +35,7 @@ needs_labels:
   - "needs:architect"
   - "needs:implementer"
   - "needs:reviewer"
+  - "needs:tester"
   - "needs:harvester"
   - "needs:human"
 
@@ -78,6 +82,44 @@ github:
   bare_gh_last_resort: "short_low_risk_comments_only_with_bounded_retry_and_failure_recording"
   project_v2_policy: "optional_visual_mirror_only_no_generalized_write_policy"
   runtime_approval_prompt_boundary: "workflow_authorization_does_not_override_app_level_approval_prompts"
+
+branch_readiness:
+  canonical_target_field: "Target branch"
+  legacy_target_field: "Branch target"
+  legacy_target_field_policy: "read_compatibility_only_do_not_use_in_new_examples"
+  strategy_field: "Branch strategy"
+  supported_strategies:
+    - "mainline-maintenance"
+    - "integration-branch"
+    - "release-branch"
+    - "trunk-based"
+    - "stacked-pr"
+    - "multi-branch"
+    - "custom"
+  agent_foundry_presets:
+    v1_x_maintenance:
+      branch_strategy: "mainline-maintenance"
+      target_branch: "main"
+    v2_integration:
+      branch_strategy: "integration-branch"
+      target_branch: "codex/v2-local-first-orchestration"
+      merge_back_policy: "later_readiness_and_human_gate"
+  action_plan_concepts:
+    - "current_branch_ok"
+    - "switch_context_required"
+    - "split_work_recommended"
+    - "forward_merge_needed_later"
+    - "verify_on_multiple_lines"
+    - "architect_decision_required"
+  helper_write_behavior: "read_only_action_plan_no_branch_repair_apply"
+  unsupported_actions:
+    - "checkout_switch"
+    - "branch_or_worktree_creation"
+    - "pr_retarget"
+    - "rebase"
+    - "merge"
+    - "reset"
+    - "clean"
 
 project_v2:
   mode: "optional_visual_mirror"

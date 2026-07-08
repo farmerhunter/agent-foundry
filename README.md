@@ -21,7 +21,7 @@ work session
 
 The goal is not to maintain a pile of prompts. The goal is to make hard-won working judgment portable across sessions, agents, machines, and projects without losing human review or source-of-truth discipline.
 
-Actually a lot of thoughts came out as I work on this project. For more detailed explanation of my motivation, see [docs/philosophy.md](docs/philosophy.md).
+在开发的过程中最重要的收获是做了很多思考和反思，有关人和agent的协作，都写进了这篇文档： [docs/philosophy.md](docs/philosophy.md).
 
 ## What It Does
 
@@ -50,6 +50,17 @@ Agent memory, session summaries, and external skills are treated as evidence sou
 | `docs/` | Human-readable philosophy, usage, design, deployment, and compatibility notes. |
 
 Vault-owned paths such as `practices/`, `assets/`, `indexes/`, `imports/`, and `usage/usage-aggregate.yaml` live in the selected User Vault, not in the clean public Core checkout.
+
+## Supported Targets
+
+| Target | Status |
+| --- | --- |
+| Codex | Local `SKILL.md` adapter. |
+| Claude Code | `CLAUDE.md` and related adapter files. |
+| Hermes | Local `SKILL.md` adapter. |
+| ChatGPT | Manual import through custom/project instructions and knowledge files. |
+
+DeepSeek, MiniMax, and similar model providers are treated as underlying models used through programming agents, not direct Agent Foundry adapters.
 
 ## Quick Start
 
@@ -82,37 +93,30 @@ Use short commands instead of remembering internal workflows:
 
 Detailed prompts and Chinese equivalents are in [docs/usage.md](docs/usage.md) and [docs/commands.md](docs/commands.md).
 
-## Optional Starter Packs / 可选 Starter Packs
+## Recommended Starter Packs
 
-After the first-value path above works, you can ask Agent Foundry to list or
-preview optional first-party starter packs. They are not required setup choices.
+For a new Agent Foundry setup, install these two first-party capability packs after the Core/Vault locator and status checks work.
 
-完成上面的 first-value path 后，可以让 Agent Foundry list 或 preview 可选 first-party starter packs。它们不是必选 setup 选项。
+| Pack | Why install it |
+| --- | --- |
+| `pack.bootstrap.minimal` | Gives the selected User Vault the minimal reviewed baseline for safe harvest, review, refresh, status, source-of-truth boundaries, and external-skill import/reference review. Install this first. |
+| `pack.multi-agent.optional` | Adds GitHub issue/PR collaboration habits: role labels, durable handoffs, Execution Contracts, Tester evidence routing, collaboration readiness audit, and safe action-plan guidance. Install this when you coordinate work through GitHub. |
 
-Current official starter packs:
+Quick-start install path:
 
-当前 official starter packs：
+```text
+preview capability pack deployment catalog/capability-packs/pack.bootstrap.minimal
+apply reviewed capability pack catalog/capability-packs/pack.bootstrap.minimal
+verify capability pack pack.bootstrap.minimal
 
-| Pack | What you get / 获得什么 | Choose it when / 适合什么情况 |
-| --- | --- | --- |
-| `pack.bootstrap.minimal` | A small baseline for safe harvest, review, refresh, status, and source-of-truth boundaries. / 用于安全 harvest、review、refresh、status 和 source-of-truth boundaries 的小型 baseline。 | Accept it for a new selected Vault or before any optional pack; it does not install runtimes or publish generated adapters by itself. / 新 selected Vault 或安装 optional pack 前接受它；它本身不会安装 runtimes 或发布 generated adapters。 |
-| `pack.multi-agent.optional` | GitHub issue/PR collaboration habits: role labels, durable comments, Execution Contracts, and review handoff. / GitHub issue/PR 协作习惯：role labels、durable comments、Execution Contracts 和 review handoff。 | Install it when you coordinate work through GitHub issues and PRs; skip it for solo local usage or projects without GitHub collaboration. / 当你通过 GitHub issues 和 PRs 协调工作时安装；纯本地单人使用或没有 GitHub 协作的项目可以跳过。 |
+preview capability pack deployment catalog/capability-packs/pack.multi-agent.optional
+apply reviewed capability pack catalog/capability-packs/pack.multi-agent.optional
+verify capability pack pack.multi-agent.optional
+```
 
-Use Skill-facing requests first: `list capability packs`, `recommend capability packs for my setup`, `preview capability pack deployment <pack-path>`, `apply reviewed capability pack <pack-path>`, `verify capability pack <pack-id>`, `update capability pack <pack-id-or-path>`, and `disable capability pack <pack-id>`.
+The preview step should report the selected Vault impact before any apply. After an accepted apply, the selected User Vault is canonical; generated adapters and runtime installs remain separate follow-up surfaces.
 
-优先使用 Skill-facing 请求：`list capability packs`、`recommend capability packs for my setup`、`preview capability pack deployment <pack-path>`、`apply reviewed capability pack <pack-path>`、`verify capability pack <pack-id>`、`update capability pack <pack-id-or-path>` 和 `disable capability pack <pack-id>`。
-
-Architecture-boundary and source-of-truth orientation is folded into `pack.bootstrap.minimal`; it is not a standalone current-stage starter pack.
-
-Architecture-boundary 和 source-of-truth orientation 已并入 `pack.bootstrap.minimal`；它不是当前阶段的 standalone starter pack。
-
-Core catalog entries make packs discoverable, but the selected User Vault remains canonical after accepted deployment. Generated adapters, runtime installs, local receipts, and Local Private evidence remain downstream or excluded surfaces.
-
-Core catalog entries 负责 discoverability；accepted deployment 后 selected User Vault 仍然是 canonical。Generated adapters、runtime installs、local receipts 和 Local Private evidence 仍是 downstream 或 excluded surfaces。
-
-For ordinary and complete details, see [docs/usage.md](docs/usage.md), [docs/commands.md](docs/commands.md), and the catalog pages under `catalog/capability-packs/`.
-
-普通和完整细节见 [docs/usage.md](docs/usage.md)、[docs/commands.md](docs/commands.md)，以及 `catalog/capability-packs/` 下的 catalog pages。
+For full capability-pack behavior, see [docs/usage.md](docs/usage.md), [docs/commands.md](docs/commands.md), and the catalog pages under `catalog/capability-packs/`.
 
 ## Design Principles
 
@@ -125,21 +129,11 @@ For ordinary and complete details, see [docs/usage.md](docs/usage.md), [docs/com
 
 See [docs/system-design.md](docs/system-design.md) and [docs/lifecycle-compatibility.md](docs/lifecycle-compatibility.md).
 
-## Supported Targets
-
-| Target | Status |
-| --- | --- |
-| Codex | Local `SKILL.md` adapter. |
-| Claude Code | `CLAUDE.md` and related adapter files. |
-| Hermes | Local `SKILL.md` adapter. |
-| ChatGPT | Manual import through custom/project instructions and knowledge files. |
-
-DeepSeek, MiniMax, and similar model providers are treated as underlying models used through programming agents, not direct Agent Foundry adapters.
-
 ## Documentation
 
 - [Philosophy](docs/philosophy.md): why this project exists.
 - [Usage](docs/usage.md): day-to-day commands and prompts.
+- [Multi-Agent Collaboration](docs/multi-agent-collaboration.md): role-based issue/PR development flow, including Tester gates.
 - [Deployment](docs/deployment.md): fresh install, runtime changes, sync, and offline operation.
 - [System Design](docs/system-design.md): architecture, boundaries, lifecycle, and governance model.
 - [Roadmap](docs/roadmap.md): productization, repository hygiene, and memory-system readiness plan.

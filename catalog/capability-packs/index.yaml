@@ -6,9 +6,9 @@ entries:
     title: Minimal Agent Foundry Bootstrap Pack
     channel: official
     catalog_status: available
-    latest_version: 0.2.0
+    latest_version: 0.2.1
     manifest_path: fixtures/capability-packs/bootstrap-minimal/manifest.yaml
-    manifest_sha256: a9c940d7ed56759b70082b973f1fd1591f27dcc6e8b6f7354ce91c297e97240e
+    manifest_sha256: 63a0923121ba9bb428d22c7777cbc642fc777d3d8f98342770b6958f828be4a3
     compatibility_summary: "Core schema 1; Vault layout [1]; bootstrap not required."
     compatibility_metadata:
       core_schema_version_min: 1
@@ -27,9 +27,9 @@ entries:
     title: Optional GitHub Collaboration Starter Pack
     channel: official
     catalog_status: available
-    latest_version: 0.2.0
+    latest_version: 0.3.2
     manifest_path: fixtures/capability-packs/optional-multi-agent/manifest.yaml
-    manifest_sha256: ea14748cdf10142f37c46c9357019e162a3991afe623b20708cc7ef2a618ed58
+    manifest_sha256: a8261175a4c2cc64d2d0aa047fed3d9c33daaefadeaccee9eeb314c1748d9511
     compatibility_summary: "Core schema 1; Vault layout [1]; bootstrap required; selected Vault review required."
     compatibility_metadata:
       core_schema_version_min: 1
@@ -38,7 +38,7 @@ entries:
       requires_bootstrap_pack: true
     changelog_path: catalog/capability-packs/pack.multi-agent.optional/CHANGELOG.md
     readme_path: catalog/capability-packs/pack.multi-agent.optional/README.md
-    review_evidence: https://github.com/farmerhunter/agent-foundry/issues/253
+    review_evidence: https://github.com/farmerhunter/agent-foundry/issues/352
     authority_after_deployment: selected_user_vault
     private_local_evidence: excluded
     core_release_axis: independent

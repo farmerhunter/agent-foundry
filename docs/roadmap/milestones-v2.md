@@ -22,6 +22,23 @@ GitHub Project remains useful, but it becomes a remote sync and collaboration su
 - Keep memory-system work out of V2 unless a later explicit decision changes that.
 - Make migration and backfill first-class work, not a cleanup afterthought.
 
+## Branch Policy
+
+V2 work uses `codex/v2-local-first-orchestration` as its integration branch.
+
+Branch rules:
+
+- V2 child branches should target `codex/v2-local-first-orchestration`.
+- V2-only changes should not target `main` while V2 is incomplete.
+- `main` remains the V1.x maintenance line and default target for backward-compatible harvest-driven Core updates.
+- V2 should regularly forward-merge from `main` to absorb V1.x maintenance and harvest improvements.
+- Do not merge V2 back to `main` until V2 readiness is accepted and a final human-gated integration decision approves it.
+
+Release rules:
+
+- V1.x tags are cut from `main`.
+- V2.0.0 is cut only after V2 integration is accepted and merged through the final release gate.
+
 ## V2 Milestone Sequence
 
 | Milestone | GitHub records | Purpose | Status |
@@ -135,6 +152,21 @@ It should display enough information for a user to operate confidently:
 - next action;
 - related issue, PR, branch, and thread;
 - local/GitHub sync status.
+
+The MVP should preserve local-first boundaries:
+
+- durable local ledger events are the intended authority once available;
+- GitHub issue/PR evidence can feed the preview;
+- GitHub Project is an optional visual mirror, not the source of truth;
+- candidate migration/backfill records stay visibly different from accepted
+  state;
+- stale, contradictory, degraded, or mirror-drift evidence appears as conflict
+  or warning state instead of being hidden.
+
+The user-facing output should turn board state into next actions: dispatch an
+owner, request Reviewer/Architect/Human attention, rehydrate stale evidence,
+hold blocked items, or record that no action is needed. These actions must
+remain routed through existing issue/PR gates.
 
 Write automation should wait until read-only behavior is trusted.
 

@@ -4,10 +4,10 @@ title: Role-Generic GitHub Handoff Routing
 domain: agent-collaboration
 type: checklist
 status: candidate
-version: 2
+version: 5
 created: 2026-06-11
-updated: 2026-06-12
-tags: [multi-agent, review, handoff, scheduler]
+updated: 2026-07-07
+tags: [multi-agent, review, handoff, scheduler, readiness, dry-run-repair, branch-aware]
 aliases: [COLLAB-PACK-001]
 review_required: true
 ---
@@ -26,6 +26,23 @@ Multi-agent work loses continuity when completion evidence lives only in a chat 
 - Put pickup and handoff evidence on durable issue and PR surfaces when a PR exists.
 - Include scope, verification commands and outcomes, residual risks, and the expected next role.
 - Parse explicit Execution Contract fields for owner role, review role, acceptance role, dependency gates, branch strategy, and completion handoff.
-- Prefer read-only inbox, ready-queue, pickup, handoff, and audit dry-runs before write automation.
+- Use `Target branch` as the canonical branch contract field. Treat `Branch target` as legacy compatibility input only when mapping older contracts.
+- Record `Branch strategy` with one of: `mainline-maintenance`, `integration-branch`, `release-branch`, `trunk-based`, `stacked-pr`, `multi-branch`, or `custom`.
+- Apply project presets only as overlays. In Agent Foundry, V1.x maintenance targets `main`; V2 integration targets `codex/v2-local-first-orchestration`; V2 merge-back remains a later readiness and Human-gated decision.
+- For interleaved V2 work and generic Core updates, prefer split work and explicit evidence: land generic Core updates on `main`, record later forward-merge need, and verify on multiple lines before claiming cross-line readiness.
+- Surface branch action-plan concepts as report output: `current_branch_ok`, `switch_context_required`, `split_work_recommended`, `forward_merge_needed_later`, `verify_on_multiple_lines`, and `architect_decision_required`.
+- Prefer read-only inbox, ready-queue, pickup, handoff, audit, and collaboration readiness dry-runs before write automation.
+- For new projects, run collaboration readiness before relying on multi-agent routing. Check role labels, routing templates, Execution Contracts, Testing Contracts when needed, and optional Project/Kanban mirror fields.
+- For existing projects, use collaboration readiness to report drift and safe next actions. Read the user-facing action-plan layer first: readiness status, summary, blocking gaps, unknown/degraded sources, recommended next actions, forbidden actions, and telemetry.
+- Classify recommended next actions as informational-only, agent-handled existing workflow, explicit human gate, or unsupported/deferred repair/apply. Dry-run repair plans may name missing labels, malformed contract values, Project item drift, or missing Project fields, but they must keep `mutation_performed: false` and `apply_supported_now: false`.
+- Treat TLS, EOF, timeout, rate-limit-like, and unavailable Project v2 responses as degraded sources. Return partial reports with `unknown` or `not_available` instead of inferring hidden state.
 - Keep Project status and roadmap status as mirrors or reports unless a project explicitly configures them as managed outputs.
 - Treat project-specific repository names, Project ids, branch names, issue numbers, and status mappings as overlays, not reusable pack defaults.
+
+## Boundaries
+
+- Do not run default full Project scans for ordinary collaboration reads.
+- Do not apply dry-run repairs from this pack.
+- Do not perform branch repair/apply, checkout or switch branches, create worktrees, retarget PRs, rebase, merge, reset, clean, or force-push from this pack.
+- Do not publish generated Skills, install runtime helpers, or mutate Project v2 from pack deployment.
+- Keep selected User Vault records canonical after deployment; generated adapters, runtime receipts, and local helper outputs remain downstream evidence.

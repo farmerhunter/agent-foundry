@@ -110,6 +110,8 @@ Owner role: implementer
 Review role: reviewer
 Acceptance role: architect
 Completion handoff: to:reviewer
+Branch strategy: mainline-maintenance
+Target branch: main
 Reviewer target: separate Reviewer agent, contract-validation focused
 Human review prompt: only when a real human gate is needed
 ```
@@ -118,6 +120,93 @@ Keep natural-language reviewer descriptions, human prompts, and trial
 instructions in separate fields such as `Reviewer target:`, `Human verification
 needed:`, or `Human review prompt:`. Do not encode them in `Owner role:`,
 `Review role:`, `Acceptance role:`, or `Completion handoff:`.
+
+Branch-aware Execution Contract fields are also machine-readable:
+
+```markdown
+Branch strategy: mainline-maintenance | integration-branch | release-branch | trunk-based | stacked-pr | multi-branch | custom
+Target branch: main | <integration-branch> | <release-branch>
+Affected branches: <optional comma-separated branch list>
+Verification branches: <optional comma-separated branch list>
+PR target: <expected PR base branch>
+Forward-merge expectation: none | record later forward-merge | verify on multiple lines
+```
+
+`Target branch` is canonical. Treat `Branch target` only as a legacy
+compatibility input when reading old issues; do not use it in new examples.
+
+Agent Foundry presets:
+
+- V1.x maintenance uses `Branch strategy: mainline-maintenance` and
+  `Target branch: main`.
+- V2 integration uses `Branch strategy: integration-branch` and
+  `Target branch: codex/v2-local-first-orchestration`.
+- V2 merge-back to `main` remains a later readiness and Human-gated decision.
+
+For custom or unknown branch strategies, route to Architect rather than
+guessing. For stacked PRs or multi-branch work, emit review/action-plan
+guidance; do not checkout, create a worktree, retarget the PR, rebase, merge,
+reset, clean, or apply a repair.
+
+## Tester Routing
+
+Use `needs:tester` only when a task needs explicit test planning, a test
+matrix, evidence execution, or residual-risk handoff before the next decision.
+Tester is an evidence role. Tester does not approve, reject, merge, close,
+replace Reviewer acceptance, decide Architect-owned product semantics, or
+replace Human trial.
+
+Use Tester when risk comes from user-visible state, route mocks versus real
+backend behavior, imported data shape, runtime/generated/Vault boundaries,
+unsafe writes, stale state, copy leaks, answer leaks, or a human trial that
+needs objective evidence first. Skip Tester when a small static, unit, docs, or
+copy check fully answers the user confidence question.
+
+Tester-oriented Execution Contracts use `Owner role: tester` or
+`Completion handoff: to:tester`. Do not use `Review role: tester`; route
+accepted Tester evidence to Reviewer, product ambiguity to Architect, defects
+to Implementer, and subjective trial to Human.
+
+```markdown
+## Execution Contract
+
+Owner role: tester
+Review role: reviewer
+Acceptance role: architect
+Completion handoff: to:reviewer
+
+## Testing Contract
+
+Testing Responsibility: tester
+Tester Trigger:
+  - user-visible state changes need evidence before review
+user_value_or_risk: user can trust the workflow does not leak stale or unsafe state
+user_journey_or_state_chain: preview -> apply -> verify
+evidence_required:
+  - route_mocked_browser
+  - negative_adversarial
+test_matrix:
+  - scenario: preview keeps writes disabled
+    risk: unsafe_write
+    evidence_type: route_mocked_browser
+    fixture: route_mock
+    command_or_method: not_available
+    expected_signal: preview reports writes none
+    owner: tester
+    residual_gap: does not prove backend persistence
+
+## Test Evidence Handoff
+
+to: reviewer
+commands:
+  - python3 scripts/check_consistency.py
+environment: local
+artifacts:
+  - not_available
+result_summary: passed
+residual_risks:
+  - human wording acceptance still requires Human trial
+```
 
 ## GitHub Auth And Retry Expectations
 
@@ -260,6 +349,178 @@ still fails, the helper returns `status: degraded`, preserves
 without the Project mirror. Auth, permission, malformed fixture, unresolved repo,
 and incomplete required input errors fail closed instead of being retried as
 transient failures.
+
+## Collaboration Readiness
+
+Use `collaboration-readiness` when a user asks whether a new or existing
+repository is ready for role-based GitHub collaboration.
+
+Skill-facing requests should come first:
+
+```text
+check collaboration readiness for this repo
+prepare this repo for multi-agent collaboration
+audit existing collaboration setup
+```
+
+The helper command is the secondary/debug surface:
+
+```text
+agent-foundry-github-collab --repo <owner>/<repo> collaboration-readiness \
+  --config templates/github-role-routing.template.yaml \
+  --stage AF-15 \
+  --json
+```
+
+The report is read-only and must include `mutation_performed: false`. It checks
+role labels, routing config, Execution Contract values, Testing Contract values,
+issue/PR routing state, and optional Project/Kanban visibility. Raw JSON remains
+the evidence/debug layer; user-facing guidance comes from `readiness_status`,
+`summary`, and `user_readiness_action_plan.recommended_next_actions`.
+
+Branch-aware readiness also checks generic branch strategy fields before any
+Agent Foundry-specific preset. Supported strategies are
+`mainline-maintenance`, `integration-branch`, `release-branch`, `trunk-based`,
+`stacked-pr`, `multi-branch`, and `custom`. The generic checks cover required
+branch fields, expected PR base versus actual PR base, local dirty/staged/
+unstaged/untracked/ahead/behind state, degraded or unknown remote reads, and
+forbidden repair/apply actions. V1/V2 rules are an additional preset layer, not
+the only branch model.
+
+Valid `readiness_status` values are:
+
+- `ready`: sampled evidence is ready for normal collaboration workflow.
+- `needs_setup`: missing labels, routing template, contracts, or other setup
+  gaps should be routed through existing Agent Foundry workflow.
+- `needs_human_decision`: a Project/governance/product/privacy/final
+  integration/closure choice needs a Human Decision Contract.
+- `degraded`: at least one source is unavailable or partial, and the report
+  records what is unknown instead of guessing.
+- `blocked`: core GitHub evidence is unavailable enough that the user should
+  unblock source access before relying on the report.
+
+The report may include `dry_run_repair_plan` items, but every item must keep
+`apply_supported_now` set to `false` until a later reviewed repair/apply issue
+changes that boundary.
+
+Recommended actions use these categories:
+
+| Category | Meaning | Current handling |
+| --- | --- | --- |
+| `informational_only` | Evidence, status, or degraded optional mirrors that do not need mutation. | Explain and record; no workflow mutation required. |
+| `agent_handled_existing_workflow` | A bounded issue/comment/label/PR/role-handoff action can proceed through existing Agent Foundry gates. | Route with durable issue or PR comments and `needs:*` labels. |
+| `explicit_human_gate` | The action changes product, governance, privacy/security, final integration, closure, or meaningful Project policy. | Post a Human Decision Contract before action. |
+| `unsupported_deferred_repair_apply` | The helper can describe the repair, but AF15 must not execute it. | Leave deferred or create a later gated issue. |
+
+Branch action-plan concepts:
+
+| Concept | Meaning | Current handling |
+| --- | --- | --- |
+| `current_branch_ok` | Current branch evidence matches a sampled contract. | Continue normal scoped work. |
+| `switch_context_required` | Current checkout is not the target branch. | Stop editing here; route or prepare a separately reviewed context. |
+| `split_work_recommended` | Request mixes branch lines, stacked work, or cross-line effects. | Split work or record ordered sub-work. |
+| `forward_merge_needed_later` | Another line needs the accepted change later. | Record follow-up; do not merge automatically. |
+| `verify_on_multiple_lines` | Cross-line readiness needs evidence on every named line. | Verify each branch line before acceptance. |
+| `architect_decision_required` | Strategy is custom, unknown, or policy-sensitive. | Route to Architect before implementation or merge. |
+
+Safe multi-branch UX for V2 work interleaved with generic Core updates:
+
+1. Split the generic Core update from V2-only work.
+2. Land the generic Core update on `main` first through the normal reviewed
+   path.
+3. Record `forward_merge_needed_later` for V2.
+4. Use `verify_on_multiple_lines` before claiming cross-line readiness.
+5. Keep checkout/switch, branch/worktree creation, PR retarget, rebase, merge,
+   reset, clean, and repair/apply unsupported in the helper.
+
+For new-project setup, use the action plan to confirm:
+
+- standard role labels exist: `needs:architect`, `needs:implementer`,
+  `needs:reviewer`, `needs:tester`, `needs:harvester`, and `needs:human`;
+- the role-routing config is present and uses lowercase role tokens;
+- Execution Contract and Testing Contract examples use machine-readable role
+  and handoff values;
+- human gates are named for product, governance, privacy/security, final
+  integration, closure, or destructive decisions;
+- optional Project fields and role options are visible if a Project mirror is
+  configured;
+- residual risks and the next safe workflow action are explicit.
+
+For existing-project audit, use the action plan to identify drift:
+
+- missing or extra `needs:*` routing labels;
+- malformed Execution Contract or Testing Contract values;
+- issue/PR routing that does not match next-owner state;
+- missing or degraded Project v2 visibility;
+- safe next actions grouped as informational, agent-handled, human-gated, or
+  unsupported/deferred.
+
+Project v2 remains an optional visual mirror. A degraded or unavailable Project
+read should appear in the report without blocking issue/PR/label findings that
+can still be read through REST. The helper must not perform full Project scans
+by default, Project writes, label repair, comments, merges, closure, runtime
+writes, Vault writes, generated adapter publishing, capability-pack publishing,
+or V2 local-ledger implementation.
+
+The action-plan shape is compatible with future local-first telemetry/backfill
+work: it separates observed facts, unknown/degraded sources, action category,
+owner role, and workflow route. AF15 does not implement V2, does not create a
+Foundry Board or Local Collaboration Ledger, and does not make GitHub Project
+the source of truth.
+
+## Foundry Board Preview
+
+Use `foundry-board` when a user needs a board-shaped, read-only view of current
+local-first orchestration state before sync or write-back exists.
+
+Skill-facing request:
+
+```text
+show Foundry Board
+```
+
+Debug/helper surface:
+
+```text
+agent-foundry-github-collab --repo <owner>/<repo> foundry-board \
+  --issues 293,294,295 \
+  --json
+```
+
+The report is a read-only MVP. It may read bounded issue/PR evidence, Execution
+Contracts, branch readiness, optional Project item fields, local git state, and
+fixture or future ledger-shaped evidence. It must keep:
+
+```text
+mutation_performed: false
+apply_supported_now: false
+full_project_scan_performed: false
+```
+
+The user-facing board should include:
+
+- lanes such as `planned`, `ready`, `in_progress`, `tester_evidence`, `review`,
+  `architect_acceptance`, `human_gate`, `blocked`, `stale_conflict`, `done`, and
+  `superseded`;
+- owner role and next owner role;
+- target branch and branch-readiness status;
+- latest evidence and evidence refs;
+- candidate versus accepted state authority;
+- confidence for migrated or inferred records;
+- Project mirror status such as `in_sync`, `drift`, `degraded`,
+  `not_configured`, or `unknown`;
+- recommended next actions and forbidden actions.
+
+GitHub Project remains an optional visual mirror. A Project mismatch should
+appear as mirror drift or conflict evidence; it should not cause the helper to
+write Project fields, close issues, retarget PRs, or repair branch state.
+
+The read-only MVP is allowed to say what a user or agent should do next through
+existing workflow gates. It is not allowed to perform live repair/apply, Project
+v2 mutation, GitHub write-back, real migration/backfill writes, branch
+repair/apply, checkout/switch, PR retarget, rebase, merge, reset, clean,
+runtime/Vault/private/generated mutation, generated Skill/adapter publish, or
+capability-pack deploy/apply.
 
 ## Dispatch Evidence Modes
 
