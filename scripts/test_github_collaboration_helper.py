@@ -123,6 +123,8 @@ def main() -> int:
         branch_readiness_prs = base / "branch-readiness-prs.json"
         branch_local_git = base / "branch-local-git.json"
         branch_local_clean = base / "branch-local-clean.json"
+        foundry_board_issues = base / "foundry-board-issues.json"
+        foundry_board_project = base / "foundry-board-project.json"
         new_repo_labels = base / "new-repo-labels.json"
         new_repo_issues = base / "new-repo-issues.json"
         new_repo_prs = base / "new-repo-prs.json"
@@ -537,6 +539,90 @@ def main() -> int:
                 }
             ),
         )
+        board_contract = "\n".join(
+            [
+                "Owner role: architect",
+                "Review role: reviewer",
+                "Acceptance role: architect",
+                "Completion handoff: to:reviewer",
+                "Branch strategy: integration-branch",
+                "Release line: v2.0",
+                "Target branch: codex/v2-local-first-orchestration",
+                "Base branch: codex/v2-local-first-orchestration",
+                "PR target: codex/v2-local-first-orchestration",
+            ]
+        )
+        write(
+            foundry_board_issues,
+            json.dumps(
+                {
+                    "issues": [
+                        {
+                            "number": 297,
+                            "title": "Read-only Foundry Board MVP",
+                            "state": "OPEN",
+                            "url": "https://github.com/farmerhunter/agent-foundry/issues/297",
+                            "labels": [{"name": "stage:v2.0"}, {"name": "risk:high"}, {"name": "needs:implementer"}],
+                            "body": "## Execution Contract\n\n" + board_contract + "\n",
+                        },
+                        {
+                            "number": 296,
+                            "title": "Backfill candidate from existing project",
+                            "state": "OPEN",
+                            "url": "https://github.com/farmerhunter/agent-foundry/issues/296",
+                            "labels": [{"name": "stage:v2.0"}, {"name": "risk:high"}, {"name": "migration_candidate"}],
+                            "source_confidence": "inferred",
+                            "state_authority": "candidate",
+                            "board_state": "planned",
+                            "body": "## Execution Contract\n\n" + board_contract + "\n",
+                        },
+                        {
+                            "number": 299,
+                            "title": "Human-gated V2 readiness",
+                            "state": "OPEN",
+                            "url": "https://github.com/farmerhunter/agent-foundry/issues/299",
+                            "labels": [{"name": "stage:v2.0"}, {"name": "risk:high"}, {"name": "needs:human"}],
+                            "body": "## Execution Contract\n\n"
+                            + board_contract.replace("Owner role: architect", "Owner role: human").replace("Completion handoff: to:reviewer", "Completion handoff: to:human")
+                            + "\n",
+                        },
+                    ]
+                }
+            ),
+        )
+        write(
+            foundry_board_project,
+            json.dumps(
+                {
+                    "items": [
+                        {
+                            "content": {"number": 297},
+                            "status": {"name": "Todo"},
+                            "roadmap Status": {"name": "Ready"},
+                            "stage": {"name": "V2.0"},
+                            "owner Role": {"name": "Implementer"},
+                            "risk": {"name": "High"},
+                        },
+                        {
+                            "content": {"number": 296},
+                            "status": {"name": "Done"},
+                            "roadmap Status": {"name": "Done"},
+                            "stage": {"name": "V2.0"},
+                            "owner Role": {"name": "Architect"},
+                            "risk": {"name": "High"},
+                        },
+                        {
+                            "content": {"number": 299},
+                            "status": {"name": "Todo"},
+                            "roadmap Status": {"name": "In Progress"},
+                            "stage": {"name": "V2.0"},
+                            "owner Role": {"name": "Human"},
+                            "risk": {"name": "High"},
+                        },
+                    ]
+                }
+            ),
+        )
         write(
             branch_local_git,
             json.dumps(
@@ -843,6 +929,39 @@ def main() -> int:
             ("collaboration-readiness-v2-shape", '"local_ledger_candidate": true'),
         ):
             errors.extend(expect_ok(name, readiness_json, expected))
+        foundry_board_json = run(
+            [
+                "foundry-board",
+                "--issues-json",
+                str(foundry_board_issues),
+                "--project-items-json",
+                str(foundry_board_project),
+                "--local-git-json",
+                str(branch_local_clean),
+                "--json",
+            ],
+            base,
+            {"AGENT_REPO": "farmerhunter/agent-foundry"},
+        )
+        for name, expected in (
+            ("foundry-board-command", '"command": "foundry-board"'),
+            ("foundry-board-read-only", '"mode": "read_only"'),
+            ("foundry-board-no-mutation", '"mutation_performed": false'),
+            ("foundry-board-no-apply", '"apply_supported_now": false'),
+            ("foundry-board-source-of-truth", '"source_of_truth": "local_collaboration_ledger_events"'),
+            ("foundry-board-mirror-role", '"github_project_role": "optional_visual_mirror"'),
+            ("foundry-board-ready-lane", '"lane": "ready"'),
+            ("foundry-board-human-gate-lane", '"lane": "human_gate"'),
+            ("foundry-board-stale-conflict", '"lane": "stale_conflict"'),
+            ("foundry-board-candidate", '"state_authority": "candidate"'),
+            ("foundry-board-confidence", '"confidence": "inferred"'),
+            ("foundry-board-mirror-drift", '"mirror_status": "drift"'),
+            ("foundry-board-human-action", '"category": "explicit_human_gate"'),
+            ("foundry-board-branch-target", '"target_branch": "codex/v2-local-first-orchestration"'),
+            ("foundry-board-forbidden-project", "Project v2 mutation"),
+            ("foundry-board-telemetry", '"implementation_slice": "V2-5 read-only Foundry Board MVP"'),
+        ):
+            errors.extend(expect_ok(name, foundry_board_json, expected))
         branch_readiness_json = run(
             [
                 "collaboration-readiness",

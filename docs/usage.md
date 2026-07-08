@@ -105,6 +105,28 @@ Branch action-plan concepts are also read-only:
 Branch action plan 也只读：它可以提示 split、switch context、forward-merge 或多线验证，
 但不会自动 checkout、retarget、merge、reset 或 clean。
 
+## Foundry Board Preview
+
+For V2 local-first orchestration work, ask for a read-only Foundry Board preview:
+
+```text
+show Foundry Board
+显示 Foundry Board
+```
+
+The preview turns issue, PR, branch contract, optional Project mirror, and later local ledger evidence into a board-shaped report. Normal users should look first at lanes, owner role, latest evidence, blocking reason, mirror status, branch readiness, and recommended next actions.
+
+The current MVP is read-only. It can show candidate migration state, accepted state, stale/conflicting evidence, human gates, degraded Project visibility, and whether the current checkout is on the expected branch line. It does not perform GitHub write-back, Project v2 mutation, real migration/backfill writes, branch repair/apply, checkout/switch, PR retarget, runtime/Vault/private/generated mutation, generated Skill publish, or capability-pack deploy/apply.
+
+Use the board preview to decide the next workflow action:
+
+- if an item is `ready`, dispatch the named owner through the normal issue workflow;
+- if it is `human_gate`, read the decision basis and approve, reject, or revise explicitly;
+- if it is `stale_conflict`, rehydrate issue/PR/branch evidence before advancing;
+- if Project visibility is degraded or drifted, treat Project as a mirror and use durable issue/PR evidence as the safer source.
+
+**中文要点：** Foundry Board preview 是 V2 的只读操作面板。它帮助你看当前工作、owner、证据、阻塞、branch 状态和下一步；它不会自动写 GitHub/Project，也不会做真实 sync、backfill 或 branch 操作。
+
 ## First-Time Setup
 
 On a new machine, use `docs/deployment.md` for the full split Core/Vault install flow. Short version:

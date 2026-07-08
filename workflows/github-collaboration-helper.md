@@ -468,6 +468,60 @@ owner role, and workflow route. AF15 does not implement V2, does not create a
 Foundry Board or Local Collaboration Ledger, and does not make GitHub Project
 the source of truth.
 
+## Foundry Board Preview
+
+Use `foundry-board` when a user needs a board-shaped, read-only view of current
+local-first orchestration state before sync or write-back exists.
+
+Skill-facing request:
+
+```text
+show Foundry Board
+```
+
+Debug/helper surface:
+
+```text
+agent-foundry-github-collab --repo <owner>/<repo> foundry-board \
+  --issues 293,294,295 \
+  --json
+```
+
+The report is a read-only MVP. It may read bounded issue/PR evidence, Execution
+Contracts, branch readiness, optional Project item fields, local git state, and
+fixture or future ledger-shaped evidence. It must keep:
+
+```text
+mutation_performed: false
+apply_supported_now: false
+full_project_scan_performed: false
+```
+
+The user-facing board should include:
+
+- lanes such as `planned`, `ready`, `in_progress`, `tester_evidence`, `review`,
+  `architect_acceptance`, `human_gate`, `blocked`, `stale_conflict`, `done`, and
+  `superseded`;
+- owner role and next owner role;
+- target branch and branch-readiness status;
+- latest evidence and evidence refs;
+- candidate versus accepted state authority;
+- confidence for migrated or inferred records;
+- Project mirror status such as `in_sync`, `drift`, `degraded`,
+  `not_configured`, or `unknown`;
+- recommended next actions and forbidden actions.
+
+GitHub Project remains an optional visual mirror. A Project mismatch should
+appear as mirror drift or conflict evidence; it should not cause the helper to
+write Project fields, close issues, retarget PRs, or repair branch state.
+
+The read-only MVP is allowed to say what a user or agent should do next through
+existing workflow gates. It is not allowed to perform live repair/apply, Project
+v2 mutation, GitHub write-back, real migration/backfill writes, branch
+repair/apply, checkout/switch, PR retarget, rebase, merge, reset, clean,
+runtime/Vault/private/generated mutation, generated Skill/adapter publish, or
+capability-pack deploy/apply.
+
 ## Dispatch Evidence Modes
 
 Dispatch evidence must name the mechanism actually used:

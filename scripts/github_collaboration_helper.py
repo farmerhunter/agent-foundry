@@ -41,6 +41,7 @@ READ_ONLY_ACTIONS = {
     "issue-context",
     "scheduler-audit",
     "collaboration-readiness",
+    "foundry-board",
     "activation-report",
 }
 DRY_RUN_ACTIONS = {
@@ -1042,7 +1043,7 @@ def read_live_issues(repo: str, args: argparse.Namespace) -> tuple[list[dict[str
                     "--repo",
                     repo,
                     "--json",
-                    "number,title,state,labels,body",
+                    "number,title,state,labels,body,url",
                 ]
             )
             if not result["ok"]:
@@ -1064,7 +1065,7 @@ def read_live_issues(repo: str, args: argparse.Namespace) -> tuple[list[dict[str
                 "--label",
                 stage_label,
                 "--json",
-                "number,title,state,labels,body",
+                "number,title,state,labels,body,url",
             ]
         )
         if not result["ok"]:
@@ -2063,6 +2064,341 @@ def build_readiness_action_plan(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+BOARD_LANES = [
+    "planned",
+    "ready",
+    "in_progress",
+    "tester_evidence",
+    "review",
+    "architect_acceptance",
+    "human_gate",
+    "blocked",
+    "stale_conflict",
+    "done",
+    "superseded",
+]
+
+
+def normalize_board_items(data: Any) -> list[dict[str, Any]]:
+    if data is None:
+        return []
+    if isinstance(data, dict) and "items" in data:
+        data = data["items"]
+    elif isinstance(data, dict) and "board_items" in data:
+        data = data["board_items"]
+    elif isinstance(data, dict):
+        data = [data]
+    if not isinstance(data, list):
+        fail("invalid_board_items_json", "Board items JSON must be a list or object with items/board_items")
+    return [item for item in data if isinstance(item, dict)]
+
+
+def issue_url(item: dict[str, Any]) -> str | None:
+    return item.get("url") or item.get("html_url") or item.get("github_issue_url")
+
+
+def issue_pr_url(item: dict[str, Any]) -> str | None:
+    return item.get("pull_request", {}).get("url") if isinstance(item.get("pull_request"), dict) else item.get("github_pr_url")
+
+
+def board_state_from_issue(issue: dict[str, Any], labels: list[str], project_item: dict[str, Any] | None) -> str:
+    explicit = issue.get("board_state") or issue.get("lifecycle_state")
+    if explicit:
+        return str(explicit)
+    lowered = {label.lower() for label in labels}
+    if issue.get("state", "").upper() == "CLOSED":
+        return "done"
+    if "superseded" in lowered or "state:superseded" in lowered:
+        return "superseded"
+    if "blocked" in lowered or "status:blocked" in lowered:
+        return "blocked"
+    if "needs:human" in lowered:
+        return "human_gate"
+    if "needs:reviewer" in lowered:
+        return "review"
+    if "needs:tester" in lowered:
+        return "tester_evidence"
+    if "needs:architect" in lowered:
+        return "architect_acceptance"
+    if "needs:implementer" in lowered:
+        return "ready"
+    roadmap = project_field_value(project_item or {}, "Roadmap Status")
+    if roadmap == "In Progress":
+        return "in_progress"
+    if roadmap == "Done":
+        return "done"
+    return "planned"
+
+
+def board_action_for_state(state: str, next_owner: str | None, conflicts: list[dict[str, Any]]) -> dict[str, Any]:
+    if conflicts:
+        return readiness_action(
+            "Review conflict evidence before advancing this item.",
+            "agent_handled_existing_workflow",
+            "Board state has conflict, stale, degraded, or mirror-drift evidence.",
+            "foundry_board:conflict",
+            True,
+        )
+    owner = next_owner or "Coordinator"
+    titles = {
+        "planned": "Wait for dependency release or Architect routing.",
+        "ready": f"Dispatch {owner} through the normal issue workflow.",
+        "in_progress": f"Wait for {owner} callback or inspect latest evidence.",
+        "tester_evidence": "Collect Tester evidence before review or acceptance.",
+        "review": "Run Reviewer exact-target review.",
+        "architect_acceptance": "Architect should accept, hold, or release downstream work.",
+        "human_gate": "Human decision required; surface decision basis and exact approval phrase.",
+        "blocked": "Resolve blocker through the owning role before proceeding.",
+        "stale_conflict": "Rehydrate durable state and resolve conflict route.",
+        "done": "No action required; read completion evidence if needed.",
+        "superseded": "Follow the replacement path instead of this item.",
+    }
+    category = "explicit_human_gate" if state == "human_gate" else "informational_only" if state in {"done", "superseded"} else "agent_handled_existing_workflow"
+    return {
+        "title": titles.get(state, "Inspect latest evidence and route through normal workflow."),
+        "category": category,
+        "owner_role": owner.lower(),
+        "why": f"Derived from board state `{state}`.",
+        "existing_workflow": readiness_workflow_for_category(category),
+        "allowed_now": state not in {"blocked"},
+        "evidence_source": "foundry_board:derived_state",
+    }
+
+
+def board_mirror_status(issue: dict[str, Any], project_item: dict[str, Any] | None, project_status: dict[str, Any], state: str) -> tuple[str, list[dict[str, Any]]]:
+    conflicts: list[dict[str, Any]] = []
+    if project_status.get("status") in {"config_missing", "skipped"}:
+        return "not_configured", conflicts
+    if project_status.get("status") not in {"ok", None}:
+        return "degraded", [
+            {
+                "type": "degraded_source",
+                "severity": "warning",
+                "message": "Project mirror could not be evaluated.",
+                "source": "github_graphql_project_v2",
+            }
+        ]
+    if not project_item:
+        return "unknown", conflicts
+    status = project_field_value(project_item, "Status")
+    roadmap = project_field_value(project_item, "Roadmap Status")
+    if issue.get("state", "").upper() == "CLOSED" and (status != "Done" or roadmap != "Done"):
+        conflicts.append(
+            {
+                "type": "project_mirror_drift",
+                "severity": "warning",
+                "message": "Closed issue is not mirrored as Done in Project fields.",
+                "observed_remote": {"Status": status, "Roadmap Status": roadmap},
+            }
+        )
+    if issue.get("state", "").upper() == "OPEN" and (status == "Done" or roadmap == "Done") and state != "done":
+        conflicts.append(
+            {
+                "type": "project_mirror_drift",
+                "severity": "warning",
+                "message": "Open issue is mirrored as Done in Project fields.",
+                "observed_remote": {"Status": status, "Roadmap Status": roadmap},
+            }
+        )
+    return ("drift" if conflicts else "in_sync"), conflicts
+
+
+def board_item_from_issue(
+    issue: dict[str, Any],
+    project_item: dict[str, Any] | None,
+    project_status: dict[str, Any],
+    local_git: dict[str, Any],
+) -> dict[str, Any]:
+    labels = label_names(issue)
+    body = issue.get("body") or ""
+    branch = extract_branch_contract(body)
+    branch_fields = branch.get("fields") or {}
+    state = board_state_from_issue(issue, labels, project_item)
+    next_owner = owner_from_needs(next((label for label in labels if label.startswith("needs:")), None))
+    if not next_owner:
+        next_owner = project_field_value(project_item or {}, "Owner Role")
+    contract = validate_execution_contract(body)
+    branch_eval = evaluate_branch_contract(issue, "issue", local_git if local_git.get("status") == "ok" else None)
+    mirror_status, conflicts = board_mirror_status(issue, project_item, project_status, state)
+    if contract["status"] in {"missing", "invalid"} and state not in {"done", "superseded"}:
+        conflicts.append(
+            {
+                "type": "missing_or_invalid_contract",
+                "severity": "warning",
+                "message": "Issue lacks a valid machine-readable Execution Contract.",
+                "contract_validation": contract["status"],
+            }
+        )
+    if branch_eval["status"] not in {"branch_ready"}:
+        conflicts.append(
+            {
+                "type": "branch_readiness",
+                "severity": "warning",
+                "message": "Branch readiness is not clean for this item.",
+                "branch_status": branch_eval["status"],
+            }
+        )
+    if conflicts and state not in {"blocked", "done", "superseded"}:
+        state = "stale_conflict"
+    evidence_refs = []
+    if issue_url(issue):
+        evidence_refs.append({"label": f"GitHub issue #{issue_number(issue)}", "source_type": "github_issue", "url_or_path": issue_url(issue), "availability": "available"})
+    if issue_pr_url(issue):
+        evidence_refs.append({"label": "Linked pull request", "source_type": "github_pr", "url_or_path": issue_pr_url(issue), "availability": "available"})
+    latest_evidence = evidence_refs[0] if evidence_refs else {"label": "Issue metadata", "source_type": "github_issue", "availability": "available" if issue else "unknown"}
+    confidence = issue.get("confidence") or issue.get("source_confidence") or ("observed" if issue.get("number") else "unknown")
+    state_authority = issue.get("state_authority") or issue.get("migration_state") or ("candidate" if "migration_candidate" in labels else "accepted")
+    action = board_action_for_state(state, next_owner, conflicts)
+    return {
+        "board_item_id": f"issue:{issue_number(issue)}" if issue_number(issue) is not None else issue.get("local_id", "issue:unknown"),
+        "work_item_id": issue.get("local_id") or (f"github-issue-{issue_number(issue)}" if issue_number(issue) is not None else "unknown"),
+        "title": issue.get("title"),
+        "item_kind": "migration_candidate" if state_authority == "candidate" else ("epic" if "type:epic" in labels else "issue"),
+        "github_issue_url": issue_url(issue),
+        "github_pr_url": issue_pr_url(issue),
+        "labels": labels,
+        "state": state,
+        "lane": state if state in BOARD_LANES else "planned",
+        "owner_role": project_field_value(project_item or {}, "Owner Role") or next_owner,
+        "next_owner_role": next_owner,
+        "roadmap_status": project_field_value(project_item or {}, "Roadmap Status"),
+        "stage": stage_from_labels(labels),
+        "risk": risk_from_labels(labels),
+        "target_branch": branch_fields.get("Target branch"),
+        "branch_readiness": branch_eval["status"],
+        "latest_evidence": latest_evidence,
+        "evidence_refs": evidence_refs,
+        "blocking_reason": "; ".join(conflict.get("message", "") for conflict in conflicts if conflict.get("severity") == "blocker") or None,
+        "conflicts": conflicts,
+        "conflict_count": len(conflicts),
+        "mirror_status": mirror_status,
+        "confidence": confidence,
+        "state_authority": state_authority,
+        "recommended_next_actions": [action],
+        "forbidden_actions": [
+            "live repair/apply",
+            "Project v2 mutation",
+            "GitHub write-back",
+            "branch repair/apply",
+            "PR retarget",
+            "checkout/switch",
+            "rebase/merge/reset/clean",
+            "Vault/private/runtime/generated mutation",
+            "generated Skill/adapter publish",
+            "capability-pack deploy/apply",
+        ],
+    }
+
+
+def build_foundry_board(
+    repo: str,
+    issues: list[dict[str, Any]],
+    project_items: list[dict[str, Any]],
+    project_status: dict[str, Any],
+    local_git: dict[str, Any],
+    board_name: str,
+    scope: dict[str, Any],
+) -> dict[str, Any]:
+    project_by_issue = {project_item_issue_number(item): item for item in project_items if project_item_issue_number(item) is not None}
+    items = [
+        board_item_from_issue(issue, project_by_issue.get(issue_number(issue)), project_status, local_git)
+        for issue in issues
+    ]
+    lanes = [
+        {
+            "lane": lane,
+            "items": [item["board_item_id"] for item in items if item["lane"] == lane],
+            "count": sum(1 for item in items if item["lane"] == lane),
+        }
+        for lane in BOARD_LANES
+    ]
+    conflict_items = [item for item in items if item["conflict_count"]]
+    human_gate_items = [item for item in items if item["state"] == "human_gate"]
+    candidate_items = [item for item in items if item["state_authority"] == "candidate"]
+    accepted_items = [item for item in items if item["state_authority"] == "accepted"]
+    mirror_statuses = sorted({item["mirror_status"] for item in items})
+    return {
+        "schema_version": 1,
+        "command": "foundry-board",
+        "repo": repo,
+        "board": {
+            "name": board_name,
+            "authority_statement": "local_ledger_authoritative_when_available_read_only_preview_now",
+            "source_of_truth": "local_collaboration_ledger_events",
+            "github_project_role": "optional_visual_mirror",
+            "scope": scope,
+        },
+        "mode": "read_only",
+        "mutation_performed": False,
+        "apply_supported_now": False,
+        "items": items,
+        "lanes": lanes,
+        "summary": {
+            "item_count": len(items),
+            "candidate_count": len(candidate_items),
+            "accepted_count": len(accepted_items),
+            "conflict_count": len(conflict_items),
+            "human_gate_count": len(human_gate_items),
+            "mirror_statuses": mirror_statuses,
+            "read_only_board_ready": True,
+        },
+        "user_next_actions": [
+            item["recommended_next_actions"][0]
+            for item in items
+            if item.get("recommended_next_actions")
+        ],
+        "unknown_or_degraded": [
+            {
+                "source": "github_graphql_project_v2",
+                "status": project_status.get("status"),
+                "impact": "Project mirror is optional; Board can still render issue-derived state.",
+                "safe_fallback": "github_issue_pr_evidence",
+                "error": project_status.get("error"),
+            }
+        ]
+        if project_status.get("status") in {"config_missing", "skipped", "degraded", "unavailable", "permission_denied", "auth_unavailable"}
+        else [],
+        "forbidden_actions": [
+            "live repair/apply",
+            "Project v2 mutation",
+            "GitHub write-back",
+            "real migration/backfill write",
+            "branch repair/apply",
+            "checkout/switch",
+            "PR retarget",
+            "rebase/merge/reset/clean",
+            "runtime/Vault/private/generated mutation",
+            "generated Skill/adapter publish",
+            "capability-pack deploy/apply",
+        ],
+        "telemetry": {
+            "full_project_scan_performed": False,
+            "mutation_performed": False,
+            "implementation_slice": "V2-5 read-only Foundry Board MVP",
+            "unknown_not_available_fields": ["exact_elapsed_time", "exact_api_call_count", "billing_grade_token_count"],
+        },
+    }
+
+
+def cmd_foundry_board(args: argparse.Namespace) -> None:
+    repo, repo_source = resolve_repo(args)
+    if args.board_items_json:
+        issues = normalize_board_items(load_json(args.board_items_json))
+        scope = {"mode": "board_items_fixture", "item_count": len(issues)}
+        project_items: list[dict[str, Any]] = []
+        project_status = {"source": "skipped", "status": "skipped", "item_count": 0}
+    elif args.issues_json or args.fixture_json:
+        issues = normalize_issue_collection(load_json(args.issues_json or args.fixture_json))
+        scope = {"mode": "fixture", "issue_numbers": [issue_number(issue) for issue in issues if issue_number(issue) is not None]}
+        project_items, project_status, _project_attempts = read_project_items(args)
+    else:
+        issues, scope = read_live_issues(repo, args)
+        project_items, project_status, _project_attempts = read_project_items(args)
+    local_git, _local_git_status, _local_git_attempts = read_local_git_state(args)
+    board = build_foundry_board(repo, issues[: args.limit], project_items, project_status, local_git, args.name, {"repo_source": repo_source, **scope})
+    print_json_or_text(board, args.json)
+
+
 def cmd_collaboration_readiness(args: argparse.Namespace) -> None:
     repo, repo_source = resolve_repo(args)
     config = parse_simple_yaml(Path(args.config)) if args.config else {}
@@ -2673,6 +3009,25 @@ def build_parser() -> argparse.ArgumentParser:
     readiness.add_argument("--project-retry-backoff", type=float, default=0.5, help="Seconds between transient Project read retries.")
     readiness.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON for collaboration-readiness.")
     readiness.set_defaults(func=cmd_collaboration_readiness)
+
+    board = sub.add_parser("foundry-board")
+    board.add_argument("--config", help="Reserved for future board config; currently informational.")
+    board.add_argument("--fixture-json", help="Legacy issue fixture; prefer --issues-json or --board-items-json for tests.")
+    board.add_argument("--issues-json", help="Fixture issue object, list, or object with issues/items.")
+    board.add_argument("--board-items-json", help="Fixture board items in issue-like or board item form.")
+    board.add_argument("--project-items-json", help="Fixture Project item list or gh project item-list JSON.")
+    board.add_argument("--local-git-json", help="Fixture local git state for branch/readiness display.")
+    board.add_argument("--issues", help="Comma-separated explicit issue numbers for bounded live board report.")
+    board.add_argument("--stage", help="Stage value or label for bounded live issue report.")
+    board.add_argument("--limit", type=int, default=20, help="Maximum issues/items to render.")
+    board.add_argument("--project-owner", help="Project owner for targeted live Project item-list, such as @me or an org.")
+    board.add_argument("--project-number", type=int, help="Project number for targeted live Project item-list.")
+    board.add_argument("--project-limit", type=int, default=50, help="Maximum Project items to read when explicitly configured.")
+    board.add_argument("--project-retries", type=int, default=2, help="Bounded retries for transient Project reads.")
+    board.add_argument("--project-retry-backoff", type=float, default=0.5, help="Seconds between transient Project read retries.")
+    board.add_argument("--name", default="Foundry Board", help="Board name shown in the read-only report.")
+    board.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON for foundry-board.")
+    board.set_defaults(func=cmd_foundry_board)
 
     activation = sub.add_parser("activation-report")
     activation.add_argument("--core-root", help="Agent Foundry Core root. Defaults to this helper's checkout.")

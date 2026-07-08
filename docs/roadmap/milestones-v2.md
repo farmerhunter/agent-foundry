@@ -153,6 +153,21 @@ It should display enough information for a user to operate confidently:
 - related issue, PR, branch, and thread;
 - local/GitHub sync status.
 
+The MVP should preserve local-first boundaries:
+
+- durable local ledger events are the intended authority once available;
+- GitHub issue/PR evidence can feed the preview;
+- GitHub Project is an optional visual mirror, not the source of truth;
+- candidate migration/backfill records stay visibly different from accepted
+  state;
+- stale, contradictory, degraded, or mirror-drift evidence appears as conflict
+  or warning state instead of being hidden.
+
+The user-facing output should turn board state into next actions: dispatch an
+owner, request Reviewer/Architect/Human attention, rehydrate stale evidence,
+hold blocked items, or record that no action is needed. These actions must
+remain routed through existing issue/PR gates.
+
 Write automation should wait until read-only behavior is trusted.
 
 ## V2-6 GitHub Project Remote Sync
