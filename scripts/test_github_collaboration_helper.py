@@ -88,6 +88,9 @@ def main() -> int:
                 "audit existing collaboration setup",
                 "`apply_supported_now` set to `false`",
                 "Project v2 remains an optional visual mirror",
+                "Local Collaboration Ledger Storage And Replay",
+                "usage/local/collaboration-ledger/events.jsonl",
+                "local-ledger-report",
             ],
         )
     )
@@ -1372,6 +1375,211 @@ def main() -> int:
                 "recommendation: single_agent",
             )
         )
+        ledger_root = base / "ledger"
+        ledger_events = [
+            {
+                "schema_version": 1,
+                "event_id": "evt-001",
+                "event_type": "assignment",
+                "occurred_at": "2026-07-08T10:00:00Z",
+                "work_item": {"id": "farmerhunter/agent-foundry#issue:359", "repo": "farmerhunter/agent-foundry", "type": "issue", "number": 359},
+                "actor_role": "coordinator",
+                "confidence": "observed",
+                "provenance": {"links": ["https://github.com/farmerhunter/agent-foundry/issues/359"]},
+                "payload": {"owner_role": "implementer"},
+            },
+            {
+                "schema_version": 1,
+                "event_id": "evt-002",
+                "event_type": "dispatch",
+                "occurred_at": "2026-07-08T10:01:00Z",
+                "work_item": {"id": "farmerhunter/agent-foundry#issue:359", "repo": "farmerhunter/agent-foundry", "type": "issue", "number": 359},
+                "actor_role": "coordinator",
+                "confidence": "observed",
+                "provenance": {"links": ["https://github.com/farmerhunter/agent-foundry/issues/359#issuecomment-4914188818"]},
+                "payload": {"target_role": "implementer", "thread_id": "019ea64c-33ed-79e1-9bee-0f414e0ca8f4"},
+            },
+            {
+                "schema_version": 1,
+                "event_id": "evt-003",
+                "event_type": "callback",
+                "occurred_at": "2026-07-08T10:02:00Z",
+                "work_item": {"id": "farmerhunter/agent-foundry#issue:359", "repo": "farmerhunter/agent-foundry", "type": "issue", "number": 359},
+                "actor_role": "implementer",
+                "confidence": "observed",
+                "provenance": {"links": ["https://github.com/farmerhunter/agent-foundry/issues/359#callback"]},
+                "payload": {"summary": "implementation started"},
+            },
+            {
+                "schema_version": 1,
+                "event_id": "evt-004",
+                "event_type": "review",
+                "occurred_at": "2026-07-08T10:03:00Z",
+                "work_item": {"id": "farmerhunter/agent-foundry#issue:359", "repo": "farmerhunter/agent-foundry", "type": "issue", "number": 359},
+                "actor_role": "reviewer",
+                "confidence": "observed",
+                "provenance": {"links": ["https://github.com/farmerhunter/agent-foundry/pull/000#review"]},
+                "payload": {"decision": "request_changes"},
+            },
+            {
+                "schema_version": 1,
+                "event_id": "evt-005",
+                "event_type": "review",
+                "occurred_at": "2026-07-08T10:04:00Z",
+                "work_item": {"id": "farmerhunter/agent-foundry#issue:359", "repo": "farmerhunter/agent-foundry", "type": "issue", "number": 359},
+                "actor_role": "reviewer",
+                "confidence": "observed",
+                "supersedes_event_ids": ["evt-004"],
+                "provenance": {"links": ["https://github.com/farmerhunter/agent-foundry/pull/000#review2"]},
+                "payload": {"decision": "approved"},
+            },
+            {
+                "schema_version": 1,
+                "event_id": "evt-006",
+                "event_type": "acceptance",
+                "occurred_at": "2026-07-08T10:05:00Z",
+                "work_item": {"id": "farmerhunter/agent-foundry#issue:359", "repo": "farmerhunter/agent-foundry", "type": "issue", "number": 359},
+                "actor_role": "architect",
+                "confidence": "observed",
+                "provenance": {"links": ["https://github.com/farmerhunter/agent-foundry/issues/359#acceptance"]},
+                "payload": {"decision": "accepted"},
+            },
+            {
+                "schema_version": 1,
+                "event_id": "evt-007",
+                "event_type": "merge",
+                "occurred_at": "2026-07-08T10:06:00Z",
+                "work_item": {"id": "farmerhunter/agent-foundry#issue:359", "repo": "farmerhunter/agent-foundry", "type": "issue", "number": 359},
+                "actor_role": "human",
+                "confidence": "observed",
+                "provenance": {"links": ["https://github.com/farmerhunter/agent-foundry/pull/000"]},
+                "payload": {"merge_sha": "abc123"},
+            },
+            {
+                "schema_version": 1,
+                "event_id": "evt-008",
+                "event_type": "closure",
+                "occurred_at": "2026-07-08T10:07:00Z",
+                "work_item": {"id": "farmerhunter/agent-foundry#issue:359", "repo": "farmerhunter/agent-foundry", "type": "issue", "number": 359},
+                "actor_role": "architect",
+                "confidence": "observed",
+                "provenance": {"links": ["https://github.com/farmerhunter/agent-foundry/issues/359#closed"]},
+                "payload": {"state": "closed"},
+            },
+            {
+                "schema_version": 1,
+                "event_id": "evt-009",
+                "event_type": "blocked",
+                "occurred_at": "2026-07-08T10:08:00Z",
+                "work_item": {"id": "farmerhunter/agent-foundry#issue:360", "repo": "farmerhunter/agent-foundry", "type": "issue", "number": 360},
+                "actor_role": "implementer",
+                "confidence": "inferred",
+                "unknown_fields": ["exact_unblock_time"],
+                "not_available_fields": ["human_decision_eta"],
+                "degraded_evidence": [{"source": "github_project", "status": "not_available"}],
+                "provenance": {"links": ["https://github.com/farmerhunter/agent-foundry/issues/360"]},
+                "payload": {"reason": "#359 not accepted yet"},
+            },
+            {
+                "schema_version": 1,
+                "event_id": "evt-010",
+                "event_type": "sync_readback",
+                "occurred_at": "2026-07-08T10:09:00Z",
+                "work_item": {"id": "farmerhunter/agent-foundry#issue:359", "repo": "farmerhunter/agent-foundry", "type": "issue", "number": 359},
+                "actor_role": "coordinator",
+                "confidence": "observed",
+                "provenance": {"links": ["https://github.com/farmerhunter/agent-foundry/issues/359#readback"]},
+                "payload": {"local_state": "closed", "observed_state": "open"},
+            },
+            {
+                "schema_version": 1,
+                "event_id": "evt-011",
+                "event_type": "custom_future_note",
+                "occurred_at": "2026-07-08T10:10:00Z",
+                "work_item": {"id": "farmerhunter/agent-foundry#issue:359", "repo": "farmerhunter/agent-foundry", "type": "issue", "number": 359},
+                "actor_role": "coordinator",
+                "confidence": "unknown",
+                "unknown_fields": ["future_note"],
+                "provenance": {"links": ["https://github.com/farmerhunter/agent-foundry/issues/359#future"]},
+            },
+            {
+                "schema_version": 2,
+                "event_id": "evt-012",
+                "event_type": "future_event",
+                "occurred_at": "2026-07-08T10:11:00Z",
+                "work_item": {"id": "farmerhunter/agent-foundry#issue:359", "repo": "farmerhunter/agent-foundry", "type": "issue", "number": 359},
+                "actor_role": "coordinator",
+                "confidence": "not_available",
+                "not_available_fields": ["future_schema_decoder"],
+                "provenance": {"links": ["https://github.com/farmerhunter/agent-foundry/issues/359#future-schema"]},
+            },
+        ]
+        for event in ledger_events:
+            event_path = base / f"{event['event_id']}.json"
+            write(event_path, json.dumps(event))
+            errors.extend(
+                expect_ok(
+                    f"local-ledger-append-{event['event_id']}",
+                    run(["local-ledger-append", "--ledger-root", str(ledger_root), "--event-json", str(event_path), "--json"], base),
+                    f'"event_id": "{event["event_id"]}"',
+                )
+            )
+        duplicate_event_path = base / "evt-010-duplicate.json"
+        write(duplicate_event_path, json.dumps(ledger_events[9]))
+        errors.extend(
+            expect_ok(
+                "local-ledger-append-duplicate-id",
+                run(["local-ledger-append", "--ledger-root", str(ledger_root), "--event-json", str(duplicate_event_path), "--json"], base),
+                '"event_id": "evt-010"',
+            )
+        )
+        malformed_event = base / "malformed-event.json"
+        write(malformed_event, json.dumps({"schema_version": 1, "event_id": "bad"}))
+        errors.extend(
+            expect_fail(
+                "local-ledger-malformed-fails",
+                run(["local-ledger-append", "--ledger-root", str(ledger_root), "--event-json", str(malformed_event), "--json"], base),
+                '"status": "invalid"',
+            )
+        )
+        ledger_report = run(["local-ledger-report", "--ledger-root", str(ledger_root), "--json"], base, {"PATH": str(fake_bin) + os.pathsep + os.environ.get("PATH", "")})
+        for name, expected in (
+            ("local-ledger-report-command", '"command": "local-ledger-report"'),
+            ("local-ledger-report-read-only", '"mode": "read_only"'),
+            ("local-ledger-report-no-mutation", '"mutation_performed": false'),
+            ("local-ledger-report-no-apply", '"apply_supported_now": false'),
+            ("local-ledger-report-no-github", '"github_dependency_for_replay": false'),
+            ("local-ledger-report-authority", "local_collaboration_ledger_events_are_replay_authority_for_this_report"),
+            ("local-ledger-report-assigned", '"state": "stale_conflict"'),
+            ("local-ledger-report-blocked", '"state": "blocked"'),
+            ("local-ledger-report-superseded", '"superseded_event_count": 1'),
+            ("local-ledger-report-conflict", "sync_readback_state_mismatch"),
+            ("local-ledger-report-unknown", '"unknown_or_forward_compatible_event_count": 2'),
+            ("local-ledger-report-not-available", "human_decision_eta"),
+            ("local-ledger-report-degraded", '"degraded_evidence_count": 1'),
+            ("local-ledger-report-duplicate", '"duplicate_event_ids"'),
+            ("local-ledger-report-telemetry", '"telemetry_issue": "#266"'),
+            ("local-ledger-report-user-output-size", '"user_facing_output_bytes"'),
+            ("local-ledger-report-next-action", "rehydrate_and_reconcile_evidence"),
+            ("local-ledger-report-forbidden-backfill", "#360 backfill"),
+        ):
+            errors.extend(expect_ok(name, ledger_report, expected))
+        ledger_report_again = run(["local-ledger-report", "--ledger-root", str(ledger_root), "--json"], base)
+        if ledger_report.returncode == 0 and ledger_report_again.returncode == 0:
+            first = json.loads(ledger_report.stdout)
+            second = json.loads(ledger_report_again.stdout)
+            for payload in (first, second):
+                payload["telemetry"]["replay_time_ms"] = 0
+                payload["summary"]["replay_time_ms"] = 0
+            if first == second:
+                print("local-ledger-replay-deterministic: ok")
+            else:
+                errors.append("local-ledger-replay-deterministic: repeated report output differed after normalizing replay_time_ms")
+        events_path = ledger_root / "events.jsonl"
+        if events_path.exists() and str(events_path).startswith(str(base)):
+            print("local-ledger-write-scope-temp-only: ok")
+        else:
+            errors.append("local-ledger-write-scope-temp-only: ledger did not write inside explicit temp root")
 
     if errors:
         print("GitHub collaboration helper fixture tests failed:")

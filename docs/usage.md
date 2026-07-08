@@ -127,6 +127,21 @@ Use the board preview to decide the next workflow action:
 
 **中文要点：** Foundry Board preview 是 V2 的只读操作面板。它帮助你看当前工作、owner、证据、阻塞、branch 状态和下一步；它不会自动写 GitHub/Project，也不会做真实 sync、backfill 或 branch 操作。
 
+## Local Collaboration Ledger Report
+
+For V2 local-first orchestration work, ask for a local ledger replay report:
+
+```text
+show local collaboration ledger report
+显示 local collaboration ledger report
+```
+
+The MVP stores append-only local event records under `usage/local/collaboration-ledger/` by default. The report replays assignment, dispatch, callback, review, acceptance, merge, closure, blocked, and sync-readback events into derived work-item state with provenance links, confidence, unknown/not_available fields, conflicts, degraded evidence, and #266 telemetry.
+
+The report is read-only and does not need live GitHub access. Append mode writes only the local ledger JSONL event file or an explicit test ledger root; it does not backfill existing GitHub projects, update the Foundry Board, generate Project sync plans, write GitHub/Project, close issues, mutate runtime/Vault/private/generated state, or publish generated Skills.
+
+**中文要点：** Local ledger report 会 replay 本地 append-only events，显示 work item state、证据、conflict、unknown/not_available 和 telemetry。它不依赖 GitHub live read，也不会做 #360 backfill、#361 board、#362 sync 或任何 GitHub/Project 写入。
+
 ## First-Time Setup
 
 On a new machine, use `docs/deployment.md` for the full split Core/Vault install flow. Short version:

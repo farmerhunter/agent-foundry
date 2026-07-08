@@ -522,6 +522,53 @@ repair/apply, checkout/switch, PR retarget, rebase, merge, reset, clean,
 runtime/Vault/private/generated mutation, generated Skill/adapter publish, or
 capability-pack deploy/apply.
 
+## Local Collaboration Ledger Storage And Replay
+
+Use `local-ledger-report` when V2 local-first orchestration needs to inspect
+the first durable local ledger slice without reading live GitHub.
+
+Skill-facing request:
+
+```text
+show local collaboration ledger report
+```
+
+Debug/helper surfaces:
+
+```text
+agent-foundry-github-collab local-ledger-append \
+  --ledger-root usage/local/collaboration-ledger \
+  --event-json <event.json>
+
+agent-foundry-github-collab local-ledger-report \
+  --ledger-root usage/local/collaboration-ledger \
+  --json
+```
+
+Default storage is append-only JSONL at
+`usage/local/collaboration-ledger/events.jsonl`. Tests and temporary reviews
+should pass an explicit `--ledger-root` under a temporary directory. The replay
+surface derives work-item state from assignment, dispatch, callback, review,
+acceptance, merge, closure, blocked, and sync-readback events. Every event must
+carry provenance, confidence, and explicit `unknown` or `not_available` fields
+when evidence is incomplete.
+
+The report must include #266 telemetry for event count, active event count,
+replay time, degraded evidence count, and user-facing output size. It is a
+local source-of-truth slice for replay evidence, not a GitHub sync authority.
+
+Forbidden in this MVP:
+
+- #360 existing-project backfill;
+- #361 ledger-backed Foundry Board behavior;
+- #362 Project sync-plan generation;
+- GitHub Project mutation or real GitHub write-back;
+- issue closure automation;
+- runtime/Vault/private/generated mutation;
+- generated Skill/adapter publish;
+- release/tag work;
+- memory-system work.
+
 ## Dispatch Evidence Modes
 
 Dispatch evidence must name the mechanism actually used:
