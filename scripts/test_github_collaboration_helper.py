@@ -137,6 +137,10 @@ def main() -> int:
         sync_plan_project = base / "sync-plan-project.json"
         sync_plan_ledger_root = base / "sync-plan-ledger"
         sync_plan_candidate_events = base / "sync-plan-candidate-events.json"
+        mixed_recovery_issues = base / "mixed-recovery-issues.json"
+        mixed_recovery_project = base / "mixed-recovery-project.json"
+        mixed_recovery_ledger_root = base / "mixed-recovery-ledger"
+        mixed_recovery_candidate_events = base / "mixed-recovery-candidate-events.json"
         new_repo_labels = base / "new-repo-labels.json"
         new_repo_issues = base / "new-repo-issues.json"
         new_repo_prs = base / "new-repo-prs.json"
@@ -1422,6 +1426,206 @@ def main() -> int:
             ("project-sync-plan-degraded-source", "github_graphql_project_v2"),
         ):
             errors.extend(expect_ok(name, degraded_sync_plan, expected))
+        mixed_recovery_events = [
+            {
+                "schema_version": 1,
+                "event_id": "mixed-local-newer-430",
+                "event_type": "assignment",
+                "occurred_at": "2026-07-08T12:10:00Z",
+                "work_item": {"id": "farmerhunter/agent-foundry#issue:430", "repo": "farmerhunter/agent-foundry", "type": "issue", "number": 430},
+                "actor_role": "coordinator",
+                "confidence": "observed",
+                "provenance": {"links": ["https://github.com/farmerhunter/agent-foundry/issues/430#local"]},
+                "payload": {"owner_role": "implementer"},
+            },
+            {
+                "schema_version": 1,
+                "event_id": "mixed-remote-newer-431",
+                "event_type": "assignment",
+                "occurred_at": "2026-07-08T12:10:00Z",
+                "work_item": {"id": "farmerhunter/agent-foundry#issue:431", "repo": "farmerhunter/agent-foundry", "type": "issue", "number": 431},
+                "actor_role": "coordinator",
+                "confidence": "observed",
+                "provenance": {"links": ["https://github.com/farmerhunter/agent-foundry/issues/431#local"]},
+                "payload": {"owner_role": "architect"},
+            },
+            {
+                "schema_version": 1,
+                "event_id": "mixed-partial-432",
+                "event_type": "sync_readback",
+                "occurred_at": "2026-07-08T12:11:00Z",
+                "work_item": {"id": "farmerhunter/agent-foundry#issue:432", "repo": "farmerhunter/agent-foundry", "type": "issue", "number": 432},
+                "actor_role": "sync",
+                "confidence": "observed",
+                "provenance": {"links": ["https://github.com/farmerhunter/agent-foundry/issues/432#sync"]},
+                "payload": {"local_state": "In Progress", "observed_state": "Done", "field": "Status"},
+            },
+            {
+                "schema_version": 1,
+                "event_id": "mixed-branch-433",
+                "event_type": "assignment",
+                "occurred_at": "2026-07-08T12:12:00Z",
+                "work_item": {"id": "farmerhunter/agent-foundry#issue:433", "repo": "farmerhunter/agent-foundry", "type": "issue", "number": 433},
+                "actor_role": "coordinator",
+                "confidence": "observed",
+                "provenance": {"links": ["https://github.com/farmerhunter/agent-foundry/issues/433#local"]},
+                "payload": {"owner_role": "implementer"},
+            },
+            {
+                "schema_version": 1,
+                "event_id": "mixed-superseded-434",
+                "event_type": "supersession",
+                "occurred_at": "2026-07-08T12:13:00Z",
+                "work_item": {"id": "farmerhunter/agent-foundry#issue:434", "repo": "farmerhunter/agent-foundry", "type": "issue", "number": 434},
+                "actor_role": "architect",
+                "confidence": "observed",
+                "provenance": {"links": ["https://github.com/farmerhunter/agent-foundry/issues/434#superseded"]},
+                "payload": {"superseded_by": "farmerhunter/agent-foundry#issue:435"},
+            },
+            {
+                "schema_version": 1,
+                "event_id": "mixed-out-of-band-436",
+                "event_type": "assignment",
+                "occurred_at": "2026-07-08T12:14:00Z",
+                "work_item": {"id": "farmerhunter/agent-foundry#issue:436", "repo": "farmerhunter/agent-foundry", "type": "issue", "number": 436},
+                "actor_role": "coordinator",
+                "confidence": "observed",
+                "provenance": {"links": ["https://github.com/farmerhunter/agent-foundry/issues/436#local"]},
+                "payload": {"owner_role": "reviewer"},
+            },
+        ]
+        for event in mixed_recovery_events:
+            event_path = base / f"{event['event_id']}.json"
+            write(event_path, json.dumps(event))
+            errors.extend(
+                expect_ok(
+                    f"mixed-state-ledger-append-{event['event_id']}",
+                    run(["local-ledger-append", "--ledger-root", str(mixed_recovery_ledger_root), "--event-json", str(event_path), "--json"], base),
+                    '"mutation_performed": true',
+                )
+            )
+        issue_body_v2 = "\n".join(
+            [
+                "## Execution Contract",
+                "Owner role: implementer",
+                "Review role: reviewer",
+                "Acceptance role: architect",
+                "Completion handoff: to:reviewer",
+                "Branch strategy: integration-branch",
+                "Release line: v2.0",
+                "Target branch: codex/v2-local-first-orchestration",
+            ]
+        )
+        issue_body_v1_on_v2 = issue_body_v2.replace("Release line: v2.0", "Release line: v1.x-maintenance").replace(
+            "Target branch: codex/v2-local-first-orchestration",
+            "Target branch: main",
+        )
+        write(
+            mixed_recovery_issues,
+            json.dumps(
+                {
+                    "issues": [
+                        {"number": 430, "title": "Local newer", "state": "OPEN", "updatedAt": "2026-07-08T12:20:00Z", "labels": [{"name": "stage:v2.0"}, {"name": "needs:implementer"}], "body": issue_body_v2},
+                        {"number": 431, "title": "Remote newer", "state": "OPEN", "updatedAt": "2026-07-08T12:20:00Z", "labels": [{"name": "stage:v2.0"}, {"name": "needs:architect"}], "body": issue_body_v2},
+                        {"number": 432, "title": "Partial sync", "state": "OPEN", "updatedAt": "2026-07-08T12:20:00Z", "labels": [{"name": "stage:v2.0"}], "body": issue_body_v2},
+                        {"number": 433, "title": "Branch drift", "state": "OPEN", "updatedAt": "2026-07-08T12:20:00Z", "labels": [{"name": "stage:v2.0"}], "body": issue_body_v1_on_v2},
+                        {"number": 434, "title": "Superseded", "state": "OPEN", "updatedAt": "2026-07-08T12:20:00Z", "labels": [{"name": "stage:v2.0"}], "body": issue_body_v2},
+                        {"number": 436, "title": "Out-of-band owner", "state": "OPEN", "updatedAt": "2026-07-08T12:20:00Z", "labels": [{"name": "stage:v2.0"}, {"name": "needs:architect"}], "body": issue_body_v2},
+                        {"number": 437, "title": "Remote only", "state": "OPEN", "updatedAt": "2026-07-08T12:20:00Z", "labels": [{"name": "stage:v2.0"}, {"name": "needs:reviewer"}], "body": issue_body_v2},
+                    ]
+                }
+            ),
+        )
+        write(
+            mixed_recovery_project,
+            json.dumps(
+                {
+                    "items": [
+                        {"content": {"number": 430}, "updatedAt": "2026-07-08T12:00:00Z", "Status": "Todo", "Owner Role": "Implementer"},
+                        {"content": {"number": 431}, "updatedAt": "2026-07-08T12:45:00Z", "Status": "Todo", "Owner Role": "Architect"},
+                        {"content": {"number": 432}, "updatedAt": "2026-07-08T12:45:00Z", "Status": "Done", "Owner Role": "Implementer"},
+                        {"content": {"number": 433}, "updatedAt": "2026-07-08T12:45:00Z", "Status": "Todo", "Owner Role": "Implementer"},
+                        {"content": {"number": 436}, "updatedAt": "2026-07-08T12:45:00Z", "Status": "Todo", "Owner Role": "Architect"},
+                        {"content": {"number": 437}, "updatedAt": "2026-07-08T12:45:00Z", "Status": "In Progress", "Owner Role": "Reviewer"},
+                    ]
+                }
+            ),
+        )
+        write(
+            mixed_recovery_candidate_events,
+            json.dumps(
+                {
+                    "candidate_imported_events": [
+                        {
+                            "schema_version": 1,
+                            "event_id": "mixed-candidate-435",
+                            "event_type": "assignment",
+                            "occurred_at": "2026-07-08T12:15:00Z",
+                            "work_item": {"id": "farmerhunter/agent-foundry#issue:435", "repo": "farmerhunter/agent-foundry", "type": "issue", "number": 435},
+                            "actor_role": "coordinator",
+                            "confidence": "inferred",
+                            "provenance": {"links": ["https://github.com/farmerhunter/agent-foundry/issues/435#candidate"]},
+                            "payload": {"owner_role": "architect"},
+                        }
+                    ]
+                }
+            ),
+        )
+        mixed_recovery = run(
+            [
+                "mixed-state-recovery",
+                "--issues-json",
+                str(mixed_recovery_issues),
+                "--project-items-json",
+                str(mixed_recovery_project),
+                "--ledger-root",
+                str(mixed_recovery_ledger_root),
+                "--candidate-events-json",
+                str(mixed_recovery_candidate_events),
+                "--json",
+            ],
+            base,
+            {"AGENT_REPO": "farmerhunter/agent-foundry"},
+        )
+        for name, expected in (
+            ("mixed-state-recovery-command", '"command": "mixed-state-recovery"'),
+            ("mixed-state-recovery-read-only", '"mode": "read_only"'),
+            ("mixed-state-recovery-no-mutation", '"mutation_performed": false'),
+            ("mixed-state-recovery-no-apply", '"apply_supported_now": false'),
+            ("mixed-state-recovery-source", '"source_of_truth": "local_collaboration_ledger"'),
+            ("mixed-state-recovery-local-newer", '"case_type": "local_newer"'),
+            ("mixed-state-recovery-remote-newer", '"case_type": "remote_newer"'),
+            ("mixed-state-recovery-remote-only", '"case_type": "remote_only"'),
+            ("mixed-state-recovery-candidate-only", '"case_type": "candidate_only"'),
+            ("mixed-state-recovery-partial-sync", '"case_type": "partial_sync"'),
+            ("mixed-state-recovery-branch-drift", '"case_type": "branch_line_drift"'),
+            ("mixed-state-recovery-superseded", '"case_type": "superseded_work"'),
+            ("mixed-state-recovery-human-edit", '"case_type": "out_of_band_human_edit"'),
+            ("mixed-state-recovery-safe-action", "record_recovery_with_local-ledger-action-apply"),
+            ("mixed-state-recovery-forbidden-hidden", "hidden repair"),
+            ("mixed-state-recovery-forbidden-authority", "guessing authority from GitHub issue or Project mirror"),
+            ("mixed-state-recovery-telemetry", '"telemetry_issue": "#266"'),
+        ):
+            errors.extend(expect_ok(name, mixed_recovery, expected))
+        degraded_recovery = run(
+            [
+                "--repo",
+                "farmerhunter/agent-foundry",
+                "mixed-state-recovery",
+                "--issues-json",
+                str(mixed_recovery_issues),
+                "--ledger-root",
+                str(mixed_recovery_ledger_root),
+                "--project-owner",
+                "@me",
+                "--project-number",
+                "3",
+                "--json",
+            ],
+            base,
+            {"PATH": str(fake_bin) + os.pathsep + os.environ.get("PATH", "")},
+        )
+        errors.extend(expect_ok("mixed-state-recovery-degraded-project", degraded_recovery, '"case_type": "degraded_project"'))
         branch_readiness_json = run(
             [
                 "collaboration-readiness",
