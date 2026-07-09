@@ -54,7 +54,7 @@ DRY_RUN_ACTIONS = {
     "permission-smoke",
     "comparison-draft",
 }
-LOCAL_WRITE_ACTIONS = {"local-ledger-append"}
+LOCAL_WRITE_ACTIONS = {"local-ledger-append", "local-ledger-migration-apply"}
 REMOTE_RE = re.compile(r"(?:github\.com[:/])([^/]+)/([^/.]+)(?:\.git)?$")
 CONTRACT_HEADINGS = ("Final Execution Contract", "Execution Contract", "Draft Execution Contract")
 ROLE_FIELDS = ("Owner role", "Review role", "Acceptance role")
@@ -122,6 +122,7 @@ LOCAL_LEDGER_EVENT_TYPES = {
     "blocked",
     "sync_readback",
 }
+CAPABILITY_LAYER_VALUES = {"base", "local_orchestration", "mixed"}
 LOCAL_LEDGER_CONFIDENCE_VALUES = {"observed", "inferred", "unknown", "not_available"}
 LOCAL_LEDGER_DEFAULT_ROOT = Path("usage") / "local" / "collaboration-ledger"
 
@@ -1368,6 +1369,276 @@ def build_local_ledger_backfill_preview(
     return payload
 
 
+def migration_apply_decisions(decision_doc: Any) -> tuple[dict[str, dict[str, Any]], list[str]]:
+    if not isinstance(decision_doc, dict):
+        return {}, ["decision JSON must be an object"]
+    decisions: dict[str, dict[str, Any]] = {}
+    errors: list[str] = []
+
+    def add_decision(event_id: Any, decision: str, reason: str = "", note: str = "") -> None:
+        if not isinstance(event_id, str) or not event_id.strip():
+            errors.append(f"{decision} decision must reference a non-empty event_id")
+            return
+        key = event_id.strip()
+        if key in decisions and decisions[key]["decision"] != decision:
+            errors.append(f"conflicting decisions for {key}")
+            return
+        decisions[key] = {
+            "event_id": key,
+            "decision": decision,
+            "reason": reason,
+            "manual_review_note": note,
+        }
+
+    for raw in decision_doc.get("decisions", []):
+        if not isinstance(raw, dict):
+            errors.append("decisions entries must be objects")
+            continue
+        decision = str(raw.get("decision", "")).lower().strip()
+        if decision not in {"accept", "reject", "skip"}:
+            errors.append(f"unsupported migration decision {decision!r}")
+            continue
+        add_decision(raw.get("event_id"), decision, str(raw.get("reason", "")), str(raw.get("manual_review_note", "")))
+    for field, decision in (("accept_event_ids", "accept"), ("reject_event_ids", "reject"), ("skip_event_ids", "skip")):
+        values = decision_doc.get(field, [])
+        if not isinstance(values, list):
+            errors.append(f"{field} must be a list")
+            continue
+        for event_id in values:
+            add_decision(event_id, decision)
+    return decisions, errors
+
+
+def candidate_events_from_backfill_preview(preview_doc: Any) -> tuple[list[dict[str, Any]], list[str]]:
+    if isinstance(preview_doc, list):
+        candidates = preview_doc
+    elif isinstance(preview_doc, dict):
+        candidates = preview_doc.get("candidate_imported_events") or preview_doc.get("candidate_events") or []
+    else:
+        return [], ["candidate input must be a list or backfill preview object"]
+    if not isinstance(candidates, list):
+        return [], ["candidate event collection must be a list"]
+    normalized: list[dict[str, Any]] = []
+    errors: list[str] = []
+    for index, candidate in enumerate(candidates, start=1):
+        if not isinstance(candidate, dict):
+            errors.append(f"candidate #{index} must be an object")
+            continue
+        event, event_errors, _status = validate_local_ledger_event(candidate)
+        if event is None:
+            errors.append(f"candidate #{index} invalid: {'; '.join(event_errors)}")
+            continue
+        normalized.append(dict(candidate))
+    return normalized, errors
+
+
+def capability_layer_record(candidate: dict[str, Any]) -> dict[str, str]:
+    payload = candidate.get("payload") if isinstance(candidate.get("payload"), dict) else {}
+    layer = str(candidate.get("capability_layer") or payload.get("capability_layer") or "").strip()
+    source = str(candidate.get("capability_layer_source") or "candidate_event").strip()
+    confidence = str(candidate.get("capability_layer_confidence") or candidate.get("confidence") or "inferred").strip()
+    if layer not in CAPABILITY_LAYER_VALUES:
+        layer = "local_orchestration"
+        source = "migration_apply_default"
+        confidence = "inferred"
+    if confidence not in LOCAL_LEDGER_CONFIDENCE_VALUES:
+        confidence = "inferred"
+    return {"layer": layer, "source": source, "confidence": confidence}
+
+
+def migration_decision_event_from_review_decision(candidate: dict[str, Any], decision: dict[str, Any]) -> dict[str, Any]:
+    candidate_id = str(candidate["event_id"])
+    decision_name = decision["decision"]
+    capability_layer = capability_layer_record(candidate)
+    if decision_name == "accept":
+        event = dict(candidate)
+        event["event_id"] = f"accepted-{candidate_id}"
+    else:
+        prefix = "skipped" if decision_name == "skip" else "rejected"
+        event = {
+            "schema_version": LOCAL_LEDGER_SCHEMA_VERSION,
+            "event_id": f"{prefix}-{candidate_id}",
+            "event_type": "evidence",
+            "occurred_at": candidate.get("occurred_at", "unknown"),
+            "work_item": candidate.get("work_item", {}),
+            "actor_role": "architect",
+            "confidence": "observed",
+            "unknown_fields": [],
+            "not_available_fields": [],
+            "degraded_evidence": candidate.get("degraded_evidence", []),
+            "provenance": candidate.get("provenance", {"links": []}),
+            "payload": {},
+        }
+    event["capability_layer"] = capability_layer["layer"]
+    event["capability_layer_source"] = capability_layer["source"]
+    event["capability_layer_confidence"] = capability_layer["confidence"]
+    event["base_behavior_preserved"] = True
+    event["branch_or_release_line_evidence"] = candidate.get("branch_or_release_line_evidence", "not_used")
+    provenance = event.get("provenance") if isinstance(event.get("provenance"), dict) else {"links": []}
+    provenance["candidate_event_id"] = candidate_id
+    provenance["capability_layer_source"] = capability_layer["source"]
+    provenance["capability_layer_confidence"] = capability_layer["confidence"]
+    event["provenance"] = provenance
+    payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+    payload["migration_decision"] = decision_name
+    payload["candidate_event_id"] = candidate_id
+    if decision.get("reason"):
+        payload["migration_decision_reason"] = decision["reason"]
+    if decision.get("manual_review_note"):
+        payload["manual_review_note"] = decision["manual_review_note"]
+    if decision_name == "accept":
+        payload["accepted_from_candidate"] = True
+    event["payload"] = payload
+    return event
+
+
+def build_local_ledger_migration_apply_from_decision_json(root: Path, preview_doc: Any, decision_doc: Any) -> dict[str, Any]:
+    candidates, candidate_errors = candidate_events_from_backfill_preview(preview_doc)
+    decisions, decision_errors = migration_apply_decisions(decision_doc)
+    if candidate_errors or decision_errors or not decisions:
+        return {
+            "schema_version": 1,
+            "command": "local-ledger-migration-apply",
+            "status": "invalid",
+            "errors": candidate_errors + decision_errors + ([] if decisions else ["at least one accept/reject/skip decision is required"]),
+            "mutation_performed": False,
+            "github_write_back_performed": False,
+            "project_mutation_performed": False,
+        }
+    candidate_by_id = {str(candidate["event_id"]): candidate for candidate in candidates}
+    missing = sorted(event_id for event_id in decisions if event_id not in candidate_by_id)
+    if missing:
+        return {
+            "schema_version": 1,
+            "command": "local-ledger-migration-apply",
+            "status": "invalid",
+            "errors": [f"decision references missing candidate event {event_id}" for event_id in missing],
+            "mutation_performed": False,
+            "github_write_back_performed": False,
+            "project_mutation_performed": False,
+        }
+    before_events, before_invalid, before_storage = read_local_ledger_events(root)
+    before_replay = replay_local_ledger(before_events)
+    existing_ids = {event["event_id"] for event in before_events}
+    planned_events = [
+        migration_decision_event_from_review_decision(candidate_by_id[event_id], decision)
+        for event_id, decision in sorted(decisions.items())
+    ]
+    validation_errors: list[str] = []
+    for event in planned_events:
+        normalized, errors, _status = validate_local_ledger_event(event)
+        if normalized is None:
+            validation_errors.append(f"{event.get('event_id', 'unknown')}: {'; '.join(errors)}")
+    if validation_errors:
+        return {
+            "schema_version": 1,
+            "command": "local-ledger-migration-apply",
+            "status": "invalid",
+            "errors": validation_errors,
+            "mutation_performed": False,
+            "github_write_back_performed": False,
+            "project_mutation_performed": False,
+        }
+    appended: list[dict[str, Any]] = []
+    duplicate_skips: list[dict[str, Any]] = []
+    for event in planned_events:
+        if event["event_id"] in existing_ids:
+            duplicate_skips.append({"event_id": event["event_id"], "reason": "idempotent_duplicate_event_id"})
+            continue
+        result = append_local_ledger_event(root, event)
+        appended.append(result)
+        existing_ids.add(event["event_id"])
+    after_events, after_invalid, after_storage = read_local_ledger_events(root)
+    after_replay = replay_local_ledger(after_events)
+    accepted_count = sum(1 for item in decisions.values() if item["decision"] == "accept")
+    rejected_count = sum(1 for item in decisions.values() if item["decision"] == "reject")
+    skipped_count = sum(1 for item in decisions.values() if item["decision"] == "skip")
+    payload = {
+        "schema_version": 1,
+        "command": "local-ledger-migration-apply",
+        "mode": "apply",
+        "status": "ok",
+        "ledger_root": str(root),
+        "mutation_performed": bool(appended),
+        "write_scope": "local_ledger_events_jsonl_only",
+        "github_write_back_performed": False,
+        "project_mutation_performed": False,
+        "capability_layer": "local_orchestration",
+        "capability_layer_source": "explicit_migration_apply_decision",
+        "capability_layer_confidence": "confirmed",
+        "candidate_event_count": len(candidates),
+        "decision_count": len(decisions),
+        "accepted_count": accepted_count,
+        "rejected_count": rejected_count,
+        "skipped_count": skipped_count,
+        "appended_events": appended,
+        "duplicate_skips": duplicate_skips,
+        "before": {
+            "storage": before_storage,
+            "invalid_event_count": len(before_invalid),
+            "summary": before_replay["summary"],
+            "derived_work_items": before_replay["derived_work_items"],
+        },
+        "after": {
+            "storage": after_storage,
+            "invalid_event_count": len(after_invalid),
+            "summary": after_replay["summary"],
+            "derived_work_items": after_replay["derived_work_items"],
+        },
+        "candidate_decision_records": {
+            event_id: {
+                "decision": decision["decision"],
+                "capability_layer": capability_layer_record(candidate_by_id[event_id]),
+                "confidence": candidate_by_id[event_id].get("confidence", "unknown"),
+                "manual_review_note": decision.get("manual_review_note", ""),
+            }
+            for event_id, decision in sorted(decisions.items())
+        },
+        "user_facing_report": {
+            "summary": f"Applied {len(appended)} migration decision event(s) to the local ledger.",
+            "next_actions": [
+                "run_local-ledger-report_to_review_accepted_state",
+                "run_foundry-board_to_review_board_state",
+                "continue_to_V2-10_after_review_acceptance",
+            ],
+            "rollback_or_compensating_guidance": "append compensating evidence or superseding events; do not rewrite ledger history",
+            "residual_risks": [
+                "candidate inference remains provenance-backed and should be reviewed before broad migration",
+                "GitHub and Project mirrors were not changed",
+                *(
+                    ["degraded candidate evidence was preserved rather than guessed clean"]
+                    if any(event.get("degraded_evidence") for event in planned_events)
+                    else []
+                ),
+            ],
+        },
+        "forbidden_actions": [
+            "GitHub issue/PR mutation",
+            "Project v2 mutation",
+            "#371 local action apply",
+            "#372 Project sync apply",
+            "#373 mixed-state recovery implementation",
+            "#378 management surface implementation",
+            "runtime/Vault/private/generated mutation",
+            "generated Skill publish or capability-pack deploy/apply",
+            "main merge or release/tag work",
+            "destructive ledger history rewrite",
+        ],
+        "telemetry": {
+            "telemetry_issue": "#266",
+            "candidate_count": len(candidates),
+            "decision_count": len(decisions),
+            "appended_event_count": len(appended),
+            "duplicate_skip_count": len(duplicate_skips),
+            "before_event_count": before_replay["summary"]["event_count"],
+            "after_event_count": after_replay["summary"]["event_count"],
+            "after_conflict_count": after_replay["summary"]["conflict_count"],
+            "degraded_evidence_count": after_replay["summary"]["degraded_evidence_count"],
+        },
+    }
+    return payload
+
+
 def cmd_local_ledger_backfill_preview(args: argparse.Namespace) -> None:
     repo, repo_source = resolve_repo(args)
     if args.issues_json or args.fixture_json:
@@ -1392,6 +1663,15 @@ def cmd_local_ledger_backfill_preview(args: argparse.Namespace) -> None:
 def cmd_local_ledger_append(args: argparse.Namespace) -> None:
     event = load_json(args.event_json)
     result = append_local_ledger_event(local_ledger_root(args), event)
+    print_json_or_text(result, args.json)
+    if result["status"] == "invalid":
+        raise SystemExit(6)
+
+
+def cmd_local_ledger_migration_apply(args: argparse.Namespace) -> None:
+    preview_doc = load_json(args.candidate_events_json)
+    decision_doc = load_json(args.decision_json)
+    result = build_local_ledger_migration_apply_from_decision_json(local_ledger_root(args), preview_doc, decision_doc)
     print_json_or_text(result, args.json)
     if result["status"] == "invalid":
         raise SystemExit(6)
@@ -4490,6 +4770,13 @@ def build_parser() -> argparse.ArgumentParser:
     ledger_append.add_argument("--event-json", required=True, help="Path to one ledger event JSON object.")
     ledger_append.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON for local-ledger-append.")
     ledger_append.set_defaults(func=cmd_local_ledger_append)
+
+    migration_apply = sub.add_parser("local-ledger-migration-apply")
+    migration_apply.add_argument("--ledger-root", help="Local ledger root. Defaults to usage/local/collaboration-ledger.")
+    migration_apply.add_argument("--candidate-events-json", required=True, help="Backfill preview output or candidate event list to review/apply.")
+    migration_apply.add_argument("--decision-json", required=True, help="Migration decision JSON with accept/reject/skip event ids.")
+    migration_apply.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON for local-ledger-migration-apply.")
+    migration_apply.set_defaults(func=cmd_local_ledger_migration_apply)
 
     ledger_report = sub.add_parser("local-ledger-report")
     ledger_report.add_argument("--ledger-root", help="Local ledger root. Defaults to usage/local/collaboration-ledger.")
