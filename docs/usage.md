@@ -172,6 +172,24 @@ The decision file records explicit `accept`, `reject`, or `skip` choices for can
 
 **中文要点：** Migration apply 只把 review 后的 accept/reject/skip 决策写入本地 ledger JSONL，不改 GitHub/Project。重复运行会跳过已写入的 deterministic events；#371/#372/#373 仍是后续 gate。
 
+After a Foundry Board next action has the required local review gate, apply that local action into the ledger:
+
+```text
+apply approved local board action
+应用 approved local board action
+```
+
+```bash
+python3 scripts/github_collaboration_helper.py --repo <owner>/<repo> local-ledger-action-apply \
+  --ledger-root usage/local/collaboration-ledger \
+  --action-json /tmp/local-actions.json \
+  --json
+```
+
+The action file records approved local actions such as assignment, handoff, blocked/unblocked, review result, Architect acceptance, Human approval evidence, local closure evidence, supersession, or recovery evidence. Reviewer-, Architect-, and Human-owned actions must name the matching `required_gate` and `approved_by_role`; otherwise the helper fails closed before writing. Successful apply appends only deterministic local ledger events, reports before/after replay state, and leaves GitHub/Project sync for later gates.
+
+**中文要点：** Local action apply 只写 accepted local ledger。Reviewer/Architect/Human gate 不匹配时会 fail closed；它不会改 GitHub issue/PR、Project、runtime、Vault 或 generated artifacts。Project sync 仍属于 #372。
+
 For GitHub Project mirroring, ask for a dry-run sync plan:
 
 ```text

@@ -54,7 +54,7 @@ DRY_RUN_ACTIONS = {
     "permission-smoke",
     "comparison-draft",
 }
-LOCAL_WRITE_ACTIONS = {"local-ledger-append", "local-ledger-migration-apply"}
+LOCAL_WRITE_ACTIONS = {"local-ledger-append", "local-ledger-migration-apply", "local-ledger-action-apply"}
 REMOTE_RE = re.compile(r"(?:github\.com[:/])([^/]+)/([^/.]+)(?:\.git)?$")
 CONTRACT_HEADINGS = ("Final Execution Contract", "Execution Contract", "Draft Execution Contract")
 ROLE_FIELDS = ("Owner role", "Review role", "Acceptance role")
@@ -120,6 +120,9 @@ LOCAL_LEDGER_EVENT_TYPES = {
     "merge",
     "closure",
     "blocked",
+    "unblocked",
+    "supersession",
+    "recovery",
     "sync_readback",
 }
 CAPABILITY_LAYER_VALUES = {"base", "local_orchestration", "mixed"}
@@ -727,6 +730,24 @@ def append_local_ledger_event(root: Path, event: dict[str, Any]) -> dict[str, An
     }
 
 
+def append_events_if_absent(
+    root: Path,
+    events: list[dict[str, Any]],
+    existing_ids: set[str],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    appended: list[dict[str, Any]] = []
+    duplicate_skips: list[dict[str, Any]] = []
+    for event in events:
+        event_id = event["event_id"]
+        if event_id in existing_ids:
+            duplicate_skips.append({"event_id": event_id, "reason": "idempotent_duplicate_event_id"})
+            continue
+        result = append_local_ledger_event(root, event)
+        appended.append(result)
+        existing_ids.add(event_id)
+    return appended, duplicate_skips
+
+
 def empty_derived_work_item(key: str, event: dict[str, Any]) -> dict[str, Any]:
     work_item = event.get("work_item", {})
     return {
@@ -839,6 +860,22 @@ def apply_local_ledger_event(item: dict[str, Any], event: dict[str, Any]) -> Non
         item["state"] = "blocked"
         item["blocking_reason"] = payload.get("reason", "unknown")
         item["next_review_or_action_needed"] = "resolve_blocker"
+    elif event_type == "unblocked":
+        item["blocked"] = False
+        item["state"] = payload.get("next_state", "assigned")
+        item["blocking_reason"] = None
+        item["latest_evidence"].append({"event_id": event["event_id"], "summary": payload.get("summary", "unblocked")})
+        item["next_review_or_action_needed"] = payload.get("next_review_or_action_needed", "review_unblocked_state")
+    elif event_type == "supersession":
+        item["state"] = "superseded"
+        item["superseded_by"] = payload.get("superseded_by", "unknown")
+        item["latest_evidence"].append({"event_id": event["event_id"], "summary": payload.get("summary", "supersession")})
+        item["next_review_or_action_needed"] = payload.get("next_review_or_action_needed", "follow_superseding_work")
+    elif event_type == "recovery":
+        item["state"] = payload.get("recovered_state", "recovery_review")
+        item["recovery_reason"] = payload.get("reason", "unknown")
+        item["latest_evidence"].append({"event_id": event["event_id"], "summary": payload.get("summary", "recovery")})
+        item["next_review_or_action_needed"] = payload.get("next_review_or_action_needed", "verify_recovered_state")
     elif event_type == "sync_readback":
         observed_state = payload.get("observed_state")
         local_state = payload.get("local_state")
@@ -1672,6 +1709,291 @@ def cmd_local_ledger_migration_apply(args: argparse.Namespace) -> None:
     preview_doc = load_json(args.candidate_events_json)
     decision_doc = load_json(args.decision_json)
     result = build_local_ledger_migration_apply_from_decision_json(local_ledger_root(args), preview_doc, decision_doc)
+    print_json_or_text(result, args.json)
+    if result["status"] == "invalid":
+        raise SystemExit(6)
+
+
+LOCAL_ACTION_EVENT_TYPES = {
+    "assignment": "assignment",
+    "handoff": "dispatch",
+    "blocked": "blocked",
+    "unblocked": "unblocked",
+    "review_result": "review",
+    "architect_acceptance": "acceptance",
+    "human_approval": "human_approval",
+    "local_done": "closure",
+    "closure": "closure",
+    "supersession": "supersession",
+    "recovery": "evidence",
+}
+LOCAL_ACTION_REQUIRED_GATES = {
+    "review_result": "reviewer",
+    "architect_acceptance": "architect",
+    "human_approval": "human",
+    "local_done": "reviewer",
+    "closure": "reviewer",
+}
+
+
+def normalize_local_action_collection(data: Any) -> tuple[list[dict[str, Any]], list[str]]:
+    if isinstance(data, dict) and "actions" in data:
+        data = data["actions"]
+    elif isinstance(data, dict):
+        data = [data]
+    if not isinstance(data, list):
+        return [], ["action JSON must be an object, list, or object with actions"]
+    actions: list[dict[str, Any]] = []
+    errors: list[str] = []
+    for index, action in enumerate(data, start=1):
+        if not isinstance(action, dict):
+            errors.append(f"action #{index} must be an object")
+            continue
+        action_type = str(action.get("action_type") or action.get("type") or "").strip()
+        if action_type not in LOCAL_ACTION_EVENT_TYPES:
+            errors.append(f"action #{index} has unsupported action_type {action_type!r}")
+            continue
+        work_item = action.get("work_item")
+        if not isinstance(work_item, dict) or not (work_item.get("id") or (work_item.get("repo") and work_item.get("type") and work_item.get("number") is not None)):
+            errors.append(f"action #{index} must include work_item with id or repo/type/number")
+            continue
+        action_id = str(action.get("action_id") or action.get("id") or f"{work_item_key(work_item)}-{action_type}").strip()
+        required_gate = str(action.get("required_gate") or LOCAL_ACTION_REQUIRED_GATES.get(action_type, "none")).lower()
+        approved_by_role = str(action.get("approved_by_role") or action.get("actor_role") or "agent").lower()
+        if required_gate not in {"none", "reviewer", "architect", "human"}:
+            errors.append(f"action #{index} has unsupported required_gate {required_gate!r}")
+            continue
+        if required_gate != "none" and approved_by_role != required_gate:
+            errors.append(f"action #{index} requires {required_gate} gate but approved_by_role is {approved_by_role}")
+            continue
+        normalized = dict(action)
+        normalized["action_id"] = action_id
+        normalized["action_type"] = action_type
+        normalized["work_item"] = work_item
+        normalized["required_gate"] = required_gate
+        normalized["approved_by_role"] = approved_by_role
+        actions.append(normalized)
+    return actions, errors
+
+
+def sanitized_event_id(value: str) -> str:
+    cleaned = re.sub(r"[^A-Za-z0-9_.:-]+", "-", value.strip())
+    return cleaned.strip("-") or "unknown"
+
+
+def local_action_capability_layer(action: dict[str, Any]) -> dict[str, str]:
+    raw = action.get("capability_layer")
+    if isinstance(raw, dict):
+        layer = str(raw.get("layer") or raw.get("value") or "").strip()
+        source = str(raw.get("source") or "local_action_apply").strip()
+        confidence = str(raw.get("confidence") or "observed").strip()
+    else:
+        layer = str(raw or "local_orchestration").strip()
+        source = str(action.get("capability_layer_source") or "local_action_apply").strip()
+        confidence = str(action.get("capability_layer_confidence") or "observed").strip()
+    if layer not in CAPABILITY_LAYER_VALUES:
+        layer = "mixed" if str(raw).lower() == "mixed" else "local_orchestration"
+        source = "local_action_apply_default"
+        confidence = "inferred"
+    if confidence not in LOCAL_LEDGER_CONFIDENCE_VALUES:
+        confidence = "inferred"
+    return {"layer": layer, "source": source, "confidence": confidence}
+
+
+def local_action_event(action: dict[str, Any]) -> dict[str, Any]:
+    action_type = action["action_type"]
+    event_type = LOCAL_ACTION_EVENT_TYPES[action_type]
+    capability_layer = local_action_capability_layer(action)
+    evidence_refs = action.get("evidence_refs") or action.get("provenance_links") or []
+    if not isinstance(evidence_refs, list):
+        evidence_refs = [str(evidence_refs)]
+    payload = dict(action.get("payload") if isinstance(action.get("payload"), dict) else {})
+    if action_type == "assignment":
+        payload.setdefault("owner_role", action.get("owner_role") or action.get("target_role") or "unknown")
+    elif action_type == "handoff":
+        payload.setdefault("target_role", action.get("target_role") or action.get("owner_role") or "unknown")
+        if action.get("thread_id"):
+            payload.setdefault("thread_id", action["thread_id"])
+    elif action_type == "blocked":
+        payload.setdefault("reason", action.get("reason") or "local action marked blocked")
+    elif action_type == "unblocked":
+        payload.setdefault("summary", action.get("summary") or "local action unblocked item")
+        payload.setdefault("next_state", action.get("next_state") or "assigned")
+    elif action_type == "review_result":
+        payload.setdefault("decision", action.get("decision") or "reviewed")
+    elif action_type == "architect_acceptance":
+        payload.setdefault("decision", action.get("decision") or "accepted")
+    elif action_type == "human_approval":
+        payload.setdefault("approval", action.get("approval") or "approved")
+    elif action_type in {"local_done", "closure"}:
+        payload.setdefault("state", "closed")
+    elif action_type == "supersession":
+        payload.setdefault("superseded_by", action.get("superseded_by") or "unknown")
+    elif action_type == "recovery":
+        payload.setdefault("summary", action.get("summary") or "local recovery evidence")
+    payload["local_action_type"] = action_type
+    payload["required_gate"] = action["required_gate"]
+    payload["approved_by_role"] = action["approved_by_role"]
+    event = {
+        "schema_version": LOCAL_LEDGER_SCHEMA_VERSION,
+        "event_id": f"local-action-{sanitized_event_id(action['action_id'])}",
+        "event_type": event_type,
+        "occurred_at": str(action.get("occurred_at") or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())),
+        "work_item": action["work_item"],
+        "actor_role": action["approved_by_role"],
+        "confidence": action.get("confidence", "observed"),
+        "unknown_fields": action.get("unknown_fields", []),
+        "not_available_fields": action.get("not_available_fields", []),
+        "degraded_evidence": action.get("degraded_evidence", []),
+        "supersedes_event_ids": action.get("supersedes_event_ids", []),
+        "provenance": {
+            "links": evidence_refs,
+            "local_action_id": action["action_id"],
+            "required_gate": action["required_gate"],
+            "capability_layer_source": capability_layer["source"],
+            "capability_layer_confidence": capability_layer["confidence"],
+        },
+        "capability_layer": capability_layer["layer"],
+        "capability_layer_source": capability_layer["source"],
+        "capability_layer_confidence": capability_layer["confidence"],
+        "base_behavior_preserved": True,
+        "payload": payload,
+    }
+    return event
+
+
+def build_local_ledger_action_apply(root: Path, action_doc: Any) -> dict[str, Any]:
+    start = time.perf_counter()
+    actions, action_errors = normalize_local_action_collection(action_doc)
+    if action_errors or not actions:
+        return {
+            "schema_version": 1,
+            "command": "local-ledger-action-apply",
+            "status": "invalid",
+            "errors": action_errors + ([] if actions else ["at least one approved local action is required"]),
+            "mutation_performed": False,
+            "github_write_back_performed": False,
+            "project_mutation_performed": False,
+        }
+    before_events, before_invalid, before_storage = read_local_ledger_events(root)
+    before_replay = replay_local_ledger(before_events)
+    existing_ids = {event["event_id"] for event in before_events}
+    planned_events = [local_action_event(action) for action in actions]
+    validation_errors: list[str] = []
+    for event in planned_events:
+        normalized, errors, _status = validate_local_ledger_event(event)
+        if normalized is None:
+            validation_errors.append(f"{event.get('event_id', 'unknown')}: {'; '.join(errors)}")
+    if validation_errors:
+        return {
+            "schema_version": 1,
+            "command": "local-ledger-action-apply",
+            "status": "invalid",
+            "errors": validation_errors,
+            "mutation_performed": False,
+            "github_write_back_performed": False,
+            "project_mutation_performed": False,
+        }
+    appended_events, duplicate_skips = append_events_if_absent(root, planned_events, existing_ids)
+    after_events, after_invalid, after_storage = read_local_ledger_events(root)
+    after_replay = replay_local_ledger(after_events)
+    action_counts: dict[str, int] = {}
+    gate_counts: dict[str, int] = {}
+    for action in actions:
+        action_counts[action["action_type"]] = action_counts.get(action["action_type"], 0) + 1
+        gate_counts[action["required_gate"]] = gate_counts.get(action["required_gate"], 0) + 1
+    residual_risks = [
+        "local action apply updates only accepted ledger state; remote mirrors may now drift until #372",
+    ]
+    if before_invalid or after_invalid:
+        residual_risks.append("invalid local ledger records remain visible for later recovery")
+    if after_replay["summary"]["conflict_count"]:
+        residual_risks.append("contradictory local replay remains visible for later mixed-state recovery")
+    if any(event.get("degraded_evidence") for event in planned_events):
+        residual_risks.append("degraded action evidence was preserved rather than guessed clean")
+    return {
+        "schema_version": 1,
+        "command": "local-ledger-action-apply",
+        "mode": "apply",
+        "status": "ok",
+        "ledger_root": str(root),
+        "events_path": str(local_ledger_events_path(root)),
+        "mutation_performed": bool(appended_events),
+        "write_scope": "local_ledger_events_jsonl_only",
+        "github_write_back_performed": False,
+        "project_mutation_performed": False,
+        "runtime_vault_private_generated_write_performed": False,
+        "action_count": len(actions),
+        "appended_event_count": len(appended_events),
+        "duplicate_skip_count": len(duplicate_skips),
+        "action_counts": action_counts,
+        "gate_counts": gate_counts,
+        "appended_events": appended_events,
+        "duplicate_skips": duplicate_skips,
+        "before": {
+            "storage": before_storage,
+            "invalid_event_count": len(before_invalid),
+            "summary": before_replay["summary"],
+            "derived_work_items": before_replay["derived_work_items"],
+        },
+        "after": {
+            "storage": after_storage,
+            "invalid_event_count": len(after_invalid),
+            "summary": after_replay["summary"],
+            "derived_work_items": after_replay["derived_work_items"],
+        },
+        "action_records": [
+            {
+                "action_id": action["action_id"],
+                "action_type": action["action_type"],
+                "result_event_id": f"local-action-{sanitized_event_id(action['action_id'])}",
+                "owner_role": action.get("owner_role") or action.get("target_role") or "unknown",
+                "required_gate": action["required_gate"],
+                "approved_by_role": action["approved_by_role"],
+                "capability_layer": local_action_capability_layer(action),
+                "evidence_refs": action.get("evidence_refs") or action.get("provenance_links") or [],
+            }
+            for action in actions
+        ],
+        "user_facing_report": {
+            "summary": f"Applied {len(appended_events)} local orchestration action event(s); {len(duplicate_skips)} duplicates were skipped.",
+            "next_actions": [
+                "run_local-ledger-report_to_review_accepted_state",
+                "run_foundry-board_to_review_next_actions",
+                "defer_project_sync_until_#372",
+            ],
+            "writes": "local_ledger_events_jsonl_only",
+            "residual_risks": residual_risks,
+        },
+        "forbidden_actions": [
+            "GitHub issue/PR mutation",
+            "GitHub Project mutation",
+            "branch repair/apply or PR retarget",
+            "#372 Project sync apply",
+            "#373 mixed-state recovery implementation",
+            "#378 management surface implementation",
+            "runtime/Vault/private/generated mutation",
+            "generated Skill publish or capability-pack deploy/apply",
+            "main merge or release/tag work",
+            "destructive ledger history rewrite",
+        ],
+        "telemetry": {
+            "telemetry_issue": "#266",
+            "action_count": len(actions),
+            "appended_event_count": len(appended_events),
+            "duplicate_skip_count": len(duplicate_skips),
+            "before_event_count": before_replay["summary"]["event_count"],
+            "after_event_count": after_replay["summary"]["event_count"],
+            "before_conflict_count": before_replay["summary"]["conflict_count"],
+            "after_conflict_count": after_replay["summary"]["conflict_count"],
+            "degraded_evidence_count": after_replay["summary"]["degraded_evidence_count"],
+            "elapsed_time_ms": round((time.perf_counter() - start) * 1000, 3),
+        },
+    }
+
+
+def cmd_local_ledger_action_apply(args: argparse.Namespace) -> None:
+    result = build_local_ledger_action_apply(local_ledger_root(args), load_json(args.action_json))
     print_json_or_text(result, args.json)
     if result["status"] == "invalid":
         raise SystemExit(6)
@@ -4777,6 +5099,12 @@ def build_parser() -> argparse.ArgumentParser:
     migration_apply.add_argument("--decision-json", required=True, help="Migration decision JSON with accept/reject/skip event ids.")
     migration_apply.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON for local-ledger-migration-apply.")
     migration_apply.set_defaults(func=cmd_local_ledger_migration_apply)
+
+    action_apply = sub.add_parser("local-ledger-action-apply")
+    action_apply.add_argument("--ledger-root", help="Local ledger root. Defaults to usage/local/collaboration-ledger.")
+    action_apply.add_argument("--action-json", required=True, help="Approved local orchestration action object, list, or object with actions.")
+    action_apply.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON for local-ledger-action-apply.")
+    action_apply.set_defaults(func=cmd_local_ledger_action_apply)
 
     ledger_report = sub.add_parser("local-ledger-report")
     ledger_report.add_argument("--ledger-root", help="Local ledger root. Defaults to usage/local/collaboration-ledger.")
