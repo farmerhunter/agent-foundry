@@ -2106,6 +2106,91 @@ def main() -> int:
             print("local-ledger-backfill-no-ledger-write: ok")
         else:
             errors.append("local-ledger-backfill-no-ledger-write: preview mutated accepted ledger")
+        migration_preview = base / "migration-preview.json"
+        migration_decisions = base / "migration-decisions.json"
+        write(migration_preview, backfill_preview.stdout)
+        write(
+            migration_decisions,
+            json.dumps(
+                {
+                    "decisions": [
+                        {
+                            "event_id": "candidate-issue-410-assignment",
+                            "decision": "accept",
+                            "reason": "reviewed owner candidate",
+                            "manual_review_note": "accept implementer owner from needs label",
+                        },
+                        {
+                            "event_id": "candidate-issue-410-dispatch-1",
+                            "decision": "reject",
+                            "reason": "dispatch comment is historical evidence only",
+                        },
+                        {
+                            "event_id": "candidate-issue-410-callback-2",
+                            "decision": "skip",
+                            "reason": "callback belongs to superseded workflow",
+                        },
+                    ]
+                }
+            ),
+        )
+        migration_apply = run(
+            [
+                "local-ledger-migration-apply",
+                "--ledger-root",
+                str(accepted_ledger_root),
+                "--candidate-events-json",
+                str(migration_preview),
+                "--decision-json",
+                str(migration_decisions),
+                "--json",
+            ],
+            base,
+        )
+        for name, expected in (
+            ("local-ledger-migration-apply-command", '"command": "local-ledger-migration-apply"'),
+            ("local-ledger-migration-apply-mode", '"mode": "apply"'),
+            ("local-ledger-migration-apply-mutates-local", '"mutation_performed": true'),
+            ("local-ledger-migration-apply-local-scope", '"write_scope": "local_ledger_events_jsonl_only"'),
+            ("local-ledger-migration-apply-no-github", '"github_write_back_performed": false'),
+            ("local-ledger-migration-apply-no-project", '"project_mutation_performed": false'),
+            ("local-ledger-migration-apply-layer", '"capability_layer": "local_orchestration"'),
+            ("local-ledger-migration-apply-accepted", '"accepted_count": 1'),
+            ("local-ledger-migration-apply-rejected", '"rejected_count": 1'),
+            ("local-ledger-migration-apply-skipped", '"skipped_count": 1'),
+            ("local-ledger-migration-apply-before-after", '"before"'),
+            ("local-ledger-migration-apply-compensating", "append compensating evidence or superseding events"),
+            ("local-ledger-migration-apply-forbidden-project", "Project v2 mutation"),
+            ("local-ledger-migration-apply-forbidden-371", "#371 local action apply"),
+            ("local-ledger-migration-apply-telemetry", '"telemetry_issue": "#266"'),
+        ):
+            errors.extend(expect_ok(name, migration_apply, expected))
+        migration_report = run(["local-ledger-report", "--ledger-root", str(accepted_ledger_root), "--json"], base)
+        for name, expected in (
+            ("local-ledger-migration-accepted-replay", "accepted-candidate-issue-410-assignment"),
+            ("local-ledger-migration-rejected-replay", "rejected-candidate-issue-410-dispatch-1"),
+            ("local-ledger-migration-skipped-replay", "skipped-candidate-issue-410-callback-2"),
+        ):
+            errors.extend(expect_ok(name, migration_report, expected))
+        migration_apply_again = run(
+            [
+                "local-ledger-migration-apply",
+                "--ledger-root",
+                str(accepted_ledger_root),
+                "--candidate-events-json",
+                str(migration_preview),
+                "--decision-json",
+                str(migration_decisions),
+                "--json",
+            ],
+            base,
+        )
+        for name, expected in (
+            ("local-ledger-migration-idempotent-no-new-write", '"mutation_performed": false'),
+            ("local-ledger-migration-idempotent-duplicates", '"duplicate_skip_count": 3'),
+            ("local-ledger-migration-idempotent-reason", "idempotent_duplicate_event_id"),
+        ):
+            errors.extend(expect_ok(name, migration_apply_again, expected))
         degraded_backfill = run(
             [
                 "--repo",

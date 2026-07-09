@@ -153,6 +153,25 @@ The preview converts bounded issue/PR/comment/label/milestone/Project mirror evi
 
 **中文要点：** Backfill preview 只生成 candidate events 给 review；不会写 GitHub/Project，不会把 candidate 变成 accepted ledger state，也不会启动 #361 board 或 #362 sync。
 
+After review, apply only the approved migration decisions into the accepted local ledger:
+
+```text
+apply reviewed migration candidates
+应用 reviewed migration candidates
+```
+
+```bash
+python3 scripts/github_collaboration_helper.py --repo <owner>/<repo> local-ledger-migration-apply \
+  --ledger-root usage/local/collaboration-ledger \
+  --candidate-events-json /tmp/backfill-preview.json \
+  --decision-json /tmp/migration-decisions.json \
+  --json
+```
+
+The decision file records explicit `accept`, `reject`, or `skip` choices for candidate event ids. The helper appends deterministic local ledger events, preserves provenance and manual review notes, and is idempotent when rerun. It writes only the local ledger JSONL file; it does not mutate GitHub issues, PRs, Project fields, runtime, Vault, generated Skills, or capability packs. Local action apply (#371), Project sync apply (#372), and mixed-state recovery (#373) remain separate gates.
+
+**中文要点：** Migration apply 只把 review 后的 accept/reject/skip 决策写入本地 ledger JSONL，不改 GitHub/Project。重复运行会跳过已写入的 deterministic events；#371/#372/#373 仍是后续 gate。
+
 For GitHub Project mirroring, ask for a dry-run sync plan:
 
 ```text

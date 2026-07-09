@@ -619,6 +619,61 @@ Forbidden in this preview:
 - generated publish or capability-pack deploy/apply;
 - memory-system work.
 
+## Accepted Migration Apply
+
+Use `local-ledger-migration-apply` when reviewed backfill candidates have an
+explicit accept/reject/skip decision and should be recorded in the accepted
+Local Collaboration Ledger.
+
+Skill-facing request:
+
+```text
+apply reviewed migration candidates
+```
+
+Debug/helper surface:
+
+```text
+agent-foundry-github-collab --repo <owner>/<repo> local-ledger-migration-apply \
+  --ledger-root usage/local/collaboration-ledger \
+  --candidate-events-json /tmp/backfill-preview.json \
+  --decision-json /tmp/migration-decisions.json \
+  --json
+```
+
+The candidate input should come from a reviewed `local-ledger-backfill-preview`
+report or an equivalent candidate event list. The decision JSON must name
+candidate event ids and the reviewed decision for each item: `accept`, `reject`,
+or `skip`. The helper appends deterministic local ledger events, so reruns skip
+already-recorded decisions instead of duplicating state.
+
+The report must show before/after local replay summaries, appended and skipped
+decision counts, provenance, manual review notes, #266 telemetry, and
+compensating-event guidance. Accepted candidate events become local ledger
+events; rejected or skipped candidates are recorded as evidence so the review
+decision remains durable without rewriting history.
+
+Allowed write scope:
+
+- append-only local ledger JSONL under the selected `--ledger-root`;
+- no GitHub issue/PR write-back;
+- no GitHub Project mutation.
+
+Forbidden in this apply step:
+
+- #371 local action apply;
+- #372 Project sync apply;
+- #373 mixed-state recovery implementation;
+- #378 management surface implementation;
+- GitHub issue/PR mutation;
+- GitHub Project mutation;
+- issue closure automation;
+- destructive ledger history rewrite;
+- branch repair/apply or PR retarget;
+- runtime/Vault/private/generated mutation;
+- generated Skill publish or capability-pack deploy/apply;
+- main merge, release, or tag work.
+
 ## Project Sync Plan Dry Run
 
 Use `project-sync-plan` when V2 local-first orchestration needs to preview how
