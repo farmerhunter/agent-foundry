@@ -221,6 +221,27 @@ The acceptance file must include `accepted: true` and durable `evidence_refs`; H
 
 **中文要点：** `project-sync-apply` 现在验证 accepted plan、分类 Human gate、模拟 targeted Project write/readback，并把 sync-readback 写回本地 ledger。它不做真实 Project mutation；真实写入仍需要后续明确 gate。
 
+When local ledger state and GitHub/Project evidence disagree, ask for a mixed-state recovery report:
+
+```text
+review mixed local and GitHub state
+检查 local ledger 和 GitHub/Project 的混杂状态
+```
+
+```bash
+python3 scripts/github_collaboration_helper.py --repo <owner>/<repo> mixed-state-recovery \
+  --ledger-root usage/local/collaboration-ledger \
+  --issues 370,371,372 \
+  --candidate-events-json /tmp/backfill-preview.json \
+  --project-owner @me \
+  --project-number 3 \
+  --json
+```
+
+The report classifies `local_newer`, `remote_newer`, `remote_only`, `candidate_only`, `partial_sync`, `stale_comment`, `branch_line_drift`, `superseded_work`, `degraded_project`, and `out_of_band_human_edit`. It says what is trusted, what is candidate-only, what is mirror-only, what conflicts, and which safe next action is available. It does not repair branches, rewrite ledger history, retarget PRs, mutate GitHub issues/Project fields, or guess authority from mirror state.
+
+**中文要点：** `mixed-state-recovery` 是“混杂状态解释器”，不是自动修复器。它帮助用户决定下一步是 backfill preview、migration apply、local action apply、sync plan，还是 Human/Architect gate。
+
 ## First-Time Setup
 
 On a new machine, use `docs/deployment.md` for the full split Core/Vault install flow. Short version:

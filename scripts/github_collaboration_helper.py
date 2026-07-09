@@ -42,6 +42,7 @@ READ_ONLY_ACTIONS = {
     "scheduler-audit",
     "collaboration-readiness",
     "foundry-board",
+    "mixed-state-recovery",
     "project-sync-plan",
     "local-ledger-report",
     "local-ledger-backfill-preview",
@@ -3676,6 +3677,8 @@ def remote_mirror_from_issue(
         "status": "available",
         "issue_state": issue_state,
         "github_state": issue.get("state", "unknown"),
+        "updated_at": issue.get("updatedAt") or issue.get("updated_at"),
+        "project_updated_at": (project_item or {}).get("updatedAt") or (project_item or {}).get("updated_at"),
         "labels": labels,
         "needs_owner": owner_from_needs(next((label for label in labels if label.startswith("needs:")), None)),
         "project_status": project_status.get("status", "unknown"),
@@ -3835,6 +3838,7 @@ def board_item_from_issue(
         "mirror_status": mirror_status,
         "confidence": confidence,
         "state_authority": state_authority,
+        "remote_mirror_state": remote_mirror_from_issue("unknown", issue, project_item, project_status),
         "recommended_next_actions": [action],
         "forbidden_actions": [
             "live repair/apply",
@@ -4095,6 +4099,215 @@ def build_foundry_board(
             ),
             "telemetry_issue": "#266",
             "unknown_not_available_fields": ["exact_elapsed_time", "exact_api_call_count", "billing_grade_token_count"],
+        },
+    }
+
+
+RECOVERY_CLASSIFICATIONS = [
+    "local_newer",
+    "remote_newer",
+    "remote_only",
+    "candidate_only",
+    "partial_sync",
+    "stale_comment",
+    "branch_line_drift",
+    "superseded_work",
+    "degraded_project",
+    "out_of_band_human_edit",
+]
+
+
+def item_text_for_recovery(item: dict[str, Any]) -> str:
+    parts = [
+        str(item.get("title") or ""),
+        " ".join(str(label) for label in item.get("labels", [])),
+        " ".join(str(conflict.get("type") or conflict.get("code") or "") for conflict in item.get("conflicts", []) if isinstance(conflict, dict)),
+        " ".join(str(conflict.get("message") or "") for conflict in item.get("conflicts", []) if isinstance(conflict, dict)),
+    ]
+    evidence = item.get("latest_evidence")
+    if isinstance(evidence, dict):
+        parts.append(str(evidence.get("label") or ""))
+    return " ".join(parts).lower()
+
+
+def recovery_next_action(classification: str) -> dict[str, Any]:
+    actions = {
+        "local_newer": ("trust_local_ledger_then_prepare_project_sync_plan", "Local accepted ledger is newer than the mirror; preview sync before any remote write.", "agent_handled_existing_workflow"),
+        "remote_newer": ("rehydrate_remote_evidence_then_record_local_recovery", "Remote evidence is newer; rehydrate before adding compensating local evidence.", "agent_handled_existing_workflow"),
+        "remote_only": ("preview_backfill_or_route_architect_before_acceptance", "Remote item has no accepted local ledger state.", "agent_handled_existing_workflow"),
+        "candidate_only": ("review_candidate_before_migration_apply", "Candidate import is not authoritative until accepted.", "agent_handled_existing_workflow"),
+        "partial_sync": ("rerun_project_sync_plan_and_review_readback", "Project or sync-readback state is partial or contradictory.", "agent_handled_existing_workflow"),
+        "stale_comment": ("rehydrate_latest_comments_before_advancing", "Stale comment evidence requires fresh durable readback.", "agent_handled_existing_workflow"),
+        "branch_line_drift": ("route_architect_for_branch_line_decision", "Branch/release line mismatch needs explicit routing.", "explicit_human_gate"),
+        "superseded_work": ("follow_superseding_work_and_record_supersession_if_needed", "Superseded work should not advance through the old item.", "informational_only"),
+        "degraded_project": ("continue_from_local_ledger_or_retry_project_readback", "Project readback is degraded; do not infer hidden mirror state.", "agent_handled_existing_workflow"),
+        "out_of_band_human_edit": ("record_human_evidence_or_request_human_decision", "Human-edited remote state must be captured durably before local recovery.", "explicit_human_gate"),
+    }
+    title, why, category = actions[classification]
+    return {
+        "classification": classification,
+        "title": title,
+        "category": category,
+        "why": why,
+        "allowed_now": category != "explicit_human_gate",
+        "existing_workflow": readiness_workflow_for_category(category),
+    }
+
+
+def recovery_classifications_for_item(item: dict[str, Any], project_status: dict[str, Any]) -> list[str]:
+    classifications: list[str] = []
+    authority = str(item.get("state_authority") or "")
+    mirror_status = str(item.get("mirror_status") or "")
+    text = item_text_for_recovery(item)
+    if authority == "remote_mirror_only":
+        classifications.append("remote_only")
+    if authority == "candidate_import":
+        classifications.append("candidate_only")
+    if mirror_status == "degraded" or project_status.get("status") in {"degraded", "unavailable", "permission_denied", "auth_unavailable"}:
+        classifications.append("degraded_project")
+    remote_state = item.get("remote_mirror_state") if isinstance(item.get("remote_mirror_state"), dict) else {}
+    freshness = compare_isoish(item.get("local_updated_at"), remote_state.get("project_updated_at") or remote_state.get("updated_at"))
+    if freshness in {"local_newer", "remote_newer"}:
+        classifications.append(freshness)
+    conflict_types = {
+        str(conflict.get("type") or conflict.get("code") or "")
+        for conflict in item.get("conflicts", [])
+        if isinstance(conflict, dict)
+    }
+    if conflict_types & {"project_mirror_drift", "sync_readback_state_mismatch", "project_done_while_issue_open", "issue_closed_project_not_done"} or "sync_readback_state_mismatch" in text:
+        classifications.append("partial_sync")
+    target_branch = str(item.get("target_branch") or "")
+    stage = str(item.get("stage") or "").lower()
+    if (
+        "branch_readiness" in conflict_types
+        or str(item.get("branch_readiness") or "") not in {"", "branch_ready", "not_evaluated_from_ledger_board"}
+        or (target_branch == "main" and stage.startswith("v2"))
+        or (target_branch == V2_INTEGRATION_BRANCH and stage in {"af-13", "af-14", "af-15", "v1.1"})
+        or "branch line" in text
+        or "branch-line" in text
+    ):
+        classifications.append("branch_line_drift")
+    if "stale_comment" in text or "stale comment" in text or "stale_or_conflicting" in text:
+        classifications.append("stale_comment")
+    if str(item.get("state") or "") == "superseded" or str(item.get("local_replay_state") or "") == "superseded" or "superseded" in text:
+        classifications.append("superseded_work")
+    if "out_of_band" in text or "out-of-band" in text or "human edit" in text or conflict_types & {"github_issue_label_drift", "github_issue_owner_drift", "owner_mismatch"}:
+        classifications.append("out_of_band_human_edit")
+    return [classification for classification in RECOVERY_CLASSIFICATIONS if classification in set(classifications)]
+
+
+def recovery_trust_bucket(item: dict[str, Any], classifications: list[str]) -> str:
+    authority = str(item.get("state_authority") or "")
+    if authority == "accepted_local_ledger":
+        return "trusted"
+    if authority == "candidate_import":
+        return "candidate_only"
+    if authority == "remote_mirror_only":
+        return "mirror_only"
+    if classifications:
+        return "conflicting"
+    return "unknown"
+
+
+def build_mixed_state_recovery_report(board: dict[str, Any], project_status: dict[str, Any], project_attempts: dict[str, Any]) -> dict[str, Any]:
+    start = time.perf_counter()
+    recovery_items: list[dict[str, Any]] = []
+    classification_counts = {classification: 0 for classification in RECOVERY_CLASSIFICATIONS}
+    for item in board.get("items", []):
+        classifications = recovery_classifications_for_item(item, project_status)
+        if not classifications:
+            continue
+        for classification in classifications:
+            classification_counts[classification] += 1
+        recovery_items.append(
+            {
+                "work_item_id": item.get("work_item_id"),
+                "title": item.get("title"),
+                "state_authority": item.get("state_authority"),
+                "trust_bucket": recovery_trust_bucket(item, classifications),
+                "classifications": classifications,
+                "trusted_state": item.get("local_replay_state") or item.get("state") if item.get("state_authority") == "accepted_local_ledger" else None,
+                "candidate_only_state": item.get("state") if item.get("state_authority") == "candidate_import" else None,
+                "mirror_only_state": item.get("state") if item.get("state_authority") == "remote_mirror_only" else None,
+                "conflicts": item.get("conflicts", []),
+                "mirror_status": item.get("mirror_status"),
+                "remote_mirror_state": item.get("remote_mirror_state"),
+                "safe_next_actions": [recovery_next_action(classification) for classification in classifications],
+                "forbidden_actions": [
+                    "hidden repair",
+                    "guessing authority from Project mirror",
+                    "destructive ledger cleanup",
+                    "unapproved GitHub issue/PR write",
+                    "live GitHub Project mutation",
+                    "branch repair/apply or PR retarget",
+                ],
+            }
+        )
+    trusted = [item for item in recovery_items if item["trust_bucket"] == "trusted"]
+    candidate_only = [item for item in recovery_items if item["trust_bucket"] == "candidate_only"]
+    mirror_only = [item for item in recovery_items if item["trust_bucket"] == "mirror_only"]
+    conflicting = [item for item in recovery_items if item.get("conflicts") or len(item.get("classifications", [])) > 1]
+    cases = [
+        {
+            "case_type": classification,
+            "work_item_id": item["work_item_id"],
+            "trust_bucket": item["trust_bucket"],
+            "safe_next_action": recovery_next_action(classification)["title"],
+        }
+        for item in recovery_items
+        for classification in item["classifications"]
+    ]
+    return {
+        "schema_version": 1,
+        "command": "mixed-state-recovery",
+        "mode": "read_only",
+        "mutation_performed": False,
+        "apply_supported_now": False,
+        "source_of_truth": "local_collaboration_ledger",
+        "source_of_truth_detail": "local_collaboration_ledger_events",
+        "github_project_role": "optional_visual_mirror",
+        "board_summary": board.get("summary", {}),
+        "classification_counts": classification_counts,
+        "cases": cases,
+        "recovery_items": recovery_items,
+        "sections": {
+            "trusted": [item["work_item_id"] for item in trusted],
+            "candidate_only": [item["work_item_id"] for item in candidate_only],
+            "mirror_only": [item["work_item_id"] for item in mirror_only],
+            "conflicting": [item["work_item_id"] for item in conflicting],
+        },
+        "user_facing_report": {
+            "summary": f"Mixed-state recovery found {len(recovery_items)} item(s) needing explicit recovery review.",
+            "trusted": [item["work_item_id"] for item in trusted],
+            "candidate_only": [item["work_item_id"] for item in candidate_only],
+            "mirror_only": [item["work_item_id"] for item in mirror_only],
+            "conflicting": [item["work_item_id"] for item in conflicting],
+            "next_actions": [
+                "record_recovery_with_local-ledger-action-apply_after_review_when_needed",
+                *[action for item in recovery_items for action in item["safe_next_actions"]],
+            ],
+            "writes": "none",
+        },
+        "forbidden_actions": [
+            "live GitHub issue/PR mutation as product behavior",
+            "live GitHub Project mutation",
+            "branch repair/apply or PR retarget",
+            "destructive ledger rewrite",
+            "hidden repair or guessed authority",
+            "guessing authority from GitHub issue or Project mirror",
+            "runtime/Vault/private/generated mutation",
+            "generated Skill publish or capability-pack deploy/apply",
+            "main merge, release/tag, V2 final closure, reset/clean/force push, or destructive operation",
+        ],
+        "telemetry": {
+            "telemetry_issue": "#266",
+            "item_count": len(board.get("items", [])),
+            "recovery_item_count": len(recovery_items),
+            "classification_counts": classification_counts,
+            "project_attempts": project_attempts.get("attempts", 0),
+            "degraded_project_count": classification_counts["degraded_project"],
+            "elapsed_time_ms": round((time.perf_counter() - start) * 1000, 3),
+            "full_project_scan_performed": False,
         },
     }
 
@@ -4667,6 +4880,38 @@ def cmd_project_sync_plan(args: argparse.Namespace) -> None:
     )
     elapsed_time_ms = round((time.perf_counter() - start) * 1000, 3)
     print_json_or_text(build_project_sync_plan(repo, board, project_items, project_status, project_attempts, elapsed_time_ms), args.json)
+
+
+def cmd_mixed_state_recovery(args: argparse.Namespace) -> None:
+    repo, repo_source = resolve_repo(args)
+    if getattr(args, "board_items_json", None):
+        issues = normalize_board_items(load_json(args.board_items_json))
+        scope = {"mode": "board_items_fixture", "item_count": len(issues)}
+        project_items: list[dict[str, Any]] = []
+        project_status = {"source": "skipped", "status": "skipped", "item_count": 0}
+        project_attempts = {"attempts": 0, "transient_failures": []}
+    elif args.issues_json or args.fixture_json:
+        issues = normalize_issue_collection(load_json(args.issues_json or args.fixture_json))
+        scope = {"mode": "fixture", "issue_numbers": [issue_number(issue) for issue in issues if issue_number(issue) is not None]}
+        project_items, project_status, project_attempts = read_project_items(args)
+    else:
+        issues, scope = read_live_issues(repo, args)
+        project_items, project_status, project_attempts = read_project_items(args)
+    local_git, _local_git_status, _local_git_attempts = read_local_git_state(args)
+    ledger_report = build_local_ledger_report(local_ledger_root(args))
+    candidate_events = normalize_candidate_events(load_json(args.candidate_events_json)) if args.candidate_events_json else []
+    board = build_foundry_board(
+        repo,
+        issues[: args.limit],
+        project_items,
+        project_status,
+        local_git,
+        args.name,
+        {"repo_source": repo_source, **scope, "ledger_root": ledger_report["ledger_root"], "mixed_state_recovery_source": True},
+        accepted_replay={"derived_work_items": ledger_report["derived_work_items"], "summary": ledger_report["summary"]},
+        candidate_events=candidate_events,
+    )
+    print_json_or_text(build_mixed_state_recovery_report(board, project_status, project_attempts), args.json)
 
 
 def cmd_foundry_board(args: argparse.Namespace) -> None:
@@ -5334,6 +5579,26 @@ def build_parser() -> argparse.ArgumentParser:
     board.add_argument("--name", default="Foundry Board", help="Board name shown in the read-only report.")
     board.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON for foundry-board.")
     board.set_defaults(func=cmd_foundry_board)
+
+    recovery = sub.add_parser("mixed-state-recovery")
+    recovery.add_argument("--fixture-json", help="Legacy issue fixture; prefer --issues-json.")
+    recovery.add_argument("--issues-json", help="Fixture issue object, list, or object with issues/items.")
+    recovery.add_argument("--board-items-json", help="Fixture board items in issue-like or board item form.")
+    recovery.add_argument("--project-items-json", help="Fixture Project item list or gh project item-list JSON.")
+    recovery.add_argument("--local-git-json", help="Fixture local git state for branch/readiness display.")
+    recovery.add_argument("--ledger-root", help="Accepted local ledger root. Defaults to usage/local/collaboration-ledger.")
+    recovery.add_argument("--candidate-events-json", help="Read-only candidate event list or backfill preview output for recovery display.")
+    recovery.add_argument("--issues", help="Comma-separated explicit issue numbers for bounded live recovery report.")
+    recovery.add_argument("--stage", help="Stage value or label for bounded live recovery report.")
+    recovery.add_argument("--limit", type=int, default=20, help="Maximum issues/items to inspect.")
+    recovery.add_argument("--project-owner", help="Project owner for targeted live Project item-list.")
+    recovery.add_argument("--project-number", type=int, help="Project number for targeted live Project item-list.")
+    recovery.add_argument("--project-limit", type=int, default=50, help="Maximum Project items to read when explicitly configured.")
+    recovery.add_argument("--project-retries", type=int, default=2, help="Bounded retries for transient Project reads.")
+    recovery.add_argument("--project-retry-backoff", type=float, default=0.5, help="Seconds between transient Project read retries.")
+    recovery.add_argument("--name", default="Foundry Board", help="Board name for the internal read-only board source.")
+    recovery.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON for mixed-state-recovery.")
+    recovery.set_defaults(func=cmd_mixed_state_recovery)
 
     sync_plan = sub.add_parser("project-sync-plan")
     sync_plan.add_argument("--fixture-json", help="Legacy issue fixture; prefer --issues-json.")

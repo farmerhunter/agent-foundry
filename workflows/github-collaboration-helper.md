@@ -844,6 +844,65 @@ Forbidden in this apply step:
 - main merge, release, or tag work;
 - destructive git operation, reset, clean, or force push.
 
+## Mixed-State Recovery Report
+
+Use `mixed-state-recovery` when local-first ledger state, GitHub issue/PR
+evidence, Project mirror state, candidate migration evidence, or branch-line
+evidence disagree. This is the V2 recovery UX for messy overlap between
+local-first and GitHub-first operation. It explains what is trusted, what is
+candidate-only, what is mirror-only, what conflicts, and which safe next action
+is available.
+
+Skill-facing request:
+
+```text
+review mixed local and GitHub state
+```
+
+Debug/helper surface:
+
+```text
+agent-foundry-github-collab --repo <owner>/<repo> mixed-state-recovery \
+  --ledger-root usage/local/collaboration-ledger \
+  --issues 370,371,372 \
+  --candidate-events-json /tmp/backfill-preview.json \
+  --project-owner @me \
+  --project-number 3 \
+  --json
+```
+
+The report must classify:
+
+- `local_newer`;
+- `remote_newer`;
+- `remote_only`;
+- `candidate_only`;
+- `partial_sync`;
+- `stale_comment`;
+- `branch_line_drift`;
+- `superseded_work`;
+- `degraded_project`;
+- `out_of_band_human_edit`.
+
+Recovery remains report-only. Safe next actions usually point to
+`local-ledger-backfill-preview`, `local-ledger-migration-apply`,
+`local-ledger-action-apply`, `project-sync-plan`, or a Human/Architect gate.
+The helper must not guess authority from GitHub issue labels or Project fields,
+rewrite ledger history, repair branches, retarget PRs, or mutate GitHub/Project
+state.
+
+Forbidden in this recovery step:
+
+- hidden repair;
+- guessing authority from GitHub issue or Project mirror;
+- destructive ledger cleanup or rewrite;
+- live GitHub issue/PR mutation;
+- live GitHub Project mutation;
+- branch repair/apply or PR retarget;
+- runtime/Vault/private/generated mutation;
+- generated Skill publish or capability-pack deploy/apply;
+- main merge, release, or tag work.
+
 ## Dispatch Evidence Modes
 
 Dispatch evidence must name the mechanism actually used:
