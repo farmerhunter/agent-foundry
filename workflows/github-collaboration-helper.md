@@ -674,6 +674,61 @@ Forbidden in this apply step:
 - generated Skill publish or capability-pack deploy/apply;
 - main merge, release, or tag work.
 
+## Local Orchestration Action Apply
+
+Use `local-ledger-action-apply` when an approved Foundry Board next action or
+local orchestration action should become an accepted append-only Local
+Collaboration Ledger event.
+
+Skill-facing request:
+
+```text
+apply approved local board action
+```
+
+Debug/helper surface:
+
+```text
+agent-foundry-github-collab --repo <owner>/<repo> local-ledger-action-apply \
+  --ledger-root usage/local/collaboration-ledger \
+  --action-json /tmp/local-actions.json \
+  --json
+```
+
+Supported action families are `assignment`, `handoff`, `blocked`,
+`unblocked`, `review_result`, `architect_acceptance`, `human_approval`,
+`local_done`, `closure`, `supersession`, and `recovery`. The action input must
+name the work item, evidence refs when available, owner or target role when
+relevant, required gate, approving role, and capability layer when the action is
+not clearly local orchestration. `base`, `local_orchestration`, and `mixed`
+must remain explicit report values rather than branch-derived assumptions.
+
+Gate enforcement:
+
+- `review_result`, `local_done`, and `closure` require reviewer approval.
+- `architect_acceptance` requires architect approval.
+- `human_approval` requires human approval.
+- If the named `approved_by_role` does not match the required gate, the helper
+  must fail closed before appending any ledger event.
+
+The report must include before/after local replay state, appended and
+idempotently skipped events, evidence refs, owner role, required gate, residual
+risks, #266 telemetry, and forbidden remote side effects. Re-running the same
+approved actions must not duplicate local state.
+
+Forbidden in this apply step:
+
+- #372 Project sync apply;
+- #373 mixed-state recovery implementation beyond visible residual risks;
+- #378 management surface implementation;
+- GitHub issue/PR mutation;
+- GitHub Project mutation;
+- branch repair/apply or PR retarget;
+- runtime/Vault/private/generated mutation;
+- generated Skill publish or capability-pack deploy/apply;
+- main merge, release, or tag work;
+- destructive ledger history rewrite.
+
 ## Project Sync Plan Dry Run
 
 Use `project-sync-plan` when V2 local-first orchestration needs to preview how

@@ -1931,6 +1931,7 @@ def main() -> int:
             second = json.loads(ledger_report_again.stdout)
             for payload in (first, second):
                 payload["telemetry"]["replay_time_ms"] = 0
+                payload["telemetry"]["user_facing_output_bytes"] = 0
                 payload["summary"]["replay_time_ms"] = 0
             if first == second:
                 print("local-ledger-replay-deterministic: ok")
@@ -2191,6 +2192,183 @@ def main() -> int:
             ("local-ledger-migration-idempotent-reason", "idempotent_duplicate_event_id"),
         ):
             errors.extend(expect_ok(name, migration_apply_again, expected))
+        local_action_root = base / "local-action-ledger"
+        local_actions = base / "local-actions.json"
+        write(
+            local_actions,
+            json.dumps(
+                {
+                    "actions": [
+                        {
+                            "action_id": "assign-510",
+                            "action_type": "assignment",
+                            "work_item": {"id": "farmerhunter/agent-foundry#issue:510", "repo": "farmerhunter/agent-foundry", "type": "issue", "number": 510},
+                            "owner_role": "implementer",
+                            "approved_by_role": "agent",
+                            "evidence_refs": ["https://github.com/farmerhunter/agent-foundry/issues/510#assignment"],
+                            "capability_layer": {"layer": "local_orchestration", "source": "issue_contract", "confidence": "observed"},
+                        },
+                        {
+                            "action_id": "handoff-510",
+                            "action_type": "handoff",
+                            "work_item": {"id": "farmerhunter/agent-foundry#issue:510", "repo": "farmerhunter/agent-foundry", "type": "issue", "number": 510},
+                            "target_role": "reviewer",
+                            "approved_by_role": "agent",
+                            "evidence_refs": ["https://github.com/farmerhunter/agent-foundry/issues/510#handoff"],
+                        },
+                        {
+                            "action_id": "blocked-511",
+                            "action_type": "blocked",
+                            "work_item": {"id": "farmerhunter/agent-foundry#issue:511", "repo": "farmerhunter/agent-foundry", "type": "issue", "number": 511},
+                            "reason": "missing external evidence",
+                            "approved_by_role": "agent",
+                            "degraded_evidence": [{"source": "github", "status": "degraded"}],
+                        },
+                        {
+                            "action_id": "unblocked-511",
+                            "action_type": "unblocked",
+                            "work_item": {"id": "farmerhunter/agent-foundry#issue:511", "repo": "farmerhunter/agent-foundry", "type": "issue", "number": 511},
+                            "approved_by_role": "agent",
+                            "payload": {"next_review_or_action_needed": "resume_work"},
+                        },
+                        {
+                            "action_id": "review-512",
+                            "action_type": "review_result",
+                            "work_item": {"id": "farmerhunter/agent-foundry#issue:512", "repo": "farmerhunter/agent-foundry", "type": "issue", "number": 512},
+                            "required_gate": "reviewer",
+                            "approved_by_role": "reviewer",
+                            "decision": "request_changes",
+                        },
+                        {
+                            "action_id": "accept-513",
+                            "action_type": "architect_acceptance",
+                            "work_item": {"id": "farmerhunter/agent-foundry#issue:513", "repo": "farmerhunter/agent-foundry", "type": "issue", "number": 513},
+                            "required_gate": "architect",
+                            "approved_by_role": "architect",
+                        },
+                        {
+                            "action_id": "human-514",
+                            "action_type": "human_approval",
+                            "work_item": {"id": "farmerhunter/agent-foundry#issue:514", "repo": "farmerhunter/agent-foundry", "type": "issue", "number": 514},
+                            "required_gate": "human",
+                            "approved_by_role": "human",
+                            "approval": "approved local ledger action",
+                            "capability_layer": "mixed",
+                        },
+                        {
+                            "action_id": "done-515",
+                            "action_type": "local_done",
+                            "work_item": {"id": "farmerhunter/agent-foundry#issue:515", "repo": "farmerhunter/agent-foundry", "type": "issue", "number": 515},
+                            "required_gate": "reviewer",
+                            "approved_by_role": "reviewer",
+                        },
+                        {
+                            "action_id": "supersede-516",
+                            "action_type": "supersession",
+                            "work_item": {"id": "farmerhunter/agent-foundry#issue:516", "repo": "farmerhunter/agent-foundry", "type": "issue", "number": 516},
+                            "approved_by_role": "agent",
+                            "superseded_by": "farmerhunter/agent-foundry#issue:517",
+                        },
+                        {
+                            "action_id": "recover-517",
+                            "action_type": "recovery",
+                            "work_item": {"id": "farmerhunter/agent-foundry#issue:517", "repo": "farmerhunter/agent-foundry", "type": "issue", "number": 517},
+                            "approved_by_role": "agent",
+                            "summary": "recorded interrupted apply recovery evidence",
+                            "unknown_fields": ["remote_project_readback"],
+                        },
+                    ]
+                }
+            ),
+        )
+        local_action_apply = run(
+            [
+                "local-ledger-action-apply",
+                "--ledger-root",
+                str(local_action_root),
+                "--action-json",
+                str(local_actions),
+                "--json",
+            ],
+            base,
+        )
+        for name, expected in (
+            ("local-ledger-action-apply-command", '"command": "local-ledger-action-apply"'),
+            ("local-ledger-action-apply-mode", '"mode": "apply"'),
+            ("local-ledger-action-apply-mutates-local", '"mutation_performed": true'),
+            ("local-ledger-action-apply-local-scope", '"write_scope": "local_ledger_events_jsonl_only"'),
+            ("local-ledger-action-apply-no-github", '"github_write_back_performed": false'),
+            ("local-ledger-action-apply-no-project", '"project_mutation_performed": false'),
+            ("local-ledger-action-apply-no-runtime", '"runtime_vault_private_generated_write_performed": false'),
+            ("local-ledger-action-apply-assignment", '"assignment": 1'),
+            ("local-ledger-action-apply-handoff", '"handoff": 1'),
+            ("local-ledger-action-apply-blocked", '"blocked": 1'),
+            ("local-ledger-action-apply-unblocked", '"unblocked": 1'),
+            ("local-ledger-action-apply-review", '"review_result": 1'),
+            ("local-ledger-action-apply-acceptance", '"architect_acceptance": 1'),
+            ("local-ledger-action-apply-human", '"human_approval": 1'),
+            ("local-ledger-action-apply-closure", '"local_done": 1'),
+            ("local-ledger-action-apply-supersession", '"supersession": 1'),
+            ("local-ledger-action-apply-recovery", '"recovery": 1'),
+            ("local-ledger-action-apply-reviewer-gate", '"reviewer": 2'),
+            ("local-ledger-action-apply-architect-gate", '"architect": 1'),
+            ("local-ledger-action-apply-human-gate", '"human": 1'),
+            ("local-ledger-action-apply-layer", '"layer": "local_orchestration"'),
+            ("local-ledger-action-apply-mixed", '"layer": "mixed"'),
+            ("local-ledger-action-apply-user-report", "run_foundry-board_to_review_next_actions"),
+            ("local-ledger-action-apply-forbidden-project", "GitHub Project mutation"),
+            ("local-ledger-action-apply-forbidden-372", "#372 Project sync apply"),
+            ("local-ledger-action-apply-telemetry", '"telemetry_issue": "#266"'),
+        ):
+            errors.extend(expect_ok(name, local_action_apply, expected))
+        local_action_report = run(["local-ledger-report", "--ledger-root", str(local_action_root), "--json"], base)
+        for name, expected in (
+            ("local-ledger-action-replay-assigned", '"state": "dispatched"'),
+            ("local-ledger-action-replay-unblocked", "resume_work"),
+            ("local-ledger-action-replay-review", '"state": "review_changes_requested"'),
+            ("local-ledger-action-replay-accepted", '"state": "accepted"'),
+            ("local-ledger-action-replay-human", '"state": "human_approved"'),
+            ("local-ledger-action-replay-closed", '"state": "closed"'),
+            ("local-ledger-action-replay-superseded", '"state": "superseded"'),
+            ("local-ledger-action-replay-recovery", "recorded interrupted apply recovery evidence"),
+        ):
+            errors.extend(expect_ok(name, local_action_report, expected))
+        local_action_apply_again = run(
+            [
+                "local-ledger-action-apply",
+                "--ledger-root",
+                str(local_action_root),
+                "--action-json",
+                str(local_actions),
+                "--json",
+            ],
+            base,
+        )
+        for name, expected in (
+            ("local-ledger-action-idempotent-no-new-write", '"mutation_performed": false'),
+            ("local-ledger-action-idempotent-duplicates", '"duplicate_skip_count": 10'),
+            ("local-ledger-action-idempotent-reason", "idempotent_duplicate_event_id"),
+        ):
+            errors.extend(expect_ok(name, local_action_apply_again, expected))
+        bad_local_action = base / "bad-local-action.json"
+        write(
+            bad_local_action,
+            json.dumps(
+                {
+                    "action_type": "human_approval",
+                    "work_item": {"id": "farmerhunter/agent-foundry#issue:518", "repo": "farmerhunter/agent-foundry", "type": "issue", "number": 518},
+                    "required_gate": "human",
+                    "approved_by_role": "reviewer",
+                }
+            ),
+        )
+        errors.extend(
+            expect_fail(
+                "local-ledger-action-gate-fails-closed",
+                run(["local-ledger-action-apply", "--ledger-root", str(local_action_root), "--action-json", str(bad_local_action), "--json"], base),
+                "requires human gate",
+            )
+        )
         degraded_backfill = run(
             [
                 "--repo",
