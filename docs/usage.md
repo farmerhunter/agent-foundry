@@ -201,6 +201,26 @@ The plan reads the ledger-backed Foundry Board and reports what Project fields w
 
 **中文要点：** Project sync plan 只说明如果同步会改什么、哪里冲突、哪些需要 Human gate；它不会真正改 Project、GitHub issue、branch、runtime 或 Vault。
 
+After a dry-run sync plan has been reviewed and accepted, test the apply path with the gated fake executor:
+
+```text
+apply accepted Project sync plan
+应用 accepted Project sync plan
+```
+
+```bash
+python3 scripts/github_collaboration_helper.py --repo <owner>/<repo> project-sync-apply \
+  --ledger-root usage/local/collaboration-ledger \
+  --sync-plan-json /tmp/project-sync-plan.json \
+  --acceptance-json /tmp/project-sync-acceptance.json \
+  --fake-project-write-json /tmp/fake-project-write-results.json \
+  --json
+```
+
+The acceptance file must include `accepted: true` and durable `evidence_refs`; Human-gated operations also need their exact `idempotency_key` listed in `human_approved_idempotency_keys`. This command is the V2 apply contract for Project mirror writes, but the current Core implementation uses a reviewed fake/mock executor and records local `sync_readback` evidence only. Operations that need Human approval, miss Project item identity, hit partial write/readback failures, or touch unsupported policy/schema paths remain skipped and visible. Live Project mutation requires a later explicit gate.
+
+**中文要点：** `project-sync-apply` 现在验证 accepted plan、分类 Human gate、模拟 targeted Project write/readback，并把 sync-readback 写回本地 ledger。它不做真实 Project mutation；真实写入仍需要后续明确 gate。
+
 ## First-Time Setup
 
 On a new machine, use `docs/deployment.md` for the full split Core/Vault install flow. Short version:

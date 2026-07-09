@@ -54,7 +54,7 @@ DRY_RUN_ACTIONS = {
     "permission-smoke",
     "comparison-draft",
 }
-LOCAL_WRITE_ACTIONS = {"local-ledger-append", "local-ledger-migration-apply", "local-ledger-action-apply"}
+LOCAL_WRITE_ACTIONS = {"local-ledger-append", "local-ledger-migration-apply", "local-ledger-action-apply", "project-sync-apply"}
 REMOTE_RE = re.compile(r"(?:github\.com[:/])([^/]+)/([^/.]+)(?:\.git)?$")
 CONTRACT_HEADINGS = ("Final Execution Contract", "Execution Contract", "Draft Execution Contract")
 ROLE_FIELDS = ("Owner role", "Review role", "Acceptance role")
@@ -4155,7 +4155,11 @@ def field_value_for_sync_item(item: dict[str, Any], field: str) -> str | None:
         return item.get("branch_readiness")
     if field == "Evidence Links":
         refs = item.get("evidence_refs") or []
-        links = [ref.get("url_or_path") for ref in refs if isinstance(ref, dict) and ref.get("url_or_path")]
+        links = [
+            str(ref.get("url_or_path"))
+            for ref in refs
+            if isinstance(ref, dict) and ref.get("url_or_path") is not None
+        ]
         return ", ".join(links) if links else None
     return None
 
@@ -4372,6 +4376,269 @@ def build_project_sync_plan(
         },
     }
     return payload
+
+
+def load_project_sync_operations(plan_doc: Any) -> tuple[list[dict[str, Any]], list[str]]:
+    if not isinstance(plan_doc, dict):
+        return [], ["sync plan JSON must be an object"]
+    if plan_doc.get("command") != "project-sync-plan":
+        return [], ["sync plan must come from project-sync-plan"]
+    if plan_doc.get("mode") != "dry_run":
+        return [], ["sync plan must be a dry_run plan"]
+    operations = plan_doc.get("planned_operations")
+    if not isinstance(operations, list):
+        return [], ["sync plan must include planned_operations list"]
+    normalized: list[dict[str, Any]] = []
+    errors: list[str] = []
+    for index, operation in enumerate(operations, start=1):
+        if not isinstance(operation, dict):
+            errors.append(f"operation #{index} must be an object")
+            continue
+        if operation.get("operation") != "set_project_field":
+            errors.append(f"operation #{index} has unsupported operation {operation.get('operation')!r}")
+            continue
+        if not operation.get("idempotency_key"):
+            errors.append(f"operation #{index} must include idempotency_key")
+            continue
+        normalized.append(operation)
+    return normalized, errors
+
+
+def fake_project_write_results(fake_doc: Any) -> tuple[dict[str, dict[str, Any]], list[str]]:
+    if fake_doc is None:
+        return {}, ["fake Project write executor is required; live Project mutation is not supported"]
+    if not isinstance(fake_doc, dict):
+        return {}, ["fake Project write JSON must be an object"]
+    raw = fake_doc.get("results", fake_doc)
+    if not isinstance(raw, dict):
+        return {}, ["fake Project write results must be an object keyed by idempotency_key"]
+    results: dict[str, dict[str, Any]] = {}
+    for key, value in raw.items():
+        if isinstance(value, dict):
+            results[str(key)] = value
+        else:
+            results[str(key)] = {"status": str(value)}
+    return results, []
+
+
+def load_project_sync_acceptance(acceptance_doc: Any) -> tuple[dict[str, Any], list[str]]:
+    if not isinstance(acceptance_doc, dict):
+        return {}, ["acceptance JSON must be an object"]
+    if acceptance_doc.get("accepted") is not True:
+        return {}, ["accepted plan evidence must set accepted: true"]
+    evidence_refs = acceptance_doc.get("evidence_refs")
+    if not isinstance(evidence_refs, list) or not any(isinstance(ref, str) and ref.strip() for ref in evidence_refs):
+        return {}, ["accepted plan evidence must include evidence_refs"]
+    approved_keys = acceptance_doc.get("human_approved_idempotency_keys", [])
+    if approved_keys is None:
+        approved_keys = []
+    if not isinstance(approved_keys, list) or not all(isinstance(key, str) and key.strip() for key in approved_keys):
+        return {}, ["human_approved_idempotency_keys must be a list of strings when present"]
+    return {
+        "evidence_refs": [str(ref) for ref in evidence_refs if isinstance(ref, str) and ref.strip()],
+        "approved_human_gate_keys": {str(key) for key in approved_keys},
+        "approved_by_role": str(acceptance_doc.get("approved_by_role") or "unknown"),
+    }, []
+
+
+def project_sync_apply_event(operation: dict[str, Any], result: dict[str, Any]) -> dict[str, Any]:
+    work_item_id = str(operation.get("work_item_id") or "unknown")
+    number_match = re.search(r"#(?:issue|pr):(\d+)$", work_item_id)
+    item_type_match = re.search(r"#(issue|pr):", work_item_id)
+    work_item = {
+        "id": work_item_id,
+        "repo": "unknown",
+        "type": item_type_match.group(1) if item_type_match else "issue",
+        "number": int(number_match.group(1)) if number_match else 0,
+    }
+    repo_match = re.match(r"([^#]+)#", work_item_id)
+    if repo_match:
+        work_item["repo"] = repo_match.group(1)
+    return {
+        "schema_version": LOCAL_LEDGER_SCHEMA_VERSION,
+        "event_id": f"project-sync-readback-{sanitized_event_id(str(operation['idempotency_key']))}",
+        "event_type": "sync_readback",
+        "occurred_at": str(result.get("occurred_at") or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())),
+        "work_item": work_item,
+        "actor_role": "sync",
+        "confidence": "observed",
+        "unknown_fields": [],
+        "not_available_fields": [],
+        "degraded_evidence": result.get("degraded_evidence", []),
+        "provenance": {"links": operation.get("evidence_refs", []), "idempotency_key": operation["idempotency_key"]},
+        "payload": {
+            "source": "github_project_mirror",
+            "local_state": operation.get("after"),
+            "observed_state": result.get("readback", operation.get("after")),
+            "field": operation.get("field"),
+            "project_item_id": operation.get("project_item_id"),
+            "fake_project_write": True,
+        },
+    }
+
+
+def build_project_sync_apply_from_plan(root: Path, plan_doc: Any, acceptance_doc: Any, fake_doc: Any) -> dict[str, Any]:
+    start = time.perf_counter()
+    operations, operation_errors = load_project_sync_operations(plan_doc)
+    acceptance, acceptance_errors = load_project_sync_acceptance(acceptance_doc)
+    fake_results, fake_errors = fake_project_write_results(fake_doc)
+    if operation_errors or acceptance_errors or fake_errors:
+        return {
+            "schema_version": 1,
+            "command": "project-sync-apply",
+            "status": "invalid",
+            "errors": operation_errors + acceptance_errors + fake_errors,
+            "mutation_performed": False,
+            "project_mutation_performed": False,
+            "live_project_mutation_performed": False,
+        }
+    before_events, before_invalid, before_storage = read_local_ledger_events(root)
+    before_replay = replay_local_ledger(before_events)
+    existing_ids = {event["event_id"] for event in before_events}
+    applied_operations: list[dict[str, Any]] = []
+    skipped_operations: list[dict[str, Any]] = []
+    partial_failures: list[dict[str, Any]] = []
+    human_gates: list[dict[str, Any]] = []
+    unsupported_operations: list[dict[str, Any]] = []
+    readback_events: list[dict[str, Any]] = []
+    approved_human_gate_count = 0
+    for operation in operations:
+        key = str(operation["idempotency_key"])
+        field = str(operation.get("field") or "")
+        if operation.get("gate") == "explicit_human_gate" or field == "Status":
+            if key not in acceptance["approved_human_gate_keys"]:
+                human_gates.append({"idempotency_key": key, "field": field, "reason": "explicit_human_gate_required"})
+                skipped_operations.append({"idempotency_key": key, "reason": "human_gate_required"})
+                continue
+            approved_human_gate_count += 1
+        if not operation.get("project_item_id"):
+            unsupported_operations.append({"idempotency_key": key, "reason": "missing_project_item_id"})
+            skipped_operations.append({"idempotency_key": key, "reason": "missing_project_item_id"})
+            continue
+        result = fake_results.get(key)
+        if not result:
+            unsupported_operations.append({"idempotency_key": key, "reason": "missing_fake_project_write_result"})
+            skipped_operations.append({"idempotency_key": key, "reason": "missing_fake_project_write_result"})
+            continue
+        status = str(result.get("status") or "ok")
+        if status not in {"ok", "idempotent"}:
+            partial_failures.append({"idempotency_key": key, "status": status, "error": result.get("error", "unknown")})
+            skipped_operations.append({"idempotency_key": key, "reason": "fake_project_write_failed", "status": status})
+            continue
+        readback = result.get("readback", operation.get("after"))
+        readback_ok = readback == operation.get("after")
+        applied_operations.append(
+            {
+                "operation": operation["operation"],
+                "idempotency_key": key,
+                "project_item_id": operation.get("project_item_id"),
+                "field": field,
+                "before": operation.get("before"),
+                "after": operation.get("after"),
+                "fake_write_status": status,
+                "readback": readback,
+                "readback_ok": readback_ok,
+                "evidence_refs": operation.get("evidence_refs", []),
+            }
+        )
+        if not readback_ok:
+            partial_failures.append({"idempotency_key": key, "status": "readback_mismatch", "expected": operation.get("after"), "observed": readback})
+        readback_events.append(project_sync_apply_event(operation, {**result, "readback": readback}))
+    appended_events, duplicate_skips = append_events_if_absent(root, readback_events, existing_ids)
+    after_events, after_invalid, after_storage = read_local_ledger_events(root)
+    after_replay = replay_local_ledger(after_events)
+    payload = {
+        "schema_version": 1,
+        "command": "project-sync-apply",
+        "mode": "apply",
+        "status": "partial" if partial_failures or unsupported_operations or human_gates else "ok",
+        "ledger_root": str(root),
+        "mutation_performed": bool(appended_events or applied_operations),
+        "project_mutation_performed": False,
+        "live_project_mutation_performed": False,
+        "fake_project_write_performed": bool(applied_operations),
+        "write_scope": "fake_project_write_executor_and_local_sync_readback_events_only",
+        "source_of_truth": "local_collaboration_ledger",
+        "project_role": "optional_visual_mirror",
+        "accepted_plan_evidence_refs": acceptance["evidence_refs"],
+        "approved_by_role": acceptance["approved_by_role"],
+        "operation_count": len(operations),
+        "applied_operation_count": len(applied_operations),
+        "human_gate_count": len(human_gates),
+        "approved_human_gate_count": approved_human_gate_count,
+        "unsupported_operation_count": len(unsupported_operations),
+        "partial_failure_count": len(partial_failures),
+        "duplicate_skip_count": len(duplicate_skips),
+        "applied_operations": applied_operations,
+        "skipped_operations": skipped_operations,
+        "human_gates": human_gates,
+        "unsupported_operations": unsupported_operations,
+        "partial_failures": partial_failures,
+        "appended_sync_readback_events": appended_events,
+        "duplicate_skips": duplicate_skips,
+        "before": {
+            "storage": before_storage,
+            "invalid_event_count": len(before_invalid),
+            "summary": before_replay["summary"],
+        },
+        "after": {
+            "storage": after_storage,
+            "invalid_event_count": len(after_invalid),
+            "summary": after_replay["summary"],
+            "derived_work_items": after_replay["derived_work_items"],
+        },
+        "user_facing_report": {
+            "summary": f"Applied {len(applied_operations)} fake Project mirror operation(s); {len(human_gates)} Human gates and {len(partial_failures)} partial failures remain.",
+            "next_actions": [
+                "review_human_gates_before_live_project_writes",
+                "rerun_project-sync-plan_after_degraded_readback",
+                "continue_to_V2-12_after_review_acceptance",
+            ],
+            "writes": "fake_project_write_executor_and_local_sync_readback_events_only",
+            "residual_risks": [
+                "real GitHub Project mutation remains unsupported without later explicit gate",
+                "GitHub Project remains mirror-only, not source of truth",
+                *("partial Project write/readback failures remain visible" for _ in ([1] if partial_failures else [])),
+            ],
+        },
+        "forbidden_actions": [
+            "live issue closure/reopen automation",
+            "broad Project scan by default",
+            "broad Project policy/schema mutation",
+            "privacy/security-sensitive Project writes without Human gate",
+            "#373 mixed-state recovery implementation",
+            "#378 management surface implementation",
+            "branch repair/apply or PR retarget",
+            "runtime/Vault/private/generated mutation",
+            "generated Skill publish or capability-pack deploy/apply",
+            "main merge or release/tag work",
+            "destructive git operation, reset/clean/force push",
+        ],
+        "telemetry": {
+            "telemetry_issue": "#266",
+            "operation_count": len(operations),
+            "targeted_api_attempts": len(applied_operations),
+            "degraded_source_count": len(partial_failures),
+            "partial_failure_count": len(partial_failures),
+            "human_gate_count": len(human_gates),
+            "idempotent_skip_count": len(duplicate_skips),
+            "elapsed_time_ms": round((time.perf_counter() - start) * 1000, 3),
+            "full_project_scan_performed": False,
+        },
+    }
+    return payload
+
+
+def cmd_project_sync_apply(args: argparse.Namespace) -> None:
+    result = build_project_sync_apply_from_plan(
+        local_ledger_root(args),
+        load_json(args.sync_plan_json),
+        load_json(args.acceptance_json),
+        load_json(args.fake_project_write_json),
+    )
+    print_json_or_text(result, args.json)
+    if result["status"] == "invalid":
+        raise SystemExit(6)
 
 
 def cmd_project_sync_plan(args: argparse.Namespace) -> None:
@@ -5086,6 +5353,14 @@ def build_parser() -> argparse.ArgumentParser:
     sync_plan.add_argument("--name", default="Foundry Board", help="Board name for the internal read-only board source.")
     sync_plan.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON for project-sync-plan.")
     sync_plan.set_defaults(func=cmd_project_sync_plan)
+
+    sync_apply = sub.add_parser("project-sync-apply")
+    sync_apply.add_argument("--ledger-root", help="Local ledger root. Defaults to usage/local/collaboration-ledger.")
+    sync_apply.add_argument("--sync-plan-json", required=True, help="Accepted project-sync-plan output or revalidated equivalent.")
+    sync_apply.add_argument("--acceptance-json", required=True, help="Accepted plan evidence with accepted:true and evidence_refs.")
+    sync_apply.add_argument("--fake-project-write-json", required=True, help="Fake Project write/readback result map keyed by operation idempotency_key.")
+    sync_apply.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON for project-sync-apply.")
+    sync_apply.set_defaults(func=cmd_project_sync_apply)
 
     ledger_append = sub.add_parser("local-ledger-append")
     ledger_append.add_argument("--ledger-root", help="Local ledger root. Defaults to usage/local/collaboration-ledger.")
