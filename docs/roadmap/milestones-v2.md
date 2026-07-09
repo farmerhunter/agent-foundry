@@ -2,7 +2,7 @@
 
 Status: active capability roadmap
 Updated: 2026-07-09
-Scope: V2 local-first orchestration, Foundry Board, Local Collaboration Ledger, GitHub Project remote sync/apply, migration from existing GitHub-first projects, mixed-state recovery, dogfood adoption, and runtime/pack enablement.
+Scope: V2 local-first orchestration, Foundry Board, Local Collaboration Ledger, GitHub Project remote sync/apply, migration from existing GitHub-first projects, mixed-state recovery, management UX, dogfood adoption, and runtime/pack enablement.
 
 ## V2 Goal
 
@@ -22,6 +22,8 @@ V2 is not complete until users can operate the workflow end to end:
 - make approved local orchestration changes through explicit apply gates;
 - preview and then apply safe GitHub Project mirror updates through gated sync;
 - handle mixed local/GitHub state without hiding conflicts;
+- use a management surface that explains state, evidence, next actions, gates,
+  and recovery without requiring raw JSON inspection;
 - dogfood the workflow on a real project and record the practical conclusion;
 - enable the behavior through practices, Skills, and capability packs without
   confusing V1.x maintenance flows.
@@ -58,6 +60,10 @@ runtime action belongs to the Local Orchestration layer.
   implementation gate must carry focused automated tests, degraded-state tests,
   write-boundary assertions, and user-facing output checks; final readiness must
   verify a real adopting-project workflow rather than only fixture success.
+- Treat usability as a first-class non-functional requirement. V2 is a stateful
+  local runtime capability; users need a management surface, stable ViewModels,
+  performance expectations, reliability/recovery behavior, and privacy/security
+  boundaries before real dogfood can fairly judge the product.
 
 ## Branch Policy
 
@@ -102,9 +108,10 @@ complete the user-facing capability.
 | V2-10 Local Orchestration Action Apply | #371 | Let users apply approved local board actions as ledger events: assignment, blocked, review, acceptance, closure, recovery, and supersession. | Planned |
 | V2-11 GitHub Project Sync Apply | #372 | Apply approved Project mirror changes after dry-run review, with idempotency, readback, partial failure handling, and Human gates for risky writes. | Planned |
 | V2-12 Mixed-State Conflict And Recovery | #373 | Handle interleaved local-first and GitHub-first edits, stale comments, branch-line drift, partial sync, superseded work, and rollback/recovery paths. | Planned |
-| V2-13 Real-Project Dogfood And UX Conclusion | #374 | Run the complete workflow on a real project, document practical friction, and decide whether the experience is good enough for adoption. | Planned |
-| V2-14 Runtime / Skill / Capability Pack Enablement | #375 | Harvest and publish layer-aware V2 practices, Skills, and packs without making Local Orchestration behavior the default for Base workflows. | Planned |
-| V2-15 Final V2 Integration And Release Gate | #376 | Verify full V2 usability, dogfood conclusions, docs, enablement, and decide on merge-back to `main` plus `v2.0.0` release. | Planned |
+| V2-13 Management Surface And UX ViewModel | #378 | Provide a user-facing management surface and stable ViewModel for board, item detail, migration review, apply review, sync plan, conflicts, and health. | Planned |
+| V2-14 Real-Project Dogfood And UX Conclusion | #374 | Run the complete workflow on a real project, document practical friction, and decide whether the experience is good enough for adoption. | Planned |
+| V2-15 Runtime / Skill / Capability Pack Enablement | #375 | Harvest and publish layer-aware V2 practices, Skills, and packs without making Local Orchestration behavior the default for Base workflows. | Planned |
+| V2-16 Final V2 Integration And Release Gate | #376 | Verify full V2 usability, dogfood conclusions, docs, enablement, and decide on merge-back to `main` plus `v2.0.0` release. | Planned |
 
 ## V2 Capability Phases
 
@@ -136,6 +143,8 @@ Phase 3 must close remote mirror apply and mixed-state operation:
 
 Phase 4 must prove real use:
 
+- provide a management surface that lets users inspect and act on state without
+  reading raw JSON or ledger files;
 - dogfood the complete workflow on at least one real existing project;
 - capture failures, unclear prompts, confusing command names, and missing
   actions;
@@ -214,6 +223,9 @@ The testing bar for #359-#362 is:
   claiming billing-grade counters;
 - at least one user-facing command/report smoke path that reads like a practical
   maintainer workflow, not just a raw debug payload.
+- management-surface tests must show that a user can identify current state,
+  evidence, next action, required gate, forbidden action, and recovery path
+  without reading raw helper JSON.
 
 ## V2-0 User Journey And UX Contract
 
@@ -432,6 +444,11 @@ runtime/pack enablement remain planned.
 V2-8 is the next design gate. It should convert the user correction into a
 precise end-to-end UX contract for the remaining capability:
 
+- the complete user experience loop from preview to apply, recovery, dogfood,
+  and enablement;
+- the management surface and ViewModel required before dogfood;
+- non-functional requirements for performance, reliability, security/privacy,
+  usability, and recovery;
 - how Base and Local Orchestration layers are identified and separated;
 - how harvest, dedupe, approval, publish, generated Skill, runtime apply, and
   capability-pack flows decide whether an item belongs to `base`,
@@ -519,9 +536,43 @@ The user-facing output should say what is trusted, what is candidate-only, what
 is remote mirror-only, what conflicts, and which safe next action exists. It
 must avoid hidden repair, guessing authority, or destructive cleanup.
 
-## V2-13 Real-Project Dogfood And UX Conclusion
+## V2-13 Management Surface And UX ViewModel
 
-V2-13 is required before final V2 readiness.
+V2-13 should make V2 usable as a stateful local runtime capability, not only as a
+set of helper commands.
+
+The first management surface can be a static HTML report, local TUI, or local
+web UI. It must be good enough for dogfood before V2-14 starts.
+
+Required views:
+
+- Board view: lanes, owner role, capability layer, evidence, next action, and
+  conflict badges.
+- Item detail: local ledger timeline, GitHub evidence, Project mirror state,
+  gates, conflicts, and forbidden actions.
+- Migration review: candidate events, provenance, confidence, and
+  accept/reject/defer plans.
+- Apply review: before/after local state, write target, idempotency, required
+  gate, and rollback or compensating-event guidance.
+- Sync review: local desired state vs Project mirror, would-change fields,
+  conflicts, Human gates, and readback status.
+- Health view: ledger root, schema version, replay performance, degraded
+  GitHub/Project status, and runtime/Skill/CP enablement status.
+
+Non-functional requirements:
+
+- performance: representative ledger replay and board render must stay within a
+  documented budget;
+- reliability: interrupted/partial apply or sync states must be visible and
+  recoverable;
+- security/privacy: local-only/private evidence must not be pushed or displayed
+  as public sync data;
+- usability: a reviewer must be able to identify state, next action, required
+  gate, and forbidden actions without raw JSON inspection.
+
+## V2-14 Real-Project Dogfood And UX Conclusion
+
+V2-14 is required before final V2 readiness.
 
 Dogfood must cover at least one real existing project, preferably one with
 non-trivial GitHub issue/PR/Project history. The walkthrough should include:
@@ -532,6 +583,7 @@ non-trivial GitHub issue/PR/Project history. The walkthrough should include:
 - local action apply;
 - Project sync dry-run;
 - at least one approved sync apply or an explicit Human-gated deferral;
+- management surface walkthrough;
 - mixed-state or degraded-source handling;
 - user-facing conclusion: what felt clear, what remained confusing, and what
   must change before release.
@@ -539,9 +591,9 @@ non-trivial GitHub issue/PR/Project history. The walkthrough should include:
 Fixture tests cannot replace this milestone because V2 is an orchestration UX
 capability, not only a parser/helper capability.
 
-## V2-14 Runtime / Skill / Capability Pack Enablement
+## V2-15 Runtime / Skill / Capability Pack Enablement
 
-V2-14 should make the capability available through normal Agent Foundry use.
+V2-15 should make the capability available through normal Agent Foundry use.
 
 Required behavior:
 
@@ -557,9 +609,9 @@ Required behavior:
 This milestone prevents V2 Core helper features from existing only as manual
 script commands.
 
-## V2-15 Final V2 Integration And Release Gate
+## V2-16 Final V2 Integration And Release Gate
 
-V2-15 is the real final V2 gate.
+V2-16 is the real final V2 gate.
 
 It should verify:
 
@@ -568,6 +620,7 @@ It should verify:
 - local action apply works for ordinary orchestration;
 - Project sync apply works or has an explicit Human-gated deferral;
 - mixed-state recovery has practical user guidance;
+- management surface usability and NFR evidence are accepted;
 - dogfood produced an accepted conclusion;
 - practices/Skills/capability packs are enabled or explicitly deferred;
 - docs explain the normal user path without requiring the user to understand
