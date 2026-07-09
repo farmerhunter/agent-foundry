@@ -26,6 +26,20 @@ V2 is not complete until users can operate the workflow end to end:
 - enable the behavior through practices, Skills, and capability packs without
   confusing V1.x maintenance flows.
 
+V2 does not replace the Base Agent Foundry operating model. After V2 merges
+back, Agent Foundry should have two compatible capability layers:
+
+- the Base layer: stateless or GitHub-first workflow, practice/asset lifecycle,
+  harvest, review, publish, runtime apply, and capability-pack governance;
+- the Local Orchestration layer: local ledger, Foundry Board, migration apply,
+  local action apply, Project mirror sync, and mixed-state recovery.
+
+Base remains the default. Local Orchestration is enabled by an explicit
+capability marker, repo configuration, local ledger presence, issue contract, or
+user request. Branch names can provide development-time sanity checks, but they
+must not be the canonical way to decide whether a practice, asset, Skill, or
+runtime action belongs to the Local Orchestration layer.
+
 ## Product Principles
 
 - Start from end-to-end user journeys before building storage or board features.
@@ -89,7 +103,7 @@ complete the user-facing capability.
 | V2-11 GitHub Project Sync Apply | #372 | Apply approved Project mirror changes after dry-run review, with idempotency, readback, partial failure handling, and Human gates for risky writes. | Planned |
 | V2-12 Mixed-State Conflict And Recovery | #373 | Handle interleaved local-first and GitHub-first edits, stale comments, branch-line drift, partial sync, superseded work, and rollback/recovery paths. | Planned |
 | V2-13 Real-Project Dogfood And UX Conclusion | #374 | Run the complete workflow on a real project, document practical friction, and decide whether the experience is good enough for adoption. | Planned |
-| V2-14 Runtime / Skill / Capability Pack Enablement | #375 | Harvest and publish branch-aware V2 practices, Skills, and packs without making V2 behavior the default for V1.x maintenance. | Planned |
+| V2-14 Runtime / Skill / Capability Pack Enablement | #375 | Harvest and publish layer-aware V2 practices, Skills, and packs without making Local Orchestration behavior the default for Base workflows. | Planned |
 | V2-15 Final V2 Integration And Release Gate | #376 | Verify full V2 usability, dogfood conclusions, docs, enablement, and decide on merge-back to `main` plus `v2.0.0` release. | Planned |
 
 ## V2 Capability Phases
@@ -129,11 +143,44 @@ Phase 4 must prove real use:
 
 Phase 5 must enable adoption:
 
-- harvest V2 practices and Skills with release-line/branch-aware gates;
-- update capability packs only where V2 behavior belongs;
+- harvest V2 practices and Skills with explicit capability-layer gates;
+- update capability packs only where Local Orchestration behavior belongs;
 - keep V1.x `main` maintenance behavior from silently becoming V2 local-first
   behavior;
 - run a final readiness gate before merge-back or release.
+
+## Capability Layer Contract
+
+V2 planning must treat release version, branch, and capability layer as separate
+axes.
+
+- Version or release line answers what is being shipped.
+- Branch answers where code is being developed or integrated.
+- Capability layer answers which operating model is active for a repo, issue,
+  practice, asset, Skill, or runtime action.
+
+The capability layer should be explicit in durable records and user-facing
+reports. Recommended values:
+
+- `base`: default Agent Foundry behavior; no local orchestration state required.
+- `local_orchestration`: V2 layer; local ledger and Foundry Board semantics are
+  active.
+- `mixed`: transition or migration state where base and local orchestration
+  evidence both exist and conflicts must be surfaced.
+
+Selection precedence:
+
+1. explicit user request or command;
+2. repo/local capability configuration;
+3. local ledger manifest or accepted ledger state;
+4. issue or task contract field such as `Capability layer`;
+5. capability pack or runtime profile;
+6. branch/release-line evidence as a warning or fallback only.
+
+The default is always `base`. A practice or asset should be `base` unless it
+requires local ledger, Foundry Board, migration apply, Project sync apply, or
+mixed-state recovery. Local-Orchestration-only entries should remain rare and
+conditional.
 
 ## V2 Testing Contract
 
@@ -385,6 +432,11 @@ runtime/pack enablement remain planned.
 V2-8 is the next design gate. It should convert the user correction into a
 precise end-to-end UX contract for the remaining capability:
 
+- how Base and Local Orchestration layers are identified and separated;
+- how harvest, dedupe, approval, publish, generated Skill, runtime apply, and
+  capability-pack flows decide whether an item belongs to `base`,
+  `local_orchestration`, or `mixed`;
+- how to avoid promoting Local-Orchestration-only behavior into Base defaults;
 - what the user sees after a backfill preview;
 - how the user accepts selected candidate events into local ledger authority;
 - how local board actions become approved ledger events;
@@ -493,11 +545,12 @@ V2-14 should make the capability available through normal Agent Foundry use.
 
 Required behavior:
 
-- harvest V2 practices with release-line and branch-aware gates;
+- harvest V2 practices with explicit capability-layer gates;
 - update `agent-collaboration` guidance so V2 flows trigger only when the repo,
-  branch, issue contract, or user request asks for local-first orchestration;
+  capability marker, local ledger state, issue contract, or user request asks
+  for Local Orchestration;
 - update capability packs where appropriate without making V2 behavior the
-  implicit default for V1.x `main` maintenance;
+  implicit default for Base workflows;
 - verify generated/runtime behavior or explicitly defer activation behind an
   open follow-up gate.
 
