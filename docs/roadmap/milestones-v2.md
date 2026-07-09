@@ -2,7 +2,7 @@
 
 Status: active capability roadmap
 Updated: 2026-07-09
-Scope: V2 local-first orchestration, Foundry Board, Local Collaboration Ledger, GitHub Project remote sync/apply, migration from existing GitHub-first projects, mixed-state recovery, management UX, dogfood adoption, and runtime/pack enablement.
+Scope: V2 local-first orchestration, Foundry Board, Local Collaboration Ledger, GitHub Project remote sync/apply, migration from existing GitHub-first projects, mixed-state recovery, end-to-end operational UX, dogfood adoption, and runtime/pack enablement.
 
 ## V2 Goal
 
@@ -22,8 +22,10 @@ V2 is not complete until users can operate the workflow end to end:
 - make approved local orchestration changes through explicit apply gates;
 - preview and then apply safe GitHub Project mirror updates through gated sync;
 - handle mixed local/GitHub state without hiding conflicts;
-- use a management surface that explains state, evidence, next actions, gates,
-  and recovery without requiring raw JSON inspection;
+- use a coherent operational flow whose interfaces, data contracts, gates,
+  environment assumptions, version semantics, and conflict/recovery behavior are
+  consistent across local runtime, GitHub, generated Skills, and multiple
+  collaborators;
 - dogfood the workflow on a real project and record the practical conclusion;
 - enable the behavior through practices, Skills, and capability packs without
   confusing V1.x maintenance flows.
@@ -44,7 +46,9 @@ runtime action belongs to the Local Orchestration layer.
 
 ## Product Principles
 
-- Start from end-to-end user journeys before building storage or board features.
+- Start from the end-to-end operational user experience before building storage,
+  board, sync, apply, or UI features. UX means the whole chain from intent to
+  evidence, state change, review, sync, recovery, and enablement.
 - Support both new projects and existing issue-driven projects.
 - Build read-only visibility before write or sync automation, but treat
   read-only/dry-run as Phase 1 rather than the full V2 capability.
@@ -61,9 +65,10 @@ runtime action belongs to the Local Orchestration layer.
   write-boundary assertions, and user-facing output checks; final readiness must
   verify a real adopting-project workflow rather than only fixture success.
 - Treat usability as a first-class non-functional requirement. V2 is a stateful
-  local runtime capability; users need a management surface, stable ViewModels,
-  performance expectations, reliability/recovery behavior, and privacy/security
-  boundaries before real dogfood can fairly judge the product.
+  local runtime capability; users need stable operational contracts, interface
+  and data compatibility, management surfaces, performance expectations,
+  reliability/recovery behavior, and privacy/security boundaries before real
+  dogfood can fairly judge the product.
 
 ## Branch Policy
 
@@ -103,12 +108,12 @@ complete the user-facing capability.
 | V2-6 GitHub Project Remote Sync Design | #298 | Define safe remote mirror sync, dry-run/readback behavior, field mapping, conflict rules, and human gates. | Accepted design |
 | V2-6A GitHub Project Dry-Run Sync Plan | #362 | Implement read-only sync-plan generation that shows would-change/conflict/human-gate outcomes without writing Project. | Completed Phase 1 implementation |
 | V2-7 Phase 1 Readiness | #299 | Verify read-only ledger, backfill preview, board visibility, dry-run sync plan, docs, telemetry, and residual risks. | Accepted Phase 1 readiness |
-| V2-8 Capability Replan And Apply UX Contract | #369 | Redefine V2 completion around migration apply, local action apply, Project sync apply, mixed-state recovery, dogfood, and enablement. | Next design gate |
+| V2-8 Capability Replan And Operational UX Contract | #369 | Redefine V2 completion around the full operation chain: capability layer, interfaces, data contracts, apply, sync, mixed-state recovery, dogfood, and enablement. | Next design gate |
 | V2-9 Accepted Migration Apply | #370 | Turn reviewed backfill candidates into accepted local ledger state through explicit apply gates, with rollback/readback evidence and no GitHub writes. | Planned |
 | V2-10 Local Orchestration Action Apply | #371 | Let users apply approved local board actions as ledger events: assignment, blocked, review, acceptance, closure, recovery, and supersession. | Planned |
 | V2-11 GitHub Project Sync Apply | #372 | Apply approved Project mirror changes after dry-run review, with idempotency, readback, partial failure handling, and Human gates for risky writes. | Planned |
 | V2-12 Mixed-State Conflict And Recovery | #373 | Handle interleaved local-first and GitHub-first edits, stale comments, branch-line drift, partial sync, superseded work, and rollback/recovery paths. | Planned |
-| V2-13 Management Surface And UX ViewModel | #378 | Provide a user-facing management surface and stable ViewModel for board, item detail, migration review, apply review, sync plan, conflicts, and health. | Planned |
+| V2-13 Operational UX Contract And Management Surface | #378 | Implement stable operational ViewModels and a management surface for board, item detail, migration review, apply review, sync plan, conflicts, health, and cross-environment/version coordination. | Planned |
 | V2-14 Real-Project Dogfood And UX Conclusion | #374 | Run the complete workflow on a real project, document practical friction, and decide whether the experience is good enough for adoption. | Planned |
 | V2-15 Runtime / Skill / Capability Pack Enablement | #375 | Harvest and publish layer-aware V2 practices, Skills, and packs without making Local Orchestration behavior the default for Base workflows. | Planned |
 | V2-16 Final V2 Integration And Release Gate | #376 | Verify full V2 usability, dogfood conclusions, docs, enablement, and decide on merge-back to `main` plus `v2.0.0` release. | Planned |
@@ -143,8 +148,11 @@ Phase 3 must close remote mirror apply and mixed-state operation:
 
 Phase 4 must prove real use:
 
-- provide a management surface that lets users inspect and act on state without
-  reading raw JSON or ledger files;
+- provide stable operational contracts and management surfaces that let users
+  inspect and act on state without reading raw JSON or ledger files;
+- verify that the same flow works across multiple collaborators, local runtime
+  state, GitHub issue/PR evidence, Project mirror state, generated Skills, and
+  versioned schemas;
 - dogfood the complete workflow on at least one real existing project;
 - capture failures, unclear prompts, confusing command names, and missing
   actions;
@@ -190,6 +198,40 @@ The default is always `base`. A practice or asset should be `base` unless it
 requires local ledger, Foundry Board, migration apply, Project sync apply, or
 mixed-state recovery. Local-Orchestration-only entries should remain rare and
 conditional.
+
+## End-To-End Operational UX Contract
+
+V2 UX is not limited to a management UI. The design baseline is the complete
+operation chain a user and agents experience while work moves across local
+runtime state, GitHub issues/PRs, Project mirror fields, generated Skills,
+capability packs, and multiple role threads.
+
+V2-8 must define stable contracts for:
+
+- user intent: what the user asks for and how the requested capability layer is
+  selected;
+- interfaces: CLI commands, Skill prompts, management surfaces, issue
+  contracts, Project sync plans, and generated/runtime entry points;
+- data: local ledger events, board ViewModels, candidate imports, sync-plan
+  operations, conflict records, health records, and telemetry;
+- authority: which layer owns each state transition and which evidence is only a
+  mirror, candidate, or degraded observation;
+- environments: clean checkout, dirty checkout, multiple worktrees, local
+  runtime installed, no runtime installed, generated Skill stale, Project
+  unavailable, and offline/degraded GitHub;
+- actors: human, Coordinator, Architect, Implementer, Tester, Reviewer,
+  Harvester, and external collaborators changing GitHub state out of band;
+- versions: Core version, ledger schema version, generated Skill version,
+  capability-pack version, runtime receipt, and Project field schema;
+- gates: which transitions are agent-handled, Reviewer/Architect-gated,
+  Human-gated, unsupported, or deferred;
+- recovery: how interrupted apply, partial sync, stale generated output,
+  conflicting GitHub edits, schema drift, and branch-line mismatch become
+  visible and recoverable.
+
+Every later V2 implementation gate must state which part of this operational
+contract it satisfies. A UI or management page is only one surface over this
+contract, not the contract itself.
 
 ## V2 Testing Contract
 
@@ -439,14 +481,19 @@ were accepted. It did not complete final V2 adoption because migration apply,
 local action apply, Project sync apply, mixed-state recovery, dogfood, and
 runtime/pack enablement remain planned.
 
-## V2-8 Capability Replan And Apply UX Contract
+## V2-8 Capability Replan And Operational UX Contract
 
 V2-8 is the next design gate. It should convert the user correction into a
-precise end-to-end UX contract for the remaining capability:
+precise end-to-end operational UX contract for the remaining capability:
 
 - the complete user experience loop from preview to apply, recovery, dogfood,
   and enablement;
-- the management surface and ViewModel required before dogfood;
+- interface and data contracts across helper commands, Skills, local ledger,
+  Foundry Board, Project sync, generated/runtime outputs, and GitHub durable
+  records;
+- cross-environment, cross-actor, and cross-version coordination rules;
+- the management surface and ViewModel required to make that contract visible
+  before dogfood;
 - non-functional requirements for performance, reliability, security/privacy,
   usability, and recovery;
 - how Base and Local Orchestration layers are identified and separated;
@@ -536,15 +583,18 @@ The user-facing output should say what is trusted, what is candidate-only, what
 is remote mirror-only, what conflicts, and which safe next action exists. It
 must avoid hidden repair, guessing authority, or destructive cleanup.
 
-## V2-13 Management Surface And UX ViewModel
+## V2-13 Operational UX Contract And Management Surface
 
 V2-13 should make V2 usable as a stateful local runtime capability, not only as a
-set of helper commands.
+set of helper commands or UI screens.
 
 The first management surface can be a static HTML report, local TUI, or local
-web UI. It must be good enough for dogfood before V2-14 starts.
+web UI, but the required deliverable is broader: a stable operational ViewModel
+that preserves the same state, authority, gate, conflict, and recovery semantics
+across CLI, Skills, management surface, and future UI. It must be good enough
+for dogfood before V2-14 starts.
 
-Required views:
+Required operational contracts and views:
 
 - Board view: lanes, owner role, capability layer, evidence, next action, and
   conflict badges.
@@ -558,6 +608,15 @@ Required views:
   conflicts, Human gates, and readback status.
 - Health view: ledger root, schema version, replay performance, degraded
   GitHub/Project status, and runtime/Skill/CP enablement status.
+- Interface compatibility: the same item/action/gate/conflict identifiers should
+  remain stable across CLI JSON, human-readable output, management surface, and
+  Skill-facing summaries.
+- Cross-environment behavior: local runtime present/missing, stale generated
+  Skill, dirty checkout, multiple worktrees, Project unavailable, and offline or
+  degraded GitHub should produce coherent next actions.
+- Cross-version behavior: ledger schema, Core helper, generated Skill,
+  capability pack, runtime receipt, and Project field schema versions should be
+  visible enough to diagnose mismatch before apply/sync.
 
 Non-functional requirements:
 
