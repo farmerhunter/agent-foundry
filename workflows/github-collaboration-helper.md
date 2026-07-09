@@ -784,6 +784,66 @@ Forbidden in this dry-run:
 - release/tag work;
 - final V2 readiness closure.
 
+## Project Sync Apply Gate
+
+Use `project-sync-apply` only after a `project-sync-plan` has been reviewed and
+accepted or revalidated. This is the V2 apply contract for GitHub Project mirror
+operations, but current Core support is intentionally fake/mock backed: it
+validates the plan, classifies gates, simulates targeted Project write/readback
+results, and records local `sync_readback` evidence. It must not mutate a live
+GitHub Project unless a later explicit gate adds and approves that behavior.
+
+Skill-facing request:
+
+```text
+apply accepted Project sync plan
+```
+
+Debug/helper surface:
+
+```text
+agent-foundry-github-collab --repo <owner>/<repo> project-sync-apply \
+  --ledger-root usage/local/collaboration-ledger \
+  --sync-plan-json /tmp/project-sync-plan.json \
+  --acceptance-json /tmp/project-sync-acceptance.json \
+  --fake-project-write-json /tmp/fake-project-write-results.json \
+  --json
+```
+
+The acceptance file must include `accepted: true` and durable `evidence_refs`.
+Human-gated operations, such as built-in `Status` changes or
+privacy/security-sensitive values, stay skipped unless their exact
+`idempotency_key` appears in `human_approved_idempotency_keys`.
+
+The fake write result file is keyed by operation `idempotency_key`. Each result
+should include `status` and optional `readback` or error/degraded evidence.
+
+The apply report must include applied operations, skipped operations, Human
+gates, partial failures, appended local sync-readback events, idempotent skips,
+before/after local replay summaries, residual risks, forbidden actions, and
+#266 telemetry.
+
+Human gates remain required for:
+
+- built-in Project Status side effects;
+- issue closure/reopen implications;
+- privacy/security-sensitive Project values;
+- broad Project policy/schema changes.
+
+Forbidden in this apply step:
+
+- live issue closure/reopen automation;
+- broad Project scan by default;
+- broad Project policy/schema mutation;
+- privacy/security-sensitive Project writes without Human gate;
+- #373 mixed-state recovery implementation;
+- #378 management surface implementation;
+- branch repair/apply or PR retarget;
+- runtime/Vault/private/generated mutation;
+- generated publish or capability-pack deploy/apply;
+- main merge, release, or tag work;
+- destructive git operation, reset, clean, or force push.
+
 ## Dispatch Evidence Modes
 
 Dispatch evidence must name the mechanism actually used:

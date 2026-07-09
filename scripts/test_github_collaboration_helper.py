@@ -1304,6 +1304,102 @@ def main() -> int:
             ("project-sync-plan-unsupported-branch", "checkout/switch"),
         ):
             errors.extend(expect_ok(name, sync_plan, expected))
+        sync_apply_plan = base / "project-sync-plan.json"
+        write(sync_apply_plan, sync_plan.stdout)
+        sync_apply_doc = json.loads(sync_plan.stdout)
+        fake_project_write = base / "fake-project-write.json"
+        fake_results = {}
+        for operation in sync_apply_doc.get("planned_operations", []):
+            if operation.get("gate") == "agent_handled_existing_workflow" and operation.get("project_item_id"):
+                fake_results[operation["idempotency_key"]] = {"status": "ok", "readback": operation.get("after")}
+        if fake_results:
+            first_key = sorted(fake_results)[0]
+            fake_results[first_key] = {"status": "partial_failure", "error": "transient GraphQL EOF"}
+        write(fake_project_write, json.dumps({"results": fake_results}))
+        sync_apply_acceptance = base / "project-sync-acceptance.json"
+        write(
+            sync_apply_acceptance,
+            json.dumps(
+                {
+                    "accepted": True,
+                    "approved_by_role": "architect",
+                    "evidence_refs": ["https://github.com/farmerhunter/agent-foundry/issues/372#accepted-plan"],
+                }
+            ),
+        )
+        sync_apply_rejected_acceptance = base / "project-sync-rejected-acceptance.json"
+        write(sync_apply_rejected_acceptance, json.dumps({"accepted": False, "evidence_refs": ["https://example.invalid/rejected"]}))
+        rejected_sync_apply = run(
+            [
+                "project-sync-apply",
+                "--ledger-root",
+                str(sync_plan_ledger_root),
+                "--sync-plan-json",
+                str(sync_apply_plan),
+                "--acceptance-json",
+                str(sync_apply_rejected_acceptance),
+                "--fake-project-write-json",
+                str(fake_project_write),
+                "--json",
+            ],
+            base,
+        )
+        errors.extend(expect_fail("project-sync-apply-rejects-unaccepted-plan", rejected_sync_apply, "accepted plan evidence must set accepted: true"))
+        sync_apply = run(
+            [
+                "project-sync-apply",
+                "--ledger-root",
+                str(sync_plan_ledger_root),
+                "--sync-plan-json",
+                str(sync_apply_plan),
+                "--acceptance-json",
+                str(sync_apply_acceptance),
+                "--fake-project-write-json",
+                str(fake_project_write),
+                "--json",
+            ],
+            base,
+        )
+        for name, expected in (
+            ("project-sync-apply-command", '"command": "project-sync-apply"'),
+            ("project-sync-apply-mode", '"mode": "apply"'),
+            ("project-sync-apply-mutates", '"mutation_performed": true'),
+            ("project-sync-apply-no-live-project", '"live_project_mutation_performed": false'),
+            ("project-sync-apply-fake-project", '"fake_project_write_performed": true'),
+            ("project-sync-apply-write-scope", '"write_scope": "fake_project_write_executor_and_local_sync_readback_events_only"'),
+            ("project-sync-apply-source", '"source_of_truth": "local_collaboration_ledger"'),
+            ("project-sync-apply-mirror", '"project_role": "optional_visual_mirror"'),
+            ("project-sync-apply-accepted-evidence", '"accepted_plan_evidence_refs"'),
+            ("project-sync-apply-human-gate", '"reason": "explicit_human_gate_required"'),
+            ("project-sync-apply-partial", "partial Project write/readback failures remain visible"),
+            ("project-sync-apply-readback-event", "project-sync-readback"),
+            ("project-sync-apply-no-closure", "live issue closure/reopen automation"),
+            ("project-sync-apply-no-broad-scan", '"full_project_scan_performed": false'),
+            ("project-sync-apply-telemetry", '"telemetry_issue": "#266"'),
+        ):
+            errors.extend(expect_ok(name, sync_apply, expected))
+        sync_apply_report = run(["local-ledger-report", "--ledger-root", str(sync_plan_ledger_root), "--json"], base)
+        errors.extend(expect_ok("project-sync-apply-replay-sync-readback", sync_apply_report, "project-sync-readback"))
+        sync_apply_again = run(
+            [
+                "project-sync-apply",
+                "--ledger-root",
+                str(sync_plan_ledger_root),
+                "--sync-plan-json",
+                str(sync_apply_plan),
+                "--acceptance-json",
+                str(sync_apply_acceptance),
+                "--fake-project-write-json",
+                str(fake_project_write),
+                "--json",
+            ],
+            base,
+        )
+        for name, expected in (
+            ("project-sync-apply-idempotent-skips", '"idempotent_skip_count"'),
+            ("project-sync-apply-idempotent-reason", "idempotent_duplicate_event_id"),
+        ):
+            errors.extend(expect_ok(name, sync_apply_again, expected))
         degraded_sync_plan = run(
             [
                 "project-sync-plan",
