@@ -142,6 +142,23 @@ The report is read-only and does not need live GitHub access. Append mode writes
 
 **中文要点：** Local ledger report 会 replay 本地 append-only events，显示 work item state、证据、conflict、unknown/not_available 和 telemetry。它不依赖 GitHub live read，也不会做 #360 backfill、#361 board、#362 sync 或任何 GitHub/Project 写入。
 
+For an existing adopter project, start with a user-facing onboarding packet before running previews:
+
+```text
+onboard this existing project into V2 Local Orchestration as a read-only trial
+把这个 existing project 作为只读 trial 接入 V2 Local Orchestration
+```
+
+The agent should first state the repo, path, current branch, and the selected mode. Base remains the default for ordinary project work. Local Orchestration is selected only by explicit user trial intent, local capability config, ledger manifest/state, issue/task contract, or an accepted capability profile.
+
+The agent reads durable GitHub evidence such as issues, PRs, labels, comments, branch/status, and relevant docs/helpers. It may write temporary JSON, HTML, or ledger evidence only under an explicit temp root such as `/private/tmp/...` or a user-supplied trial directory. It must not touch adopter repo files, live GitHub Project fields, runtime/Vault/private/generated state, generated Skills, or capability packs.
+
+If a stage-based query such as `stage:M14` or another expected `stage:*` label returns no candidates, do not assume the adopter repo is empty or incorrectly configured. Fall back to an explicit issue/PR set chosen from durable GitHub evidence, and tell the user which issue and PR numbers are being used.
+
+Human-owned decisions remain explicit: candidate accept/reject/defer, local action apply, sync apply choice, and final trust/readiness judgment. Stop or defer when the path or branch is wrong, provenance is unclear, output implies live mutation, Project/sync would be unsafe, or the user cannot identify the next safe action.
+
+**中文要点：** Existing-project onboarding 先讲清楚用户说什么、agent 读什么、临时文件写到哪里、什么不会被碰。`stage:*` 查不到时要 fallback 到明确的 issue/PR 列表；candidate acceptance、local apply、sync apply 和最终信任判断都属于 Human-owned decisions。
+
 For existing GitHub-first projects, ask for a read-only backfill preview:
 
 ```text

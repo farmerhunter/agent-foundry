@@ -576,6 +576,37 @@ Forbidden in this MVP:
 
 ## Existing Project Ledger Backfill Preview
 
+Before previewing an existing adopter project, present an onboarding packet in
+user-facing language. The packet should say:
+
+- what the user says to start: "onboard this existing project into V2 Local
+  Orchestration as a read-only trial";
+- what the agent reads: bounded issues, PRs, labels, comments, branch/status,
+  durable issue/PR evidence, and relevant helper docs;
+- what may be written: temporary JSON, HTML, and local ledger evidence under an
+  explicit temp root or user-supplied trial root;
+- what must not be touched: adopter repo files, live GitHub Project fields,
+  runtime/Vault/private/generated state, generated Skills, and capability
+  packs;
+- which decisions stay Human-owned: candidate accept/reject/defer, local action
+  apply, sync apply choice, and final trust/readiness judgment;
+- stop/defer conditions: wrong path or branch, unclear provenance, implied live
+  mutation, unsafe Project/sync operation, or user cannot identify the next
+  safe action.
+
+Base remains the default mode for ordinary project work. Local Orchestration is
+selected only through explicit trial/user intent, local capability config,
+ledger manifest/state, an issue/task contract, or an accepted capability
+profile. Do not infer Local Orchestration from merely seeing a GitHub project or
+stage label.
+
+If a stage-based query returns no candidates, do not imply the adopter project
+must have a matching `stage:*` label. Fall back to explicit issue/PR selection
+from durable GitHub evidence and report the selected issue/PR numbers. For
+example, a trial packet may start with `stage:M14`; if that returns no issues,
+the next safe step is a bounded explicit list such as `--issues 27,276,284` and
+`--prs 283,285`, with the actual numbers chosen from current durable readback.
+
 Use `local-ledger-backfill-preview` when an existing GitHub-first project needs
 candidate Local Collaboration Ledger events for review before any authoritative
 migration.
@@ -618,6 +649,14 @@ Forbidden in this preview:
 - runtime/Vault/private/generated mutation;
 - generated publish or capability-pack deploy/apply;
 - memory-system work.
+
+Adopter-side validation note: the tiny-ipa trial validation request for #386/#387
+is recorded at
+https://github.com/farmerhunter/tiny-ipa/issues/27#issuecomment-4934556479.
+If a maintainer response arrives before review, incorporate or answer it in the
+cleanup/readiness evidence. If no response is present before final V2 readiness
+resumes, the #376 Human Decision Contract must explicitly say the adopter-side
+response is pending and ask whether Human defers that response.
 
 ## Accepted Migration Apply
 
@@ -770,6 +809,11 @@ degraded Project readback, privacy-sensitive values, and branch-line mismatch.
 Human gates include built-in Project Status side effects, issue closure/reopen
 implications, privacy/security-sensitive sync, broad Project policy/schema
 changes, and any future transition from dry-run to write/apply.
+
+For adopter onboarding, `project-sync-plan` is decision support only. Live sync
+or apply remains separately reviewed and Human-authorized. Degraded Project
+visibility should be retried later or carried as `unknown` / `not_available`
+unless the current step actually requires Project write/readback evidence.
 
 Forbidden in this dry-run:
 
