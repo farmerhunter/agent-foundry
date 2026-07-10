@@ -109,13 +109,13 @@ complete the user-facing capability.
 | V2-6A GitHub Project Dry-Run Sync Plan | #362 | Implement read-only sync-plan generation that shows would-change/conflict/human-gate outcomes without writing Project. | Completed Phase 1 implementation |
 | V2-7 Phase 1 Readiness | #299 | Verify read-only ledger, backfill preview, board visibility, dry-run sync plan, docs, telemetry, and residual risks. | Accepted Phase 1 readiness |
 | V2-8 Capability Replan And Operational UX Contract | #369 | Redefine V2 completion around the full operation chain: capability layer, interfaces, data contracts, apply, sync, mixed-state recovery, dogfood, and enablement. | Next design gate |
-| V2-9 Accepted Migration Apply | #370 | Turn reviewed backfill candidates into accepted local ledger state through explicit apply gates, with rollback/readback evidence and no GitHub writes. | Planned |
-| V2-10 Local Orchestration Action Apply | #371 | Let users apply approved local board actions as ledger events: assignment, blocked, review, acceptance, closure, recovery, and supersession. | Planned |
-| V2-11 GitHub Project Sync Apply | #372 | Apply approved Project mirror changes after dry-run review, with idempotency, readback, partial failure handling, and Human gates for risky writes. | Planned |
-| V2-12 Mixed-State Conflict And Recovery | #373 | Handle interleaved local-first and GitHub-first edits, stale comments, branch-line drift, partial sync, superseded work, and rollback/recovery paths. | Planned |
-| V2-13 Operational UX Contract And Management Surface | #378 | Implement stable operational ViewModels and a management surface for board, item detail, migration review, apply review, sync plan, conflicts, health, and cross-environment/version coordination. | Planned |
-| V2-14 Real-Project Dogfood And UX Conclusion | #374 | Run the complete workflow on a real project, document practical friction, and decide whether the experience is good enough for adoption. | Planned |
-| V2-15 Runtime / Skill / Capability Pack Enablement | #375 | Harvest and publish layer-aware V2 practices, Skills, and packs without making Local Orchestration behavior the default for Base workflows. | Planned |
+| V2-9 Accepted Migration Apply | #370 | Turn reviewed backfill candidates into accepted local ledger state through explicit apply gates, with rollback/readback evidence and no GitHub writes. | Completed implementation |
+| V2-10 Local Orchestration Action Apply | #371 | Let users apply approved local board actions as ledger events: assignment, blocked, review, acceptance, closure, recovery, and supersession. | Completed implementation |
+| V2-11 GitHub Project Sync Apply | #372 | Apply approved Project mirror changes after dry-run review, with idempotency, readback, partial failure handling, and Human gates for risky writes. | Completed implementation |
+| V2-12 Mixed-State Conflict And Recovery | #373 | Handle interleaved local-first and GitHub-first edits, stale comments, branch-line drift, partial sync, superseded work, and rollback/recovery paths. | Completed implementation |
+| V2-13 Operational UX Contract And Management Surface | #378 | Implement stable operational ViewModels and a management surface for board, item detail, migration review, apply review, sync plan, conflicts, health, and cross-environment/version coordination. | Completed implementation |
+| V2-14 Real-Project Dogfood And UX Conclusion | #374 | Run the complete workflow on a real project, document practical friction, and decide whether the experience is good enough for adoption. | Completed dogfood |
+| V2-15 Runtime / Skill / Capability Pack Enablement | #375 | Harvest and publish layer-aware V2 practices, Skills, and packs without making Local Orchestration behavior the default for Base workflows. | Active |
 | V2-16 Final V2 Integration And Release Gate | #376 | Verify full V2 usability, dogfood conclusions, docs, enablement, and decide on merge-back to `main` plus `v2.0.0` release. | Planned |
 
 ## V2 Capability Phases

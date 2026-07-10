@@ -1,10 +1,10 @@
 manifest_schema_version: 1
 pack_id: pack.multi-agent.optional
 title: Optional Multi-Agent Collaboration Pack
-description: Reviewed optional first-party starter pack for role-generic GitHub issue and PR collaboration helpers, collaboration readiness, branch-aware action plans, and dry-run repair planning.
+description: Reviewed optional first-party starter pack for role-generic GitHub issue and PR collaboration helpers, collaboration readiness, branch-aware action plans, Local Orchestration activation guidance, and dry-run repair planning.
 lifecycle_status: reviewed
-version: 0.3.2
-exported_at: 2026-07-07
+version: 0.4.0
+exported_at: 2026-07-10
 distribution_type: optional_capability
 source_provenance: "Agent Foundry public Core fixture reviewed through AF12-3 issue #253."
 maintainer_contact: "https://github.com/farmerhunter/agent-foundry"
@@ -25,6 +25,8 @@ evidence_sources:
   - "Agent Foundry issues 316-319 AF15 helper, docs, dry-run repair, and dogfood review"
   - "Agent Foundry issues 328-331 AF15 action-plan UX correction and dogfood review"
   - "Agent Foundry issues 348-352 AF16 branch-aware collaboration readiness and docs/template enablement"
+  - "Agent Foundry issues 359-374 V2 Local Collaboration Ledger, Foundry Board, apply, sync, mixed-state recovery, operational cockpit, and dogfood evidence"
+  - "Agent Foundry issue 375 V2 runtime Skill and capability-pack enablement"
   - "Agent Foundry public first-party starter-pack review"
 
 export_policy:
@@ -58,6 +60,9 @@ starter_contents:
     - "branch-aware Execution Contract fields: Branch strategy, Target branch, affected branches, and verification branches"
     - "generic branch strategy families with Agent Foundry V1/V2 presets as project overlays"
     - "multi-branch, stacked PR, split-work, forward-merge, and multi-line verification action-plan concepts"
+    - "capability-layer classification: base, local_orchestration, and mixed"
+    - "Local Orchestration activation only from durable signals such as explicit user request, local capability config, accepted ledger state, issue contract, runtime profile, or accepted operational UX contract"
+    - "Base remains the default for ordinary collaboration, harvest, Skill, runtime, and capability-pack behavior"
     - "degraded GitHub/Project access reporting"
     - "read-only audit before write automation"
   assets:
@@ -110,8 +115,8 @@ included_records:
     kind: practice
     lifecycle_status: candidate
     path: records/practices/COLLAB-PACK-001-review-handoff.md
-    source_version: 5
-    content_sha256: "316cbd91d14dee915b09561e8e9d2576582772f2ca25a1212ecde6a4872208bd"
+    source_version: 6
+    content_sha256: "d90c256ed1b2a0e7445cf4e006011fc7073fdd427cf978076589da2e05a00702"
     destination_layer: canonical_vault_record
     membership_role: optional_member
     activation_default: manual_review
@@ -120,8 +125,8 @@ included_records:
     kind: asset
     lifecycle_status: candidate
     path: records/assets/ASSET-COLLAB-PACK-001-review-handoff-helper.asset.yaml
-    source_version: 5
-    content_sha256: "8c8eb717577fac50cf0ee80cd16d1e6443f9a84340ff6c3dbe5798cf42a2069d"
+    source_version: 6
+    content_sha256: "0b9dd2a59594a219c9a317015df601904668d1d72023f0d8ba19371dbc03e989"
     destination_layer: canonical_vault_record
     membership_role: optional_member
     activation_default: manual_review

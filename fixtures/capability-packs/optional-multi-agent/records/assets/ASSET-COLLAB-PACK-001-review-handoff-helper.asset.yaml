@@ -2,12 +2,12 @@ id: ASSET-COLLAB-PACK-001
 title: Role-Generic GitHub Scheduler Helper Set
 asset_type: skill
 status: candidate
-version: 5
+version: 6
 created: 2026-06-11
-updated: 2026-07-07
-purpose: Provide reviewed helper surfaces for role-generic GitHub issue/PR coordination, collaboration readiness reporting, and branch-aware action-plan guidance.
-responsibility: Support inbox, ready-queue, pickup, handoff, audit, collaboration readiness, branch/worktree/PR-target readiness reporting, user-facing readiness action plans, dry-run repair planning, degraded GitHub/Project access reporting, label routing, issue context, PR context, and retry wrappers after managed install.
-non_responsibility: Does not decide product scope, override issue contracts, make Project v2 the scheduler authority, install helpers, execute from pack staging, apply dry-run repairs, publish generated Skills, mutate Project v2 by default, repair branches, switch checkout context, create worktrees, retarget PRs, rebase, merge, reset, clean, or force-push.
+updated: 2026-07-10
+purpose: Provide reviewed helper surfaces for role-generic GitHub issue/PR coordination, collaboration readiness reporting, branch-aware action-plan guidance, and explicit Local Orchestration capability-layer activation.
+responsibility: Support inbox, ready-queue, pickup, handoff, audit, collaboration readiness, branch/worktree/PR-target readiness reporting, user-facing readiness action plans, dry-run repair planning, degraded GitHub/Project access reporting, label routing, issue context, PR context, retry wrappers, and Local Orchestration guidance only when durable capability-layer evidence selects it after managed install.
+non_responsibility: Does not decide product scope, override issue contracts, make Project v2 the scheduler authority, install helpers, execute from pack staging, apply dry-run repairs, publish generated Skills, mutate Project v2 by default, infer Local Orchestration from branch names alone, repair branches, switch checkout context, create worktrees, retarget PRs, rebase, merge, reset, clean, or force-push.
 inputs:
   - issue number
   - PR number
@@ -16,6 +16,8 @@ inputs:
   - Target branch
   - Branch strategy
   - optional affected or verification branch list
+  - optional Capability layer contract field
+  - optional local orchestration capability config
   - GitHub label and comment state
   - optional project-local routing config
 process:
@@ -27,6 +29,10 @@ process:
   - Validate branch-aware contract fields as report data: canonical Target branch, Branch strategy, expected PR base, local dirty/ahead/behind state, and degraded or unknown remote state.
   - Report branch action-plan concepts such as current_branch_ok, switch_context_required, split_work_recommended, forward_merge_needed_later, verify_on_multiple_lines, and architect_decision_required without performing branch repair.
   - Preserve generic branch strategies, including mainline-maintenance, integration-branch, release-branch, trunk-based, stacked-pr, multi-branch, and custom, with Agent Foundry V1/V2 as project presets rather than the only model.
+  - Preserve Base behavior as the default unless durable capability-layer evidence selects Local Orchestration.
+  - Treat explicit user requests, repo/local capability config, accepted local ledger state, issue contract fields, capability pack or runtime profiles, or accepted operational UX contracts as valid Local Orchestration triggers.
+  - Treat branch names, release lines, and PR targets as readiness or warning evidence only, not canonical Local Orchestration triggers.
+  - For mixed work, separate Base operations from Local Orchestration operations before recommending ledger, board, migration, sync, recovery, or cockpit surfaces.
   - Print dry-run plans before any mutating helper behavior is allowed.
   - Keep dry-run repair entries report-only with mutation_performed false and apply_supported_now false.
   - Prefer REST-first GitHub reads and targeted Project v2 GraphQL only when configured and needed.
@@ -42,6 +48,8 @@ outputs:
   - branch readiness report
   - readiness action plan
   - branch action plan
+  - capability-layer activation guidance
+  - mixed Base and Local Orchestration action guidance
   - dry-run repair plan
   - degraded-source summary
   - issue or PR context summary
@@ -63,4 +71,7 @@ success_criteria:
   - Mutating actions remain disabled until managed install, permissions, and receipts exist.
   - Readiness reports identify missing or drifted setup without mutating GitHub or Project state.
   - Branch readiness reports identify contract, local-state, PR-base, split-work, forward-merge, and multi-line verification needs without changing branches or PR targets.
+  - Local Orchestration guidance appears only when durable capability-layer evidence selects it.
+  - Base/V1.x maintenance reports do not silently switch to V2 behavior because of branch or release-line evidence alone.
+  - Mixed reports separate Base-safe next actions from Local Orchestration-only next actions.
   - Degraded GitHub or Project access is visible in reports instead of hidden by inferred success.
