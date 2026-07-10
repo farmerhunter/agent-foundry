@@ -242,6 +242,28 @@ The report classifies `local_newer`, `remote_newer`, `remote_only`, `candidate_o
 
 **中文要点：** `mixed-state-recovery` 是“混杂状态解释器”，不是自动修复器。它帮助用户决定下一步是 backfill preview、migration apply、local action apply、sync plan，还是 Human/Architect gate。
 
+To inspect the full V2 local-first operation loop before dogfood, ask for the local operational cockpit:
+
+```text
+show the V2 operational cockpit
+显示 V2 本地操作 cockpit
+```
+
+```bash
+python3 scripts/github_collaboration_helper.py --repo <owner>/<repo> operational-cockpit \
+  --ledger-root usage/local/collaboration-ledger \
+  --issues 370,371,372,373 \
+  --candidate-events-json /tmp/backfill-preview.json \
+  --project-owner @me \
+  --project-number 3 \
+  --html-out /tmp/agent-foundry-operational-cockpit.html \
+  --json
+```
+
+The cockpit is a read-only local decision-support report. It renders a stable ViewModel as JSON plus optional static HTML, covering board state, item detail, migration review, local apply review, sync handoff, mixed-state recovery, health, and telemetry. It tells you when to stay local, open/check GitHub Project, run `project-sync-plan`, run accepted `project-sync-apply`, or retry degraded Project later. GitHub Project remains the richer remote collaboration/control surface; the cockpit does not replace it, run a server, auto-sync, mutate Project fields, or publish generated/runtime/capability-pack artifacts.
+
+**中文要点：** `operational-cockpit` 是只读的本地决策面板，可以输出 JSON fallback 和 static HTML。它说明 local ledger authority、Project mirror 状态、gate、conflict、health warning 和下一步安全动作；GitHub Project 仍是远端协作/control surface，不会被自动替代或自动写入。
+
 ## First-Time Setup
 
 On a new machine, use `docs/deployment.md` for the full split Core/Vault install flow. Short version:
