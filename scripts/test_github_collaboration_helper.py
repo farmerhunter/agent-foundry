@@ -141,6 +141,8 @@ def main() -> int:
         mixed_recovery_project = base / "mixed-recovery-project.json"
         mixed_recovery_ledger_root = base / "mixed-recovery-ledger"
         mixed_recovery_candidate_events = base / "mixed-recovery-candidate-events.json"
+        cockpit_health = base / "operational-cockpit-health.json"
+        cockpit_html = base / "operational-cockpit.html"
         new_repo_labels = base / "new-repo-labels.json"
         new_repo_issues = base / "new-repo-issues.json"
         new_repo_prs = base / "new-repo-prs.json"
@@ -1626,6 +1628,101 @@ def main() -> int:
             {"PATH": str(fake_bin) + os.pathsep + os.environ.get("PATH", "")},
         )
         errors.extend(expect_ok("mixed-state-recovery-degraded-project", degraded_recovery, '"case_type": "degraded_project"'))
+        write(
+            cockpit_health,
+            json.dumps(
+                {
+                    "local_runtime": {"status": "missing", "confidence": "observed"},
+                    "generated_skill": {"status": "stale", "confidence": "observed"},
+                    "core_helper": {"status": "current", "confidence": "observed"},
+                    "ledger_schema": {"status": "version_mismatch", "confidence": "observed"},
+                    "capability_pack": {"status": "stale", "confidence": "inferred"},
+                    "runtime_receipt": {"status": "missing", "confidence": "not_available"},
+                    "project_field_schema": {"status": "mismatch", "confidence": "observed"},
+                    "diagnostic_note": "/Users/example/private/runtime-receipt.json",
+                    "local_private_paths": ["/Users/example/private/raw-vault"],
+                }
+            ),
+        )
+        cockpit_ledger_before = (mixed_recovery_ledger_root / "events.jsonl").read_text(encoding="utf-8")
+        operational_cockpit = run(
+            [
+                "operational-cockpit",
+                "--issues-json",
+                str(mixed_recovery_issues),
+                "--project-items-json",
+                str(mixed_recovery_project),
+                "--ledger-root",
+                str(mixed_recovery_ledger_root),
+                "--candidate-events-json",
+                str(mixed_recovery_candidate_events),
+                "--health-json",
+                str(cockpit_health),
+                "--html-out",
+                str(cockpit_html),
+                "--json",
+            ],
+            base,
+            {"AGENT_REPO": "farmerhunter/agent-foundry"},
+        )
+        for name, expected in (
+            ("operational-cockpit-command", '"command": "operational-cockpit"'),
+            ("operational-cockpit-surface", '"surface": "static_html_local_operational_cockpit"'),
+            ("operational-cockpit-read-only", '"mode": "read_only"'),
+            ("operational-cockpit-no-mutation", '"mutation_performed": false'),
+            ("operational-cockpit-no-apply", '"apply_supported_now": false'),
+            ("operational-cockpit-no-writes", '"writes_supported_now": false'),
+            ("operational-cockpit-source", '"source_of_truth": "local_collaboration_ledger"'),
+            ("operational-cockpit-project-role", "richer_remote_collaboration_control_surface_and_optional_mirror"),
+            ("operational-cockpit-on-demand-sync", '"sync_cadence": "on_demand_by_default"'),
+            ("operational-cockpit-sections-board", '"board"'),
+            ("operational-cockpit-sections-item-detail", '"item_detail"'),
+            ("operational-cockpit-sections-migration", '"migration_review"'),
+            ("operational-cockpit-sections-apply", '"local_apply_review"'),
+            ("operational-cockpit-sections-sync", '"sync_handoff"'),
+            ("operational-cockpit-sections-recovery", '"mixed_state_recovery"'),
+            ("operational-cockpit-sections-health", '"health"'),
+            ("operational-cockpit-sections-telemetry", '"telemetry"'),
+            ("operational-cockpit-candidate", '"candidate_count"'),
+            ("operational-cockpit-mirror-only", '"remote_mirror_only_count"'),
+            ("operational-cockpit-conflict", '"case_type": "branch_line_drift"'),
+            ("operational-cockpit-stale-runtime", '"status": "missing"'),
+            ("operational-cockpit-stale-skill", '"generated_skill"'),
+            ("operational-cockpit-version-mismatch", '"ledger_schema"'),
+            ("operational-cockpit-project-plan", "run_project_sync_plan_when"),
+            ("operational-cockpit-project-apply", "run_accepted_project_sync_apply_when"),
+            ("operational-cockpit-retry-project", "retry_degraded_project_later_when"),
+            ("operational-cockpit-no-external-assets", '"html_external_asset_fetches": false'),
+            ("operational-cockpit-no-analytics", '"analytics_enabled": false'),
+            ("operational-cockpit-private-redacted", "[local-private-path]"),
+            ("operational-cockpit-telemetry", '"telemetry_issue": "#266"'),
+            ("operational-cockpit-html-written", '"html_output_written": true'),
+        ):
+            errors.extend(expect_ok(name, operational_cockpit, expected))
+        cockpit_ledger_after = (mixed_recovery_ledger_root / "events.jsonl").read_text(encoding="utf-8")
+        if cockpit_ledger_before == cockpit_ledger_after:
+            print("operational-cockpit-no-ledger-write: ok")
+        else:
+            errors.append("operational-cockpit-no-ledger-write: cockpit mutated accepted ledger")
+        if cockpit_html.exists():
+            cockpit_html_text = cockpit_html.read_text(encoding="utf-8")
+            for name, expected in (
+                ("operational-cockpit-html-title", "Operational Cockpit"),
+                ("operational-cockpit-html-board", "<h2>Board</h2>"),
+                ("operational-cockpit-html-sync", "<h2>Sync Handoff</h2>"),
+                ("operational-cockpit-html-health", "<h2>Health</h2>"),
+                ("operational-cockpit-html-forbidden", "live GitHub Project mutation"),
+            ):
+                if expected in cockpit_html_text:
+                    print(f"{name}: ok")
+                else:
+                    errors.append(f"{name}: expected HTML containing {expected!r}")
+            if "/Users/example/private" not in cockpit_html_text and 'src="http' not in cockpit_html_text and 'href="http' not in cockpit_html_text:
+                print("operational-cockpit-html-public-safe: ok")
+            else:
+                errors.append("operational-cockpit-html-public-safe: HTML leaked local private path or external asset link")
+        else:
+            errors.append("operational-cockpit-html-exists: expected HTML report to be written")
         branch_readiness_json = run(
             [
                 "collaboration-readiness",

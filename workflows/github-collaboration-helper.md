@@ -903,6 +903,72 @@ Forbidden in this recovery step:
 - generated Skill publish or capability-pack deploy/apply;
 - main merge, release, or tag work.
 
+## Operational Cockpit
+
+Use `operational-cockpit` when V2 local-first orchestration needs a dogfoodable
+management surface rather than raw JSON from separate helper commands. The
+surface is a local operational cockpit and decision-support report. It is not a
+replacement for GitHub Project; Project remains the richer remote
+collaboration/control surface and optional mirror.
+
+Skill-facing request:
+
+```text
+show the V2 operational cockpit
+```
+
+Debug/helper surface:
+
+```text
+agent-foundry-github-collab --repo <owner>/<repo> operational-cockpit \
+  --ledger-root usage/local/collaboration-ledger \
+  --issues 370,371,372,373 \
+  --candidate-events-json /tmp/backfill-preview.json \
+  --project-owner @me \
+  --project-number 3 \
+  --html-out /tmp/agent-foundry-operational-cockpit.html \
+  --json
+```
+
+The ViewModel must keep identifiers stable across CLI JSON, human-readable
+output, static HTML, and Skill-facing summaries. Required sections are:
+
+- overview;
+- board;
+- item detail;
+- migration review;
+- local apply review;
+- sync handoff;
+- mixed-state recovery;
+- health;
+- telemetry.
+
+The cockpit must tell users when to:
+
+- stay local;
+- open or check GitHub Project;
+- run `project-sync-plan`;
+- run accepted `project-sync-apply`;
+- retry degraded Project later.
+
+Report generation is no-write for product state. Writing the static HTML file is
+only the local report artifact; it must not mutate GitHub, Project, runtime,
+Vault, generated artifacts, or capability-pack state. HTML must not fetch
+external assets, enable analytics, or expose local-private paths. Degraded or
+unknown environment/version evidence must stay visible instead of being guessed
+clean.
+
+Forbidden in this cockpit step:
+
+- live GitHub Project mutation;
+- automatic sync/apply cadence;
+- GitHub issue/PR write-back as product behavior;
+- runtime/Vault/private/generated mutation;
+- generated Skill publish;
+- capability-pack deploy/apply;
+- main merge, release, or tag work;
+- branch repair/apply or destructive action.
+
 ## Dispatch Evidence Modes
 
 Dispatch evidence must name the mechanism actually used:

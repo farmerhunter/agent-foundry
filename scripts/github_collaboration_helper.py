@@ -9,6 +9,7 @@ generated output, private state, or memory-system records.
 from __future__ import annotations
 
 import argparse
+import html
 import json
 import os
 import re
@@ -42,6 +43,7 @@ READ_ONLY_ACTIONS = {
     "scheduler-audit",
     "collaboration-readiness",
     "foundry-board",
+    "operational-cockpit",
     "mixed-state-recovery",
     "project-sync-plan",
     "local-ledger-report",
@@ -4312,6 +4314,336 @@ def build_mixed_state_recovery_report(board: dict[str, Any], project_status: dic
     }
 
 
+OPERATIONAL_COCKPIT_SECTIONS = [
+    "overview",
+    "board",
+    "item_detail",
+    "migration_review",
+    "local_apply_review",
+    "sync_handoff",
+    "mixed_state_recovery",
+    "health",
+    "telemetry",
+]
+
+
+def load_operational_health(args: argparse.Namespace) -> dict[str, Any]:
+    default = {
+        "local_runtime": {"status": "unknown", "confidence": "not_available"},
+        "generated_skill": {"status": "unknown", "confidence": "not_available"},
+        "core_helper": {"status": "present", "confidence": "observed"},
+        "ledger_schema": {"status": "unknown", "confidence": "not_available"},
+        "capability_pack": {"status": "unknown", "confidence": "not_available"},
+        "runtime_receipt": {"status": "unknown", "confidence": "not_available"},
+        "project_field_schema": {"status": "unknown", "confidence": "not_available"},
+        "local_private_paths": [],
+    }
+    if getattr(args, "health_json", None):
+        supplied = load_json(args.health_json)
+        if not isinstance(supplied, dict):
+            fail("invalid_health_json", "health JSON must be an object")
+        for key, value in supplied.items():
+            default[key] = value
+    return default
+
+
+def public_safe(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {str(k): public_safe(v) for k, v in value.items() if k not in {"local_private_paths", "private_paths", "token", "secret"}}
+    if isinstance(value, list):
+        return [public_safe(item) for item in value]
+    if isinstance(value, str):
+        value = re.sub(r"/Users/[^\\s\"']+", "[local-private-path]", value)
+        value = re.sub(r"~/?[^\\s\"']*", "[local-home-path]", value) if value.startswith("~") else value
+        return value
+    return value
+
+
+def health_warning(name: str, value: Any) -> dict[str, Any] | None:
+    status = value.get("status") if isinstance(value, dict) else value
+    if status in {"ok", "present", "current", "compatible", "not_configured"}:
+        return None
+    return {
+        "source": name,
+        "status": status or "unknown",
+        "impact": "Show this as an environment/version warning; do not infer hidden readiness.",
+        "safe_next_action": "rehydrate_or_verify_this_surface_before_claiming_cross_environment_readiness",
+    }
+
+
+def cockpit_next_action(board: dict[str, Any], recovery: dict[str, Any], project_status: dict[str, Any]) -> dict[str, Any]:
+    if project_status.get("status") in {"degraded", "unavailable", "permission_denied", "auth_unavailable"}:
+        return {
+            "action": "stay_local_and_retry_degraded_project_later",
+            "category": "agent_handled_existing_workflow",
+            "why": "Project readback is degraded; local ledger authority can still be inspected.",
+        }
+    if recovery.get("telemetry", {}).get("recovery_item_count", 0):
+        return {
+            "action": "review_mixed_state_recovery_before_apply_or_sync",
+            "category": "agent_handled_existing_workflow",
+            "why": "Conflicts or mirror-only/candidate-only states require explicit recovery review.",
+        }
+    if board.get("summary", {}).get("conflict_count", 0):
+        return {
+            "action": "inspect_item_detail_and_route_required_gate",
+            "category": "agent_handled_existing_workflow",
+            "why": "Board items include conflicts or gates.",
+        }
+    return {
+        "action": "continue_local_board_work_or_preview_project_sync_plan_when_remote_mirror_is_needed",
+        "category": "informational_only",
+        "why": "No blocking cockpit conflict is visible in the supplied evidence.",
+    }
+
+
+def build_operational_cockpit_viewmodel(
+    repo: str,
+    board: dict[str, Any],
+    ledger_report: dict[str, Any],
+    recovery: dict[str, Any],
+    project_status: dict[str, Any],
+    project_attempts: dict[str, Any],
+    local_git: dict[str, Any],
+    health: dict[str, Any],
+) -> dict[str, Any]:
+    start = time.perf_counter()
+    health_public = public_safe(health)
+    health_warnings = [
+        warning
+        for key, value in health_public.items()
+        if (warning := health_warning(key, value))
+    ]
+    if project_status.get("status") in {"degraded", "unavailable", "permission_denied", "auth_unavailable", "config_missing", "skipped"}:
+        health_warnings.append(
+            {
+                "source": "github_project",
+                "status": project_status.get("status"),
+                "impact": "Project remains optional mirror/control surface; local cockpit still renders from local evidence.",
+                "safe_next_action": "retry_project_readback_later_or_run_project_sync_plan_when_needed",
+            }
+        )
+    if local_git.get("dirty") or local_git.get("staged") or local_git.get("ahead") or local_git.get("behind"):
+        health_warnings.append(
+            {
+                "source": "local_git",
+                "status": "attention_required",
+                "impact": "Dirty, staged, ahead, or behind local checkout can affect branch-line dogfood evidence.",
+                "safe_next_action": "resolve_or_record_local_git_state_before_claiming_cross_line_readiness",
+            }
+        )
+    next_action = cockpit_next_action(board, recovery, project_status)
+    board_items = board.get("items", [])
+    viewmodel: dict[str, Any] = {
+        "schema_version": 1,
+        "command": "operational-cockpit",
+        "surface": "static_html_local_operational_cockpit",
+        "mode": "read_only",
+        "repo": repo,
+        "mutation_performed": False,
+        "apply_supported_now": False,
+        "writes_supported_now": False,
+        "html_external_asset_fetches": False,
+        "analytics_enabled": False,
+        "source_of_truth": "local_collaboration_ledger",
+        "github_project_role": "richer_remote_collaboration_control_surface_and_optional_mirror",
+        "sync_cadence": "on_demand_by_default",
+        "sections_present": OPERATIONAL_COCKPIT_SECTIONS,
+        "overview": {
+            "capability_layer": "local_orchestration",
+            "local_authority": "accepted_local_ledger_replay",
+            "project_mirror_status": project_status.get("status"),
+            "item_count": board.get("summary", {}).get("item_count", 0),
+            "conflict_count": board.get("summary", {}).get("conflict_count", 0),
+            "candidate_count": board.get("summary", {}).get("candidate_count", 0),
+            "remote_mirror_only_count": board.get("summary", {}).get("remote_mirror_only_count", 0),
+            "safe_next_action": next_action,
+        },
+        "board": {
+            "lanes": board.get("lanes", []),
+            "items": [
+                {
+                    "work_item_id": item.get("work_item_id"),
+                    "title": item.get("title"),
+                    "lane": item.get("lane"),
+                    "owner_role": item.get("owner_role"),
+                    "capability_layer": item.get("capability_layer") or item.get("layer") or "local_orchestration",
+                    "state_authority": item.get("state_authority"),
+                    "mirror_status": item.get("mirror_status"),
+                    "next_actions": item.get("recommended_next_actions", []),
+                    "conflict_badges": [conflict.get("type") or conflict.get("code") for conflict in item.get("conflicts", []) if isinstance(conflict, dict)],
+                }
+                for item in board_items
+            ],
+        },
+        "item_detail": [
+            {
+                "work_item_id": item.get("work_item_id"),
+                "ledger_timeline": item.get("latest_evidence", []),
+                "github_evidence": item.get("github_evidence") or item.get("url"),
+                "project_mirror_state": item.get("remote_mirror_state"),
+                "gates": item.get("required_gates", []),
+                "conflicts": item.get("conflicts", []),
+                "forbidden_actions": item.get("forbidden_actions", []),
+            }
+            for item in board_items
+        ],
+        "migration_review": {
+            "candidate_count": board.get("summary", {}).get("candidate_count", 0),
+            "accepted_count": board.get("summary", {}).get("accepted_count", 0),
+            "safe_decisions": ["accept_after_review", "reject_with_reason", "defer_with_review_note"],
+            "next_action": "use_local-ledger-migration-apply_only_after_reviewed_candidate_decision",
+        },
+        "local_apply_review": {
+            "purpose": "Review approved local board actions before append-only local ledger events.",
+            "write_target": "local_ledger_events_jsonl_only_after_accepted_local_action_apply",
+            "idempotency_required": True,
+            "rollback_guidance": "append compensating or superseding local ledger events; do not rewrite history",
+        },
+        "sync_handoff": {
+            "stay_local_when": [
+                "local ledger authority is clear",
+                "candidate events still need review",
+                "Project is degraded and no remote write is required",
+            ],
+            "open_or_check_github_project_when": [
+                "team lane, assignment, review, or Human coordination needs remote visibility",
+                "mirror drift may affect collaborators",
+                "dogfood needs local-vs-Project comparison evidence",
+            ],
+            "run_project_sync_plan_when": [
+                "accepted local state should be previewed for remote mirror update",
+                "Project drift is suspected and readback is available enough",
+            ],
+            "run_accepted_project_sync_apply_when": [
+                "a reviewed accepted sync plan exists",
+                "required Human gates are satisfied",
+                "readback/idempotency expectations are visible",
+            ],
+            "retry_degraded_project_later_when": [
+                "Project GraphQL/REST is degraded",
+                "local work can proceed without remote mutation",
+            ],
+        },
+        "mixed_state_recovery": recovery,
+        "health": {
+            "status": health_public,
+            "warnings": health_warnings,
+            "cross_environment": ["local_runtime", "generated_skill", "dirty_checkout", "multiple_worktrees", "project_unavailable"],
+            "cross_version": ["core_helper", "ledger_schema", "generated_skill", "capability_pack", "runtime_receipt", "project_field_schema"],
+        },
+        "telemetry": {
+            "telemetry_issue": "#266",
+            "board_item_count": board.get("summary", {}).get("item_count", 0),
+            "ledger_event_count": ledger_report.get("summary", {}).get("event_count", 0),
+            "recovery_item_count": recovery.get("telemetry", {}).get("recovery_item_count", 0),
+            "project_attempts": project_attempts.get("attempts", 0),
+            "degraded_source_count": len(health_warnings),
+            "render_time_ms": round((time.perf_counter() - start) * 1000, 3),
+        },
+        "forbidden_actions": [
+            "live GitHub Project mutation",
+            "automatic sync/apply cadence",
+            "GitHub issue/PR write-back as product behavior",
+            "runtime/Vault/private/generated mutation",
+            "generated Skill publish",
+            "capability-pack deploy/apply",
+            "main merge, release/tag, V2 final closure",
+            "branch repair/apply or destructive action",
+        ],
+    }
+    viewmodel["telemetry"]["user_facing_output_bytes"] = len(json.dumps(viewmodel, sort_keys=True).encode("utf-8"))
+    return viewmodel
+
+
+def render_operational_cockpit_html(viewmodel: dict[str, Any]) -> str:
+    def esc(value: Any) -> str:
+        return html.escape(str(value), quote=True)
+
+    def section(title: str, body: str) -> str:
+        return f"<section><h2>{esc(title)}</h2>{body}</section>"
+
+    overview = viewmodel["overview"]
+    board_rows = "".join(
+        "<tr>"
+        f"<td>{esc(item.get('work_item_id'))}</td>"
+        f"<td>{esc(item.get('title'))}</td>"
+        f"<td>{esc(item.get('lane'))}</td>"
+        f"<td>{esc(item.get('state_authority'))}</td>"
+        f"<td>{esc(item.get('mirror_status'))}</td>"
+        f"<td>{esc(', '.join(item.get('conflict_badges') or []))}</td>"
+        "</tr>"
+        for item in viewmodel["board"]["items"]
+    )
+    warnings = "".join(
+        f"<li><strong>{esc(item.get('source'))}</strong>: {esc(item.get('status'))} - {esc(item.get('safe_next_action'))}</li>"
+        for item in viewmodel["health"]["warnings"]
+    )
+    sync = viewmodel["sync_handoff"]
+    sync_lists = "".join(
+        f"<h3>{esc(key)}</h3><ul>{''.join(f'<li>{esc(value)}</li>' for value in values)}</ul>"
+        for key, values in sync.items()
+    )
+    recovery_cases = "".join(
+        f"<li>{esc(case.get('case_type'))}: {esc(case.get('work_item_id'))} -> {esc(case.get('safe_next_action'))}</li>"
+        for case in viewmodel["mixed_state_recovery"].get("cases", [])
+    )
+    return "\n".join(
+        [
+            "<!doctype html>",
+            '<html lang="en">',
+            "<head>",
+            '<meta charset="utf-8">',
+            '<meta name="viewport" content="width=device-width, initial-scale=1">',
+            f"<title>{esc(viewmodel.get('repo'))} Operational Cockpit</title>",
+            "<style>body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;margin:24px;line-height:1.45;color:#202124;background:#fff}section{border-top:1px solid #dadce0;padding:16px 0}table{border-collapse:collapse;width:100%}th,td{border:1px solid #dadce0;padding:6px;text-align:left;vertical-align:top}.pill{display:inline-block;border:1px solid #5f6368;border-radius:999px;padding:2px 8px;margin-right:6px}.warn{color:#8a4b00}</style>",
+            "</head>",
+            "<body>",
+            f"<h1>{esc(viewmodel.get('repo'))} Operational Cockpit</h1>",
+            '<p><span class="pill">read-only</span><span class="pill">writes: none</span><span class="pill">Project is mirror/control surface</span></p>',
+            section(
+                "Overview",
+                "<ul>"
+                f"<li>source_of_truth: {esc(viewmodel.get('source_of_truth'))}</li>"
+                f"<li>github_project_role: {esc(viewmodel.get('github_project_role'))}</li>"
+                f"<li>sync_cadence: {esc(viewmodel.get('sync_cadence'))}</li>"
+                f"<li>safe_next_action: {esc(overview.get('safe_next_action', {}).get('action'))}</li>"
+                f"<li>items/conflicts/candidates: {esc(overview.get('item_count'))}/{esc(overview.get('conflict_count'))}/{esc(overview.get('candidate_count'))}</li>"
+                "</ul>",
+            ),
+            section(
+                "Board",
+                "<table><thead><tr><th>Item</th><th>Title</th><th>Lane</th><th>Authority</th><th>Mirror</th><th>Conflict badges</th></tr></thead>"
+                f"<tbody>{board_rows}</tbody></table>",
+            ),
+            section("Item Detail", f"<pre>{esc(json.dumps(viewmodel['item_detail'], indent=2, sort_keys=True))}</pre>"),
+            section("Migration Review", f"<pre>{esc(json.dumps(viewmodel['migration_review'], indent=2, sort_keys=True))}</pre>"),
+            section("Local Apply Review", f"<pre>{esc(json.dumps(viewmodel['local_apply_review'], indent=2, sort_keys=True))}</pre>"),
+            section("Sync Handoff", sync_lists),
+            section("Mixed-State Recovery", f"<ul>{recovery_cases}</ul>"),
+            section("Health", f"<ul class=\"warn\">{warnings}</ul><pre>{esc(json.dumps(viewmodel['health']['status'], indent=2, sort_keys=True))}</pre>"),
+            section("Telemetry", f"<pre>{esc(json.dumps(viewmodel['telemetry'], indent=2, sort_keys=True))}</pre>"),
+            section("Forbidden Actions", "<ul>" + "".join(f"<li>{esc(action)}</li>" for action in viewmodel["forbidden_actions"]) + "</ul>"),
+            "</body>",
+            "</html>",
+        ]
+    )
+
+
+def write_operational_cockpit_html(path_text: str, viewmodel: dict[str, Any]) -> dict[str, Any]:
+    path = Path(path_text).expanduser().resolve()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    html_text = render_operational_cockpit_html(viewmodel)
+    path.write_text(html_text, encoding="utf-8")
+    return {
+        "html_output": str(path),
+        "html_output_written": True,
+        "html_bytes": len(html_text.encode("utf-8")),
+        "html_external_asset_fetches": False,
+        "analytics_enabled": False,
+    }
+
+
 SYNC_PLAN_FIELDS = ["Status", "Roadmap Status", "Owner Role", "Stage", "Risk", "Target Branch", "Branch Readiness", "Evidence Links"]
 SYNC_PLAN_OWNER_OPTIONS = ["Architect", "Implementer", "Tester", "Reviewer", "Human", "Harvester"]
 
@@ -4912,6 +5244,56 @@ def cmd_mixed_state_recovery(args: argparse.Namespace) -> None:
         candidate_events=candidate_events,
     )
     print_json_or_text(build_mixed_state_recovery_report(board, project_status, project_attempts), args.json)
+
+
+def cockpit_inputs(args: argparse.Namespace) -> tuple[str, str, list[dict[str, Any]], dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any], list[dict[str, Any]], dict[str, Any]]:
+    repo, repo_source = resolve_repo(args)
+    if getattr(args, "board_items_json", None):
+        issues = normalize_board_items(load_json(args.board_items_json))
+        scope = {"mode": "board_items_fixture", "item_count": len(issues)}
+        project_items: list[dict[str, Any]] = []
+        project_status = {"source": "skipped", "status": "skipped", "item_count": 0}
+        project_attempts = {"attempts": 0, "transient_failures": []}
+    elif args.issues_json or args.fixture_json:
+        issues = normalize_issue_collection(load_json(args.issues_json or args.fixture_json))
+        scope = {"mode": "fixture", "issue_numbers": [issue_number(issue) for issue in issues if issue_number(issue) is not None]}
+        project_items, project_status, project_attempts = read_project_items(args)
+    else:
+        issues, scope = read_live_issues(repo, args)
+        project_items, project_status, project_attempts = read_project_items(args)
+    local_git, _local_git_status, _local_git_attempts = read_local_git_state(args)
+    ledger_report = build_local_ledger_report(local_ledger_root(args))
+    candidate_events = normalize_candidate_events(load_json(args.candidate_events_json)) if args.candidate_events_json else []
+    return repo, repo_source, issues, scope, project_items, project_status, project_attempts, local_git, candidate_events, ledger_report
+
+
+def cmd_operational_cockpit(args: argparse.Namespace) -> None:
+    repo, repo_source, issues, scope, project_items, project_status, project_attempts, local_git, candidate_events, ledger_report = cockpit_inputs(args)
+    board = build_foundry_board(
+        repo,
+        issues[: args.limit],
+        project_items,
+        project_status,
+        local_git,
+        args.name,
+        {"repo_source": repo_source, **scope, "ledger_root": ledger_report["ledger_root"], "operational_cockpit_source": True},
+        accepted_replay={"derived_work_items": ledger_report["derived_work_items"], "summary": ledger_report["summary"]},
+        candidate_events=candidate_events,
+    )
+    recovery = build_mixed_state_recovery_report(board, project_status, project_attempts)
+    viewmodel = build_operational_cockpit_viewmodel(
+        repo,
+        board,
+        ledger_report,
+        recovery,
+        project_status,
+        project_attempts,
+        local_git,
+        load_operational_health(args),
+    )
+    if getattr(args, "html_out", None):
+        viewmodel["static_html_report"] = write_operational_cockpit_html(args.html_out, viewmodel)
+    print_json_or_text(viewmodel, args.json)
 
 
 def cmd_foundry_board(args: argparse.Namespace) -> None:
@@ -5579,6 +5961,28 @@ def build_parser() -> argparse.ArgumentParser:
     board.add_argument("--name", default="Foundry Board", help="Board name shown in the read-only report.")
     board.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON for foundry-board.")
     board.set_defaults(func=cmd_foundry_board)
+
+    cockpit = sub.add_parser("operational-cockpit")
+    cockpit.add_argument("--fixture-json", help="Legacy issue fixture; prefer --issues-json.")
+    cockpit.add_argument("--issues-json", help="Fixture issue object, list, or object with issues/items.")
+    cockpit.add_argument("--board-items-json", help="Fixture board items in issue-like or board item form.")
+    cockpit.add_argument("--project-items-json", help="Fixture Project item list or gh project item-list JSON.")
+    cockpit.add_argument("--local-git-json", help="Fixture local git state for branch/readiness display.")
+    cockpit.add_argument("--ledger-root", help="Accepted local ledger root. Defaults to usage/local/collaboration-ledger.")
+    cockpit.add_argument("--candidate-events-json", help="Read-only candidate event list or backfill preview output for cockpit display.")
+    cockpit.add_argument("--health-json", help="Optional runtime/environment/version health fixture for cockpit warnings.")
+    cockpit.add_argument("--issues", help="Comma-separated explicit issue numbers for bounded live cockpit report.")
+    cockpit.add_argument("--stage", help="Stage value or label for bounded live cockpit report.")
+    cockpit.add_argument("--limit", type=int, default=20, help="Maximum issues/items to render.")
+    cockpit.add_argument("--project-owner", help="Project owner for targeted live Project item-list.")
+    cockpit.add_argument("--project-number", type=int, help="Project number for targeted live Project item-list.")
+    cockpit.add_argument("--project-limit", type=int, default=50, help="Maximum Project items to read when explicitly configured.")
+    cockpit.add_argument("--project-retries", type=int, default=2, help="Bounded retries for transient Project reads.")
+    cockpit.add_argument("--project-retry-backoff", type=float, default=0.5, help="Seconds between transient Project read retries.")
+    cockpit.add_argument("--name", default="V2 Operational Cockpit", help="Cockpit report name.")
+    cockpit.add_argument("--html-out", help="Write static local HTML report to this path.")
+    cockpit.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON for operational-cockpit.")
+    cockpit.set_defaults(func=cmd_operational_cockpit)
 
     recovery = sub.add_parser("mixed-state-recovery")
     recovery.add_argument("--fixture-json", help="Legacy issue fixture; prefer --issues-json.")

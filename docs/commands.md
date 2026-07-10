@@ -42,6 +42,7 @@ Use these short commands in day-to-day agent work. English command text is canon
 | `preview GitHub Project sync plan` | `预览 GitHub Project sync plan` | Generate a dry-run Project mirror plan from ledger-backed board state with before/after values, conflicts, Human gates, and readback requirements. No Project/GitHub writes. |
 | `apply accepted Project sync plan` | `应用 accepted Project sync plan` | Apply accepted Project mirror operations through a reviewed fake/mock executor and record local sync-readback evidence. Live Project writes remain gated. |
 | `review mixed local and GitHub state` | `检查 local ledger 和 GitHub/Project 的混杂状态` | Explain local-newer, remote-newer, remote-only, candidate-only, partial-sync, branch-line, supersession, degraded Project, and out-of-band edit recovery paths. Read-only; no hidden repair. |
+| `show V2 operational cockpit` | `显示 V2 本地操作 cockpit` | Generate a read-only static HTML/JSON local operational cockpit with board, detail, migration, apply, sync handoff, recovery, health, and telemetry sections. GitHub Project remains the remote collaboration/control surface; no auto-sync or Project mutation. |
 | `publish practices` | `发布 practices` | Publish adapters from current active practices; usually not needed manually. |
 | `check operation context` | `检查操作上下文` | Show current Agent Foundry Core/Vault/evidence/runtime context before writes. |
 | `check Agent Foundry status` | `检查 Agent Foundry 状态` | Run a read-only status pass for Core, selected Vault, generated output, runtime receipts, and manual targets. |
