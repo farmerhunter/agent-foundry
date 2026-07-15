@@ -158,17 +158,51 @@ python3 scripts/github_collaboration_helper.py --repo <owner>/<repo> guided-onbo
   --trial-root /private/tmp/agent-foundry-guided-onboarding-trial
 ```
 
+For a real Human trial, do not treat the generated packet as acceptance. Run the protocol one step at a time and capture the Human response before continuing. A response file is the portable transcript input:
+
+```json
+{
+  "responses": [
+    {
+      "step": 1,
+      "choice": "start trial",
+      "human_response": "I understand this is a read-only trial and want to continue."
+    }
+  ],
+  "final_evaluation": {
+    "clarity_of_starting_context": "clear",
+    "confidence_in_current_state_evidence": "medium",
+    "candidate_non_authority_clarity": "clear",
+    "isolated_ledger_boundary_clarity": "clear",
+    "project_sync_not_executed_clarity": "clear",
+    "next_step_actionability": "actionable",
+    "remaining_friction": "Need to inspect #282 before accepting.",
+    "final_decision": "deferred"
+  }
+}
+```
+
+```bash
+python3 scripts/github_collaboration_helper.py --repo <owner>/<repo> guided-onboarding \
+  --issues <explicit-current-issue-list> \
+  --trial-root /private/tmp/agent-foundry-guided-onboarding-trial \
+  --trial-response-json /private/tmp/agent-foundry-guided-onboarding-trial/responses.json \
+  --transcript-out /private/tmp/agent-foundry-guided-onboarding-trial/transcripts/trial.json
+```
+
+If the next required Human response is missing, the protocol reports `blocked_waiting_for_human_response` and does not proceed. The transcript captures the Human response, choice, timestamp if supplied, and evidence refs before progression. Supported choices include setup inspection, fallback-set accept/edit/inspect/stop, candidate accept/skip/inspect/defer, preview-only isolated ledger decision, stop/recovery, and final decision `accepted`, `accepted_with_cleanup`, `rejected`, or `deferred`.
+
 The agent reads durable GitHub evidence such as issues, PRs, labels, comments, branch/status, and relevant docs/helpers. It may write temporary JSON, HTML, or ledger evidence only under the shown isolated trial root, for example `/private/tmp/...` or a user-supplied trial directory. It must not touch adopter repo files, live GitHub Project fields, runtime/Vault/private/generated state, generated Skills, or capability packs.
 
 If a stage-based query such as `stage:M14` or another expected `stage:*` label returns no candidates, do not assume the adopter repo is empty or incorrectly configured. Fall back to an explicit issue/PR set chosen from durable GitHub evidence, and tell the user which issue and PR numbers are being used.
 
 For the tiny-ipa renewed trial, rehydrate current durable state instead of reusing the old #386 active-item snapshot. The expected current readback before #390 is #276-#281 closed and #282 labeled `needs:user`, unless fresh GitHub evidence changes it. The guided packet should derive that concrete issue fallback set, show provenance, and ask the Human to confirm or edit it before candidate review.
 
-Candidate review is plain language: each candidate offers `accept`, `skip`, or `inspect evidence`. Candidates are not authoritative and change no project state until accepted into the isolated ledger. Before local apply, the agent must show the isolated ledger location, cleanup boundary, and no-effect guarantee. Project sync plans are proposed operations and risks with visible `not executed` status; live Project apply remains separately reviewed and Human-gated.
+Candidate review is plain language: each candidate offers `accept`, `skip`, `inspect evidence`, or `defer`. Candidates are not authoritative and change no project state until accepted into the isolated ledger. Before local apply, the agent must show the isolated ledger location, cleanup boundary, and no-effect guarantee. Project sync plans are proposed operations and risks with visible `not executed` status; live Project apply remains separately reviewed and Human-gated.
 
 Human-owned decisions remain explicit: fallback-set confirmation, candidate accept/skip/inspect, isolated local apply, sync apply choice, and final trust/readiness judgment. Stop or defer when the path or branch is wrong, provenance is unclear, output implies live mutation, Project/sync would be unsafe, or the user cannot identify the next safe action.
 
-**中文要点：** Existing-project onboarding 先给十分钟 guided packet，而不是让用户读 raw JSON。每一步都要说明 agent 读什么、可能写到哪个隔离位置、不会碰什么、现在只需要 Human 做哪一个决定。`stage:*` 查不到时 fallback 到当前 durable evidence 推导出的明确 issue/PR 列表；candidate 只有 accept / skip / inspect evidence，未写入 isolated ledger 前不是 authority；Project sync plan 必须显示 `not executed`。
+**中文要点：** Existing-project onboarding 先给十分钟 guided packet，但 packet 本身不是 Human acceptance。真实 trial 必须一步一步收集 Human response；缺少 response 时 helper 会 `blocked_waiting_for_human_response`，不能继续。Transcript 只能写在 isolated trial root 里面，默认不写 adopter repo、GitHub、Project、runtime、Vault/private/generated state、generated Skills 或 capability packs。`stage:*` 查不到时 fallback 到当前 durable evidence 推导出的明确 issue/PR 列表；candidate 只有 accept / skip / inspect evidence / defer，未写入 isolated ledger 前不是 authority；Project sync plan 必须显示 `not executed`。
 
 For existing GitHub-first projects, ask for a read-only backfill preview:
 
