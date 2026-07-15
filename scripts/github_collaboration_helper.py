@@ -1475,6 +1475,157 @@ def onboarding_step(
     }
 
 
+def trial_response_entries(response_doc: Any) -> tuple[list[dict[str, Any]], dict[str, Any], list[str]]:
+    if response_doc is None:
+        return [], {}, []
+    if not isinstance(response_doc, dict):
+        return [], {}, ["trial response JSON must be an object"]
+    responses = response_doc.get("responses", [])
+    if not isinstance(responses, list):
+        return [], {}, ["responses must be a list"]
+    normalized: list[dict[str, Any]] = []
+    errors: list[str] = []
+    for index, response in enumerate(responses, start=1):
+        if not isinstance(response, dict):
+            errors.append(f"response #{index} must be an object")
+            continue
+        try:
+            step = int(response.get("step"))
+        except (TypeError, ValueError):
+            errors.append(f"response #{index} missing numeric step")
+            continue
+        choice = str(response.get("choice", "")).strip()
+        human_response = str(response.get("human_response", "")).strip()
+        if not choice:
+            errors.append(f"response #{index} missing choice")
+        if not human_response:
+            errors.append(f"response #{index} missing human_response")
+        normalized.append(
+            {
+                "step": step,
+                "choice": choice,
+                "human_response": human_response,
+                "timestamp": str(response.get("timestamp", "not_available")),
+                "evidence_refs": response.get("evidence_refs", []),
+                "notes": str(response.get("notes", "")),
+            }
+        )
+    final_evaluation = response_doc.get("final_evaluation", {})
+    if final_evaluation and not isinstance(final_evaluation, dict):
+        errors.append("final_evaluation must be an object when present")
+        final_evaluation = {}
+    return normalized, final_evaluation, errors
+
+
+def build_interactive_trial_protocol(
+    steps: list[dict[str, Any]],
+    response_doc: Any,
+    trial_root: str,
+) -> dict[str, Any]:
+    responses, final_evaluation, errors = trial_response_entries(response_doc)
+    response_by_step = {response["step"]: response for response in responses}
+    transcript_steps: list[dict[str, Any]] = []
+    missing_step: dict[str, Any] | None = None
+    for step in steps:
+        step_number = int(step["step"])
+        response = response_by_step.get(step_number)
+        if not response:
+            missing_step = step
+            break
+        transcript_steps.append(
+            {
+                "step": step_number,
+                "title": step["title"],
+                "choice": response["choice"],
+                "human_response": response["human_response"],
+                "timestamp": response["timestamp"],
+                "evidence_refs": response["evidence_refs"],
+                "notes": response["notes"],
+                "captured_before_progression": True,
+            }
+        )
+    progression_allowed = missing_step is None and not errors
+    final_decision = str(final_evaluation.get("final_decision") or final_evaluation.get("decision") or "").strip()
+    final_required_fields = [
+        "clarity_of_starting_context",
+        "confidence_in_current_state_evidence",
+        "candidate_non_authority_clarity",
+        "isolated_ledger_boundary_clarity",
+        "project_sync_not_executed_clarity",
+        "next_step_actionability",
+        "remaining_friction",
+        "final_decision",
+    ]
+    missing_final_fields = [field for field in final_required_fields if not final_evaluation.get(field)]
+    final_evaluation_complete = not missing_final_fields and final_decision in {
+        "accepted",
+        "accepted_with_cleanup",
+        "rejected",
+        "deferred",
+    }
+    return {
+        "status": "ready_for_final_human_evaluation" if progression_allowed and not final_evaluation_complete else "blocked_waiting_for_human_response" if not progression_allowed else "complete",
+        "no_proceed_without_human_response": True,
+        "progression_allowed": progression_allowed,
+        "blocked_at_step": None if progression_allowed else missing_step["step"] if missing_step else "invalid_response",
+        "next_required_human_response": None if progression_allowed else {
+            "step": missing_step["step"] if missing_step else "invalid_response",
+            "title": missing_step["title"] if missing_step else "Fix trial response JSON",
+            "allowed_choices": missing_step.get("allowed_human_choices", []) if missing_step else [],
+            "prompt": missing_step["one_human_decision_required_now"] if missing_step else "; ".join(errors),
+        },
+        "response_errors": errors,
+        "transcript_capture": {
+            "status": "captured" if transcript_steps else "no_human_response_captured_yet",
+            "transcript_root": trial_root,
+            "captured_response_count": len(transcript_steps),
+            "responses": transcript_steps,
+            "actual_human_response_required_before_progression": True,
+        },
+        "choice_defer_recovery_paths": [
+            "inspect evidence before selecting candidates",
+            "skip candidate and continue with remaining evidence",
+            "defer candidate and record recovery reason",
+            "stop trial when provenance, write boundary, or safety is unclear",
+            f"remove {trial_root.rstrip('/')} to abandon temporary trial evidence",
+        ],
+        "final_structured_human_evaluation": {
+            "required": True,
+            "status": "complete" if final_evaluation_complete else "missing_or_incomplete",
+            "missing_fields": missing_final_fields,
+            "allowed_final_decisions": ["accepted", "accepted_with_cleanup", "rejected", "deferred"],
+            "captured": final_evaluation,
+        },
+    }
+
+
+def write_trial_transcript(path_text: str, trial_root: str, payload: dict[str, Any]) -> dict[str, Any]:
+    root = Path(trial_root).expanduser().resolve()
+    path = Path(path_text).expanduser().resolve()
+    if root not in path.parents:
+        return {
+            "status": "invalid",
+            "error": "transcript path must stay inside trial root",
+            "mutation_performed": False,
+        }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    transcript = {
+        "schema_version": 1,
+        "command": "guided-onboarding-transcript",
+        "repo": payload["repo"],
+        "trial_protocol": payload["interactive_human_trial_protocol"],
+        "forbidden_actions": payload["forbidden_actions"],
+        "mutation_scope": "local_trial_transcript_only",
+    }
+    path.write_text(json.dumps(transcript, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return {
+        "status": "written",
+        "path": str(path),
+        "mutation_performed": True,
+        "write_scope": "local_trial_transcript_only",
+    }
+
+
 def build_guided_onboarding_packet(
     repo: str,
     repo_source: str,
@@ -1488,6 +1639,7 @@ def build_guided_onboarding_packet(
     adopter_path: str,
     adopter_branch: str,
     selected_mode: str,
+    response_doc: Any = None,
 ) -> dict[str, Any]:
     explicit_set = derive_explicit_fallback_set(issues, prs)
     selected_numbers = explicit_set["issue_numbers"]
@@ -1501,7 +1653,7 @@ def build_guided_onboarding_packet(
             "state": record["state"],
             "labels": record["labels"],
             "provenance_url": record["url"],
-            "available_actions": ["accept", "skip", "inspect evidence"],
+            "available_actions": ["accept", "skip", "inspect evidence", "defer"],
             "authority": "candidate_non_authoritative_until_accepted_into_isolated_ledger",
         }
         for record in explicit_set["provenance"]
@@ -1549,7 +1701,7 @@ def build_guided_onboarding_packet(
         },
         "candidate_review": {
             "candidate_non_authority": "candidates are not authoritative and change no project state until accepted into the isolated ledger",
-            "human_actions": ["accept", "skip", "inspect evidence"],
+            "human_actions": ["accept", "skip", "inspect evidence", "defer"],
             "candidates": candidate_cards,
         },
         "project_sync_plan": {
@@ -1568,7 +1720,7 @@ def build_guided_onboarding_packet(
         "guided_steps": [
             onboarding_step(
                 1,
-                "Start / scope confirmation",
+                "Starting context / consent",
                 ["repo/path/branch/mode requested by the Human", "current branch/status when available"],
                 [f"temporary guided onboarding evidence under {trial_root}"],
                 ["adopter repo files", "GitHub issues/labels/Project", "runtime/Vault/private/generated state"],
@@ -1580,39 +1732,39 @@ def build_guided_onboarding_packet(
                 ["current durable GitHub issues, PRs, labels, comments, and provenance URLs", "optional targeted Project readback when configured"],
                 [f"temporary readback summaries under {trial_root} if the operator saves evidence"],
                 ["stale #386 active-item snapshots", "hidden Project state guesses"],
-                "Confirm or edit the explicit issue/PR fallback set before candidate review.",
+                "Confirm the current durable state is fresh before fallback-set selection.",
             ),
             onboarding_step(
                 3,
+                "Explicit fallback set selection",
+                ["fallback issue/PR candidates derived from current durable evidence", "candidate provenance links"],
+                [f"fallback-set decision note under {trial_root} only if requested"],
+                ["accepted local ledger authority", "adopter repo files", "GitHub Project fields"],
+                "Confirm, edit, inspect, or stop on the explicit issue/PR fallback set before candidate review.",
+            ),
+            onboarding_step(
+                4,
                 "Candidate review",
                 ["candidate cards derived from current durable evidence", "candidate provenance links"],
                 [f"review notes or candidate decision draft under {trial_root} only if requested"],
                 ["accepted local ledger authority", "adopter repo files", "GitHub Project fields"],
-                "Choose accept, skip, or inspect evidence for each candidate.",
+                "Choose accept, skip, inspect evidence, or defer for each candidate.",
             ),
             onboarding_step(
-                4,
-                "Isolated ledger apply preview/apply boundary",
+                5,
+                "No-mutation isolated ledger decision",
                 ["accepted candidate decisions", "isolated ledger location and cleanup boundary"],
                 [f"append-only isolated ledger events at {trial_root.rstrip('/')}/local-collaboration-ledger/events.jsonl only after later reviewed local apply"],
                 ["tiny-ipa files", "GitHub issues/labels/Project", "runtime/Vault/private/generated state", "generated Skills", "capability packs"],
                 "Approve or defer isolated local apply after reading the no-effect guarantee.",
             ),
             onboarding_step(
-                5,
-                "Board / cockpit / local action / sync plan",
+                6,
+                "Human-facing evidence / result presentation",
                 ["accepted isolated ledger replay", "optional Project mirror readback", "sync-plan dry-run output"],
                 [f"optional static HTML/JSON decision-support report under {trial_root}"],
                 ["live Project apply", "automatic sync cadence", "remote issue closure/reopen"],
                 "Decide whether to stay local, inspect GitHub Project, run project-sync-plan, or defer live apply.",
-            ),
-            onboarding_step(
-                6,
-                "Renewed trial handoff",
-                ["fresh tiny-ipa durable state for #390", "Human subjective acceptance response"],
-                [f"#390 trial evidence notes under {trial_root} or durable GitHub comments"],
-                ["#376/#292 final closure", "stale #386 snapshot reuse"],
-                "Answer whether the current-state guided path is understandable enough to proceed.",
             ),
         ],
         "forbidden_actions": [
@@ -1642,6 +1794,47 @@ def build_guided_onboarding_packet(
             "user_facing_output_size": "concise_step_packet",
         },
     }
+    allowed_choices = {
+        1: ["start trial", "inspect setup", "stop"],
+        2: ["confirm current context", "inspect evidence", "stop"],
+        3: ["accept proposed set", "edit set", "inspect evidence", "stop"],
+        4: ["accept for isolated-trial consideration", "skip", "inspect evidence", "defer"],
+        5: ["preview only", "request later local-temp gate", "defer", "stop"],
+        6: ["continue with decision support", "inspect raw debug evidence", "defer", "stop"],
+        7: ["inspect evidence", "skip candidate", "defer candidate", "stop and recover"],
+        8: ["accepted", "accepted with cleanup", "rejected", "deferred"],
+    }
+    extra_steps = [
+        onboarding_step(
+            7,
+            "Choice / defer / recovery path",
+            ["Human-selected non-happy path", "candidate provenance", "current transcript"],
+            [f"temporary recovery note under {trial_root} if requested"],
+            ["hidden repair", "destructive cleanup", "GitHub or Project mutation"],
+            "Choose inspect evidence, skip/defer a candidate, or stop and recover.",
+        ),
+        onboarding_step(
+            8,
+            "Final structured Human evaluation",
+            ["captured responses from prior steps", "Human final ratings and decision"],
+            [f"trial transcript under {trial_root}"],
+            ["#390 Human acceptance inference", "#376/#292 closure", "final V2 integration"],
+            "Provide final decision: accepted, accepted with cleanup, rejected, or deferred.",
+        ),
+    ]
+    payload["guided_steps"].extend(extra_steps)
+    for step in payload["guided_steps"]:
+        step["allowed_human_choices"] = allowed_choices.get(step["step"], [])
+    payload["interactive_human_trial_protocol"] = build_interactive_trial_protocol(
+        payload["guided_steps"],
+        response_doc,
+        trial_root,
+    )
+    payload["mutation_performed"] = False
+    payload["transcript_capture_supported"] = True
+    payload["default_trial_mode"] = "no_mutation_preview_only"
+    payload["local_temp_apply_requires_later_explicit_gate"] = True
+    payload["telemetry"]["guided_step_count"] = len(payload["guided_steps"])
     return payload
 
 
@@ -1652,18 +1845,20 @@ def render_guided_onboarding_text(payload: dict[str, Any]) -> str:
         f"Mode: {payload['adopter_project']['selected_mode']} (Base remains default outside this explicit trial)",
         f"Isolated evidence root: {payload['isolated_evidence_root']}",
         "Raw JSON is debug evidence only; the primary Human UX is this guided packet.",
+        f"Interactive Human trial protocol: {payload['interactive_human_trial_protocol']['status']}",
+        f"No proceed without Human response: {payload['interactive_human_trial_protocol']['no_proceed_without_human_response']}",
         "",
         "Current durable evidence and explicit issue/PR fallback:",
         payload["current_durable_evidence_summary"]["summary"],
         f"Human decision required now: {payload['explicit_issue_pr_fallback']['human_prompt']}",
         "",
-        "Candidate review: accept / skip / inspect evidence",
+        "Candidate review: accept / skip / inspect evidence / defer",
         payload["candidate_review"]["candidate_non_authority"],
     ]
     for candidate in payload["candidate_review"]["candidates"]:
         lines.append(
             f"- {candidate['kind']} #{candidate['number']}: {candidate['title']} "
-            f"({candidate['state']}); actions: accept, skip, inspect evidence; provenance: {candidate.get('provenance_url') or 'not_available'}"
+            f"({candidate['state']}); actions: accept, skip, inspect evidence, defer; provenance: {candidate.get('provenance_url') or 'not_available'}"
         )
     lines.extend(
         [
@@ -1682,6 +1877,7 @@ def render_guided_onboarding_text(payload: dict[str, Any]) -> str:
         lines.extend(
             [
                 f"{step['step']}. {step['title']}",
+                "   Allowed Human choices: " + "; ".join(step.get("allowed_human_choices", [])),
                 "   What the agent reads: " + "; ".join(step["what_the_agent_reads"]),
                 "   What it may write: " + "; ".join(step["what_it_may_write"]),
                 "   What it will not touch: " + "; ".join(step["what_it_will_not_touch"]),
@@ -1694,6 +1890,7 @@ def render_guided_onboarding_text(payload: dict[str, Any]) -> str:
             "Renewed trial handoff:",
             payload["renewed_trial_handoff"]["current_expected_tiny_ipa_readback"],
             "Do not reuse stale #386 active-item snapshot.",
+            "Final structured Human evaluation is required before #390 can request acceptance again.",
         ]
     )
     return "\n".join(lines)
@@ -1721,7 +1918,13 @@ def cmd_guided_onboarding(args: argparse.Namespace) -> None:
         args.adopter_path,
         args.adopter_branch,
         args.selected_mode,
+        load_json(args.trial_response_json) if args.trial_response_json else None,
     )
+    if args.transcript_out:
+        payload["transcript_output"] = write_trial_transcript(args.transcript_out, args.trial_root, payload)
+        if payload["transcript_output"]["status"] == "invalid":
+            print_json_or_text(payload, True)
+            raise SystemExit(6)
     if args.json:
         print_json_or_text(payload, True)
     else:
@@ -6278,6 +6481,8 @@ def build_parser() -> argparse.ArgumentParser:
     guided.add_argument("--adopter-path", default="not_provided", help="Adopter project path shown in the guided packet.")
     guided.add_argument("--adopter-branch", default="not_provided", help="Adopter project branch shown in the guided packet.")
     guided.add_argument("--selected-mode", default="explicit_local_orchestration_read_only_trial", help="Selected onboarding mode shown in the guided packet.")
+    guided.add_argument("--trial-response-json", help="Human trial response JSON; required to advance past each protocol step.")
+    guided.add_argument("--transcript-out", help="Optional local transcript output path. Must stay inside --trial-root.")
     guided.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON for guided-onboarding.")
     guided.set_defaults(func=cmd_guided_onboarding)
 

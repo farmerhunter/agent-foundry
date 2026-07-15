@@ -606,6 +606,24 @@ agent-foundry-github-collab --repo <owner>/<repo> guided-onboarding \
   --trial-root /private/tmp/agent-foundry-guided-onboarding-trial
 ```
 
+The packet is not itself a valid Human trial. For #390-style acceptance, the
+trial must use response capture:
+
+```text
+agent-foundry-github-collab --repo <owner>/<repo> guided-onboarding \
+  --issues <explicit-current-issue-list> \
+  --trial-root /private/tmp/agent-foundry-guided-onboarding-trial \
+  --trial-response-json /private/tmp/agent-foundry-guided-onboarding-trial/responses.json \
+  --transcript-out /private/tmp/agent-foundry-guided-onboarding-trial/transcripts/trial.json
+```
+
+The protocol must report `blocked_waiting_for_human_response` and stop when the
+next required Human response is missing. A transcript entry is required before
+the agent treats a step as progressed. Captured responses should include the
+step number, Human choice, Human response, optional timestamp, evidence refs,
+and notes. The transcript may be written only inside the explicit trial root.
+It is local evidence, not accepted local ledger authority.
+
 Base remains the default mode for ordinary project work. Local Orchestration is
 selected only through explicit trial/user intent, local capability config,
 ledger manifest/state, an issue/task contract, or an accepted capability
@@ -621,12 +639,20 @@ expected readback before #390 is #276-#281 closed and #282 labeled
 #386 active-item snapshot.
 
 Candidate review stays non-authoritative: each candidate should show
-`accept`, `skip`, or `inspect evidence`, and no project state changes until a
-later reviewed local apply accepts the candidate into the isolated ledger.
+`accept`, `skip`, `inspect evidence`, or `defer`, and no project state changes
+until a later reviewed local apply accepts the candidate into the isolated
+ledger.
 Before local apply, show the isolated ledger location, cleanup boundary, and
 no-effect guarantee. Project sync remains dry-run decision support with
 visible `not executed` status until a separate reviewed and Human-gated apply
 path is authorized.
+
+Final structured Human evaluation is required before #390 can ask for
+acceptance again. Capture clarity of starting context, confidence in
+current-state evidence, candidate non-authority clarity, isolated
+ledger/no-effect clarity, Project sync `not executed` clarity, next-step
+actionability, remaining friction, and final decision:
+`accepted`, `accepted_with_cleanup`, `rejected`, or `deferred`.
 
 Use `local-ledger-backfill-preview` when an existing GitHub-first project needs
 candidate Local Collaboration Ledger events for review before any authoritative

@@ -146,6 +146,9 @@ def main() -> int:
         cockpit_html = base / "operational-cockpit.html"
         guided_onboarding_issues = base / "guided-onboarding-issues.json"
         guided_onboarding_prs = base / "guided-onboarding-prs.json"
+        guided_trial_responses = base / "guided-trial-responses.json"
+        guided_trial_transcript = base / "guided-trial-root" / "transcripts" / "trial.json"
+        guided_trial_response_errors = base / "guided-trial-response-errors.json"
         new_repo_labels = base / "new-repo-labels.json"
         new_repo_issues = base / "new-repo-issues.json"
         new_repo_prs = base / "new-repo-prs.json"
@@ -457,6 +460,78 @@ def main() -> int:
             ),
         )
         write(guided_onboarding_prs, json.dumps({"items": []}))
+        write(
+            guided_trial_responses,
+            json.dumps(
+                {
+                    "responses": [
+                        {
+                            "step": 1,
+                            "choice": "start trial",
+                            "human_response": "I understand this is a read-only trial and want to continue.",
+                            "timestamp": "2026-07-15T09:00:00Z",
+                        },
+                        {
+                            "step": 2,
+                            "choice": "confirm current context",
+                            "human_response": "The current tiny-ipa M14 context is correct.",
+                            "timestamp": "2026-07-15T09:01:00Z",
+                        },
+                        {
+                            "step": 3,
+                            "choice": "accept proposed set",
+                            "human_response": "Use #282 as the gate and #276-#281 as completed context.",
+                            "timestamp": "2026-07-15T09:02:00Z",
+                        },
+                        {
+                            "step": 4,
+                            "choice": "inspect evidence",
+                            "human_response": "I want to inspect #282 evidence before considering it.",
+                            "timestamp": "2026-07-15T09:03:00Z",
+                            "evidence_refs": ["https://github.com/farmerhunter/tiny-ipa/issues/282"],
+                        },
+                        {
+                            "step": 5,
+                            "choice": "preview only",
+                            "human_response": "Keep ledger work in no-mutation preview mode.",
+                            "timestamp": "2026-07-15T09:04:00Z",
+                        },
+                        {
+                            "step": 6,
+                            "choice": "continue with decision support",
+                            "human_response": "The Project sync plan is not executed and only decision support.",
+                            "timestamp": "2026-07-15T09:05:00Z",
+                        },
+                        {
+                            "step": 7,
+                            "choice": "defer candidate",
+                            "human_response": "Defer the candidate until I finish reading the evidence.",
+                            "timestamp": "2026-07-15T09:06:00Z",
+                        },
+                        {
+                            "step": 8,
+                            "choice": "deferred",
+                            "human_response": "The trial is understandable, but I want more time before acceptance.",
+                            "timestamp": "2026-07-15T09:07:00Z",
+                        },
+                    ],
+                    "final_evaluation": {
+                        "clarity_of_starting_context": "clear",
+                        "confidence_in_current_state_evidence": "medium",
+                        "candidate_non_authority_clarity": "clear",
+                        "isolated_ledger_boundary_clarity": "clear",
+                        "project_sync_not_executed_clarity": "clear",
+                        "next_step_actionability": "actionable",
+                        "remaining_friction": "Need to read #282 details before accepting.",
+                        "final_decision": "deferred",
+                    },
+                }
+            ),
+        )
+        write(
+            guided_trial_response_errors,
+            json.dumps({"responses": [{"step": 1, "choice": "start trial"}]}),
+        )
         write(
             readiness_prs,
             json.dumps(
@@ -945,6 +1020,10 @@ def main() -> int:
             ("guided-onboarding-isolated-ledger", "isolated_ledger_no_effect_guarantee"),
             ("guided-onboarding-project-not-executed", '"status": "not executed"'),
             ("guided-onboarding-no-stale-snapshot", "stale #386 active-item snapshot"),
+            ("guided-onboarding-no-proceed", '"no_proceed_without_human_response": true'),
+            ("guided-onboarding-blocked", '"status": "blocked_waiting_for_human_response"'),
+            ("guided-onboarding-start-consent", "Starting context / consent"),
+            ("guided-onboarding-final-evaluation", "Final structured Human evaluation"),
         ]:
             errors.extend(expect_ok(name, guided_onboarding_json, expected))
         guided_onboarding_text = run(
@@ -968,8 +1047,64 @@ def main() -> int:
             ("guided-onboarding-text-not-touch", "What it will not touch:"),
             ("guided-onboarding-text-decision", "One Human decision required now:"),
             ("guided-onboarding-text-not-executed", "Project sync plan status: not executed"),
+            ("guided-onboarding-text-no-proceed", "No proceed without Human response: True"),
+            ("guided-onboarding-text-final-eval", "Final structured Human evaluation is required"),
         ]:
             errors.extend(expect_ok(name, guided_onboarding_text, expected))
+        guided_trial_complete = run(
+            [
+                "--json",
+                "--repo",
+                "farmerhunter/tiny-ipa",
+                "guided-onboarding",
+                "--issues-json",
+                str(guided_onboarding_issues),
+                "--prs-json",
+                str(guided_onboarding_prs),
+                "--trial-root",
+                str(guided_trial_transcript.parents[1]),
+                "--trial-response-json",
+                str(guided_trial_responses),
+                "--transcript-out",
+                str(guided_trial_transcript),
+            ],
+            base,
+        )
+        for name, expected in [
+            ("guided-trial-response-complete", '"status": "complete"'),
+            ("guided-trial-progression-allowed", '"progression_allowed": true'),
+            ("guided-trial-response-captured", '"captured_before_progression": true'),
+            ("guided-trial-response-count", '"captured_response_count": 8'),
+            ("guided-trial-inspect-path", "inspect evidence"),
+            ("guided-trial-defer-path", "Defer the candidate"),
+            ("guided-trial-final-decision", '"final_decision": "deferred"'),
+            ("guided-trial-default-no-mutation", '"default_trial_mode": "no_mutation_preview_only"'),
+            ("guided-trial-local-gate", '"local_temp_apply_requires_later_explicit_gate": true'),
+            ("guided-trial-transcript-written", '"status": "written"'),
+            ("guided-trial-transcript-scope", '"write_scope": "local_trial_transcript_only"'),
+        ]:
+            errors.extend(expect_ok(name, guided_trial_complete, expected))
+        if guided_trial_transcript.exists():
+            transcript_text = guided_trial_transcript.read_text(encoding="utf-8")
+            errors.extend(expect_text_contains("guided-trial-transcript-file", transcript_text, ["actual_human_response_required_before_progression", "deferred"]))
+        else:
+            errors.append("guided-trial-transcript-file: transcript was not written")
+        guided_trial_invalid = run(
+            [
+                "--json",
+                "--repo",
+                "farmerhunter/tiny-ipa",
+                "guided-onboarding",
+                "--issues-json",
+                str(guided_onboarding_issues),
+                "--prs-json",
+                str(guided_onboarding_prs),
+                "--trial-response-json",
+                str(guided_trial_response_errors),
+            ],
+            base,
+        )
+        errors.extend(expect_ok("guided-trial-invalid-response-blocks", guided_trial_invalid, "response #1 missing human_response"))
         errors.extend(
             expect_ok(
                 "scheduler-audit-fixture",
