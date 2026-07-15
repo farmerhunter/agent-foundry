@@ -92,6 +92,7 @@ def main() -> int:
                 "usage/local/collaboration-ledger/events.jsonl",
                 "local-ledger-report",
                 "local-ledger-backfill-preview",
+                "guided-onboarding",
                 "project-sync-plan",
                 "writes_supported_now: false",
             ],
@@ -143,6 +144,8 @@ def main() -> int:
         mixed_recovery_candidate_events = base / "mixed-recovery-candidate-events.json"
         cockpit_health = base / "operational-cockpit-health.json"
         cockpit_html = base / "operational-cockpit.html"
+        guided_onboarding_issues = base / "guided-onboarding-issues.json"
+        guided_onboarding_prs = base / "guided-onboarding-prs.json"
         new_repo_labels = base / "new-repo-labels.json"
         new_repo_issues = base / "new-repo-issues.json"
         new_repo_prs = base / "new-repo-prs.json"
@@ -395,6 +398,65 @@ def main() -> int:
         write(new_repo_labels, json.dumps({"labels": []}))
         write(new_repo_issues, json.dumps({"issues": []}))
         write(new_repo_prs, json.dumps({"items": []}))
+        write(
+            guided_onboarding_issues,
+            json.dumps(
+                {
+                    "issues": [
+                        {
+                            "number": 276,
+                            "title": "[M14][P0] Deployment target and runtime config contract",
+                            "state": "CLOSED",
+                            "labels": [{"name": "area:testing"}, {"name": "type:task"}],
+                            "url": "https://github.com/farmerhunter/tiny-ipa/issues/276",
+                        },
+                        {
+                            "number": 277,
+                            "title": "[M14][P1] Production auth, origin, CORS, and secret hardening",
+                            "state": "CLOSED",
+                            "labels": [{"name": "area:backend"}, {"name": "type:task"}],
+                            "url": "https://github.com/farmerhunter/tiny-ipa/issues/277",
+                        },
+                        {
+                            "number": 278,
+                            "title": "[M14][P1] VPS install and systemd runbook",
+                            "state": "CLOSED",
+                            "labels": [{"name": "area:tooling"}, {"name": "type:task"}],
+                            "url": "https://github.com/farmerhunter/tiny-ipa/issues/278",
+                        },
+                        {
+                            "number": 279,
+                            "title": "[M14][P2] Frontend build and reverse-proxy routing contract",
+                            "state": "CLOSED",
+                            "labels": [{"name": "area:frontend"}, {"name": "type:task"}],
+                            "url": "https://github.com/farmerhunter/tiny-ipa/issues/279",
+                        },
+                        {
+                            "number": 280,
+                            "title": "[M14][P2] SQLite backup and restore dry-run verification",
+                            "state": "CLOSED",
+                            "labels": [{"name": "area:backend"}, {"name": "type:task"}],
+                            "url": "https://github.com/farmerhunter/tiny-ipa/issues/280",
+                        },
+                        {
+                            "number": 281,
+                            "title": "[M14][P3] Deployment smoke and rollback checklist",
+                            "state": "CLOSED",
+                            "labels": [{"name": "area:tooling"}, {"name": "type:task"}],
+                            "url": "https://github.com/farmerhunter/tiny-ipa/issues/281",
+                        },
+                        {
+                            "number": 282,
+                            "title": "[M14][P4] VPS deployment readiness review and human deployment gate",
+                            "state": "OPEN",
+                            "labels": [{"name": "area:testing"}, {"name": "needs:user"}, {"name": "type:review"}],
+                            "url": "https://github.com/farmerhunter/tiny-ipa/issues/282",
+                        },
+                    ]
+                }
+            ),
+        )
+        write(guided_onboarding_prs, json.dumps({"items": []}))
         write(
             readiness_prs,
             json.dumps(
@@ -849,6 +911,65 @@ def main() -> int:
         )
         errors.extend(expect_ok("issue-context-ignores-fenced-contract-heading", issue_context_result, '"status": "ok"'))
         errors.extend(expect_ok("issue-context-real-contract-owner", issue_context_result, '"Owner role": "implementer"'))
+        guided_onboarding_json = run(
+            [
+                "--json",
+                "--repo",
+                "farmerhunter/tiny-ipa",
+                "guided-onboarding",
+                "--issues-json",
+                str(guided_onboarding_issues),
+                "--prs-json",
+                str(guided_onboarding_prs),
+                "--trial-root",
+                "/private/tmp/af390-tiny-ipa-guided-trial",
+                "--adopter-path",
+                "/Users/example/tiny-ipa",
+                "--adopter-branch",
+                "main",
+            ],
+            base,
+        )
+        for name, expected in [
+            ("guided-onboarding-command", '"command": "guided-onboarding"'),
+            ("guided-onboarding-surface", "ten-minute guided onboarding"),
+            ("guided-onboarding-read-only", '"mode": "read_only"'),
+            ("guided-onboarding-no-mutation", '"mutation_performed": false'),
+            ("guided-onboarding-no-apply", '"apply_supported_now": false'),
+            ("guided-onboarding-raw-json-debug", '"raw_json_primary_ux": false'),
+            ("guided-onboarding-fallback", "explicit issue/PR fallback"),
+            ("guided-onboarding-current-gate", '"issue_numbers": [\n      282\n    ]'),
+            ("guided-onboarding-current-state", "#276-#281 closed and #282 needs:user"),
+            ("guided-onboarding-candidate-actions", "inspect evidence"),
+            ("guided-onboarding-candidate-non-authority", "candidate_non_authoritative_until_accepted_into_isolated_ledger"),
+            ("guided-onboarding-isolated-ledger", "isolated_ledger_no_effect_guarantee"),
+            ("guided-onboarding-project-not-executed", '"status": "not executed"'),
+            ("guided-onboarding-no-stale-snapshot", "stale #386 active-item snapshot"),
+        ]:
+            errors.extend(expect_ok(name, guided_onboarding_json, expected))
+        guided_onboarding_text = run(
+            [
+                "--repo",
+                "farmerhunter/tiny-ipa",
+                "guided-onboarding",
+                "--issues-json",
+                str(guided_onboarding_issues),
+                "--prs-json",
+                str(guided_onboarding_prs),
+                "--trial-root",
+                "/private/tmp/af390-tiny-ipa-guided-trial",
+            ],
+            base,
+        )
+        for name, expected in [
+            ("guided-onboarding-text-title", "Ten-minute guided onboarding packet"),
+            ("guided-onboarding-text-reads", "What the agent reads:"),
+            ("guided-onboarding-text-writes", "What it may write:"),
+            ("guided-onboarding-text-not-touch", "What it will not touch:"),
+            ("guided-onboarding-text-decision", "One Human decision required now:"),
+            ("guided-onboarding-text-not-executed", "Project sync plan status: not executed"),
+        ]:
+            errors.extend(expect_ok(name, guided_onboarding_text, expected))
         errors.extend(
             expect_ok(
                 "scheduler-audit-fixture",

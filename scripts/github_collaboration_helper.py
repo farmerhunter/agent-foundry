@@ -43,6 +43,7 @@ READ_ONLY_ACTIONS = {
     "scheduler-audit",
     "collaboration-readiness",
     "foundry-board",
+    "guided-onboarding",
     "operational-cockpit",
     "mixed-state-recovery",
     "project-sync-plan",
@@ -1407,6 +1408,324 @@ def build_local_ledger_backfill_preview(
         "telemetry_issue": "#266",
     }
     return payload
+
+
+def issue_provenance_record(item: dict[str, Any], kind: str = "issue") -> dict[str, Any]:
+    labels = label_names(item)
+    return {
+        "kind": kind,
+        "number": issue_number(item),
+        "title": item.get("title", ""),
+        "state": item.get("state", "unknown"),
+        "labels": labels,
+        "url": issue_pr_url(item) if kind == "pr" else issue_url(item),
+        "selected_reason": (
+            "current durable gate" if any(label in {"needs:user", "needs:human"} for label in labels)
+            else "active routed work" if any(label.startswith("needs:") for label in labels)
+            else "completed context" if str(item.get("state", "")).upper() == "CLOSED"
+            else "durable evidence"
+        ),
+    }
+
+
+def derive_explicit_fallback_set(issues: list[dict[str, Any]], prs: list[dict[str, Any]]) -> dict[str, Any]:
+    current_gates = [
+        issue for issue in issues
+        if str(issue.get("state", "")).upper() != "CLOSED"
+        and any(label in {"needs:user", "needs:human"} for label in label_names(issue))
+    ]
+    routed_open = [
+        issue for issue in issues
+        if str(issue.get("state", "")).upper() != "CLOSED"
+        and any(label.startswith("needs:") for label in label_names(issue))
+    ]
+    open_issues = [issue for issue in issues if str(issue.get("state", "")).upper() != "CLOSED"]
+    completed_context = [issue for issue in issues if str(issue.get("state", "")).upper() == "CLOSED"]
+    selected_issues = current_gates or routed_open or open_issues
+    selected_prs = [pr for pr in prs if str(pr.get("state", "")).upper() != "CLOSED"]
+    return {
+        "status": "human_confirmation_required",
+        "name": "explicit issue/PR fallback",
+        "issue_numbers": [issue_number(issue) for issue in selected_issues if issue_number(issue) is not None],
+        "pr_numbers": [issue_number(pr) for pr in selected_prs if issue_number(pr) is not None],
+        "provenance": [
+            *(issue_provenance_record(issue, "issue") for issue in selected_issues),
+            *(issue_provenance_record(pr, "pr") for pr in selected_prs),
+        ],
+        "completed_context": [issue_provenance_record(issue, "issue") for issue in completed_context],
+        "human_prompt": "Confirm this explicit issue/PR fallback set, edit it, or stop before candidate review.",
+    }
+
+
+def onboarding_step(
+    step: int,
+    title: str,
+    reads: list[str],
+    may_write: list[str],
+    will_not_touch: list[str],
+    decision: str,
+) -> dict[str, Any]:
+    return {
+        "step": step,
+        "title": title,
+        "what_the_agent_reads": reads,
+        "what_it_may_write": may_write,
+        "what_it_will_not_touch": will_not_touch,
+        "one_human_decision_required_now": decision,
+    }
+
+
+def build_guided_onboarding_packet(
+    repo: str,
+    repo_source: str,
+    issues: list[dict[str, Any]],
+    prs: list[dict[str, Any]],
+    issue_scope: dict[str, Any],
+    pr_status: dict[str, Any],
+    project_status: dict[str, Any],
+    project_attempts: dict[str, Any],
+    trial_root: str,
+    adopter_path: str,
+    adopter_branch: str,
+    selected_mode: str,
+) -> dict[str, Any]:
+    explicit_set = derive_explicit_fallback_set(issues, prs)
+    selected_numbers = explicit_set["issue_numbers"]
+    context_numbers = [record["number"] for record in explicit_set["completed_context"] if record.get("number") is not None]
+    candidate_cards = [
+        {
+            "candidate_id": f"issue-{record['number']}" if record["kind"] == "issue" else f"pr-{record['number']}",
+            "kind": record["kind"],
+            "number": record["number"],
+            "title": record["title"],
+            "state": record["state"],
+            "labels": record["labels"],
+            "provenance_url": record["url"],
+            "available_actions": ["accept", "skip", "inspect evidence"],
+            "authority": "candidate_non_authoritative_until_accepted_into_isolated_ledger",
+        }
+        for record in explicit_set["provenance"]
+    ]
+    fallback_phrase = (
+        f"Current durable evidence selects issues {selected_numbers}"
+        + (f" with completed context {context_numbers}." if context_numbers else ".")
+    )
+    payload = {
+        "schema_version": 1,
+        "command": "guided-onboarding",
+        "surface": "ten-minute guided onboarding",
+        "mode": "read_only",
+        "repo": repo,
+        "repo_source": repo_source,
+        "adopter_project": {
+            "path": adopter_path,
+            "branch": adopter_branch,
+            "selected_mode": selected_mode,
+            "base_default_preserved": True,
+            "local_orchestration_selection": "explicit_trial_only_until_accepted_local_capability_state",
+        },
+        "isolated_evidence_root": trial_root,
+        "isolated_ledger": {
+            "location": f"{trial_root.rstrip('/')}/local-collaboration-ledger/events.jsonl",
+            "cleanup_boundary": f"remove {trial_root.rstrip('/')} to discard trial evidence",
+            "isolated_ledger_no_effect_guarantee": (
+                "no adopter repo files, GitHub issues/labels/Project fields, runtime, Vault/private/generated state, "
+                "generated Skills, or capability packs are modified"
+            ),
+        },
+        "raw_json_primary_ux": False,
+        "raw_json_role": "debug/evidence only; the Human-facing path is this guided packet",
+        "mutation_performed": False,
+        "apply_supported_now": False,
+        "github_write_back_supported_now": False,
+        "project_mutation_performed": False,
+        "explicit_issue_pr_fallback": explicit_set,
+        "current_durable_evidence_summary": {
+            "summary": fallback_phrase,
+            "issue_scope": issue_scope,
+            "pr_status": pr_status,
+            "project_status": project_status,
+            "project_attempts": project_attempts,
+        },
+        "candidate_review": {
+            "candidate_non_authority": "candidates are not authoritative and change no project state until accepted into the isolated ledger",
+            "human_actions": ["accept", "skip", "inspect evidence"],
+            "candidates": candidate_cards,
+        },
+        "project_sync_plan": {
+            "status": "not executed",
+            "not_executed": True,
+            "purpose": "decision support only; shows proposed operations and risks before any separately reviewed apply",
+            "proposed_operations": [
+                "compare accepted local ledger board state with optional GitHub Project mirror",
+                "report field changes, conflicts, Human gates, unsupported actions, and readback requirements",
+            ],
+            "risks": [
+                "Project mirror may be stale or degraded",
+                "live Project apply remains separately reviewed and Human-gated",
+            ],
+        },
+        "guided_steps": [
+            onboarding_step(
+                1,
+                "Start / scope confirmation",
+                ["repo/path/branch/mode requested by the Human", "current branch/status when available"],
+                [f"temporary guided onboarding evidence under {trial_root}"],
+                ["adopter repo files", "GitHub issues/labels/Project", "runtime/Vault/private/generated state"],
+                "Confirm this is a ten-minute read-only trial and that Base remains default outside the trial.",
+            ),
+            onboarding_step(
+                2,
+                "Current durable-state preflight",
+                ["current durable GitHub issues, PRs, labels, comments, and provenance URLs", "optional targeted Project readback when configured"],
+                [f"temporary readback summaries under {trial_root} if the operator saves evidence"],
+                ["stale #386 active-item snapshots", "hidden Project state guesses"],
+                "Confirm or edit the explicit issue/PR fallback set before candidate review.",
+            ),
+            onboarding_step(
+                3,
+                "Candidate review",
+                ["candidate cards derived from current durable evidence", "candidate provenance links"],
+                [f"review notes or candidate decision draft under {trial_root} only if requested"],
+                ["accepted local ledger authority", "adopter repo files", "GitHub Project fields"],
+                "Choose accept, skip, or inspect evidence for each candidate.",
+            ),
+            onboarding_step(
+                4,
+                "Isolated ledger apply preview/apply boundary",
+                ["accepted candidate decisions", "isolated ledger location and cleanup boundary"],
+                [f"append-only isolated ledger events at {trial_root.rstrip('/')}/local-collaboration-ledger/events.jsonl only after later reviewed local apply"],
+                ["tiny-ipa files", "GitHub issues/labels/Project", "runtime/Vault/private/generated state", "generated Skills", "capability packs"],
+                "Approve or defer isolated local apply after reading the no-effect guarantee.",
+            ),
+            onboarding_step(
+                5,
+                "Board / cockpit / local action / sync plan",
+                ["accepted isolated ledger replay", "optional Project mirror readback", "sync-plan dry-run output"],
+                [f"optional static HTML/JSON decision-support report under {trial_root}"],
+                ["live Project apply", "automatic sync cadence", "remote issue closure/reopen"],
+                "Decide whether to stay local, inspect GitHub Project, run project-sync-plan, or defer live apply.",
+            ),
+            onboarding_step(
+                6,
+                "Renewed trial handoff",
+                ["fresh tiny-ipa durable state for #390", "Human subjective acceptance response"],
+                [f"#390 trial evidence notes under {trial_root} or durable GitHub comments"],
+                ["#376/#292 final closure", "stale #386 snapshot reuse"],
+                "Answer whether the current-state guided path is understandable enough to proceed.",
+            ),
+        ],
+        "forbidden_actions": [
+            "live GitHub Project mutation",
+            "tiny-ipa repo/label/Project mutation",
+            "runtime/Vault/private/generated mutation",
+            "generated Skill publish",
+            "capability-pack deploy/apply",
+            "final V2 integration",
+            "#376/#292 closure",
+            "#390 renewed trial before #389 acceptance",
+        ],
+        "renewed_trial_handoff": {
+            "issue": "#390",
+            "must_rehydrate_current_tiny_ipa_state": True,
+            "current_expected_tiny_ipa_readback": "#276-#281 closed and #282 needs:user unless fresh readback changes it",
+            "do_not_reuse": "stale #386 active-item snapshot",
+            "acceptance_needed": "fresh subjective Human acceptance, not only command/test output",
+        },
+        "telemetry": {
+            "telemetry_issue": "#266",
+            "issue_count": len(issues),
+            "pr_count": len(prs),
+            "candidate_count": len(candidate_cards),
+            "guided_step_count": 6,
+            "degraded_source_count": 0 if project_status.get("status") in {"ok", "skipped", "config_missing"} else 1,
+            "user_facing_output_size": "concise_step_packet",
+        },
+    }
+    return payload
+
+
+def render_guided_onboarding_text(payload: dict[str, Any]) -> str:
+    lines = [
+        "Ten-minute guided onboarding packet",
+        f"Repo: {payload['repo']}",
+        f"Mode: {payload['adopter_project']['selected_mode']} (Base remains default outside this explicit trial)",
+        f"Isolated evidence root: {payload['isolated_evidence_root']}",
+        "Raw JSON is debug evidence only; the primary Human UX is this guided packet.",
+        "",
+        "Current durable evidence and explicit issue/PR fallback:",
+        payload["current_durable_evidence_summary"]["summary"],
+        f"Human decision required now: {payload['explicit_issue_pr_fallback']['human_prompt']}",
+        "",
+        "Candidate review: accept / skip / inspect evidence",
+        payload["candidate_review"]["candidate_non_authority"],
+    ]
+    for candidate in payload["candidate_review"]["candidates"]:
+        lines.append(
+            f"- {candidate['kind']} #{candidate['number']}: {candidate['title']} "
+            f"({candidate['state']}); actions: accept, skip, inspect evidence; provenance: {candidate.get('provenance_url') or 'not_available'}"
+        )
+    lines.extend(
+        [
+            "",
+            f"Isolated ledger location: {payload['isolated_ledger']['location']}",
+            f"Isolated ledger no-effect guarantee: {payload['isolated_ledger']['isolated_ledger_no_effect_guarantee']}",
+            f"Cleanup boundary: {payload['isolated_ledger']['cleanup_boundary']}",
+            "",
+            "Project sync plan status: not executed",
+            "Project sync is proposed operations and risks only; live Project apply remains separately reviewed and Human-gated.",
+            "",
+            "Guided steps:",
+        ]
+    )
+    for step in payload["guided_steps"]:
+        lines.extend(
+            [
+                f"{step['step']}. {step['title']}",
+                "   What the agent reads: " + "; ".join(step["what_the_agent_reads"]),
+                "   What it may write: " + "; ".join(step["what_it_may_write"]),
+                "   What it will not touch: " + "; ".join(step["what_it_will_not_touch"]),
+                "   One Human decision required now: " + step["one_human_decision_required_now"],
+            ]
+        )
+    lines.extend(
+        [
+            "",
+            "Renewed trial handoff:",
+            payload["renewed_trial_handoff"]["current_expected_tiny_ipa_readback"],
+            "Do not reuse stale #386 active-item snapshot.",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def cmd_guided_onboarding(args: argparse.Namespace) -> None:
+    repo, repo_source = resolve_repo(args)
+    if args.issues_json or args.fixture_json:
+        issues = normalize_issue_collection(load_json(args.issues_json or args.fixture_json))
+        issue_status = {"source": "fixture", "status": "ok", "mode": "fixture", "count": len(issues)}
+    else:
+        issues, issue_status, _issue_attempts = read_readiness_issues(repo, args)
+    prs, pr_status, _pr_attempts = read_readiness_prs(repo, args)
+    _project_items, project_status, project_attempts = read_project_items(args)
+    payload = build_guided_onboarding_packet(
+        repo,
+        repo_source,
+        issues[: args.limit],
+        prs[: args.limit],
+        issue_status,
+        pr_status,
+        project_status,
+        project_attempts,
+        args.trial_root,
+        args.adopter_path,
+        args.adopter_branch,
+        args.selected_mode,
+    )
+    if args.json:
+        print_json_or_text(payload, True)
+    else:
+        print(render_guided_onboarding_text(payload))
 
 
 def migration_apply_decisions(decision_doc: Any) -> tuple[dict[str, dict[str, Any]], list[str]]:
@@ -5940,6 +6259,27 @@ def build_parser() -> argparse.ArgumentParser:
     readiness.add_argument("--project-retry-backoff", type=float, default=0.5, help="Seconds between transient Project read retries.")
     readiness.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON for collaboration-readiness.")
     readiness.set_defaults(func=cmd_collaboration_readiness)
+
+    guided = sub.add_parser("guided-onboarding")
+    guided.add_argument("--fixture-json", help="Legacy issue fixture; prefer --issues-json.")
+    guided.add_argument("--issues-json", help="Fixture issue object, list, or object with issues/items.")
+    guided.add_argument("--prs-json", help="Fixture PR object, list, or object with issues/items.")
+    guided.add_argument("--project-items-json", help="Fixture Project item list or gh project item-list JSON.")
+    guided.add_argument("--issues", help="Comma-separated explicit issue numbers for bounded live onboarding.")
+    guided.add_argument("--prs", help="Comma-separated explicit PR numbers for bounded live onboarding.")
+    guided.add_argument("--stage", help="Stage value or label for bounded live onboarding preflight.")
+    guided.add_argument("--limit", type=int, default=20, help="Maximum issues/PRs to inspect.")
+    guided.add_argument("--project-owner", help="Project owner for targeted live Project readback.")
+    guided.add_argument("--project-number", type=int, help="Project number for targeted live Project readback.")
+    guided.add_argument("--project-limit", type=int, default=50, help="Maximum Project items to read when explicitly configured.")
+    guided.add_argument("--project-retries", type=int, default=2, help="Bounded retries for transient Project reads.")
+    guided.add_argument("--project-retry-backoff", type=float, default=0.5, help="Seconds between transient Project read retries.")
+    guided.add_argument("--trial-root", default="/private/tmp/agent-foundry-guided-onboarding-trial", help="Isolated trial evidence root shown to the Human.")
+    guided.add_argument("--adopter-path", default="not_provided", help="Adopter project path shown in the guided packet.")
+    guided.add_argument("--adopter-branch", default="not_provided", help="Adopter project branch shown in the guided packet.")
+    guided.add_argument("--selected-mode", default="explicit_local_orchestration_read_only_trial", help="Selected onboarding mode shown in the guided packet.")
+    guided.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON for guided-onboarding.")
+    guided.set_defaults(func=cmd_guided_onboarding)
 
     board = sub.add_parser("foundry-board")
     board.add_argument("--config", help="Reserved for future board config; currently informational.")
