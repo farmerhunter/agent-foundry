@@ -576,23 +576,35 @@ Forbidden in this MVP:
 
 ## Existing Project Ledger Backfill Preview
 
-Before previewing an existing adopter project, present an onboarding packet in
-user-facing language. The packet should say:
+Before previewing an existing adopter project, present a ten-minute guided
+onboarding packet in user-facing language. The packet is the primary Human
+interface; raw JSON is debug/evidence only. The packet should say at every
+step:
 
 - what the user says to start: "onboard this existing project into V2 Local
-  Orchestration as a read-only trial";
+  Orchestration as a ten-minute read-only trial";
 - what the agent reads: bounded issues, PRs, labels, comments, branch/status,
   durable issue/PR evidence, and relevant helper docs;
-- what may be written: temporary JSON, HTML, and local ledger evidence under an
-  explicit temp root or user-supplied trial root;
+- what may be written: temporary JSON, HTML, and isolated local ledger evidence
+  under an explicit temp root or user-supplied trial root;
 - what must not be touched: adopter repo files, live GitHub Project fields,
   runtime/Vault/private/generated state, generated Skills, and capability
   packs;
-- which decisions stay Human-owned: candidate accept/reject/defer, local action
-  apply, sync apply choice, and final trust/readiness judgment;
+- the one Human decision required now: fallback-set confirmation,
+  candidate accept/skip/inspect evidence, local apply decision, sync apply
+  choice, or final trust/readiness judgment;
 - stop/defer conditions: wrong path or branch, unclear provenance, implied live
   mutation, unsafe Project/sync operation, or user cannot identify the next
   safe action.
+
+Debug/helper surface:
+
+```text
+agent-foundry-github-collab --repo <owner>/<repo> guided-onboarding \
+  --issues <explicit-current-issue-list> \
+  --prs <optional-current-pr-list> \
+  --trial-root /private/tmp/agent-foundry-guided-onboarding-trial
+```
 
 Base remains the default mode for ordinary project work. Local Orchestration is
 selected only through explicit trial/user intent, local capability config,
@@ -603,9 +615,18 @@ stage label.
 If a stage-based query returns no candidates, do not imply the adopter project
 must have a matching `stage:*` label. Fall back to explicit issue/PR selection
 from durable GitHub evidence and report the selected issue/PR numbers. For
-example, a trial packet may start with `stage:M14`; if that returns no issues,
-the next safe step is a bounded explicit list such as `--issues 27,276,284` and
-`--prs 283,285`, with the actual numbers chosen from current durable readback.
+example, a renewed tiny-ipa trial should rehydrate current durable state; the
+expected readback before #390 is #276-#281 closed and #282 labeled
+`needs:user`, unless fresh GitHub evidence changes it. Do not reuse the stale
+#386 active-item snapshot.
+
+Candidate review stays non-authoritative: each candidate should show
+`accept`, `skip`, or `inspect evidence`, and no project state changes until a
+later reviewed local apply accepts the candidate into the isolated ledger.
+Before local apply, show the isolated ledger location, cleanup boundary, and
+no-effect guarantee. Project sync remains dry-run decision support with
+visible `not executed` status until a separate reviewed and Human-gated apply
+path is authorized.
 
 Use `local-ledger-backfill-preview` when an existing GitHub-first project needs
 candidate Local Collaboration Ledger events for review before any authoritative
