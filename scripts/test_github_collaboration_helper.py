@@ -3022,6 +3022,129 @@ def main() -> int:
                 "requires human gate",
             )
         )
+        dogfood_root = base / "ledger-dogfood-trial"
+        dogfood_decisions = base / "ledger-dogfood-decisions.json"
+        dogfood_candidates = json.loads(backfill_preview.stdout).get("candidate_imported_events", [])
+        dogfood_candidate = next((event for event in dogfood_candidates if event.get("work_item", {}).get("number") == 410), None)
+        if dogfood_candidate is None:
+            errors.append("ledger-dogfood-fixture: expected a candidate for issue 410")
+        else:
+            write(
+                dogfood_decisions,
+                json.dumps(
+                    {
+                        "human_response": {
+                            "context_confirmed": True,
+                            "candidate_set": "accept issue 410 for isolated ledger dogfood",
+                            "local_transition": "record human-gated blocked state",
+                            "project_sync_interpretation": "mirror/control surface only; not executed",
+                        },
+                        "candidate_decisions": {
+                            "decisions": [
+                                {
+                                    "event_id": dogfood_candidate["event_id"],
+                                    "decision": "accept",
+                                    "reason": "Human accepted bounded issue evidence for isolated dogfood.",
+                                }
+                            ]
+                        },
+                        "local_actions": {
+                            "actions": [
+                                {
+                                    "action_id": "dogfood-blocked-410",
+                                    "action_type": "blocked",
+                                    "work_item": dogfood_candidate["work_item"],
+                                    "approved_by_role": "human",
+                                    "reason": "Human gate remains pending in the isolated local workflow.",
+                                    "evidence_refs": ["https://github.com/farmerhunter/agent-foundry/issues/410"],
+                                    "capability_layer": "local_orchestration",
+                                }
+                            ]
+                        },
+                    }
+                ),
+            )
+            ledger_dogfood = run(
+                [
+                    "--repo",
+                    "farmerhunter/agent-foundry",
+                    "ledger-dogfood",
+                    "--trial-root",
+                    str(dogfood_root),
+                    "--decision-json",
+                    str(dogfood_decisions),
+                    "--issues-json",
+                    str(backfill_issues),
+                    "--prs-json",
+                    str(backfill_prs),
+                    "--project-items-json",
+                    str(backfill_project),
+                    "--json",
+                ],
+                base,
+            )
+            for name, expected in (
+                ("ledger-dogfood-command", '"command": "ledger-dogfood"'),
+                ("ledger-dogfood-status", '"status": "ok"'),
+                ("ledger-dogfood-local-authority", "accepted_local_collaboration_ledger_replay"),
+                ("ledger-dogfood-local-write", '"write_scope": "explicit_trial_root_only"'),
+                ("ledger-dogfood-issue-transition", "dogfood-blocked-410"),
+                ("ledger-dogfood-project-mirror", "remote_collaboration_control_surface_and_optional_mirror"),
+                ("ledger-dogfood-project-not-executed", '"project_sync_not_executed": true'),
+                ("ledger-dogfood-no-github-write", '"github_write_back_performed": false'),
+                ("ledger-dogfood-no-project-write", '"project_mutation_performed": false'),
+                ("ledger-dogfood-cleanup", "remove only the explicit trial root"),
+                ("ledger-dogfood-telemetry", '"telemetry_issue": "#266"'),
+            ):
+                errors.extend(expect_ok(name, ledger_dogfood, expected))
+            for relative in (
+                "local-collaboration-ledger/events.jsonl",
+                "backfill-preview.json",
+                "reviewed-migration-decisions.json",
+                "local-action-apply-report.json",
+                "before-replay.json",
+                "after-replay.json",
+                "foundry-board.json",
+                "operational-cockpit.json",
+                "operational-cockpit.html",
+                "project-sync-plan.json",
+                "mixed-state-recovery.json",
+                "human-transcript.json",
+                "audit-manifest.json",
+            ):
+                if (dogfood_root / relative).exists():
+                    print(f"ledger-dogfood-artifact-{relative}: ok")
+                else:
+                    errors.append(f"ledger-dogfood-artifact-{relative}: expected isolated trial artifact")
+            ledger_dogfood_again = run(
+                [
+                    "--repo",
+                    "farmerhunter/agent-foundry",
+                    "ledger-dogfood",
+                    "--trial-root",
+                    str(dogfood_root),
+                    "--decision-json",
+                    str(dogfood_decisions),
+                    "--issues-json",
+                    str(backfill_issues),
+                    "--prs-json",
+                    str(backfill_prs),
+                    "--project-items-json",
+                    str(backfill_project),
+                    "--json",
+                ],
+                base,
+            )
+            errors.extend(expect_ok("ledger-dogfood-idempotent", ledger_dogfood_again, '"mutation_performed": false'))
+        missing_dogfood_decision = base / "ledger-dogfood-missing-human.json"
+        write(missing_dogfood_decision, json.dumps({"candidate_decisions": {}, "local_actions": {}}))
+        errors.extend(
+            expect_fail(
+                "ledger-dogfood-human-decision-required",
+                run(["ledger-dogfood", "--trial-root", str(base / "blocked-dogfood"), "--decision-json", str(missing_dogfood_decision), "--issues-json", str(backfill_issues), "--json"], base),
+                "blocked_waiting_for_human_decision",
+            )
+        )
         degraded_backfill = run(
             [
                 "--repo",

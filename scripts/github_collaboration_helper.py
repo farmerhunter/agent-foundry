@@ -58,7 +58,7 @@ DRY_RUN_ACTIONS = {
     "permission-smoke",
     "comparison-draft",
 }
-LOCAL_WRITE_ACTIONS = {"local-ledger-append", "local-ledger-migration-apply", "local-ledger-action-apply", "project-sync-apply"}
+LOCAL_WRITE_ACTIONS = {"local-ledger-append", "local-ledger-migration-apply", "local-ledger-action-apply", "ledger-dogfood", "project-sync-apply"}
 REMOTE_RE = re.compile(r"(?:github\.com[:/])([^/]+)/([^/.]+)(?:\.git)?$")
 CONTRACT_HEADINGS = ("Final Execution Contract", "Execution Contract", "Draft Execution Contract")
 ROLE_FIELDS = ("Owner role", "Review role", "Acceptance role")
@@ -2521,6 +2521,194 @@ def cmd_local_ledger_action_apply(args: argparse.Namespace) -> None:
     result = build_local_ledger_action_apply(local_ledger_root(args), load_json(args.action_json))
     print_json_or_text(result, args.json)
     if result["status"] == "invalid":
+        raise SystemExit(6)
+
+
+def trial_root_path(trial_root: str, relative_path: str) -> Path:
+    root = Path(trial_root).expanduser().resolve()
+    target = (root / relative_path).resolve()
+    if target != root and root not in target.parents:
+        fail("trial_root_escape", "dogfood artifacts must stay inside the explicit trial root")
+    return target
+
+
+def write_trial_json(trial_root: str, relative_path: str, payload: Any) -> dict[str, Any]:
+    path = trial_root_path(trial_root, relative_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return {"path": str(path), "bytes": path.stat().st_size}
+
+
+def dogfood_inputs(args: argparse.Namespace) -> tuple[str, str, list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]:
+    repo, repo_source = resolve_repo(args)
+    if args.issues_json or args.fixture_json:
+        issues = normalize_issue_collection(load_json(args.issues_json or args.fixture_json))
+        scope = {"mode": "fixture", "issue_numbers": [issue_number(issue) for issue in issues if issue_number(issue) is not None]}
+    else:
+        issues, scope = read_live_issues(repo, args)
+    prs, _prs_status, _prs_attempts = read_readiness_prs(repo, args)
+    project_items, project_status, project_attempts = read_project_items(args)
+    local_git, _local_git_status, _local_git_attempts = read_local_git_state(args)
+    return repo, repo_source, issues, prs, project_items, project_status, project_attempts, local_git, scope
+
+
+def dogfood_decision_parts(decision_doc: Any) -> tuple[dict[str, Any] | None, dict[str, Any] | None, dict[str, Any] | None, list[str]]:
+    if not isinstance(decision_doc, dict):
+        return None, None, None, ["Human decision JSON must be an object"]
+    human_response = decision_doc.get("human_response")
+    candidate_decisions = decision_doc.get("candidate_decisions")
+    local_actions = decision_doc.get("local_actions")
+    errors: list[str] = []
+    if not isinstance(human_response, dict) or not human_response:
+        errors.append("Human decision JSON must include non-empty human_response before ledger progression")
+    if not isinstance(candidate_decisions, dict):
+        errors.append("Human decision JSON must include candidate_decisions")
+    if not isinstance(local_actions, (dict, list)):
+        errors.append("Human decision JSON must include local_actions")
+    return human_response if isinstance(human_response, dict) else None, candidate_decisions if isinstance(candidate_decisions, dict) else None, local_actions if isinstance(local_actions, (dict, list)) else None, errors
+
+
+def build_ledger_dogfood(args: argparse.Namespace) -> dict[str, Any]:
+    start = time.perf_counter()
+    if not args.trial_root:
+        return {"command": "ledger-dogfood", "status": "invalid", "errors": ["--trial-root is required"], "mutation_performed": False}
+    trial_root = Path(args.trial_root).expanduser().resolve()
+    decision_doc = load_json(args.decision_json)
+    human_response, candidate_decisions, local_actions, decision_errors = dogfood_decision_parts(decision_doc)
+    if decision_errors:
+        return {
+            "schema_version": 1,
+            "command": "ledger-dogfood",
+            "status": "blocked_waiting_for_human_decision",
+            "errors": decision_errors,
+            "trial_root": str(trial_root),
+            "mutation_performed": False,
+            "github_write_back_performed": False,
+            "project_mutation_performed": False,
+        }
+
+    repo, repo_source, issues, prs, project_items, project_status, project_attempts, local_git, scope = dogfood_inputs(args)
+    ledger_root = trial_root_path(args.trial_root, "local-collaboration-ledger")
+    before_replay = build_local_ledger_report(ledger_root)
+    preview = build_local_ledger_backfill_preview(repo, repo_source, issues, prs, project_items, project_status, project_attempts, str(ledger_root))
+    preview_artifact = write_trial_json(args.trial_root, "backfill-preview.json", preview)
+    decision_artifact = write_trial_json(args.trial_root, "reviewed-migration-decisions.json", candidate_decisions)
+    transcript_artifact = write_trial_json(
+        args.trial_root,
+        "human-transcript.json",
+        {
+            "schema_version": 1,
+            "kind": "ledger_dogfood_human_decision_record",
+            "response": human_response,
+            "candidate_decision_required_before_apply": True,
+            "local_action_required_before_progression": True,
+        },
+    )
+    migration = build_local_ledger_migration_apply_from_decision_json(ledger_root, preview, candidate_decisions)
+    migration_artifact = write_trial_json(args.trial_root, "migration-apply-report.json", migration)
+    if migration.get("status") != "ok":
+        return {
+            "schema_version": 1,
+            "command": "ledger-dogfood",
+            "status": "invalid",
+            "errors": migration.get("errors", ["migration apply failed"]),
+            "trial_root": str(trial_root),
+            "artifacts": {"backfill_preview": preview_artifact, "reviewed_migration_decisions": decision_artifact, "human_transcript": transcript_artifact, "migration_apply": migration_artifact},
+            "mutation_performed": False,
+            "github_write_back_performed": False,
+            "project_mutation_performed": False,
+        }
+    action_artifact = write_trial_json(args.trial_root, "local-action-decisions.json", local_actions)
+    local_action = build_local_ledger_action_apply(ledger_root, local_actions)
+    local_action_artifact = write_trial_json(args.trial_root, "local-action-apply-report.json", local_action)
+    if local_action.get("status") != "ok":
+        return {
+            "schema_version": 1,
+            "command": "ledger-dogfood",
+            "status": "invalid",
+            "errors": local_action.get("errors", ["local action apply failed"]),
+            "trial_root": str(trial_root),
+            "artifacts": {"backfill_preview": preview_artifact, "reviewed_migration_decisions": decision_artifact, "human_transcript": transcript_artifact, "migration_apply": migration_artifact, "local_action_decisions": action_artifact, "local_action_apply": local_action_artifact},
+            "mutation_performed": bool(migration.get("mutation_performed")),
+            "github_write_back_performed": False,
+            "project_mutation_performed": False,
+        }
+    after_replay = build_local_ledger_report(ledger_root)
+    candidate_events = normalize_candidate_events(preview.get("candidate_imported_events", []))
+    board = build_foundry_board(
+        repo,
+        issues,
+        project_items,
+        project_status,
+        local_git,
+        "Controlled Ledger Dogfood Board",
+        {"repo_source": repo_source, **scope, "ledger_root": str(ledger_root), "dogfood": True},
+        accepted_replay={"derived_work_items": after_replay["derived_work_items"], "summary": after_replay["summary"]},
+        candidate_events=candidate_events,
+    )
+    recovery = build_mixed_state_recovery_report(board, project_status, project_attempts)
+    elapsed_time_ms = round((time.perf_counter() - start) * 1000, 3)
+    sync_plan = build_project_sync_plan(repo, board, project_items, project_status, project_attempts, elapsed_time_ms)
+    cockpit = build_operational_cockpit_viewmodel(repo, board, after_replay, recovery, project_status, project_attempts, local_git, {})
+    cockpit["static_html_report"] = write_operational_cockpit_html(str(trial_root_path(args.trial_root, "operational-cockpit.html")), cockpit)
+    artifacts = {
+        "backfill_preview": preview_artifact,
+        "reviewed_migration_decisions": decision_artifact,
+        "human_transcript": transcript_artifact,
+        "migration_apply": migration_artifact,
+        "local_action_decisions": action_artifact,
+        "local_action_apply": local_action_artifact,
+        "before_replay": write_trial_json(args.trial_root, "before-replay.json", before_replay),
+        "after_replay": write_trial_json(args.trial_root, "after-replay.json", after_replay),
+        "foundry_board": write_trial_json(args.trial_root, "foundry-board.json", board),
+        "operational_cockpit": write_trial_json(args.trial_root, "operational-cockpit.json", cockpit),
+        "project_sync_plan": write_trial_json(args.trial_root, "project-sync-plan.json", sync_plan),
+        "mixed_state_recovery": write_trial_json(args.trial_root, "mixed-state-recovery.json", recovery),
+    }
+    payload = {
+        "schema_version": 1,
+        "command": "ledger-dogfood",
+        "mode": "controlled_isolated_trial",
+        "status": "ok",
+        "repo": repo,
+        "repo_source": repo_source,
+        "trial_root": str(trial_root),
+        "ledger_root": str(ledger_root),
+        "source_of_truth": "accepted_local_collaboration_ledger_replay",
+        "github_project_role": "remote_collaboration_control_surface_and_optional_mirror",
+        "target_issue_selection": {"issues_read": [issue_number(issue) for issue in issues if issue_number(issue) is not None], "selected_by_human_response": human_response},
+        "mutation_performed": bool(migration.get("mutation_performed") or local_action.get("mutation_performed")),
+        "write_scope": "explicit_trial_root_only",
+        "github_write_back_performed": False,
+        "project_mutation_performed": False,
+        "runtime_vault_private_generated_write_performed": False,
+        "before_after": {"before": before_replay["summary"], "after": after_replay["summary"]},
+        "accepted_local_ledger_events": after_replay["summary"]["event_count"],
+        "local_action_records": local_action.get("action_records", []),
+        "project_sync_not_executed": True,
+        "artifacts": artifacts,
+        "user_facing_report": {
+            "summary": "Controlled ledger dogfood recorded accepted local events and a local workflow transition in the isolated trial root.",
+            "local_authority": "Foundry Board and Operational Cockpit are derived from accepted local ledger replay.",
+            "remote_evidence": "GitHub issue evidence is provenance and a remote reality check; GitHub Project is a mirror/control surface only.",
+            "next_safe_action": "Human reviews replayed #282 state, the dry-run Project sync plan, and cleanup/recovery guidance before any later gate.",
+            "cleanup_or_recovery": "To abandon this dogfood, remove only the explicit trial root. To correct accepted local state, append compensating or superseding events; do not rewrite history.",
+            "forbidden_actions": ["tiny-ipa repo or GitHub mutation", "live GitHub Project mutation", "runtime/Vault/private/generated mutation", "generated Skill publish", "capability-pack deploy/apply"],
+        },
+        "telemetry": {"telemetry_issue": "#266", "event_count": after_replay["summary"]["event_count"], "degraded_evidence_count": after_replay["summary"]["degraded_evidence_count"], "artifact_count": len(artifacts), "elapsed_time_ms": round((time.perf_counter() - start) * 1000, 3)},
+    }
+    payload["artifacts"]["audit_manifest"] = write_trial_json(
+        args.trial_root,
+        "audit-manifest.json",
+        {"command": "ledger-dogfood", "artifact_paths": {name: value["path"] for name, value in payload["artifacts"].items()}, "checks": ["accepted local ledger replay", "Project sync plan not executed", "all artifacts under explicit trial root"], "cleanup_guidance": payload["user_facing_report"]["cleanup_or_recovery"], "forbidden_action_assertions": payload["user_facing_report"]["forbidden_actions"]},
+    )
+    return payload
+
+
+def cmd_ledger_dogfood(args: argparse.Namespace) -> None:
+    result = build_ledger_dogfood(args)
+    print_json_or_text(result, args.json)
+    if result.get("status") != "ok":
         raise SystemExit(6)
 
 
@@ -6594,6 +6782,26 @@ def build_parser() -> argparse.ArgumentParser:
     action_apply.add_argument("--action-json", required=True, help="Approved local orchestration action object, list, or object with actions.")
     action_apply.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON for local-ledger-action-apply.")
     action_apply.set_defaults(func=cmd_local_ledger_action_apply)
+
+    dogfood = sub.add_parser("ledger-dogfood")
+    dogfood.add_argument("--trial-root", required=True, help="Explicit isolated root for every dogfood artifact and local ledger write.")
+    dogfood.add_argument("--decision-json", required=True, help="Human response, candidate decisions, and local action decisions required before progression.")
+    dogfood.add_argument("--fixture-json", help="Legacy issue fixture; prefer --issues-json.")
+    dogfood.add_argument("--issues-json", help="Fixture issue object, list, or object with issues/items.")
+    dogfood.add_argument("--prs-json", help="Fixture PR object, list, or object with issues/items.")
+    dogfood.add_argument("--project-items-json", help="Fixture Project item list for mirror/control-surface evidence.")
+    dogfood.add_argument("--local-git-json", help="Fixture local git state for board/cockpit output.")
+    dogfood.add_argument("--issues", help="Comma-separated explicit issue numbers for bounded live dogfood evidence.")
+    dogfood.add_argument("--prs", help="Comma-separated explicit PR numbers for bounded live dogfood evidence.")
+    dogfood.add_argument("--stage", help="Stage value or label for bounded live evidence.")
+    dogfood.add_argument("--limit", type=int, default=20, help="Maximum issues/items to inspect.")
+    dogfood.add_argument("--project-owner", help="Project owner for targeted optional Project mirror readback.")
+    dogfood.add_argument("--project-number", type=int, help="Project number for targeted optional Project mirror readback.")
+    dogfood.add_argument("--project-limit", type=int, default=50, help="Maximum Project items to read when explicitly configured.")
+    dogfood.add_argument("--project-retries", type=int, default=2, help="Bounded retries for transient Project reads.")
+    dogfood.add_argument("--project-retry-backoff", type=float, default=0.5, help="Seconds between transient Project read retries.")
+    dogfood.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON for ledger-dogfood.")
+    dogfood.set_defaults(func=cmd_ledger_dogfood)
 
     ledger_report = sub.add_parser("local-ledger-report")
     ledger_report.add_argument("--ledger-root", help="Local ledger root. Defaults to usage/local/collaboration-ledger.")

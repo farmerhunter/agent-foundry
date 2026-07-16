@@ -252,6 +252,16 @@ The action file records approved local actions such as assignment, handoff, bloc
 
 **中文要点：** Local action apply 只写 accepted local ledger。Reviewer/Architect/Human gate 不匹配时会 fail closed；它不会改 GitHub issue/PR、Project、runtime、Vault 或 generated artifacts。Project sync 仍属于 #372。
 
+## Controlled Ledger Dogfood
+
+For a bounded adopter trial that must demonstrate operating Local Orchestration rather than only preview text, ask for controlled ledger dogfood for the selected issue. The runner must provide an explicit isolated trial root and a Human decision JSON that contains the confirmed context, candidate `accept`/`reject`/`skip` decisions, and one approved safe local action such as a Human-gated `blocked` or `deferred` transition.
+
+The command writes only inside that trial root: accepted `local-collaboration-ledger/events.jsonl`, backfill preview, reviewed decisions, before/after replay, Foundry Board, operational cockpit JSON/HTML, dry-run Project sync plan, mixed-state recovery report, Human decision record, and audit manifest. Foundry Board and cockpit derive from accepted local ledger replay. GitHub issue/PR state is provenance and a remote reality check; GitHub Project is the remote collaboration/control surface and mirror target, never this trial's source of truth. The sync plan visibly remains `not executed`.
+
+Use the audit manifest to inspect the artifact list and cleanup guidance. To abandon a trial, remove only its explicit trial root. To correct accepted local state, append compensating or superseding events rather than rewriting ledger history. This workflow never changes adopter repo files, GitHub issues/labels/Project, runtime, Vault/private/generated state, generated Skills, or capability packs.
+
+**中文要点：** Controlled dogfood 不是只读 packet：它在隔离 trial root 内实际写入 accepted local ledger events，并用 replay 驱动 Board/Cockpit；但这不等于改 tiny-ipa、GitHub 或 Project。Human 先确认 context、candidate 决策和一个安全的 local transition。Project sync 只给 mirror/control-surface 的 `not executed` dry-run 证据。放弃 trial 时只清理该 trial root；纠正 ledger 要追加 compensating/superseding event，不能改写历史。
+
 For GitHub Project mirroring, ask for a dry-run sync plan:
 
 ```text

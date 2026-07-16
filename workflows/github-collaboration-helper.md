@@ -815,6 +815,34 @@ Forbidden in this apply step:
 - main merge, release, or tag work;
 - destructive ledger history rewrite.
 
+## Controlled Ledger Dogfood
+
+Use `ledger-dogfood` only for a reviewed adopter-facing trial that needs to
+demonstrate a real local workflow transition without changing the adopter
+repository or remote collaboration state. It is a controlled local-write
+workflow, not a general migration or sync command.
+
+The runner must provide an explicit `--trial-root` and a Human decision JSON.
+That JSON must contain `human_response`, reviewed `candidate_decisions`, and
+`local_actions`; the helper blocks before ledger progression when any are
+missing. All generated artifacts, including
+`local-collaboration-ledger/events.jsonl`, remain below the explicit trial
+root.
+
+The workflow is: bounded GitHub evidence -> candidate backfill preview ->
+Human-reviewed migration decisions -> accepted append-only local events -> one
+approved local action -> replay-derived Foundry Board and operational cockpit
+-> dry-run Project mirror plan -> recovery and audit artifacts. The local ledger
+is authority for this trial. GitHub issue/PR data is provenance and a remote
+reality check. GitHub Project is the richer remote collaboration/control surface
+and optional mirror, never the local trial source of truth.
+
+The generated audit manifest includes artifact paths, stable checks, cleanup
+guidance, and forbidden-action assertions. Cleanup means abandoning only the
+explicit trial root. Corrections to accepted local state require compensating or
+superseding events; do not rewrite ledger history. Project sync remains `not
+executed`; no live GitHub or Project mutation is permitted.
+
 ## Project Sync Plan Dry Run
 
 Use `project-sync-plan` when V2 local-first orchestration needs to preview how
