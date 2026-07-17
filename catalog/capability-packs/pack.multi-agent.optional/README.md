@@ -63,6 +63,32 @@ worktrees, retarget PRs, rebase, merge, reset, clean, or repair branches.
 **中文要点：** Branch readiness 只给 action plan，不执行 checkout/switch、worktree
 creation、PR retarget、rebase、merge、reset、clean 或 branch repair。
 
+## Local Orchestration Layer / Local Orchestration 层
+
+The current starter guidance includes the V2 Local Orchestration activation
+model. Base collaboration remains the default for ordinary GitHub issue/PR
+coordination, practice harvest, generated Skill guidance, runtime actions, and
+capability-pack behavior. Local Orchestration guidance appears only when durable
+evidence says it is in scope: an explicit user request, repo or local
+capability config, accepted local ledger state or manifest, issue/task contract
+field, capability pack or runtime profile, or accepted operational UX contract.
+
+**中文要点：** Base 是默认层。只有明确 user request、local capability config、
+accepted ledger state、issue contract、runtime profile 或 accepted operational UX
+contract 这类 durable signal 出现时，才启用 Local Orchestration 指导。
+
+Branch names, release lines, and PR targets are readiness and warning evidence.
+They can explain why a branch context looks suspicious, but they are not the
+canonical trigger that turns Base work into Local Orchestration work.
+
+**中文要点：** branch / release line / PR target 只能作为 readiness 或 warning
+evidence，不能单独决定启用 Local Orchestration。
+
+Mixed work should say which actions remain Base and which require Local
+Orchestration surfaces such as Local Collaboration Ledger, Foundry Board,
+migration apply, local action apply, Project sync plan/apply, mixed-state
+recovery, or operational cockpit.
+
 ## Collaboration Readiness / 协作就绪检查
 
 The current starter guidance includes the AF15 collaboration readiness model:
@@ -113,8 +139,8 @@ handoff mechanism.
 
 This pack does not merge PRs, close issues, create hidden access control, apply
 runtime helpers, publish generated Skills, mutate Project v2 by default, execute
-dry-run repair plans, export private Vault content, or treat local helper
-receipts as authority.
+dry-run repair plans, enable Local Orchestration by branch name alone, export
+private Vault content, or treat local helper receipts as authority.
 
 **中文要点：** 它不 merge/close、不执行 live repair/apply、不 mutate Project v2、
 不 publish generated Skills、不 export private Vault。
@@ -163,11 +189,13 @@ receipts remain downstream status surfaces, not catalog or pack authority.
 
 ## Versioning
 
-Pack version `0.3.2` identifies the reviewed branch-aware GitHub collaboration
-starter contract. Pack version `0.3.1` identified the AF15 collaboration
-readiness action-plan contract. Pack version `0.2.0` identified the earlier
-GitHub collaboration starter contract. Core git tags and releases identify
-repository snapshots. These are related but independent axes.
+Pack version `0.4.0` identifies the reviewed V2 Local Orchestration
+capability-layer activation contract. Pack version `0.3.2` identified the
+branch-aware GitHub collaboration starter contract. Pack version `0.3.1`
+identified the AF15 collaboration readiness action-plan contract. Pack version
+`0.2.0` identified the earlier GitHub collaboration starter contract. Core git
+tags and releases identify repository snapshots. These are related but
+independent axes.
 
 ## Review
 
@@ -178,6 +206,8 @@ Review evidence:
 - https://github.com/farmerhunter/agent-foundry/issues/315
 - https://github.com/farmerhunter/agent-foundry/issues/316
 - https://github.com/farmerhunter/agent-foundry/issues/317
+- https://github.com/farmerhunter/agent-foundry/issues/374
+- https://github.com/farmerhunter/agent-foundry/issues/375
 - https://github.com/farmerhunter/agent-foundry/issues/318
 - https://github.com/farmerhunter/agent-foundry/issues/319
 - https://github.com/farmerhunter/agent-foundry/issues/350

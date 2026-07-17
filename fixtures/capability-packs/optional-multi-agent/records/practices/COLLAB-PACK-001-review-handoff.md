@@ -4,10 +4,10 @@ title: Role-Generic GitHub Handoff Routing
 domain: agent-collaboration
 type: checklist
 status: candidate
-version: 5
+version: 6
 created: 2026-06-11
-updated: 2026-07-07
-tags: [multi-agent, review, handoff, scheduler, readiness, dry-run-repair, branch-aware]
+updated: 2026-07-10
+tags: [multi-agent, review, handoff, scheduler, readiness, dry-run-repair, branch-aware, local-orchestration]
 aliases: [COLLAB-PACK-001]
 review_required: true
 ---
@@ -38,11 +38,16 @@ Multi-agent work loses continuity when completion evidence lives only in a chat 
 - Treat TLS, EOF, timeout, rate-limit-like, and unavailable Project v2 responses as degraded sources. Return partial reports with `unknown` or `not_available` instead of inferring hidden state.
 - Keep Project status and roadmap status as mirrors or reports unless a project explicitly configures them as managed outputs.
 - Treat project-specific repository names, Project ids, branch names, issue numbers, and status mappings as overlays, not reusable pack defaults.
+- Preserve Base behavior as the default capability layer for ordinary GitHub collaboration, practice harvest, asset review, generated Skill guidance, runtime actions, and capability-pack behavior.
+- Enable Local Orchestration guidance only when durable capability-layer evidence says it is in scope: an explicit user request, repo or local capability config, accepted local ledger state or manifest, issue/task contract field, capability pack or runtime profile, or accepted operational UX contract.
+- Treat branch names, release lines, and PR targets as readiness and warning evidence, not as canonical Local Orchestration triggers.
+- For `mixed` work, say which operations remain Base and which require Local Orchestration surfaces such as Local Collaboration Ledger, Foundry Board, migration apply, local action apply, Project sync plan/apply, mixed-state recovery, or operational cockpit.
 
 ## Boundaries
 
 - Do not run default full Project scans for ordinary collaboration reads.
 - Do not apply dry-run repairs from this pack.
 - Do not perform branch repair/apply, checkout or switch branches, create worktrees, retarget PRs, rebase, merge, reset, clean, or force-push from this pack.
+- Do not silently switch Base/V1.x maintenance workflows into Local Orchestration behavior based only on branch or release-line evidence.
 - Do not publish generated Skills, install runtime helpers, or mutate Project v2 from pack deployment.
 - Keep selected User Vault records canonical after deployment; generated adapters, runtime receipts, and local helper outputs remain downstream evidence.

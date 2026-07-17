@@ -9,6 +9,7 @@ generated output, private state, or memory-system records.
 from __future__ import annotations
 
 import argparse
+import html
 import json
 import os
 import re
@@ -41,6 +42,13 @@ READ_ONLY_ACTIONS = {
     "issue-context",
     "scheduler-audit",
     "collaboration-readiness",
+    "foundry-board",
+    "guided-onboarding",
+    "operational-cockpit",
+    "mixed-state-recovery",
+    "project-sync-plan",
+    "local-ledger-report",
+    "local-ledger-backfill-preview",
     "activation-report",
 }
 DRY_RUN_ACTIONS = {
@@ -50,6 +58,7 @@ DRY_RUN_ACTIONS = {
     "permission-smoke",
     "comparison-draft",
 }
+LOCAL_WRITE_ACTIONS = {"local-ledger-append", "local-ledger-migration-apply", "local-ledger-action-apply", "ledger-dogfood", "project-sync-apply"}
 REMOTE_RE = re.compile(r"(?:github\.com[:/])([^/]+)/([^/.]+)(?:\.git)?$")
 CONTRACT_HEADINGS = ("Final Execution Contract", "Execution Contract", "Draft Execution Contract")
 ROLE_FIELDS = ("Owner role", "Review role", "Acceptance role")
@@ -102,6 +111,27 @@ BRANCH_CONTRACT_FIELDS = (
     "Forward-merge expectation",
 )
 LEGACY_BRANCH_TARGET_FIELD = "Branch target"
+LOCAL_LEDGER_SCHEMA_VERSION = 1
+LOCAL_LEDGER_EVENT_TYPES = {
+    "assignment",
+    "dispatch",
+    "callback",
+    "evidence",
+    "review",
+    "requested_changes",
+    "acceptance",
+    "human_approval",
+    "merge",
+    "closure",
+    "blocked",
+    "unblocked",
+    "supersession",
+    "recovery",
+    "sync_readback",
+}
+CAPABILITY_LAYER_VALUES = {"base", "local_orchestration", "mixed"}
+LOCAL_LEDGER_CONFIDENCE_VALUES = {"observed", "inferred", "unknown", "not_available"}
+LOCAL_LEDGER_DEFAULT_ROOT = Path("usage") / "local" / "collaboration-ledger"
 
 
 def fail(code: str, detail: str, exit_code: int = 2) -> None:
@@ -578,6 +608,2114 @@ def print_json_or_text(payload: dict[str, Any], as_json: bool) -> None:
             print(f"{key}: {value}")
 
 
+def local_ledger_root(args: argparse.Namespace) -> Path:
+    root = Path(args.ledger_root) if args.ledger_root else default_core_root() / LOCAL_LEDGER_DEFAULT_ROOT
+    return root.expanduser().resolve()
+
+
+def local_ledger_events_path(root: Path) -> Path:
+    path = (root / "events.jsonl").resolve()
+    if root not in path.parents:
+        fail("ledger_path_escape", "ledger events path must stay inside ledger root")
+    return path
+
+
+def work_item_key(work_item: dict[str, Any]) -> str:
+    if work_item.get("id"):
+        return str(work_item["id"])
+    repo = work_item.get("repo", "unknown")
+    item_type = work_item.get("type", "issue")
+    number = work_item.get("number", "unknown")
+    return f"{repo}#{item_type}:{number}"
+
+
+def validate_local_ledger_event(event: Any) -> tuple[dict[str, Any] | None, list[str], str]:
+    errors: list[str] = []
+    if not isinstance(event, dict):
+        return None, ["event must be a JSON object"], "malformed"
+    schema_version = event.get("schema_version")
+    if not isinstance(schema_version, int) or schema_version < 1:
+        errors.append("schema_version must be a positive integer")
+    event_id = event.get("event_id")
+    if not isinstance(event_id, str) or not event_id.strip():
+        errors.append("event_id must be a non-empty string")
+    event_type = event.get("event_type")
+    if not isinstance(event_type, str) or not event_type.strip():
+        errors.append("event_type must be a non-empty string")
+    occurred_at = event.get("occurred_at")
+    if not isinstance(occurred_at, str) or not occurred_at.strip():
+        errors.append("occurred_at must be a non-empty string")
+    work_item = event.get("work_item")
+    if not isinstance(work_item, dict):
+        errors.append("work_item must be an object")
+    elif not work_item.get("id") and not (work_item.get("repo") and work_item.get("type") and work_item.get("number") is not None):
+        errors.append("work_item must include id or repo/type/number")
+    provenance = event.get("provenance")
+    if not isinstance(provenance, dict):
+        errors.append("provenance must be an object")
+    else:
+        links = provenance.get("links")
+        if links is not None and not isinstance(links, list):
+            errors.append("provenance.links must be a list when present")
+    confidence = event.get("confidence")
+    if confidence not in LOCAL_LEDGER_CONFIDENCE_VALUES:
+        errors.append(f"confidence must be one of {sorted(LOCAL_LEDGER_CONFIDENCE_VALUES)}")
+    unknown_fields = event.get("unknown_fields", [])
+    not_available_fields = event.get("not_available_fields", [])
+    degraded_evidence = event.get("degraded_evidence", [])
+    for field_name, value in (
+        ("unknown_fields", unknown_fields),
+        ("not_available_fields", not_available_fields),
+        ("degraded_evidence", degraded_evidence),
+    ):
+        if not isinstance(value, list):
+            errors.append(f"{field_name} must be a list")
+    supersedes = event.get("supersedes_event_ids", [])
+    if not isinstance(supersedes, list):
+        errors.append("supersedes_event_ids must be a list")
+    if errors:
+        return None, errors, "malformed"
+    normalized = dict(event)
+    normalized["event_id"] = event_id.strip()
+    normalized["event_type"] = event_type.strip()
+    normalized["occurred_at"] = occurred_at.strip()
+    normalized["work_item_key"] = work_item_key(work_item)
+    normalized["unknown_fields"] = unknown_fields
+    normalized["not_available_fields"] = not_available_fields
+    normalized["degraded_evidence"] = degraded_evidence
+    normalized["supersedes_event_ids"] = supersedes
+    if schema_version > LOCAL_LEDGER_SCHEMA_VERSION:
+        return normalized, [], "forward_compatible"
+    if event_type not in LOCAL_LEDGER_EVENT_TYPES:
+        return normalized, [], "unknown_event"
+    return normalized, [], "valid"
+
+
+def read_local_ledger_events(root: Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
+    events_path = local_ledger_events_path(root)
+    valid_events: list[dict[str, Any]] = []
+    invalid_events: list[dict[str, Any]] = []
+    if not events_path.exists():
+        return valid_events, invalid_events, {"path": str(events_path), "exists": False, "line_count": 0}
+    for lineno, line in enumerate(events_path.read_text(encoding="utf-8").splitlines(), start=1):
+        if not line.strip():
+            continue
+        try:
+            raw = json.loads(line)
+        except json.JSONDecodeError as exc:
+            invalid_events.append({"line": lineno, "status": "malformed", "errors": [str(exc)]})
+            continue
+        normalized, errors, status = validate_local_ledger_event(raw)
+        if normalized is None:
+            invalid_events.append({"line": lineno, "status": status, "errors": errors, "event_id": raw.get("event_id") if isinstance(raw, dict) else None})
+            continue
+        normalized["validation_status"] = status
+        normalized["line"] = lineno
+        valid_events.append(normalized)
+    return valid_events, invalid_events, {"path": str(events_path), "exists": True, "line_count": len(valid_events) + len(invalid_events)}
+
+
+def append_local_ledger_event(root: Path, event: dict[str, Any]) -> dict[str, Any]:
+    normalized, errors, status = validate_local_ledger_event(event)
+    if normalized is None:
+        return {"status": "invalid", "errors": errors, "mutation_performed": False}
+    root.mkdir(parents=True, exist_ok=True)
+    events_path = local_ledger_events_path(root)
+    with events_path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(event, sort_keys=True, separators=(",", ":")) + "\n")
+    return {
+        "status": status,
+        "event_id": normalized["event_id"],
+        "event_type": normalized["event_type"],
+        "ledger_root": str(root),
+        "events_path": str(events_path),
+        "mutation_performed": True,
+        "write_scope": "local_ledger_events_jsonl_only",
+    }
+
+
+def append_events_if_absent(
+    root: Path,
+    events: list[dict[str, Any]],
+    existing_ids: set[str],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    appended: list[dict[str, Any]] = []
+    duplicate_skips: list[dict[str, Any]] = []
+    for event in events:
+        event_id = event["event_id"]
+        if event_id in existing_ids:
+            duplicate_skips.append({"event_id": event_id, "reason": "idempotent_duplicate_event_id"})
+            continue
+        result = append_local_ledger_event(root, event)
+        appended.append(result)
+        existing_ids.add(event_id)
+    return appended, duplicate_skips
+
+
+def empty_derived_work_item(key: str, event: dict[str, Any]) -> dict[str, Any]:
+    work_item = event.get("work_item", {})
+    return {
+        "work_item_key": key,
+        "work_item": work_item,
+        "state": "unknown",
+        "owner_role": "unknown",
+        "review_state": "unknown",
+        "accepted": False,
+        "merged": False,
+        "closed": False,
+        "blocked": False,
+        "blocking_reason": None,
+        "latest_event_id": None,
+        "latest_occurred_at": None,
+        "latest_evidence": [],
+        "provenance_links": [],
+        "confidence": "unknown",
+        "unknown_fields": [],
+        "not_available_fields": [],
+        "degraded_evidence": [],
+        "conflicts": [],
+        "event_ids": [],
+        "next_review_or_action_needed": "review_local_ledger_state",
+    }
+
+
+def merge_unique(existing: list[Any], additions: list[Any]) -> list[Any]:
+    seen = set(json.dumps(item, sort_keys=True) if isinstance(item, (dict, list)) else str(item) for item in existing)
+    output = list(existing)
+    for item in additions:
+        key = json.dumps(item, sort_keys=True) if isinstance(item, (dict, list)) else str(item)
+        if key not in seen:
+            seen.add(key)
+            output.append(item)
+    return output
+
+
+def apply_local_ledger_event(item: dict[str, Any], event: dict[str, Any]) -> None:
+    event_type = event["event_type"]
+    payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+    item["latest_event_id"] = event["event_id"]
+    item["latest_occurred_at"] = event.get("occurred_at", item.get("latest_occurred_at"))
+    item["event_ids"].append(event["event_id"])
+    item["confidence"] = event.get("confidence", item["confidence"])
+    item["unknown_fields"] = merge_unique(item["unknown_fields"], event.get("unknown_fields", []))
+    item["not_available_fields"] = merge_unique(item["not_available_fields"], event.get("not_available_fields", []))
+    item["degraded_evidence"] = merge_unique(item["degraded_evidence"], event.get("degraded_evidence", []))
+    provenance = event.get("provenance") if isinstance(event.get("provenance"), dict) else {}
+    item["provenance_links"] = merge_unique(item["provenance_links"], provenance.get("links", []))
+    if event.get("validation_status") in {"unknown_event", "forward_compatible"}:
+        item["latest_evidence"].append({"event_id": event["event_id"], "type": event.get("validation_status")})
+        if not item["conflicts"]:
+            item["next_review_or_action_needed"] = "review_forward_compatible_or_unknown_event"
+        return
+    if event_type == "assignment":
+        item["state"] = "assigned"
+        item["owner_role"] = payload.get("owner_role", event.get("actor_role", item["owner_role"]))
+        item["next_review_or_action_needed"] = "dispatch_or_start_work"
+    elif event_type == "dispatch":
+        item["state"] = "dispatched"
+        item["owner_role"] = payload.get("target_role", item["owner_role"])
+        item["thread_id"] = payload.get("thread_id", item.get("thread_id", "unknown"))
+        item["next_review_or_action_needed"] = "await_callback"
+    elif event_type == "callback":
+        item["state"] = "callback_received"
+        item["latest_evidence"].append({"event_id": event["event_id"], "summary": payload.get("summary", "callback_received")})
+        item["next_review_or_action_needed"] = "review_callback_evidence"
+    elif event_type == "evidence":
+        item["state"] = "evidence_recorded"
+        item["latest_evidence"].append({"event_id": event["event_id"], "summary": payload.get("summary", "evidence_recorded")})
+        item["next_review_or_action_needed"] = "review_evidence"
+    elif event_type == "review":
+        decision = payload.get("decision", "unknown")
+        item["review_state"] = decision
+        item["state"] = "review_changes_requested" if decision == "request_changes" else "reviewed"
+        item["next_review_or_action_needed"] = "address_review" if decision == "request_changes" else "await_acceptance"
+    elif event_type == "requested_changes":
+        item["review_state"] = "request_changes"
+        item["state"] = "review_changes_requested"
+        item["next_review_or_action_needed"] = "address_review"
+    elif event_type == "acceptance":
+        item["accepted"] = True
+        item["state"] = "accepted"
+        item["next_review_or_action_needed"] = "await_merge_or_closure_gate"
+    elif event_type == "human_approval":
+        item["human_approved"] = True
+        item["state"] = "human_approved"
+        item["next_review_or_action_needed"] = "perform_approved_gate"
+    elif event_type == "merge":
+        item["merged"] = True
+        item["state"] = "merged"
+        item["merge_sha"] = payload.get("merge_sha", item.get("merge_sha", "unknown"))
+        item["next_review_or_action_needed"] = "post_merge_verification_or_closure_gate"
+    elif event_type == "closure":
+        item["closed"] = True
+        item["state"] = "closed"
+        item["next_review_or_action_needed"] = "none"
+    elif event_type == "blocked":
+        if item.get("closed"):
+            item["conflicts"].append(
+                {
+                    "event_id": event["event_id"],
+                    "code": "blocked_after_closure",
+                    "local_state": "closed",
+                    "observed_state": "blocked",
+                }
+            )
+        item["blocked"] = True
+        item["state"] = "blocked"
+        item["blocking_reason"] = payload.get("reason", "unknown")
+        item["next_review_or_action_needed"] = "resolve_blocker"
+    elif event_type == "unblocked":
+        item["blocked"] = False
+        item["state"] = payload.get("next_state", "assigned")
+        item["blocking_reason"] = None
+        item["latest_evidence"].append({"event_id": event["event_id"], "summary": payload.get("summary", "unblocked")})
+        item["next_review_or_action_needed"] = payload.get("next_review_or_action_needed", "review_unblocked_state")
+    elif event_type == "supersession":
+        item["state"] = "superseded"
+        item["superseded_by"] = payload.get("superseded_by", "unknown")
+        item["latest_evidence"].append({"event_id": event["event_id"], "summary": payload.get("summary", "supersession")})
+        item["next_review_or_action_needed"] = payload.get("next_review_or_action_needed", "follow_superseding_work")
+    elif event_type == "recovery":
+        item["state"] = payload.get("recovered_state", "recovery_review")
+        item["recovery_reason"] = payload.get("reason", "unknown")
+        item["latest_evidence"].append({"event_id": event["event_id"], "summary": payload.get("summary", "recovery")})
+        item["next_review_or_action_needed"] = payload.get("next_review_or_action_needed", "verify_recovered_state")
+    elif event_type == "sync_readback":
+        observed_state = payload.get("observed_state")
+        local_state = payload.get("local_state")
+        if observed_state and local_state and observed_state != local_state:
+            item["conflicts"].append(
+                {
+                    "event_id": event["event_id"],
+                    "code": "sync_readback_state_mismatch",
+                    "local_state": local_state,
+                    "observed_state": observed_state,
+                }
+            )
+            item["state"] = "stale_conflict"
+            item["next_review_or_action_needed"] = "rehydrate_and_reconcile_evidence"
+        item["latest_evidence"].append({"event_id": event["event_id"], "summary": "sync_readback"})
+
+
+def replay_local_ledger(events: list[dict[str, Any]]) -> dict[str, Any]:
+    start = time.perf_counter()
+    superseded_ids = {str(event_id) for event in events for event_id in event.get("supersedes_event_ids", [])}
+    active_events = [event for event in events if event["event_id"] not in superseded_ids]
+    active_events.sort(key=lambda item: (item.get("occurred_at", ""), item.get("event_id", "")))
+    work_items: dict[str, dict[str, Any]] = {}
+    event_ids_seen: set[str] = set()
+    duplicate_ids: list[str] = []
+    unknown_or_forward = 0
+    for event in active_events:
+        if event["event_id"] in event_ids_seen:
+            duplicate_ids.append(event["event_id"])
+            continue
+        event_ids_seen.add(event["event_id"])
+        key = event["work_item_key"]
+        work_items.setdefault(key, empty_derived_work_item(key, event))
+        if event.get("validation_status") in {"unknown_event", "forward_compatible"}:
+            unknown_or_forward += 1
+        apply_local_ledger_event(work_items[key], event)
+    degraded_count = sum(len(event.get("degraded_evidence", [])) for event in active_events)
+    unknown_count = sum(len(event.get("unknown_fields", [])) + len(event.get("not_available_fields", [])) for event in active_events)
+    replay_time_ms = round((time.perf_counter() - start) * 1000, 3)
+    items = sorted(work_items.values(), key=lambda item: item["work_item_key"])
+    conflicts = [conflict for item in items for conflict in item["conflicts"]]
+    return {
+        "derived_work_items": items,
+        "summary": {
+            "event_count": len(events),
+            "active_event_count": len(active_events),
+            "superseded_event_count": len(superseded_ids),
+            "duplicate_event_ids": sorted(set(duplicate_ids)),
+            "work_item_count": len(items),
+            "conflict_count": len(conflicts),
+            "degraded_evidence_count": degraded_count,
+            "unknown_not_available_count": unknown_count,
+            "unknown_or_forward_compatible_event_count": unknown_or_forward,
+            "replay_time_ms": replay_time_ms,
+        },
+    }
+
+
+def build_local_ledger_report(root: Path) -> dict[str, Any]:
+    events, invalid_events, storage = read_local_ledger_events(root)
+    replay = replay_local_ledger(events)
+    payload = {
+        "schema_version": 1,
+        "command": "local-ledger-report",
+        "mode": "read_only",
+        "ledger_root": str(root),
+        "storage": storage,
+        "mutation_performed": False,
+        "apply_supported_now": False,
+        "github_dependency_for_replay": False,
+        "authority_statement": "local_collaboration_ledger_events_are_replay_authority_for_this_report",
+        "derived_work_items": replay["derived_work_items"],
+        "invalid_events": invalid_events,
+        "summary": replay["summary"],
+        "unknown_or_degraded": [
+            {
+                "source": "local_ledger_event",
+                "status": "degraded_or_incomplete",
+                "impact": "Replay continues with confidence, unknown, and not_available fields visible.",
+            }
+        ]
+        if replay["summary"]["degraded_evidence_count"] or replay["summary"]["unknown_not_available_count"] or invalid_events
+        else [],
+        "user_next_actions": [
+            item["next_review_or_action_needed"]
+            for item in replay["derived_work_items"]
+            if item.get("next_review_or_action_needed") and item.get("next_review_or_action_needed") != "none"
+        ],
+        "forbidden_actions": [
+            "#360 backfill",
+            "#361 ledger-backed board",
+            "#362 sync-plan generation",
+            "GitHub Project mutation",
+            "real GitHub write-back",
+            "issue closure automation",
+            "runtime/Vault/private/generated mutation",
+            "release/tag work",
+            "memory-system work",
+        ],
+    }
+    payload["telemetry"] = {
+        "event_count": replay["summary"]["event_count"],
+        "active_event_count": replay["summary"]["active_event_count"],
+        "replay_time_ms": replay["summary"]["replay_time_ms"],
+        "degraded_evidence_count": replay["summary"]["degraded_evidence_count"],
+        "user_facing_output_bytes": len(json.dumps(payload, sort_keys=True).encode("utf-8")),
+        "telemetry_issue": "#266",
+    }
+    return payload
+
+
+def item_url(repo: str, item_type: str, number: int | None, fallback: str | None = None) -> str:
+    if fallback:
+        return fallback
+    if number is None:
+        return f"https://github.com/{repo}"
+    if item_type == "pr":
+        return f"https://github.com/{repo}/pull/{number}"
+    return f"https://github.com/{repo}/issues/{number}"
+
+
+def issue_or_pr_state(item: dict[str, Any]) -> str:
+    state = item.get("state") or item.get("status") or "unknown"
+    return str(state).lower()
+
+
+def item_updated_at(item: dict[str, Any]) -> str:
+    return str(item.get("updatedAt") or item.get("updated_at") or item.get("createdAt") or item.get("created_at") or "unknown")
+
+
+def comments_for_item(item: dict[str, Any]) -> list[dict[str, Any]]:
+    comments = item.get("comments", [])
+    if isinstance(comments, dict):
+        comments = comments.get("nodes") or comments.get("items") or []
+    if not isinstance(comments, list):
+        return []
+    return [comment for comment in comments if isinstance(comment, dict)]
+
+
+def needs_owner_from_labels(labels: list[str]) -> str | None:
+    needs = [label for label in labels if label.startswith("needs:")]
+    if len(needs) == 1:
+        return needs[0].split(":", 1)[1]
+    return None
+
+
+def backfill_event(
+    repo: str,
+    item_type: str,
+    item: dict[str, Any],
+    event_type: str,
+    suffix: str,
+    confidence: str,
+    provenance_links: list[str],
+    payload: dict[str, Any],
+    unknown_fields: list[str] | None = None,
+    not_available_fields: list[str] | None = None,
+    degraded_evidence: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    number = issue_number(item)
+    key = f"{repo}#{item_type}:{number if number is not None else 'unknown'}"
+    return {
+        "schema_version": LOCAL_LEDGER_SCHEMA_VERSION,
+        "event_id": f"candidate-{item_type}-{number if number is not None else 'unknown'}-{suffix}",
+        "event_type": event_type,
+        "occurred_at": item_updated_at(item),
+        "work_item": {"id": key, "repo": repo, "type": item_type, "number": number},
+        "actor_role": payload.get("actor_role", "unknown"),
+        "confidence": confidence,
+        "unknown_fields": unknown_fields or [],
+        "not_available_fields": not_available_fields or [],
+        "degraded_evidence": degraded_evidence or [],
+        "provenance": {"links": provenance_links},
+        "payload": payload,
+    }
+
+
+def infer_candidate_events_for_item(
+    repo: str,
+    item_type: str,
+    item: dict[str, Any],
+    project_item: dict[str, Any] | None,
+    project_status: dict[str, Any],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
+    labels = label_names(item)
+    number = issue_number(item)
+    url = item_url(repo, item_type, number, item.get("url") or item.get("html_url"))
+    events: list[dict[str, Any]] = []
+    conflicts: list[dict[str, Any]] = []
+    manual_review: list[str] = []
+    unknown_fields: list[str] = []
+    not_available_fields: list[str] = []
+    owner = needs_owner_from_labels(labels)
+    present_needs = sorted(label for label in labels if label.startswith("needs:"))
+    if owner:
+        events.append(
+            backfill_event(
+                repo,
+                item_type,
+                item,
+                "assignment",
+                "assignment",
+                "inferred",
+                [url],
+                {"owner_role": owner, "source": "needs_label", "labels": present_needs},
+            )
+        )
+    else:
+        manual_review.append("missing_or_ambiguous_owner_label")
+        unknown_fields.append("owner_role")
+    if len(present_needs) > 1:
+        conflicts.append(
+            {
+                "work_item": f"{repo}#{item_type}:{number}",
+                "code": "stale_or_conflicting_needs_labels",
+                "labels": present_needs,
+                "review_needed": "choose one current owner before candidate import is accepted",
+            }
+        )
+    comments = comments_for_item(item)
+    for index, comment in enumerate(comments):
+        body = str(comment.get("body") or "")
+        comment_url = comment.get("url") or comment.get("html_url") or url
+        lower = body.lower()
+        if "dispatch" in lower or "dispatched" in lower:
+            events.append(
+                backfill_event(
+                    repo,
+                    item_type,
+                    item,
+                    "dispatch",
+                    f"dispatch-{index + 1}",
+                    "inferred",
+                    [comment_url],
+                    {"summary": "dispatch evidence imported from comment", "target_role": owner or "unknown"},
+                    unknown_fields=["target_thread_id"] if "thread" not in lower else [],
+                )
+            )
+        if "callback" in lower:
+            events.append(
+                backfill_event(
+                    repo,
+                    item_type,
+                    item,
+                    "callback",
+                    f"callback-{index + 1}",
+                    "inferred",
+                    [comment_url],
+                    {"summary": "callback evidence imported from comment"},
+                )
+            )
+        if "request changes" in lower or "requested changes" in lower:
+            events.append(
+                backfill_event(
+                    repo,
+                    item_type,
+                    item,
+                    "requested_changes",
+                    f"requested-changes-{index + 1}",
+                    "inferred",
+                    [comment_url],
+                    {"decision": "request_changes"},
+                )
+            )
+        elif "review" in lower:
+            events.append(
+                backfill_event(
+                    repo,
+                    item_type,
+                    item,
+                    "review",
+                    f"review-{index + 1}",
+                    "inferred",
+                    [comment_url],
+                    {"decision": "reviewed"},
+                )
+            )
+        if "accepted" in lower or "acceptance" in lower:
+            events.append(
+                backfill_event(
+                    repo,
+                    item_type,
+                    item,
+                    "acceptance",
+                    f"acceptance-{index + 1}",
+                    "inferred",
+                    [comment_url],
+                    {"decision": "accepted"},
+                )
+            )
+        if "superseded" in lower:
+            manual_review.append("superseded_work_detected")
+            conflicts.append(
+                {
+                    "work_item": f"{repo}#{item_type}:{number}",
+                    "code": "superseded_work",
+                    "evidence": comment_url,
+                    "review_needed": "confirm whether candidate events should be imported or skipped",
+                }
+            )
+    state = issue_or_pr_state(item)
+    if state in {"closed", "merged"}:
+        if item_type == "pr" and (item.get("merged") is True or item.get("mergedAt") or state == "merged"):
+            events.append(
+                backfill_event(
+                    repo,
+                    item_type,
+                    item,
+                    "merge",
+                    "merge",
+                    "observed",
+                    [url],
+                    {"merge_sha": item.get("mergeCommit", {}).get("oid") if isinstance(item.get("mergeCommit"), dict) else item.get("merge_sha", "unknown")},
+                    not_available_fields=[] if item.get("mergeCommit") or item.get("merge_sha") else ["merge_sha"],
+                )
+            )
+        events.append(
+            backfill_event(
+                repo,
+                item_type,
+                item,
+                "closure",
+                "closure",
+                "observed",
+                [url],
+                {"state": state},
+            )
+        )
+    if "needs:human" in labels or "blocked" in labels or "status:blocked" in labels:
+        events.append(
+            backfill_event(
+                repo,
+                item_type,
+                item,
+                "blocked",
+                "blocked",
+                "inferred",
+                [url],
+                {"reason": "blocking label or human gate present"},
+            )
+        )
+    if project_item is None:
+        manual_review.append("missing_project_item")
+        not_available_fields.append("project_item")
+    else:
+        project_status_value = project_field_value(project_item, "Status") or "unknown"
+        project_owner = project_field_value(project_item, "Owner Role")
+        expected_owner = owner.title() if owner else None
+        if project_owner and expected_owner and project_owner.lower() != expected_owner.lower():
+            conflicts.append(
+                {
+                    "work_item": f"{repo}#{item_type}:{number}",
+                    "code": "owner_mismatch",
+                    "needs_owner": expected_owner,
+                    "project_owner": project_owner,
+                    "review_needed": "choose accepted owner before candidate event import",
+                }
+            )
+        if state == "closed" and project_status_value.lower() != "done":
+            conflicts.append(
+                {
+                    "work_item": f"{repo}#{item_type}:{number}",
+                    "code": "closed_issue_not_mirrored_done",
+                    "issue_state": state,
+                    "project_status": project_status_value,
+                }
+            )
+        if state != "closed" and project_status_value.lower() == "done":
+            conflicts.append(
+                {
+                    "work_item": f"{repo}#{item_type}:{number}",
+                    "code": "project_done_while_item_open",
+                    "issue_state": state,
+                    "project_status": project_status_value,
+                }
+            )
+        events.append(
+            backfill_event(
+                repo,
+                item_type,
+                item,
+                "sync_readback",
+                "project-readback",
+                "observed",
+                [url],
+                {"local_state": state, "observed_state": project_status_value, "source": "project_mirror"},
+            )
+        )
+    if project_status.get("status") not in {"ok", "skipped", "config_missing"}:
+        degraded = [{"source": "github_graphql_project_v2", "status": project_status.get("status"), "error": project_status.get("error")}]
+        for event in events:
+            event["degraded_evidence"] = merge_unique(event.get("degraded_evidence", []), degraded)
+        manual_review.append("degraded_project_readback")
+    if unknown_fields or not_available_fields:
+        events.append(
+            backfill_event(
+                repo,
+                item_type,
+                item,
+                "evidence",
+                "partial-evidence",
+                "unknown" if unknown_fields else "not_available",
+                [url],
+                {"summary": "partial existing-project evidence requires manual review"},
+                unknown_fields=unknown_fields,
+                not_available_fields=not_available_fields,
+            )
+        )
+    return events, conflicts, sorted(set(manual_review))
+
+
+def build_local_ledger_backfill_preview(
+    repo: str,
+    repo_source: str,
+    issues: list[dict[str, Any]],
+    prs: list[dict[str, Any]],
+    project_items: list[dict[str, Any]],
+    project_status: dict[str, Any],
+    project_attempts: dict[str, Any],
+    ledger_root_arg: str | None,
+) -> dict[str, Any]:
+    project_by_issue = {project_item_issue_number(item): item for item in project_items if project_item_issue_number(item) is not None}
+    candidate_events: list[dict[str, Any]] = []
+    conflicts: list[dict[str, Any]] = []
+    manual_review_needs: list[str] = []
+    for issue in issues:
+        events, item_conflicts, item_review = infer_candidate_events_for_item(
+            repo,
+            "issue",
+            issue,
+            project_by_issue.get(issue_number(issue)),
+            project_status,
+        )
+        candidate_events.extend(events)
+        conflicts.extend(item_conflicts)
+        manual_review_needs.extend(item_review)
+    for pr in prs:
+        events, item_conflicts, item_review = infer_candidate_events_for_item(repo, "pr", pr, None, project_status)
+        candidate_events.extend(events)
+        conflicts.extend(item_conflicts)
+        manual_review_needs.extend(item_review)
+    accepted_local_state: dict[str, Any] = {
+        "status": "not_available",
+        "reason": "no ledger root supplied; candidate import remains separate from accepted local state",
+    }
+    if ledger_root_arg:
+        accepted_report = build_local_ledger_report(Path(ledger_root_arg).expanduser().resolve())
+        accepted_local_state = {
+            "status": "available",
+            "ledger_root": accepted_report["ledger_root"],
+            "derived_work_item_count": accepted_report["summary"]["work_item_count"],
+            "event_count": accepted_report["summary"]["event_count"],
+            "state_authority": "accepted_local_ledger",
+            "derived_work_items": accepted_report["derived_work_items"],
+        }
+        accepted_keys = {item["work_item_key"]: item for item in accepted_report["derived_work_items"]}
+        for event in candidate_events:
+            key = event["work_item"]["id"]
+            accepted = accepted_keys.get(key)
+            candidate_state = event["payload"].get("state") or event["payload"].get("observed_state")
+            if accepted and candidate_state and accepted.get("state") not in {candidate_state, "unknown"}:
+                conflicts.append(
+                    {
+                        "work_item": key,
+                        "code": "accepted_local_state_differs_from_candidate",
+                        "accepted_state": accepted.get("state"),
+                        "candidate_state": candidate_state,
+                        "review_needed": "manual migration review before candidate events become authoritative",
+                    }
+                )
+    degraded_sources = []
+    if project_status.get("status") not in {"ok", "skipped", "config_missing"}:
+        degraded_sources.append(
+            source_status(
+                "github_graphql_project_v2",
+                {"status": project_status.get("status"), **project_status},
+                project_attempts,
+            )
+        )
+    payload = {
+        "schema_version": 1,
+        "command": "local-ledger-backfill-preview",
+        "mode": "read_only",
+        "repo": repo,
+        "repo_source": repo_source,
+        "mutation_performed": False,
+        "apply_supported_now": False,
+        "github_write_back_supported_now": False,
+        "candidate_events_are_authoritative": False,
+        "accepted_local_state": accepted_local_state,
+        "candidate_imported_events": candidate_events,
+        "candidate_event_count": len(candidate_events),
+        "conflicts": conflicts,
+        "manual_review_needs": sorted(set(manual_review_needs + (["conflicts_present"] if conflicts else []))),
+        "degraded_sources": degraded_sources,
+        "user_migration_report": {
+            "summary": f"Prepared {len(candidate_events)} candidate local ledger events from existing GitHub-first evidence.",
+            "next_actions": [
+                "review_candidate_events_before_acceptance",
+                "resolve_conflicts_before_authoritative_import",
+                "use_local-ledger-append_only_after_later_approval",
+            ],
+            "writes": "none",
+        },
+        "forbidden_actions": [
+            "live GitHub mutation",
+            "Project v2 mutation",
+            "authoritative migration without later approval",
+            "branch repair/apply",
+            "PR retarget",
+            "runtime/Vault/private/generated mutation",
+            "generated publish or capability-pack deploy/apply",
+            "memory-system work",
+            "#361 ledger-backed Foundry Board",
+            "#362 Project sync-plan",
+            "final V2 readiness closure",
+        ],
+    }
+    payload["telemetry"] = {
+        "source_count": len(issues) + len(prs) + len(project_items),
+        "api_attempts": project_attempts.get("attempts", 0),
+        "degraded_source_count": len(degraded_sources),
+        "candidate_count": len(candidate_events),
+        "conflict_count": len(conflicts),
+        "manual_review_count": len(payload["manual_review_needs"]),
+        "telemetry_issue": "#266",
+    }
+    return payload
+
+
+def issue_provenance_record(item: dict[str, Any], kind: str = "issue") -> dict[str, Any]:
+    labels = label_names(item)
+    return {
+        "kind": kind,
+        "number": issue_number(item),
+        "title": item.get("title", ""),
+        "state": item.get("state", "unknown"),
+        "labels": labels,
+        "url": issue_pr_url(item) if kind == "pr" else issue_url(item),
+        "selected_reason": (
+            "current durable gate" if any(label in {"needs:user", "needs:human"} for label in labels)
+            else "active routed work" if any(label.startswith("needs:") for label in labels)
+            else "completed context" if str(item.get("state", "")).upper() == "CLOSED"
+            else "durable evidence"
+        ),
+    }
+
+
+def derive_explicit_fallback_set(issues: list[dict[str, Any]], prs: list[dict[str, Any]]) -> dict[str, Any]:
+    current_gates = [
+        issue for issue in issues
+        if str(issue.get("state", "")).upper() != "CLOSED"
+        and any(label in {"needs:user", "needs:human"} for label in label_names(issue))
+    ]
+    routed_open = [
+        issue for issue in issues
+        if str(issue.get("state", "")).upper() != "CLOSED"
+        and any(label.startswith("needs:") for label in label_names(issue))
+    ]
+    open_issues = [issue for issue in issues if str(issue.get("state", "")).upper() != "CLOSED"]
+    completed_context = [issue for issue in issues if str(issue.get("state", "")).upper() == "CLOSED"]
+    selected_issues = current_gates or routed_open or open_issues
+    selected_prs = [pr for pr in prs if str(pr.get("state", "")).upper() != "CLOSED"]
+    return {
+        "status": "human_confirmation_required",
+        "name": "explicit issue/PR fallback",
+        "issue_numbers": [issue_number(issue) for issue in selected_issues if issue_number(issue) is not None],
+        "pr_numbers": [issue_number(pr) for pr in selected_prs if issue_number(pr) is not None],
+        "provenance": [
+            *(issue_provenance_record(issue, "issue") for issue in selected_issues),
+            *(issue_provenance_record(pr, "pr") for pr in selected_prs),
+        ],
+        "completed_context": [issue_provenance_record(issue, "issue") for issue in completed_context],
+        "human_prompt": "Confirm this explicit issue/PR fallback set, edit it, or stop before candidate review.",
+    }
+
+
+def onboarding_step(
+    step: int,
+    title: str,
+    reads: list[str],
+    may_write: list[str],
+    will_not_touch: list[str],
+    decision: str,
+) -> dict[str, Any]:
+    return {
+        "step": step,
+        "title": title,
+        "what_the_agent_reads": reads,
+        "what_it_may_write": may_write,
+        "what_it_will_not_touch": will_not_touch,
+        "one_human_decision_required_now": decision,
+    }
+
+
+def trial_response_entries(response_doc: Any) -> tuple[list[dict[str, Any]], dict[str, Any], list[str]]:
+    if response_doc is None:
+        return [], {}, []
+    if not isinstance(response_doc, dict):
+        return [], {}, ["trial response JSON must be an object"]
+    responses = response_doc.get("responses", [])
+    if not isinstance(responses, list):
+        return [], {}, ["responses must be a list"]
+    normalized: list[dict[str, Any]] = []
+    errors: list[str] = []
+    for index, response in enumerate(responses, start=1):
+        if not isinstance(response, dict):
+            errors.append(f"response #{index} must be an object")
+            continue
+        try:
+            step = int(response.get("step"))
+        except (TypeError, ValueError):
+            errors.append(f"response #{index} missing numeric step")
+            continue
+        choice = str(response.get("choice", "")).strip()
+        human_response = str(response.get("human_response", "")).strip()
+        if not choice:
+            errors.append(f"response #{index} missing choice")
+        if not human_response:
+            errors.append(f"response #{index} missing human_response")
+        normalized.append(
+            {
+                "step": step,
+                "choice": choice,
+                "human_response": human_response,
+                "timestamp": str(response.get("timestamp", "not_available")),
+                "evidence_refs": response.get("evidence_refs", []),
+                "notes": str(response.get("notes", "")),
+            }
+        )
+    final_evaluation = response_doc.get("final_evaluation", {})
+    if final_evaluation and not isinstance(final_evaluation, dict):
+        errors.append("final_evaluation must be an object when present")
+        final_evaluation = {}
+    return normalized, final_evaluation, errors
+
+
+def build_interactive_trial_protocol(
+    steps: list[dict[str, Any]],
+    response_doc: Any,
+    trial_root: str,
+) -> dict[str, Any]:
+    responses, final_evaluation, errors = trial_response_entries(response_doc)
+    response_by_step = {response["step"]: response for response in responses}
+    transcript_steps: list[dict[str, Any]] = []
+    missing_step: dict[str, Any] | None = None
+    for step in steps:
+        step_number = int(step["step"])
+        response = response_by_step.get(step_number)
+        if not response:
+            missing_step = step
+            break
+        transcript_steps.append(
+            {
+                "step": step_number,
+                "title": step["title"],
+                "choice": response["choice"],
+                "human_response": response["human_response"],
+                "timestamp": response["timestamp"],
+                "evidence_refs": response["evidence_refs"],
+                "notes": response["notes"],
+                "captured_before_progression": True,
+            }
+        )
+    progression_allowed = missing_step is None and not errors
+    final_decision = str(final_evaluation.get("final_decision") or final_evaluation.get("decision") or "").strip()
+    final_required_fields = [
+        "clarity_of_starting_context",
+        "confidence_in_current_state_evidence",
+        "candidate_non_authority_clarity",
+        "isolated_ledger_boundary_clarity",
+        "project_sync_not_executed_clarity",
+        "next_step_actionability",
+        "remaining_friction",
+        "final_decision",
+    ]
+    missing_final_fields = [field for field in final_required_fields if not final_evaluation.get(field)]
+    final_evaluation_complete = not missing_final_fields and final_decision in {
+        "accepted",
+        "accepted_with_cleanup",
+        "rejected",
+        "deferred",
+    }
+    return {
+        "status": "ready_for_final_human_evaluation" if progression_allowed and not final_evaluation_complete else "blocked_waiting_for_human_response" if not progression_allowed else "complete",
+        "no_proceed_without_human_response": True,
+        "progression_allowed": progression_allowed,
+        "blocked_at_step": None if progression_allowed else missing_step["step"] if missing_step else "invalid_response",
+        "next_required_human_response": None if progression_allowed else {
+            "step": missing_step["step"] if missing_step else "invalid_response",
+            "title": missing_step["title"] if missing_step else "Fix trial response JSON",
+            "allowed_choices": missing_step.get("allowed_human_choices", []) if missing_step else [],
+            "prompt": missing_step["one_human_decision_required_now"] if missing_step else "; ".join(errors),
+        },
+        "response_errors": errors,
+        "transcript_capture": {
+            "status": "captured" if transcript_steps else "no_human_response_captured_yet",
+            "transcript_root": trial_root,
+            "captured_response_count": len(transcript_steps),
+            "responses": transcript_steps,
+            "actual_human_response_required_before_progression": True,
+        },
+        "choice_defer_recovery_paths": [
+            "inspect evidence before selecting candidates",
+            "skip candidate and continue with remaining evidence",
+            "defer candidate and record recovery reason",
+            "stop trial when provenance, write boundary, or safety is unclear",
+            f"remove {trial_root.rstrip('/')} to abandon temporary trial evidence",
+        ],
+        "final_structured_human_evaluation": {
+            "required": True,
+            "status": "complete" if final_evaluation_complete else "missing_or_incomplete",
+            "missing_fields": missing_final_fields,
+            "allowed_final_decisions": ["accepted", "accepted_with_cleanup", "rejected", "deferred"],
+            "captured": final_evaluation,
+        },
+    }
+
+
+def write_trial_transcript(path_text: str, trial_root: str, payload: dict[str, Any]) -> dict[str, Any]:
+    root = Path(trial_root).expanduser().resolve()
+    path = Path(path_text).expanduser().resolve()
+    if root not in path.parents:
+        return {
+            "status": "invalid",
+            "error": "transcript path must stay inside trial root",
+            "mutation_performed": False,
+        }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    transcript = {
+        "schema_version": 1,
+        "command": "guided-onboarding-transcript",
+        "repo": payload["repo"],
+        "trial_protocol": payload["interactive_human_trial_protocol"],
+        "forbidden_actions": payload["forbidden_actions"],
+        "mutation_scope": "local_trial_transcript_only",
+    }
+    path.write_text(json.dumps(transcript, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return {
+        "status": "written",
+        "path": str(path),
+        "mutation_performed": True,
+        "write_scope": "local_trial_transcript_only",
+    }
+
+
+def build_guided_onboarding_packet(
+    repo: str,
+    repo_source: str,
+    issues: list[dict[str, Any]],
+    prs: list[dict[str, Any]],
+    issue_scope: dict[str, Any],
+    pr_status: dict[str, Any],
+    project_status: dict[str, Any],
+    project_attempts: dict[str, Any],
+    trial_root: str,
+    adopter_path: str,
+    adopter_branch: str,
+    selected_mode: str,
+    response_doc: Any = None,
+) -> dict[str, Any]:
+    explicit_set = derive_explicit_fallback_set(issues, prs)
+    selected_numbers = explicit_set["issue_numbers"]
+    context_numbers = [record["number"] for record in explicit_set["completed_context"] if record.get("number") is not None]
+    candidate_cards = [
+        {
+            "candidate_id": f"issue-{record['number']}" if record["kind"] == "issue" else f"pr-{record['number']}",
+            "kind": record["kind"],
+            "number": record["number"],
+            "title": record["title"],
+            "state": record["state"],
+            "labels": record["labels"],
+            "provenance_url": record["url"],
+            "available_actions": ["accept", "skip", "inspect evidence", "defer"],
+            "authority": "candidate_non_authoritative_until_accepted_into_isolated_ledger",
+        }
+        for record in explicit_set["provenance"]
+    ]
+    fallback_phrase = (
+        f"Current durable evidence selects issues {selected_numbers}"
+        + (f" with completed context {context_numbers}." if context_numbers else ".")
+    )
+    payload = {
+        "schema_version": 1,
+        "command": "guided-onboarding",
+        "surface": "ten-minute guided onboarding",
+        "mode": "read_only",
+        "repo": repo,
+        "repo_source": repo_source,
+        "adopter_project": {
+            "path": adopter_path,
+            "branch": adopter_branch,
+            "selected_mode": selected_mode,
+            "base_default_preserved": True,
+            "local_orchestration_selection": "explicit_trial_only_until_accepted_local_capability_state",
+        },
+        "isolated_evidence_root": trial_root,
+        "isolated_ledger": {
+            "location": f"{trial_root.rstrip('/')}/local-collaboration-ledger/events.jsonl",
+            "cleanup_boundary": f"remove {trial_root.rstrip('/')} to discard trial evidence",
+            "isolated_ledger_no_effect_guarantee": (
+                "no adopter repo files, GitHub issues/labels/Project fields, runtime, Vault/private/generated state, "
+                "generated Skills, or capability packs are modified"
+            ),
+        },
+        "raw_json_primary_ux": False,
+        "raw_json_role": "debug/evidence only; the Human-facing path is this guided packet",
+        "mutation_performed": False,
+        "apply_supported_now": False,
+        "github_write_back_supported_now": False,
+        "project_mutation_performed": False,
+        "explicit_issue_pr_fallback": explicit_set,
+        "current_durable_evidence_summary": {
+            "summary": fallback_phrase,
+            "issue_scope": issue_scope,
+            "pr_status": pr_status,
+            "project_status": project_status,
+            "project_attempts": project_attempts,
+        },
+        "candidate_review": {
+            "candidate_non_authority": "candidates are not authoritative and change no project state until accepted into the isolated ledger",
+            "human_actions": ["accept", "skip", "inspect evidence", "defer"],
+            "candidates": candidate_cards,
+        },
+        "project_sync_plan": {
+            "status": "not executed",
+            "not_executed": True,
+            "purpose": "decision support only; shows proposed operations and risks before any separately reviewed apply",
+            "proposed_operations": [
+                "compare accepted local ledger board state with optional GitHub Project mirror",
+                "report field changes, conflicts, Human gates, unsupported actions, and readback requirements",
+            ],
+            "risks": [
+                "Project mirror may be stale or degraded",
+                "live Project apply remains separately reviewed and Human-gated",
+            ],
+        },
+        "guided_steps": [
+            onboarding_step(
+                1,
+                "Starting context / consent",
+                ["repo/path/branch/mode requested by the Human", "current branch/status when available"],
+                [f"temporary guided onboarding evidence under {trial_root}"],
+                ["adopter repo files", "GitHub issues/labels/Project", "runtime/Vault/private/generated state"],
+                "Confirm this is a ten-minute read-only trial and that Base remains default outside the trial.",
+            ),
+            onboarding_step(
+                2,
+                "Current durable-state preflight",
+                ["current durable GitHub issues, PRs, labels, comments, and provenance URLs", "optional targeted Project readback when configured"],
+                [f"temporary readback summaries under {trial_root} if the operator saves evidence"],
+                ["stale #386 active-item snapshots", "hidden Project state guesses"],
+                "Confirm the current durable state is fresh before fallback-set selection.",
+            ),
+            onboarding_step(
+                3,
+                "Explicit fallback set selection",
+                ["fallback issue/PR candidates derived from current durable evidence", "candidate provenance links"],
+                [f"fallback-set decision note under {trial_root} only if requested"],
+                ["accepted local ledger authority", "adopter repo files", "GitHub Project fields"],
+                "Confirm, edit, inspect, or stop on the explicit issue/PR fallback set before candidate review.",
+            ),
+            onboarding_step(
+                4,
+                "Candidate review",
+                ["candidate cards derived from current durable evidence", "candidate provenance links"],
+                [f"review notes or candidate decision draft under {trial_root} only if requested"],
+                ["accepted local ledger authority", "adopter repo files", "GitHub Project fields"],
+                "Choose accept, skip, inspect evidence, or defer for each candidate.",
+            ),
+            onboarding_step(
+                5,
+                "No-mutation isolated ledger decision",
+                ["accepted candidate decisions", "isolated ledger location and cleanup boundary"],
+                [f"append-only isolated ledger events at {trial_root.rstrip('/')}/local-collaboration-ledger/events.jsonl only after later reviewed local apply"],
+                ["tiny-ipa files", "GitHub issues/labels/Project", "runtime/Vault/private/generated state", "generated Skills", "capability packs"],
+                "Approve or defer isolated local apply after reading the no-effect guarantee.",
+            ),
+            onboarding_step(
+                6,
+                "Human-facing evidence / result presentation",
+                ["accepted isolated ledger replay", "optional Project mirror readback", "sync-plan dry-run output"],
+                [f"optional static HTML/JSON decision-support report under {trial_root}"],
+                ["live Project apply", "automatic sync cadence", "remote issue closure/reopen"],
+                "Decide whether to stay local, inspect GitHub Project, run project-sync-plan, or defer live apply.",
+            ),
+        ],
+        "forbidden_actions": [
+            "live GitHub Project mutation",
+            "tiny-ipa repo/label/Project mutation",
+            "runtime/Vault/private/generated mutation",
+            "generated Skill publish",
+            "capability-pack deploy/apply",
+            "final V2 integration",
+            "#376/#292 closure",
+            "#390 renewed trial before #389 acceptance",
+        ],
+        "renewed_trial_handoff": {
+            "issue": "#390",
+            "must_rehydrate_current_tiny_ipa_state": True,
+            "current_expected_tiny_ipa_readback": "#276-#281 closed and #282 needs:user unless fresh readback changes it",
+            "do_not_reuse": "stale #386 active-item snapshot",
+            "acceptance_needed": "fresh subjective Human acceptance, not only command/test output",
+        },
+        "telemetry": {
+            "telemetry_issue": "#266",
+            "issue_count": len(issues),
+            "pr_count": len(prs),
+            "candidate_count": len(candidate_cards),
+            "guided_step_count": 6,
+            "degraded_source_count": 0 if project_status.get("status") in {"ok", "skipped", "config_missing"} else 1,
+            "user_facing_output_size": "concise_step_packet",
+        },
+    }
+    allowed_choices = {
+        1: ["start trial", "inspect setup", "stop"],
+        2: ["confirm current context", "inspect evidence", "stop"],
+        3: ["accept proposed set", "edit set", "inspect evidence", "stop"],
+        4: ["accept for isolated-trial consideration", "skip", "inspect evidence", "defer"],
+        5: ["preview only", "request later local-temp gate", "defer", "stop"],
+        6: ["continue with decision support", "inspect raw debug evidence", "defer", "stop"],
+        7: ["inspect evidence", "skip candidate", "defer candidate", "stop and recover"],
+        8: ["accepted", "accepted with cleanup", "rejected", "deferred"],
+    }
+    extra_steps = [
+        onboarding_step(
+            7,
+            "Choice / defer / recovery path",
+            ["Human-selected non-happy path", "candidate provenance", "current transcript"],
+            [f"temporary recovery note under {trial_root} if requested"],
+            ["hidden repair", "destructive cleanup", "GitHub or Project mutation"],
+            "Choose inspect evidence, skip/defer a candidate, or stop and recover.",
+        ),
+        onboarding_step(
+            8,
+            "Final structured Human evaluation",
+            ["captured responses from prior steps", "Human final ratings and decision"],
+            [f"trial transcript under {trial_root}"],
+            ["#390 Human acceptance inference", "#376/#292 closure", "final V2 integration"],
+            "Provide final decision: accepted, accepted with cleanup, rejected, or deferred.",
+        ),
+    ]
+    payload["guided_steps"].extend(extra_steps)
+    for step in payload["guided_steps"]:
+        step["allowed_human_choices"] = allowed_choices.get(step["step"], [])
+    payload["interactive_human_trial_protocol"] = build_interactive_trial_protocol(
+        payload["guided_steps"],
+        response_doc,
+        trial_root,
+    )
+    payload["mutation_performed"] = False
+    payload["transcript_capture_supported"] = True
+    payload["default_trial_mode"] = "no_mutation_preview_only"
+    payload["local_temp_apply_requires_later_explicit_gate"] = True
+    payload["telemetry"]["guided_step_count"] = len(payload["guided_steps"])
+    return payload
+
+
+def render_guided_onboarding_text(payload: dict[str, Any]) -> str:
+    lines = [
+        "Ten-minute guided onboarding packet",
+        f"Repo: {payload['repo']}",
+        f"Mode: {payload['adopter_project']['selected_mode']} (Base remains default outside this explicit trial)",
+        f"Isolated evidence root: {payload['isolated_evidence_root']}",
+        "Raw JSON is debug evidence only; the primary Human UX is this guided packet.",
+        f"Interactive Human trial protocol: {payload['interactive_human_trial_protocol']['status']}",
+        f"No proceed without Human response: {payload['interactive_human_trial_protocol']['no_proceed_without_human_response']}",
+        "",
+        "Current durable evidence and explicit issue/PR fallback:",
+        payload["current_durable_evidence_summary"]["summary"],
+        f"Human decision required now: {payload['explicit_issue_pr_fallback']['human_prompt']}",
+        "",
+        "Candidate review: accept / skip / inspect evidence / defer",
+        payload["candidate_review"]["candidate_non_authority"],
+    ]
+    for candidate in payload["candidate_review"]["candidates"]:
+        lines.append(
+            f"- {candidate['kind']} #{candidate['number']}: {candidate['title']} "
+            f"({candidate['state']}); actions: accept, skip, inspect evidence, defer; provenance: {candidate.get('provenance_url') or 'not_available'}"
+        )
+    lines.extend(
+        [
+            "",
+            f"Isolated ledger location: {payload['isolated_ledger']['location']}",
+            f"Isolated ledger no-effect guarantee: {payload['isolated_ledger']['isolated_ledger_no_effect_guarantee']}",
+            f"Cleanup boundary: {payload['isolated_ledger']['cleanup_boundary']}",
+            "",
+            "Project sync plan status: not executed",
+            "Project sync is proposed operations and risks only; live Project apply remains separately reviewed and Human-gated.",
+            "",
+            "Guided steps:",
+        ]
+    )
+    for step in payload["guided_steps"]:
+        lines.extend(
+            [
+                f"{step['step']}. {step['title']}",
+                "   Allowed Human choices: " + "; ".join(step.get("allowed_human_choices", [])),
+                "   What the agent reads: " + "; ".join(step["what_the_agent_reads"]),
+                "   What it may write: " + "; ".join(step["what_it_may_write"]),
+                "   What it will not touch: " + "; ".join(step["what_it_will_not_touch"]),
+                "   One Human decision required now: " + step["one_human_decision_required_now"],
+            ]
+        )
+    lines.extend(
+        [
+            "",
+            "Renewed trial handoff:",
+            payload["renewed_trial_handoff"]["current_expected_tiny_ipa_readback"],
+            "Do not reuse stale #386 active-item snapshot.",
+            "Final structured Human evaluation is required before #390 can request acceptance again.",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def cmd_guided_onboarding(args: argparse.Namespace) -> None:
+    repo, repo_source = resolve_repo(args)
+    if args.issues_json or args.fixture_json:
+        issues = normalize_issue_collection(load_json(args.issues_json or args.fixture_json))
+        issue_status = {"source": "fixture", "status": "ok", "mode": "fixture", "count": len(issues)}
+    else:
+        issues, issue_status, _issue_attempts = read_readiness_issues(repo, args)
+    prs, pr_status, _pr_attempts = read_readiness_prs(repo, args)
+    _project_items, project_status, project_attempts = read_project_items(args)
+    payload = build_guided_onboarding_packet(
+        repo,
+        repo_source,
+        issues[: args.limit],
+        prs[: args.limit],
+        issue_status,
+        pr_status,
+        project_status,
+        project_attempts,
+        args.trial_root,
+        args.adopter_path,
+        args.adopter_branch,
+        args.selected_mode,
+        load_json(args.trial_response_json) if args.trial_response_json else None,
+    )
+    if args.transcript_out:
+        payload["transcript_output"] = write_trial_transcript(args.transcript_out, args.trial_root, payload)
+        if payload["transcript_output"]["status"] == "invalid":
+            print_json_or_text(payload, True)
+            raise SystemExit(6)
+    if args.json:
+        print_json_or_text(payload, True)
+    else:
+        print(render_guided_onboarding_text(payload))
+
+
+def migration_apply_decisions(decision_doc: Any) -> tuple[dict[str, dict[str, Any]], list[str]]:
+    if not isinstance(decision_doc, dict):
+        return {}, ["decision JSON must be an object"]
+    decisions: dict[str, dict[str, Any]] = {}
+    errors: list[str] = []
+
+    def add_decision(event_id: Any, decision: str, reason: str = "", note: str = "") -> None:
+        if not isinstance(event_id, str) or not event_id.strip():
+            errors.append(f"{decision} decision must reference a non-empty event_id")
+            return
+        key = event_id.strip()
+        if key in decisions and decisions[key]["decision"] != decision:
+            errors.append(f"conflicting decisions for {key}")
+            return
+        decisions[key] = {
+            "event_id": key,
+            "decision": decision,
+            "reason": reason,
+            "manual_review_note": note,
+        }
+
+    for raw in decision_doc.get("decisions", []):
+        if not isinstance(raw, dict):
+            errors.append("decisions entries must be objects")
+            continue
+        decision = str(raw.get("decision", "")).lower().strip()
+        if decision not in {"accept", "reject", "skip"}:
+            errors.append(f"unsupported migration decision {decision!r}")
+            continue
+        add_decision(raw.get("event_id"), decision, str(raw.get("reason", "")), str(raw.get("manual_review_note", "")))
+    for field, decision in (("accept_event_ids", "accept"), ("reject_event_ids", "reject"), ("skip_event_ids", "skip")):
+        values = decision_doc.get(field, [])
+        if not isinstance(values, list):
+            errors.append(f"{field} must be a list")
+            continue
+        for event_id in values:
+            add_decision(event_id, decision)
+    return decisions, errors
+
+
+def candidate_events_from_backfill_preview(preview_doc: Any) -> tuple[list[dict[str, Any]], list[str]]:
+    if isinstance(preview_doc, list):
+        candidates = preview_doc
+    elif isinstance(preview_doc, dict):
+        candidates = preview_doc.get("candidate_imported_events") or preview_doc.get("candidate_events") or []
+    else:
+        return [], ["candidate input must be a list or backfill preview object"]
+    if not isinstance(candidates, list):
+        return [], ["candidate event collection must be a list"]
+    normalized: list[dict[str, Any]] = []
+    errors: list[str] = []
+    for index, candidate in enumerate(candidates, start=1):
+        if not isinstance(candidate, dict):
+            errors.append(f"candidate #{index} must be an object")
+            continue
+        event, event_errors, _status = validate_local_ledger_event(candidate)
+        if event is None:
+            errors.append(f"candidate #{index} invalid: {'; '.join(event_errors)}")
+            continue
+        normalized.append(dict(candidate))
+    return normalized, errors
+
+
+def capability_layer_record(candidate: dict[str, Any]) -> dict[str, str]:
+    payload = candidate.get("payload") if isinstance(candidate.get("payload"), dict) else {}
+    layer = str(candidate.get("capability_layer") or payload.get("capability_layer") or "").strip()
+    source = str(candidate.get("capability_layer_source") or "candidate_event").strip()
+    confidence = str(candidate.get("capability_layer_confidence") or candidate.get("confidence") or "inferred").strip()
+    if layer not in CAPABILITY_LAYER_VALUES:
+        layer = "local_orchestration"
+        source = "migration_apply_default"
+        confidence = "inferred"
+    if confidence not in LOCAL_LEDGER_CONFIDENCE_VALUES:
+        confidence = "inferred"
+    return {"layer": layer, "source": source, "confidence": confidence}
+
+
+def migration_decision_event_from_review_decision(candidate: dict[str, Any], decision: dict[str, Any]) -> dict[str, Any]:
+    candidate_id = str(candidate["event_id"])
+    decision_name = decision["decision"]
+    capability_layer = capability_layer_record(candidate)
+    if decision_name == "accept":
+        event = dict(candidate)
+        event["event_id"] = f"accepted-{candidate_id}"
+    else:
+        prefix = "skipped" if decision_name == "skip" else "rejected"
+        event = {
+            "schema_version": LOCAL_LEDGER_SCHEMA_VERSION,
+            "event_id": f"{prefix}-{candidate_id}",
+            "event_type": "evidence",
+            "occurred_at": candidate.get("occurred_at", "unknown"),
+            "work_item": candidate.get("work_item", {}),
+            "actor_role": "architect",
+            "confidence": "observed",
+            "unknown_fields": [],
+            "not_available_fields": [],
+            "degraded_evidence": candidate.get("degraded_evidence", []),
+            "provenance": candidate.get("provenance", {"links": []}),
+            "payload": {},
+        }
+    event["capability_layer"] = capability_layer["layer"]
+    event["capability_layer_source"] = capability_layer["source"]
+    event["capability_layer_confidence"] = capability_layer["confidence"]
+    event["base_behavior_preserved"] = True
+    event["branch_or_release_line_evidence"] = candidate.get("branch_or_release_line_evidence", "not_used")
+    provenance = event.get("provenance") if isinstance(event.get("provenance"), dict) else {"links": []}
+    provenance["candidate_event_id"] = candidate_id
+    provenance["capability_layer_source"] = capability_layer["source"]
+    provenance["capability_layer_confidence"] = capability_layer["confidence"]
+    event["provenance"] = provenance
+    payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+    payload["migration_decision"] = decision_name
+    payload["candidate_event_id"] = candidate_id
+    if decision.get("reason"):
+        payload["migration_decision_reason"] = decision["reason"]
+    if decision.get("manual_review_note"):
+        payload["manual_review_note"] = decision["manual_review_note"]
+    if decision_name == "accept":
+        payload["accepted_from_candidate"] = True
+    event["payload"] = payload
+    return event
+
+
+def build_local_ledger_migration_apply_from_decision_json(root: Path, preview_doc: Any, decision_doc: Any) -> dict[str, Any]:
+    candidates, candidate_errors = candidate_events_from_backfill_preview(preview_doc)
+    decisions, decision_errors = migration_apply_decisions(decision_doc)
+    if candidate_errors or decision_errors or not decisions:
+        return {
+            "schema_version": 1,
+            "command": "local-ledger-migration-apply",
+            "status": "invalid",
+            "errors": candidate_errors + decision_errors + ([] if decisions else ["at least one accept/reject/skip decision is required"]),
+            "mutation_performed": False,
+            "github_write_back_performed": False,
+            "project_mutation_performed": False,
+        }
+    candidate_by_id = {str(candidate["event_id"]): candidate for candidate in candidates}
+    missing = sorted(event_id for event_id in decisions if event_id not in candidate_by_id)
+    if missing:
+        return {
+            "schema_version": 1,
+            "command": "local-ledger-migration-apply",
+            "status": "invalid",
+            "errors": [f"decision references missing candidate event {event_id}" for event_id in missing],
+            "mutation_performed": False,
+            "github_write_back_performed": False,
+            "project_mutation_performed": False,
+        }
+    before_events, before_invalid, before_storage = read_local_ledger_events(root)
+    before_replay = replay_local_ledger(before_events)
+    existing_ids = {event["event_id"] for event in before_events}
+    planned_events = [
+        migration_decision_event_from_review_decision(candidate_by_id[event_id], decision)
+        for event_id, decision in sorted(decisions.items())
+    ]
+    validation_errors: list[str] = []
+    for event in planned_events:
+        normalized, errors, _status = validate_local_ledger_event(event)
+        if normalized is None:
+            validation_errors.append(f"{event.get('event_id', 'unknown')}: {'; '.join(errors)}")
+    if validation_errors:
+        return {
+            "schema_version": 1,
+            "command": "local-ledger-migration-apply",
+            "status": "invalid",
+            "errors": validation_errors,
+            "mutation_performed": False,
+            "github_write_back_performed": False,
+            "project_mutation_performed": False,
+        }
+    appended: list[dict[str, Any]] = []
+    duplicate_skips: list[dict[str, Any]] = []
+    for event in planned_events:
+        if event["event_id"] in existing_ids:
+            duplicate_skips.append({"event_id": event["event_id"], "reason": "idempotent_duplicate_event_id"})
+            continue
+        result = append_local_ledger_event(root, event)
+        appended.append(result)
+        existing_ids.add(event["event_id"])
+    after_events, after_invalid, after_storage = read_local_ledger_events(root)
+    after_replay = replay_local_ledger(after_events)
+    accepted_count = sum(1 for item in decisions.values() if item["decision"] == "accept")
+    rejected_count = sum(1 for item in decisions.values() if item["decision"] == "reject")
+    skipped_count = sum(1 for item in decisions.values() if item["decision"] == "skip")
+    payload = {
+        "schema_version": 1,
+        "command": "local-ledger-migration-apply",
+        "mode": "apply",
+        "status": "ok",
+        "ledger_root": str(root),
+        "mutation_performed": bool(appended),
+        "write_scope": "local_ledger_events_jsonl_only",
+        "github_write_back_performed": False,
+        "project_mutation_performed": False,
+        "capability_layer": "local_orchestration",
+        "capability_layer_source": "explicit_migration_apply_decision",
+        "capability_layer_confidence": "confirmed",
+        "candidate_event_count": len(candidates),
+        "decision_count": len(decisions),
+        "accepted_count": accepted_count,
+        "rejected_count": rejected_count,
+        "skipped_count": skipped_count,
+        "appended_events": appended,
+        "duplicate_skips": duplicate_skips,
+        "before": {
+            "storage": before_storage,
+            "invalid_event_count": len(before_invalid),
+            "summary": before_replay["summary"],
+            "derived_work_items": before_replay["derived_work_items"],
+        },
+        "after": {
+            "storage": after_storage,
+            "invalid_event_count": len(after_invalid),
+            "summary": after_replay["summary"],
+            "derived_work_items": after_replay["derived_work_items"],
+        },
+        "candidate_decision_records": {
+            event_id: {
+                "decision": decision["decision"],
+                "capability_layer": capability_layer_record(candidate_by_id[event_id]),
+                "confidence": candidate_by_id[event_id].get("confidence", "unknown"),
+                "manual_review_note": decision.get("manual_review_note", ""),
+            }
+            for event_id, decision in sorted(decisions.items())
+        },
+        "user_facing_report": {
+            "summary": f"Applied {len(appended)} migration decision event(s) to the local ledger.",
+            "next_actions": [
+                "run_local-ledger-report_to_review_accepted_state",
+                "run_foundry-board_to_review_board_state",
+                "continue_to_V2-10_after_review_acceptance",
+            ],
+            "rollback_or_compensating_guidance": "append compensating evidence or superseding events; do not rewrite ledger history",
+            "residual_risks": [
+                "candidate inference remains provenance-backed and should be reviewed before broad migration",
+                "GitHub and Project mirrors were not changed",
+                *(
+                    ["degraded candidate evidence was preserved rather than guessed clean"]
+                    if any(event.get("degraded_evidence") for event in planned_events)
+                    else []
+                ),
+            ],
+        },
+        "forbidden_actions": [
+            "GitHub issue/PR mutation",
+            "Project v2 mutation",
+            "#371 local action apply",
+            "#372 Project sync apply",
+            "#373 mixed-state recovery implementation",
+            "#378 management surface implementation",
+            "runtime/Vault/private/generated mutation",
+            "generated Skill publish or capability-pack deploy/apply",
+            "main merge or release/tag work",
+            "destructive ledger history rewrite",
+        ],
+        "telemetry": {
+            "telemetry_issue": "#266",
+            "candidate_count": len(candidates),
+            "decision_count": len(decisions),
+            "appended_event_count": len(appended),
+            "duplicate_skip_count": len(duplicate_skips),
+            "before_event_count": before_replay["summary"]["event_count"],
+            "after_event_count": after_replay["summary"]["event_count"],
+            "after_conflict_count": after_replay["summary"]["conflict_count"],
+            "degraded_evidence_count": after_replay["summary"]["degraded_evidence_count"],
+        },
+    }
+    return payload
+
+
+def cmd_local_ledger_backfill_preview(args: argparse.Namespace) -> None:
+    repo, repo_source = resolve_repo(args)
+    if args.issues_json or args.fixture_json:
+        issues = normalize_issue_collection(load_json(args.issues_json or args.fixture_json))
+    else:
+        issues, _scope = read_live_issues(repo, args)
+    prs, _prs_status, _prs_attempts = read_readiness_prs(repo, args)
+    project_items, project_status, project_attempts = read_project_items(args)
+    payload = build_local_ledger_backfill_preview(
+        repo,
+        repo_source,
+        issues[: args.limit],
+        prs[: args.limit],
+        project_items,
+        project_status,
+        project_attempts,
+        args.ledger_root,
+    )
+    print_json_or_text(payload, args.json)
+
+
+def cmd_local_ledger_append(args: argparse.Namespace) -> None:
+    event = load_json(args.event_json)
+    result = append_local_ledger_event(local_ledger_root(args), event)
+    print_json_or_text(result, args.json)
+    if result["status"] == "invalid":
+        raise SystemExit(6)
+
+
+def cmd_local_ledger_migration_apply(args: argparse.Namespace) -> None:
+    preview_doc = load_json(args.candidate_events_json)
+    decision_doc = load_json(args.decision_json)
+    result = build_local_ledger_migration_apply_from_decision_json(local_ledger_root(args), preview_doc, decision_doc)
+    print_json_or_text(result, args.json)
+    if result["status"] == "invalid":
+        raise SystemExit(6)
+
+
+LOCAL_ACTION_EVENT_TYPES = {
+    "assignment": "assignment",
+    "handoff": "dispatch",
+    "blocked": "blocked",
+    "unblocked": "unblocked",
+    "review_result": "review",
+    "architect_acceptance": "acceptance",
+    "human_approval": "human_approval",
+    "local_done": "closure",
+    "closure": "closure",
+    "supersession": "supersession",
+    "recovery": "evidence",
+}
+LOCAL_ACTION_REQUIRED_GATES = {
+    "review_result": "reviewer",
+    "architect_acceptance": "architect",
+    "human_approval": "human",
+    "local_done": "reviewer",
+    "closure": "reviewer",
+}
+
+
+def normalize_local_action_collection(data: Any) -> tuple[list[dict[str, Any]], list[str]]:
+    if isinstance(data, dict) and "actions" in data:
+        data = data["actions"]
+    elif isinstance(data, dict):
+        data = [data]
+    if not isinstance(data, list):
+        return [], ["action JSON must be an object, list, or object with actions"]
+    actions: list[dict[str, Any]] = []
+    errors: list[str] = []
+    for index, action in enumerate(data, start=1):
+        if not isinstance(action, dict):
+            errors.append(f"action #{index} must be an object")
+            continue
+        action_type = str(action.get("action_type") or action.get("type") or "").strip()
+        if action_type not in LOCAL_ACTION_EVENT_TYPES:
+            errors.append(f"action #{index} has unsupported action_type {action_type!r}")
+            continue
+        work_item = action.get("work_item")
+        if not isinstance(work_item, dict) or not (work_item.get("id") or (work_item.get("repo") and work_item.get("type") and work_item.get("number") is not None)):
+            errors.append(f"action #{index} must include work_item with id or repo/type/number")
+            continue
+        action_id = str(action.get("action_id") or action.get("id") or f"{work_item_key(work_item)}-{action_type}").strip()
+        required_gate = str(action.get("required_gate") or LOCAL_ACTION_REQUIRED_GATES.get(action_type, "none")).lower()
+        approved_by_role = str(action.get("approved_by_role") or action.get("actor_role") or "agent").lower()
+        if required_gate not in {"none", "reviewer", "architect", "human"}:
+            errors.append(f"action #{index} has unsupported required_gate {required_gate!r}")
+            continue
+        if required_gate != "none" and approved_by_role != required_gate:
+            errors.append(f"action #{index} requires {required_gate} gate but approved_by_role is {approved_by_role}")
+            continue
+        normalized = dict(action)
+        normalized["action_id"] = action_id
+        normalized["action_type"] = action_type
+        normalized["work_item"] = work_item
+        normalized["required_gate"] = required_gate
+        normalized["approved_by_role"] = approved_by_role
+        actions.append(normalized)
+    return actions, errors
+
+
+def sanitized_event_id(value: str) -> str:
+    cleaned = re.sub(r"[^A-Za-z0-9_.:-]+", "-", value.strip())
+    return cleaned.strip("-") or "unknown"
+
+
+def local_action_capability_layer(action: dict[str, Any]) -> dict[str, str]:
+    raw = action.get("capability_layer")
+    if isinstance(raw, dict):
+        layer = str(raw.get("layer") or raw.get("value") or "").strip()
+        source = str(raw.get("source") or "local_action_apply").strip()
+        confidence = str(raw.get("confidence") or "observed").strip()
+    else:
+        layer = str(raw or "local_orchestration").strip()
+        source = str(action.get("capability_layer_source") or "local_action_apply").strip()
+        confidence = str(action.get("capability_layer_confidence") or "observed").strip()
+    if layer not in CAPABILITY_LAYER_VALUES:
+        layer = "mixed" if str(raw).lower() == "mixed" else "local_orchestration"
+        source = "local_action_apply_default"
+        confidence = "inferred"
+    if confidence not in LOCAL_LEDGER_CONFIDENCE_VALUES:
+        confidence = "inferred"
+    return {"layer": layer, "source": source, "confidence": confidence}
+
+
+def local_action_event(action: dict[str, Any]) -> dict[str, Any]:
+    action_type = action["action_type"]
+    event_type = LOCAL_ACTION_EVENT_TYPES[action_type]
+    capability_layer = local_action_capability_layer(action)
+    evidence_refs = action.get("evidence_refs") or action.get("provenance_links") or []
+    if not isinstance(evidence_refs, list):
+        evidence_refs = [str(evidence_refs)]
+    payload = dict(action.get("payload") if isinstance(action.get("payload"), dict) else {})
+    if action_type == "assignment":
+        payload.setdefault("owner_role", action.get("owner_role") or action.get("target_role") or "unknown")
+    elif action_type == "handoff":
+        payload.setdefault("target_role", action.get("target_role") or action.get("owner_role") or "unknown")
+        if action.get("thread_id"):
+            payload.setdefault("thread_id", action["thread_id"])
+    elif action_type == "blocked":
+        payload.setdefault("reason", action.get("reason") or "local action marked blocked")
+    elif action_type == "unblocked":
+        payload.setdefault("summary", action.get("summary") or "local action unblocked item")
+        payload.setdefault("next_state", action.get("next_state") or "assigned")
+    elif action_type == "review_result":
+        payload.setdefault("decision", action.get("decision") or "reviewed")
+    elif action_type == "architect_acceptance":
+        payload.setdefault("decision", action.get("decision") or "accepted")
+    elif action_type == "human_approval":
+        payload.setdefault("approval", action.get("approval") or "approved")
+    elif action_type in {"local_done", "closure"}:
+        payload.setdefault("state", "closed")
+    elif action_type == "supersession":
+        payload.setdefault("superseded_by", action.get("superseded_by") or "unknown")
+    elif action_type == "recovery":
+        payload.setdefault("summary", action.get("summary") or "local recovery evidence")
+    payload["local_action_type"] = action_type
+    payload["required_gate"] = action["required_gate"]
+    payload["approved_by_role"] = action["approved_by_role"]
+    event = {
+        "schema_version": LOCAL_LEDGER_SCHEMA_VERSION,
+        "event_id": f"local-action-{sanitized_event_id(action['action_id'])}",
+        "event_type": event_type,
+        "occurred_at": str(action.get("occurred_at") or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())),
+        "work_item": action["work_item"],
+        "actor_role": action["approved_by_role"],
+        "confidence": action.get("confidence", "observed"),
+        "unknown_fields": action.get("unknown_fields", []),
+        "not_available_fields": action.get("not_available_fields", []),
+        "degraded_evidence": action.get("degraded_evidence", []),
+        "supersedes_event_ids": action.get("supersedes_event_ids", []),
+        "provenance": {
+            "links": evidence_refs,
+            "local_action_id": action["action_id"],
+            "required_gate": action["required_gate"],
+            "capability_layer_source": capability_layer["source"],
+            "capability_layer_confidence": capability_layer["confidence"],
+        },
+        "capability_layer": capability_layer["layer"],
+        "capability_layer_source": capability_layer["source"],
+        "capability_layer_confidence": capability_layer["confidence"],
+        "base_behavior_preserved": True,
+        "payload": payload,
+    }
+    return event
+
+
+def build_local_ledger_action_apply(root: Path, action_doc: Any) -> dict[str, Any]:
+    start = time.perf_counter()
+    actions, action_errors = normalize_local_action_collection(action_doc)
+    if action_errors or not actions:
+        return {
+            "schema_version": 1,
+            "command": "local-ledger-action-apply",
+            "status": "invalid",
+            "errors": action_errors + ([] if actions else ["at least one approved local action is required"]),
+            "mutation_performed": False,
+            "github_write_back_performed": False,
+            "project_mutation_performed": False,
+        }
+    before_events, before_invalid, before_storage = read_local_ledger_events(root)
+    before_replay = replay_local_ledger(before_events)
+    existing_ids = {event["event_id"] for event in before_events}
+    planned_events = [local_action_event(action) for action in actions]
+    validation_errors: list[str] = []
+    for event in planned_events:
+        normalized, errors, _status = validate_local_ledger_event(event)
+        if normalized is None:
+            validation_errors.append(f"{event.get('event_id', 'unknown')}: {'; '.join(errors)}")
+    if validation_errors:
+        return {
+            "schema_version": 1,
+            "command": "local-ledger-action-apply",
+            "status": "invalid",
+            "errors": validation_errors,
+            "mutation_performed": False,
+            "github_write_back_performed": False,
+            "project_mutation_performed": False,
+        }
+    appended_events, duplicate_skips = append_events_if_absent(root, planned_events, existing_ids)
+    after_events, after_invalid, after_storage = read_local_ledger_events(root)
+    after_replay = replay_local_ledger(after_events)
+    action_counts: dict[str, int] = {}
+    gate_counts: dict[str, int] = {}
+    for action in actions:
+        action_counts[action["action_type"]] = action_counts.get(action["action_type"], 0) + 1
+        gate_counts[action["required_gate"]] = gate_counts.get(action["required_gate"], 0) + 1
+    residual_risks = [
+        "local action apply updates only accepted ledger state; remote mirrors may now drift until #372",
+    ]
+    if before_invalid or after_invalid:
+        residual_risks.append("invalid local ledger records remain visible for later recovery")
+    if after_replay["summary"]["conflict_count"]:
+        residual_risks.append("contradictory local replay remains visible for later mixed-state recovery")
+    if any(event.get("degraded_evidence") for event in planned_events):
+        residual_risks.append("degraded action evidence was preserved rather than guessed clean")
+    return {
+        "schema_version": 1,
+        "command": "local-ledger-action-apply",
+        "mode": "apply",
+        "status": "ok",
+        "ledger_root": str(root),
+        "events_path": str(local_ledger_events_path(root)),
+        "mutation_performed": bool(appended_events),
+        "write_scope": "local_ledger_events_jsonl_only",
+        "github_write_back_performed": False,
+        "project_mutation_performed": False,
+        "runtime_vault_private_generated_write_performed": False,
+        "action_count": len(actions),
+        "appended_event_count": len(appended_events),
+        "duplicate_skip_count": len(duplicate_skips),
+        "action_counts": action_counts,
+        "gate_counts": gate_counts,
+        "appended_events": appended_events,
+        "duplicate_skips": duplicate_skips,
+        "before": {
+            "storage": before_storage,
+            "invalid_event_count": len(before_invalid),
+            "summary": before_replay["summary"],
+            "derived_work_items": before_replay["derived_work_items"],
+        },
+        "after": {
+            "storage": after_storage,
+            "invalid_event_count": len(after_invalid),
+            "summary": after_replay["summary"],
+            "derived_work_items": after_replay["derived_work_items"],
+        },
+        "action_records": [
+            {
+                "action_id": action["action_id"],
+                "action_type": action["action_type"],
+                "result_event_id": f"local-action-{sanitized_event_id(action['action_id'])}",
+                "owner_role": action.get("owner_role") or action.get("target_role") or "unknown",
+                "required_gate": action["required_gate"],
+                "approved_by_role": action["approved_by_role"],
+                "capability_layer": local_action_capability_layer(action),
+                "evidence_refs": action.get("evidence_refs") or action.get("provenance_links") or [],
+            }
+            for action in actions
+        ],
+        "user_facing_report": {
+            "summary": f"Applied {len(appended_events)} local orchestration action event(s); {len(duplicate_skips)} duplicates were skipped.",
+            "next_actions": [
+                "run_local-ledger-report_to_review_accepted_state",
+                "run_foundry-board_to_review_next_actions",
+                "defer_project_sync_until_#372",
+            ],
+            "writes": "local_ledger_events_jsonl_only",
+            "residual_risks": residual_risks,
+        },
+        "forbidden_actions": [
+            "GitHub issue/PR mutation",
+            "GitHub Project mutation",
+            "branch repair/apply or PR retarget",
+            "#372 Project sync apply",
+            "#373 mixed-state recovery implementation",
+            "#378 management surface implementation",
+            "runtime/Vault/private/generated mutation",
+            "generated Skill publish or capability-pack deploy/apply",
+            "main merge or release/tag work",
+            "destructive ledger history rewrite",
+        ],
+        "telemetry": {
+            "telemetry_issue": "#266",
+            "action_count": len(actions),
+            "appended_event_count": len(appended_events),
+            "duplicate_skip_count": len(duplicate_skips),
+            "before_event_count": before_replay["summary"]["event_count"],
+            "after_event_count": after_replay["summary"]["event_count"],
+            "before_conflict_count": before_replay["summary"]["conflict_count"],
+            "after_conflict_count": after_replay["summary"]["conflict_count"],
+            "degraded_evidence_count": after_replay["summary"]["degraded_evidence_count"],
+            "elapsed_time_ms": round((time.perf_counter() - start) * 1000, 3),
+        },
+    }
+
+
+def cmd_local_ledger_action_apply(args: argparse.Namespace) -> None:
+    result = build_local_ledger_action_apply(local_ledger_root(args), load_json(args.action_json))
+    print_json_or_text(result, args.json)
+    if result["status"] == "invalid":
+        raise SystemExit(6)
+
+
+def trial_root_path(trial_root: str, relative_path: str) -> Path:
+    root = Path(trial_root).expanduser().resolve()
+    target = (root / relative_path).resolve()
+    if target != root and root not in target.parents:
+        fail("trial_root_escape", "dogfood artifacts must stay inside the explicit trial root")
+    return target
+
+
+def write_trial_json(trial_root: str, relative_path: str, payload: Any) -> dict[str, Any]:
+    path = trial_root_path(trial_root, relative_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return {"path": str(path), "bytes": path.stat().st_size}
+
+
+def dogfood_inputs(args: argparse.Namespace) -> tuple[str, str, list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]:
+    repo, repo_source = resolve_repo(args)
+    if args.issues_json or args.fixture_json:
+        issues = normalize_issue_collection(load_json(args.issues_json or args.fixture_json))
+        scope = {"mode": "fixture", "issue_numbers": [issue_number(issue) for issue in issues if issue_number(issue) is not None]}
+    else:
+        issues, scope = read_live_issues(repo, args)
+    prs, _prs_status, _prs_attempts = read_readiness_prs(repo, args)
+    project_items, project_status, project_attempts = read_project_items(args)
+    local_git, _local_git_status, _local_git_attempts = read_local_git_state(args)
+    return repo, repo_source, issues, prs, project_items, project_status, project_attempts, local_git, scope
+
+
+def dogfood_decision_parts(decision_doc: Any) -> tuple[dict[str, Any] | None, dict[str, Any] | None, dict[str, Any] | None, list[str]]:
+    if not isinstance(decision_doc, dict):
+        return None, None, None, ["Human decision JSON must be an object"]
+    human_response = decision_doc.get("human_response")
+    candidate_decisions = decision_doc.get("candidate_decisions")
+    local_actions = decision_doc.get("local_actions")
+    errors: list[str] = []
+    if not isinstance(human_response, dict) or not human_response:
+        errors.append("Human decision JSON must include non-empty human_response before ledger progression")
+    if not isinstance(candidate_decisions, dict):
+        errors.append("Human decision JSON must include candidate_decisions")
+    if not isinstance(local_actions, (dict, list)):
+        errors.append("Human decision JSON must include local_actions")
+    return human_response if isinstance(human_response, dict) else None, candidate_decisions if isinstance(candidate_decisions, dict) else None, local_actions if isinstance(local_actions, (dict, list)) else None, errors
+
+
+def build_ledger_dogfood(args: argparse.Namespace) -> dict[str, Any]:
+    start = time.perf_counter()
+    if not args.trial_root:
+        return {"command": "ledger-dogfood", "status": "invalid", "errors": ["--trial-root is required"], "mutation_performed": False}
+    trial_root = Path(args.trial_root).expanduser().resolve()
+    decision_doc = load_json(args.decision_json)
+    human_response, candidate_decisions, local_actions, decision_errors = dogfood_decision_parts(decision_doc)
+    if decision_errors:
+        return {
+            "schema_version": 1,
+            "command": "ledger-dogfood",
+            "status": "blocked_waiting_for_human_decision",
+            "errors": decision_errors,
+            "trial_root": str(trial_root),
+            "mutation_performed": False,
+            "github_write_back_performed": False,
+            "project_mutation_performed": False,
+        }
+
+    repo, repo_source, issues, prs, project_items, project_status, project_attempts, local_git, scope = dogfood_inputs(args)
+    ledger_root = trial_root_path(args.trial_root, "local-collaboration-ledger")
+    before_replay = build_local_ledger_report(ledger_root)
+    preview = build_local_ledger_backfill_preview(repo, repo_source, issues, prs, project_items, project_status, project_attempts, str(ledger_root))
+    preview_artifact = write_trial_json(args.trial_root, "backfill-preview.json", preview)
+    decision_artifact = write_trial_json(args.trial_root, "reviewed-migration-decisions.json", candidate_decisions)
+    transcript_artifact = write_trial_json(
+        args.trial_root,
+        "human-transcript.json",
+        {
+            "schema_version": 1,
+            "kind": "ledger_dogfood_human_decision_record",
+            "response": human_response,
+            "candidate_decision_required_before_apply": True,
+            "local_action_required_before_progression": True,
+        },
+    )
+    migration = build_local_ledger_migration_apply_from_decision_json(ledger_root, preview, candidate_decisions)
+    migration_artifact = write_trial_json(args.trial_root, "migration-apply-report.json", migration)
+    if migration.get("status") != "ok":
+        return {
+            "schema_version": 1,
+            "command": "ledger-dogfood",
+            "status": "invalid",
+            "errors": migration.get("errors", ["migration apply failed"]),
+            "trial_root": str(trial_root),
+            "artifacts": {"backfill_preview": preview_artifact, "reviewed_migration_decisions": decision_artifact, "human_transcript": transcript_artifact, "migration_apply": migration_artifact},
+            "mutation_performed": False,
+            "github_write_back_performed": False,
+            "project_mutation_performed": False,
+        }
+    action_artifact = write_trial_json(args.trial_root, "local-action-decisions.json", local_actions)
+    local_action = build_local_ledger_action_apply(ledger_root, local_actions)
+    local_action_artifact = write_trial_json(args.trial_root, "local-action-apply-report.json", local_action)
+    if local_action.get("status") != "ok":
+        return {
+            "schema_version": 1,
+            "command": "ledger-dogfood",
+            "status": "invalid",
+            "errors": local_action.get("errors", ["local action apply failed"]),
+            "trial_root": str(trial_root),
+            "artifacts": {"backfill_preview": preview_artifact, "reviewed_migration_decisions": decision_artifact, "human_transcript": transcript_artifact, "migration_apply": migration_artifact, "local_action_decisions": action_artifact, "local_action_apply": local_action_artifact},
+            "mutation_performed": bool(migration.get("mutation_performed")),
+            "github_write_back_performed": False,
+            "project_mutation_performed": False,
+        }
+    after_replay = build_local_ledger_report(ledger_root)
+    candidate_events = normalize_candidate_events(preview.get("candidate_imported_events", []))
+    board = build_foundry_board(
+        repo,
+        issues,
+        project_items,
+        project_status,
+        local_git,
+        "Controlled Ledger Dogfood Board",
+        {"repo_source": repo_source, **scope, "ledger_root": str(ledger_root), "dogfood": True},
+        accepted_replay={"derived_work_items": after_replay["derived_work_items"], "summary": after_replay["summary"]},
+        candidate_events=candidate_events,
+    )
+    recovery = build_mixed_state_recovery_report(board, project_status, project_attempts)
+    elapsed_time_ms = round((time.perf_counter() - start) * 1000, 3)
+    sync_plan = build_project_sync_plan(repo, board, project_items, project_status, project_attempts, elapsed_time_ms)
+    cockpit = build_operational_cockpit_viewmodel(repo, board, after_replay, recovery, project_status, project_attempts, local_git, {})
+    cockpit["static_html_report"] = write_operational_cockpit_html(str(trial_root_path(args.trial_root, "operational-cockpit.html")), cockpit)
+    artifacts = {
+        "backfill_preview": preview_artifact,
+        "reviewed_migration_decisions": decision_artifact,
+        "human_transcript": transcript_artifact,
+        "migration_apply": migration_artifact,
+        "local_action_decisions": action_artifact,
+        "local_action_apply": local_action_artifact,
+        "before_replay": write_trial_json(args.trial_root, "before-replay.json", before_replay),
+        "after_replay": write_trial_json(args.trial_root, "after-replay.json", after_replay),
+        "foundry_board": write_trial_json(args.trial_root, "foundry-board.json", board),
+        "operational_cockpit": write_trial_json(args.trial_root, "operational-cockpit.json", cockpit),
+        "project_sync_plan": write_trial_json(args.trial_root, "project-sync-plan.json", sync_plan),
+        "mixed_state_recovery": write_trial_json(args.trial_root, "mixed-state-recovery.json", recovery),
+    }
+    payload = {
+        "schema_version": 1,
+        "command": "ledger-dogfood",
+        "mode": "controlled_isolated_trial",
+        "status": "ok",
+        "repo": repo,
+        "repo_source": repo_source,
+        "trial_root": str(trial_root),
+        "ledger_root": str(ledger_root),
+        "source_of_truth": "accepted_local_collaboration_ledger_replay",
+        "github_project_role": "remote_collaboration_control_surface_and_optional_mirror",
+        "target_issue_selection": {"issues_read": [issue_number(issue) for issue in issues if issue_number(issue) is not None], "selected_by_human_response": human_response},
+        "mutation_performed": bool(migration.get("mutation_performed") or local_action.get("mutation_performed")),
+        "write_scope": "explicit_trial_root_only",
+        "github_write_back_performed": False,
+        "project_mutation_performed": False,
+        "runtime_vault_private_generated_write_performed": False,
+        "before_after": {"before": before_replay["summary"], "after": after_replay["summary"]},
+        "accepted_local_ledger_events": after_replay["summary"]["event_count"],
+        "local_action_records": local_action.get("action_records", []),
+        "project_sync_not_executed": True,
+        "artifacts": artifacts,
+        "user_facing_report": {
+            "summary": "Controlled ledger dogfood recorded accepted local events and a local workflow transition in the isolated trial root.",
+            "local_authority": "Foundry Board and Operational Cockpit are derived from accepted local ledger replay.",
+            "remote_evidence": "GitHub issue evidence is provenance and a remote reality check; GitHub Project is a mirror/control surface only.",
+            "next_safe_action": "Human reviews replayed #282 state, the dry-run Project sync plan, and cleanup/recovery guidance before any later gate.",
+            "cleanup_or_recovery": "To abandon this dogfood, remove only the explicit trial root. To correct accepted local state, append compensating or superseding events; do not rewrite history.",
+            "forbidden_actions": ["tiny-ipa repo or GitHub mutation", "live GitHub Project mutation", "runtime/Vault/private/generated mutation", "generated Skill publish", "capability-pack deploy/apply"],
+        },
+        "telemetry": {"telemetry_issue": "#266", "event_count": after_replay["summary"]["event_count"], "degraded_evidence_count": after_replay["summary"]["degraded_evidence_count"], "artifact_count": len(artifacts), "elapsed_time_ms": round((time.perf_counter() - start) * 1000, 3)},
+    }
+    payload["artifacts"]["audit_manifest"] = write_trial_json(
+        args.trial_root,
+        "audit-manifest.json",
+        {"command": "ledger-dogfood", "artifact_paths": {name: value["path"] for name, value in payload["artifacts"].items()}, "checks": ["accepted local ledger replay", "Project sync plan not executed", "all artifacts under explicit trial root"], "cleanup_guidance": payload["user_facing_report"]["cleanup_or_recovery"], "forbidden_action_assertions": payload["user_facing_report"]["forbidden_actions"]},
+    )
+    return payload
+
+
+def cmd_ledger_dogfood(args: argparse.Namespace) -> None:
+    result = build_ledger_dogfood(args)
+    print_json_or_text(result, args.json)
+    if result.get("status") != "ok":
+        raise SystemExit(6)
+
+
+def cmd_local_ledger_report(args: argparse.Namespace) -> None:
+    print_json_or_text(build_local_ledger_report(local_ledger_root(args)), args.json)
+
+
 def cmd_repo_resolve(args: argparse.Namespace) -> None:
     repo, source = resolve_repo(args)
     print_json_or_text({"repo": repo, "source": source, "mutation_performed": False}, args.json)
@@ -976,6 +3114,9 @@ def project_field_value(item: dict[str, Any], field: str) -> str | None:
         "Stage": ["Stage", "stage"],
         "Owner Role": ["Owner Role", "owner Role", "owner_role", "ownerRole"],
         "Risk": ["Risk", "risk"],
+        "Target Branch": ["Target Branch", "target Branch", "target_branch", "targetBranch"],
+        "Branch Readiness": ["Branch Readiness", "branch Readiness", "branch_readiness", "branchReadiness"],
+        "Evidence Links": ["Evidence Links", "evidence Links", "evidence_links", "evidenceLinks"],
     }
     for key in aliases[field]:
         if key not in item:
@@ -1042,7 +3183,7 @@ def read_live_issues(repo: str, args: argparse.Namespace) -> tuple[list[dict[str
                     "--repo",
                     repo,
                     "--json",
-                    "number,title,state,labels,body",
+                    "number,title,state,labels,body,url",
                 ]
             )
             if not result["ok"]:
@@ -1064,7 +3205,7 @@ def read_live_issues(repo: str, args: argparse.Namespace) -> tuple[list[dict[str
                 "--label",
                 stage_label,
                 "--json",
-                "number,title,state,labels,body",
+                "number,title,state,labels,body,url",
             ]
         )
         if not result["ok"]:
@@ -2063,6 +4204,1839 @@ def build_readiness_action_plan(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+BOARD_LANES = [
+    "planned",
+    "ready",
+    "in_progress",
+    "tester_evidence",
+    "review",
+    "architect_acceptance",
+    "human_gate",
+    "blocked",
+    "stale_conflict",
+    "done",
+    "superseded",
+]
+
+
+def normalize_board_items(data: Any) -> list[dict[str, Any]]:
+    if data is None:
+        return []
+    if isinstance(data, dict) and "items" in data:
+        data = data["items"]
+    elif isinstance(data, dict) and "board_items" in data:
+        data = data["board_items"]
+    elif isinstance(data, dict):
+        data = [data]
+    if not isinstance(data, list):
+        fail("invalid_board_items_json", "Board items JSON must be a list or object with items/board_items")
+    return [item for item in data if isinstance(item, dict)]
+
+
+def issue_url(item: dict[str, Any]) -> str | None:
+    return item.get("url") or item.get("html_url") or item.get("github_issue_url")
+
+
+def issue_pr_url(item: dict[str, Any]) -> str | None:
+    return item.get("pull_request", {}).get("url") if isinstance(item.get("pull_request"), dict) else item.get("github_pr_url")
+
+
+def board_state_from_issue(issue: dict[str, Any], labels: list[str], project_item: dict[str, Any] | None) -> str:
+    explicit = issue.get("board_state") or issue.get("lifecycle_state")
+    if explicit:
+        return str(explicit)
+    lowered = {label.lower() for label in labels}
+    if issue.get("state", "").upper() == "CLOSED":
+        return "done"
+    if "superseded" in lowered or "state:superseded" in lowered:
+        return "superseded"
+    if "blocked" in lowered or "status:blocked" in lowered:
+        return "blocked"
+    if "needs:human" in lowered:
+        return "human_gate"
+    if "needs:reviewer" in lowered:
+        return "review"
+    if "needs:tester" in lowered:
+        return "tester_evidence"
+    if "needs:architect" in lowered:
+        return "architect_acceptance"
+    if "needs:implementer" in lowered:
+        return "ready"
+    roadmap = project_field_value(project_item or {}, "Roadmap Status")
+    if roadmap == "In Progress":
+        return "in_progress"
+    if roadmap == "Done":
+        return "done"
+    return "planned"
+
+
+def board_state_from_ledger_state(state: str) -> str:
+    mapping = {
+        "unknown": "planned",
+        "assigned": "ready",
+        "dispatched": "in_progress",
+        "callback_received": "in_progress",
+        "evidence_recorded": "in_progress",
+        "review_changes_requested": "ready",
+        "reviewed": "architect_acceptance",
+        "accepted": "architect_acceptance",
+        "human_approved": "in_progress",
+        "merged": "architect_acceptance",
+        "closed": "done",
+        "blocked": "blocked",
+        "stale_conflict": "stale_conflict",
+    }
+    return mapping.get(state, "planned")
+
+
+def board_action_for_state(state: str, next_owner: str | None, conflicts: list[dict[str, Any]]) -> dict[str, Any]:
+    if conflicts:
+        return readiness_action(
+            "Review conflict evidence before advancing this item.",
+            "agent_handled_existing_workflow",
+            "Board state has conflict, stale, degraded, or mirror-drift evidence.",
+            "foundry_board:conflict",
+            True,
+        )
+    owner = next_owner or "Coordinator"
+    titles = {
+        "planned": "Wait for dependency release or Architect routing.",
+        "ready": f"Dispatch {owner} through the normal issue workflow.",
+        "in_progress": f"Wait for {owner} callback or inspect latest evidence.",
+        "tester_evidence": "Collect Tester evidence before review or acceptance.",
+        "review": "Run Reviewer exact-target review.",
+        "architect_acceptance": "Architect should accept, hold, or release downstream work.",
+        "human_gate": "Human decision required; surface decision basis and exact approval phrase.",
+        "blocked": "Resolve blocker through the owning role before proceeding.",
+        "stale_conflict": "Rehydrate durable state and resolve conflict route.",
+        "done": "No action required; read completion evidence if needed.",
+        "superseded": "Follow the replacement path instead of this item.",
+    }
+    category = "explicit_human_gate" if state == "human_gate" else "informational_only" if state in {"done", "superseded"} else "agent_handled_existing_workflow"
+    return {
+        "title": titles.get(state, "Inspect latest evidence and route through normal workflow."),
+        "category": category,
+        "owner_role": owner.lower(),
+        "why": f"Derived from board state `{state}`.",
+        "existing_workflow": readiness_workflow_for_category(category),
+        "allowed_now": state not in {"blocked"},
+        "evidence_source": "foundry_board:derived_state",
+    }
+
+
+def board_mirror_status(issue: dict[str, Any], project_item: dict[str, Any] | None, project_status: dict[str, Any], state: str) -> tuple[str, list[dict[str, Any]]]:
+    conflicts: list[dict[str, Any]] = []
+    if project_status.get("status") in {"config_missing", "skipped"}:
+        return "not_configured", conflicts
+    if project_status.get("status") not in {"ok", None}:
+        return "degraded", [
+            {
+                "type": "degraded_source",
+                "severity": "warning",
+                "message": "Project mirror could not be evaluated.",
+                "source": "github_graphql_project_v2",
+            }
+        ]
+    if not project_item:
+        return "unknown", conflicts
+    status = project_field_value(project_item, "Status")
+    roadmap = project_field_value(project_item, "Roadmap Status")
+    if issue.get("state", "").upper() == "CLOSED" and (status != "Done" or roadmap != "Done"):
+        conflicts.append(
+            {
+                "type": "project_mirror_drift",
+                "severity": "warning",
+                "message": "Closed issue is not mirrored as Done in Project fields.",
+                "observed_remote": {"Status": status, "Roadmap Status": roadmap},
+            }
+        )
+    if issue.get("state", "").upper() == "OPEN" and (status == "Done" or roadmap == "Done") and state != "done":
+        conflicts.append(
+            {
+                "type": "project_mirror_drift",
+                "severity": "warning",
+                "message": "Open issue is mirrored as Done in Project fields.",
+                "observed_remote": {"Status": status, "Roadmap Status": roadmap},
+            }
+        )
+    return ("drift" if conflicts else "in_sync"), conflicts
+
+
+def remote_issue_key(repo: str, issue: dict[str, Any]) -> str | None:
+    number = issue_number(issue)
+    if number is None:
+        return None
+    return f"{repo}#issue:{number}"
+
+
+def remote_mirror_from_issue(
+    repo: str,
+    issue: dict[str, Any] | None,
+    project_item: dict[str, Any] | None,
+    project_status: dict[str, Any],
+) -> dict[str, Any]:
+    if issue is None:
+        return {
+            "status": "not_available",
+            "issue_state": "not_available",
+            "labels": [],
+            "project_status": project_status.get("status", "not_configured"),
+            "project_item": "not_available",
+        }
+    labels = label_names(issue)
+    issue_state = board_state_from_issue(issue, labels, project_item)
+    return {
+        "status": "available",
+        "issue_state": issue_state,
+        "github_state": issue.get("state", "unknown"),
+        "updated_at": issue.get("updatedAt") or issue.get("updated_at"),
+        "project_updated_at": (project_item or {}).get("updatedAt") or (project_item or {}).get("updated_at"),
+        "labels": labels,
+        "needs_owner": owner_from_needs(next((label for label in labels if label.startswith("needs:")), None)),
+        "project_status": project_status.get("status", "unknown"),
+        "project_lane": project_field_value(project_item or {}, "Status"),
+        "project_roadmap_status": project_field_value(project_item or {}, "Roadmap Status"),
+        "project_owner_role": project_field_value(project_item or {}, "Owner Role"),
+    }
+
+
+def mirror_conflicts_for_ledger_item(
+    ledger_item: dict[str, Any],
+    issue: dict[str, Any] | None,
+    project_item: dict[str, Any] | None,
+    project_status: dict[str, Any],
+    board_state: str,
+) -> tuple[str, list[dict[str, Any]]]:
+    conflicts: list[dict[str, Any]] = []
+    if project_status.get("status") in {"config_missing", "skipped"}:
+        mirror_status = "not_configured"
+    elif project_status.get("status") not in {"ok", None}:
+        mirror_status = "degraded"
+        conflicts.append(
+            {
+                "type": "degraded_source",
+                "severity": "warning",
+                "message": "Project mirror could not be evaluated; local ledger replay remains the board source of truth.",
+                "source": "github_graphql_project_v2",
+            }
+        )
+    elif not project_item:
+        mirror_status = "unknown"
+    else:
+        mirror_status = "in_sync"
+
+    if issue is not None:
+        labels = label_names(issue)
+        issue_state = board_state_from_issue(issue, labels, project_item)
+        if issue_state != board_state and not (board_state == "done" and issue_state == "done"):
+            conflicts.append(
+                {
+                    "type": "github_issue_label_drift",
+                    "severity": "warning",
+                    "message": "GitHub issue labels/state disagree with accepted local ledger replay.",
+                    "local_board_state": board_state,
+                    "remote_issue_state": issue_state,
+                    "labels": labels,
+                }
+            )
+        remote_owner = owner_from_needs(next((label for label in labels if label.startswith("needs:")), None))
+        local_owner = ledger_item.get("next_owner_role") or ledger_item.get("owner_role")
+        if remote_owner and local_owner and str(remote_owner).lower() != str(local_owner).lower():
+            conflicts.append(
+                {
+                    "type": "github_issue_owner_drift",
+                    "severity": "warning",
+                    "message": "GitHub needs label owner disagrees with accepted local ledger owner.",
+                    "local_owner_role": local_owner,
+                    "remote_owner_role": remote_owner,
+                }
+            )
+
+    if project_item and project_status.get("status") == "ok":
+        project_lane = project_field_value(project_item, "Status")
+        project_roadmap = project_field_value(project_item, "Roadmap Status")
+        if board_state == "done" and (project_lane != "Done" or project_roadmap != "Done"):
+            conflicts.append(
+                {
+                    "type": "project_mirror_drift",
+                    "severity": "warning",
+                    "message": "Local ledger says done, but Project mirror is not Done.",
+                    "observed_remote": {"Status": project_lane, "Roadmap Status": project_roadmap},
+                }
+            )
+        if board_state != "done" and (project_lane == "Done" or project_roadmap == "Done"):
+            conflicts.append(
+                {
+                    "type": "project_mirror_drift",
+                    "severity": "warning",
+                    "message": "Project mirror says Done, but accepted local ledger is not done.",
+                    "observed_remote": {"Status": project_lane, "Roadmap Status": project_roadmap},
+                    "local_board_state": board_state,
+                }
+            )
+    if conflicts and mirror_status == "in_sync":
+        mirror_status = "drift"
+    return mirror_status, conflicts
+
+
+def board_item_from_issue(
+    issue: dict[str, Any],
+    project_item: dict[str, Any] | None,
+    project_status: dict[str, Any],
+    local_git: dict[str, Any],
+) -> dict[str, Any]:
+    labels = label_names(issue)
+    body = issue.get("body") or ""
+    branch = extract_branch_contract(body)
+    branch_fields = branch.get("fields") or {}
+    state = board_state_from_issue(issue, labels, project_item)
+    next_owner = owner_from_needs(next((label for label in labels if label.startswith("needs:")), None))
+    if not next_owner:
+        next_owner = project_field_value(project_item or {}, "Owner Role")
+    contract = validate_execution_contract(body)
+    branch_eval = evaluate_branch_contract(issue, "issue", local_git if local_git.get("status") == "ok" else None)
+    mirror_status, conflicts = board_mirror_status(issue, project_item, project_status, state)
+    if contract["status"] in {"missing", "invalid"} and state not in {"done", "superseded"}:
+        conflicts.append(
+            {
+                "type": "missing_or_invalid_contract",
+                "severity": "warning",
+                "message": "Issue lacks a valid machine-readable Execution Contract.",
+                "contract_validation": contract["status"],
+            }
+        )
+    if branch_eval["status"] not in {"branch_ready"}:
+        conflicts.append(
+            {
+                "type": "branch_readiness",
+                "severity": "warning",
+                "message": "Branch readiness is not clean for this item.",
+                "branch_status": branch_eval["status"],
+            }
+        )
+    if conflicts and state not in {"blocked", "done", "superseded"}:
+        state = "stale_conflict"
+    evidence_refs = []
+    if issue_url(issue):
+        evidence_refs.append({"label": f"GitHub issue #{issue_number(issue)}", "source_type": "github_issue", "url_or_path": issue_url(issue), "availability": "available"})
+    if issue_pr_url(issue):
+        evidence_refs.append({"label": "Linked pull request", "source_type": "github_pr", "url_or_path": issue_pr_url(issue), "availability": "available"})
+    latest_evidence = evidence_refs[0] if evidence_refs else {"label": "Issue metadata", "source_type": "github_issue", "availability": "available" if issue else "unknown"}
+    confidence = issue.get("confidence") or issue.get("source_confidence") or ("observed" if issue.get("number") else "unknown")
+    state_authority = issue.get("state_authority") or issue.get("migration_state") or ("candidate" if "migration_candidate" in labels else "accepted")
+    action = board_action_for_state(state, next_owner, conflicts)
+    return {
+        "board_item_id": f"issue:{issue_number(issue)}" if issue_number(issue) is not None else issue.get("local_id", "issue:unknown"),
+        "work_item_id": issue.get("local_id") or (f"github-issue-{issue_number(issue)}" if issue_number(issue) is not None else "unknown"),
+        "title": issue.get("title"),
+        "item_kind": "migration_candidate" if state_authority == "candidate" else ("epic" if "type:epic" in labels else "issue"),
+        "github_issue_url": issue_url(issue),
+        "github_pr_url": issue_pr_url(issue),
+        "labels": labels,
+        "state": state,
+        "lane": state if state in BOARD_LANES else "planned",
+        "owner_role": project_field_value(project_item or {}, "Owner Role") or next_owner,
+        "next_owner_role": next_owner,
+        "roadmap_status": project_field_value(project_item or {}, "Roadmap Status"),
+        "stage": stage_from_labels(labels),
+        "risk": risk_from_labels(labels),
+        "target_branch": branch_fields.get("Target branch"),
+        "branch_readiness": branch_eval["status"],
+        "latest_evidence": latest_evidence,
+        "evidence_refs": evidence_refs,
+        "blocking_reason": "; ".join(conflict.get("message", "") for conflict in conflicts if conflict.get("severity") == "blocker") or None,
+        "conflicts": conflicts,
+        "conflict_count": len(conflicts),
+        "mirror_status": mirror_status,
+        "confidence": confidence,
+        "state_authority": state_authority,
+        "remote_mirror_state": remote_mirror_from_issue("unknown", issue, project_item, project_status),
+        "recommended_next_actions": [action],
+        "forbidden_actions": [
+            "live repair/apply",
+            "Project v2 mutation",
+            "GitHub write-back",
+            "branch repair/apply",
+            "PR retarget",
+            "checkout/switch",
+            "rebase/merge/reset/clean",
+            "Vault/private/runtime/generated mutation",
+            "generated Skill/adapter publish",
+            "capability-pack deploy/apply",
+        ],
+    }
+
+
+def board_item_from_ledger_item(
+    repo: str,
+    ledger_item: dict[str, Any],
+    state_authority: str,
+    issue: dict[str, Any] | None,
+    project_item: dict[str, Any] | None,
+    project_status: dict[str, Any],
+) -> dict[str, Any]:
+    work_item = ledger_item.get("work_item") if isinstance(ledger_item.get("work_item"), dict) else {}
+    number = work_item.get("number")
+    item_type = work_item.get("type", "issue")
+    local_state = str(ledger_item.get("state", "unknown"))
+    board_state = board_state_from_ledger_state(local_state)
+    if board_state == "ready" and str(ledger_item.get("owner_role", "")).lower() == "human":
+        board_state = "human_gate"
+    mirror_status, conflicts = mirror_conflicts_for_ledger_item(ledger_item, issue, project_item, project_status, board_state)
+    if conflicts and board_state not in {"blocked", "done", "superseded"}:
+        board_state = "stale_conflict"
+    next_owner = ledger_item.get("owner_role")
+    if board_state in {"review", "architect_acceptance"}:
+        next_owner = "reviewer" if board_state == "review" else "architect"
+    branch_fields = (extract_branch_contract((issue or {}).get("body") or "").get("fields") or {}) if issue else {}
+    latest_evidence = None
+    evidence_refs = []
+    for link in ledger_item.get("provenance_links", []):
+        evidence_refs.append({"label": "Local ledger provenance", "source_type": "local_ledger_provenance", "url_or_path": link, "availability": "available"})
+    if issue and issue_url(issue):
+        evidence_refs.append({"label": f"GitHub mirror issue #{issue_number(issue)}", "source_type": "github_issue_mirror", "url_or_path": issue_url(issue), "availability": "available"})
+    if evidence_refs:
+        latest_evidence = evidence_refs[0]
+    else:
+        latest_evidence = {"label": "Local ledger replay", "source_type": "local_ledger", "availability": "available"}
+    action = board_action_for_state(board_state, str(next_owner) if next_owner else None, conflicts)
+    return {
+        "board_item_id": f"{state_authority}:{ledger_item.get('work_item_key', work_item.get('id', 'unknown'))}",
+        "work_item_id": ledger_item.get("work_item_key") or work_item.get("id") or f"{repo}#{item_type}:{number if number is not None else 'unknown'}",
+        "title": (issue or {}).get("title") or work_item.get("title") or ledger_item.get("work_item_key"),
+        "item_kind": "migration_candidate" if state_authority.startswith("candidate") else item_type,
+        "github_issue_url": issue_url(issue or {}) or item_url(repo, item_type, number if isinstance(number, int) else None),
+        "github_pr_url": issue_pr_url(issue or {}),
+        "labels": label_names(issue or {}),
+        "state": board_state,
+        "local_replay_state": local_state,
+        "lane": board_state if board_state in BOARD_LANES else "planned",
+        "owner_role": str(ledger_item.get("owner_role", "unknown")).title() if ledger_item.get("owner_role") else "Unknown",
+        "next_owner_role": next_owner,
+        "roadmap_status": project_field_value(project_item or {}, "Roadmap Status"),
+        "stage": stage_from_labels(label_names(issue or {})),
+        "risk": risk_from_labels(label_names(issue or {})),
+        "target_branch": branch_fields.get("Target branch"),
+        "branch_readiness": "not_evaluated_from_ledger_board",
+        "latest_evidence": latest_evidence,
+        "evidence_refs": evidence_refs,
+        "blocking_reason": ledger_item.get("blocking_reason"),
+        "conflicts": conflicts + list(ledger_item.get("conflicts", [])),
+        "conflict_count": len(conflicts) + len(ledger_item.get("conflicts", [])),
+        "mirror_status": mirror_status,
+        "remote_mirror_state": remote_mirror_from_issue(repo, issue, project_item, project_status),
+        "local_updated_at": ledger_item.get("latest_occurred_at"),
+        "confidence": ledger_item.get("confidence", "unknown"),
+        "state_authority": state_authority,
+        "unknown_fields": ledger_item.get("unknown_fields", []),
+        "not_available_fields": ledger_item.get("not_available_fields", []),
+        "degraded_evidence": ledger_item.get("degraded_evidence", []),
+        "recommended_next_actions": [action],
+        "forbidden_actions": [
+            "live repair/apply",
+            "Project v2 mutation",
+            "GitHub write-back",
+            "real sync/apply",
+            "issue closure automation",
+            "runtime/Vault/private/generated mutation",
+            "generated publish or capability-pack deploy/apply",
+        ],
+    }
+
+
+def normalize_candidate_events(data: Any) -> list[dict[str, Any]]:
+    if data is None:
+        return []
+    if isinstance(data, dict) and "candidate_imported_events" in data:
+        data = data["candidate_imported_events"]
+    elif isinstance(data, dict) and "events" in data:
+        data = data["events"]
+    elif isinstance(data, dict):
+        data = [data]
+    if not isinstance(data, list):
+        fail("invalid_candidate_events_json", "candidate events JSON must be a list or object with candidate_imported_events/events")
+    events: list[dict[str, Any]] = []
+    for raw in data:
+        normalized, _errors, status = validate_local_ledger_event(raw)
+        if normalized is not None:
+            normalized["validation_status"] = status
+            events.append(normalized)
+    return events
+
+
+def build_foundry_board(
+    repo: str,
+    issues: list[dict[str, Any]],
+    project_items: list[dict[str, Any]],
+    project_status: dict[str, Any],
+    local_git: dict[str, Any],
+    board_name: str,
+    scope: dict[str, Any],
+    accepted_replay: dict[str, Any] | None = None,
+    candidate_events: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    project_by_issue = {project_item_issue_number(item): item for item in project_items if project_item_issue_number(item) is not None}
+    issue_by_key = {key: issue for issue in issues if (key := remote_issue_key(repo, issue))}
+    accepted_replay = accepted_replay or {"derived_work_items": [], "summary": {"replay_time_ms": 0, "event_count": 0, "conflict_count": 0}}
+    accepted_items = [
+        board_item_from_ledger_item(
+            repo,
+            item,
+            "accepted_local_ledger",
+            issue_by_key.get(item.get("work_item_key")),
+            project_by_issue.get((item.get("work_item") or {}).get("number")),
+            project_status,
+        )
+        for item in accepted_replay.get("derived_work_items", [])
+    ]
+    candidate_replay = replay_local_ledger(candidate_events or [])
+    candidate_items = [
+        board_item_from_ledger_item(
+            repo,
+            item,
+            "candidate_import",
+            issue_by_key.get(item.get("work_item_key")),
+            project_by_issue.get((item.get("work_item") or {}).get("number")),
+            project_status,
+        )
+        for item in candidate_replay.get("derived_work_items", [])
+    ]
+    accepted_keys = {item["work_item_id"] for item in accepted_items}
+    candidate_keys = {item["work_item_id"] for item in candidate_items}
+    remote_only_items = [
+        board_item_from_issue(issue, project_by_issue.get(issue_number(issue)), project_status, local_git)
+        for issue in issues
+        if (remote_issue_key(repo, issue) not in accepted_keys and remote_issue_key(repo, issue) not in candidate_keys)
+    ]
+    for item in remote_only_items:
+        item["state_authority"] = "remote_mirror_only"
+        item["mirror_status"] = "mirror_only"
+        item["conflicts"].append(
+            {
+                "type": "missing_local_ledger_state",
+                "severity": "warning",
+                "message": "Remote mirror item is visible, but no accepted local ledger replay state exists for it.",
+            }
+        )
+        item["conflict_count"] = len(item["conflicts"])
+        if item["state"] not in {"done", "superseded", "blocked"}:
+            item["state"] = "stale_conflict"
+            item["lane"] = "stale_conflict"
+    items = accepted_items + candidate_items + remote_only_items
+    lanes = [
+        {
+            "lane": lane,
+            "items": [item["board_item_id"] for item in items if item["lane"] == lane],
+            "count": sum(1 for item in items if item["lane"] == lane),
+        }
+        for lane in BOARD_LANES
+    ]
+    conflict_items = [item for item in items if item["conflict_count"]]
+    human_gate_items = [item for item in items if item["state"] == "human_gate"]
+    candidate_board_items = [item for item in items if item["state_authority"] == "candidate_import"]
+    accepted_board_items = [item for item in items if item["state_authority"] == "accepted_local_ledger"]
+    mirror_only_items = [item for item in items if item["state_authority"] == "remote_mirror_only"]
+    mirror_statuses = sorted({item["mirror_status"] for item in items})
+    return {
+        "schema_version": 1,
+        "command": "foundry-board",
+        "repo": repo,
+        "board": {
+            "name": board_name,
+            "authority_statement": "accepted_local_ledger_replay_is_board_source_of_truth",
+            "source_of_truth": "local_collaboration_ledger_events",
+            "github_project_role": "optional_visual_mirror",
+            "scope": scope,
+        },
+        "mode": "read_only",
+        "mutation_performed": False,
+        "apply_supported_now": False,
+        "items": items,
+        "lanes": lanes,
+        "summary": {
+            "item_count": len(items),
+            "candidate_count": len(candidate_board_items),
+            "accepted_count": len(accepted_board_items),
+            "remote_mirror_only_count": len(mirror_only_items),
+            "conflict_count": len(conflict_items),
+            "human_gate_count": len(human_gate_items),
+            "mirror_statuses": mirror_statuses,
+            "local_replay_time_ms": accepted_replay.get("summary", {}).get("replay_time_ms", 0),
+            "read_only_board_ready": True,
+        },
+        "user_next_actions": [
+            item["recommended_next_actions"][0]
+            for item in items
+            if item.get("recommended_next_actions")
+        ],
+        "unknown_or_degraded": [
+            {
+                "source": "github_graphql_project_v2",
+                "status": project_status.get("status"),
+                "impact": "Project mirror is optional; Board still renders from accepted local ledger replay.",
+                "safe_fallback": "accepted_local_ledger_replay",
+                "error": project_status.get("error"),
+            }
+        ]
+        if project_status.get("status") in {"config_missing", "skipped", "degraded", "unavailable", "permission_denied", "auth_unavailable"}
+        else [],
+        "forbidden_actions": [
+            "live repair/apply",
+            "Project v2 mutation",
+            "GitHub write-back",
+            "real migration/backfill write",
+            "branch repair/apply",
+            "checkout/switch",
+            "PR retarget",
+            "rebase/merge/reset/clean",
+            "runtime/Vault/private/generated mutation",
+            "generated Skill/adapter publish",
+            "capability-pack deploy/apply",
+        ],
+        "telemetry": {
+            "full_project_scan_performed": False,
+            "mutation_performed": False,
+            "implementation_slice": "V2-5B ledger-backed Foundry Board",
+            "item_count": len(items),
+            "conflict_count": len(conflict_items),
+            "local_replay_time_ms": accepted_replay.get("summary", {}).get("replay_time_ms", 0),
+            "remote_read_degradation_count": len(
+                [
+                    source
+                    for source in [
+                        project_status
+                    ]
+                    if source.get("status") in {"degraded", "unavailable", "permission_denied", "auth_unavailable"}
+                ]
+            ),
+            "telemetry_issue": "#266",
+            "unknown_not_available_fields": ["exact_elapsed_time", "exact_api_call_count", "billing_grade_token_count"],
+        },
+    }
+
+
+RECOVERY_CLASSIFICATIONS = [
+    "local_newer",
+    "remote_newer",
+    "remote_only",
+    "candidate_only",
+    "partial_sync",
+    "stale_comment",
+    "branch_line_drift",
+    "superseded_work",
+    "degraded_project",
+    "out_of_band_human_edit",
+]
+
+
+def item_text_for_recovery(item: dict[str, Any]) -> str:
+    parts = [
+        str(item.get("title") or ""),
+        " ".join(str(label) for label in item.get("labels", [])),
+        " ".join(str(conflict.get("type") or conflict.get("code") or "") for conflict in item.get("conflicts", []) if isinstance(conflict, dict)),
+        " ".join(str(conflict.get("message") or "") for conflict in item.get("conflicts", []) if isinstance(conflict, dict)),
+    ]
+    evidence = item.get("latest_evidence")
+    if isinstance(evidence, dict):
+        parts.append(str(evidence.get("label") or ""))
+    return " ".join(parts).lower()
+
+
+def recovery_next_action(classification: str) -> dict[str, Any]:
+    actions = {
+        "local_newer": ("trust_local_ledger_then_prepare_project_sync_plan", "Local accepted ledger is newer than the mirror; preview sync before any remote write.", "agent_handled_existing_workflow"),
+        "remote_newer": ("rehydrate_remote_evidence_then_record_local_recovery", "Remote evidence is newer; rehydrate before adding compensating local evidence.", "agent_handled_existing_workflow"),
+        "remote_only": ("preview_backfill_or_route_architect_before_acceptance", "Remote item has no accepted local ledger state.", "agent_handled_existing_workflow"),
+        "candidate_only": ("review_candidate_before_migration_apply", "Candidate import is not authoritative until accepted.", "agent_handled_existing_workflow"),
+        "partial_sync": ("rerun_project_sync_plan_and_review_readback", "Project or sync-readback state is partial or contradictory.", "agent_handled_existing_workflow"),
+        "stale_comment": ("rehydrate_latest_comments_before_advancing", "Stale comment evidence requires fresh durable readback.", "agent_handled_existing_workflow"),
+        "branch_line_drift": ("route_architect_for_branch_line_decision", "Branch/release line mismatch needs explicit routing.", "explicit_human_gate"),
+        "superseded_work": ("follow_superseding_work_and_record_supersession_if_needed", "Superseded work should not advance through the old item.", "informational_only"),
+        "degraded_project": ("continue_from_local_ledger_or_retry_project_readback", "Project readback is degraded; do not infer hidden mirror state.", "agent_handled_existing_workflow"),
+        "out_of_band_human_edit": ("record_human_evidence_or_request_human_decision", "Human-edited remote state must be captured durably before local recovery.", "explicit_human_gate"),
+    }
+    title, why, category = actions[classification]
+    return {
+        "classification": classification,
+        "title": title,
+        "category": category,
+        "why": why,
+        "allowed_now": category != "explicit_human_gate",
+        "existing_workflow": readiness_workflow_for_category(category),
+    }
+
+
+def recovery_classifications_for_item(item: dict[str, Any], project_status: dict[str, Any]) -> list[str]:
+    classifications: list[str] = []
+    authority = str(item.get("state_authority") or "")
+    mirror_status = str(item.get("mirror_status") or "")
+    text = item_text_for_recovery(item)
+    if authority == "remote_mirror_only":
+        classifications.append("remote_only")
+    if authority == "candidate_import":
+        classifications.append("candidate_only")
+    if mirror_status == "degraded" or project_status.get("status") in {"degraded", "unavailable", "permission_denied", "auth_unavailable"}:
+        classifications.append("degraded_project")
+    remote_state = item.get("remote_mirror_state") if isinstance(item.get("remote_mirror_state"), dict) else {}
+    freshness = compare_isoish(item.get("local_updated_at"), remote_state.get("project_updated_at") or remote_state.get("updated_at"))
+    if freshness in {"local_newer", "remote_newer"}:
+        classifications.append(freshness)
+    conflict_types = {
+        str(conflict.get("type") or conflict.get("code") or "")
+        for conflict in item.get("conflicts", [])
+        if isinstance(conflict, dict)
+    }
+    if conflict_types & {"project_mirror_drift", "sync_readback_state_mismatch", "project_done_while_issue_open", "issue_closed_project_not_done"} or "sync_readback_state_mismatch" in text:
+        classifications.append("partial_sync")
+    target_branch = str(item.get("target_branch") or "")
+    stage = str(item.get("stage") or "").lower()
+    if (
+        "branch_readiness" in conflict_types
+        or str(item.get("branch_readiness") or "") not in {"", "branch_ready", "not_evaluated_from_ledger_board"}
+        or (target_branch == "main" and stage.startswith("v2"))
+        or (target_branch == V2_INTEGRATION_BRANCH and stage in {"af-13", "af-14", "af-15", "v1.1"})
+        or "branch line" in text
+        or "branch-line" in text
+    ):
+        classifications.append("branch_line_drift")
+    if "stale_comment" in text or "stale comment" in text or "stale_or_conflicting" in text:
+        classifications.append("stale_comment")
+    if str(item.get("state") or "") == "superseded" or str(item.get("local_replay_state") or "") == "superseded" or "superseded" in text:
+        classifications.append("superseded_work")
+    if "out_of_band" in text or "out-of-band" in text or "human edit" in text or conflict_types & {"github_issue_label_drift", "github_issue_owner_drift", "owner_mismatch"}:
+        classifications.append("out_of_band_human_edit")
+    return [classification for classification in RECOVERY_CLASSIFICATIONS if classification in set(classifications)]
+
+
+def recovery_trust_bucket(item: dict[str, Any], classifications: list[str]) -> str:
+    authority = str(item.get("state_authority") or "")
+    if authority == "accepted_local_ledger":
+        return "trusted"
+    if authority == "candidate_import":
+        return "candidate_only"
+    if authority == "remote_mirror_only":
+        return "mirror_only"
+    if classifications:
+        return "conflicting"
+    return "unknown"
+
+
+def build_mixed_state_recovery_report(board: dict[str, Any], project_status: dict[str, Any], project_attempts: dict[str, Any]) -> dict[str, Any]:
+    start = time.perf_counter()
+    recovery_items: list[dict[str, Any]] = []
+    classification_counts = {classification: 0 for classification in RECOVERY_CLASSIFICATIONS}
+    for item in board.get("items", []):
+        classifications = recovery_classifications_for_item(item, project_status)
+        if not classifications:
+            continue
+        for classification in classifications:
+            classification_counts[classification] += 1
+        recovery_items.append(
+            {
+                "work_item_id": item.get("work_item_id"),
+                "title": item.get("title"),
+                "state_authority": item.get("state_authority"),
+                "trust_bucket": recovery_trust_bucket(item, classifications),
+                "classifications": classifications,
+                "trusted_state": item.get("local_replay_state") or item.get("state") if item.get("state_authority") == "accepted_local_ledger" else None,
+                "candidate_only_state": item.get("state") if item.get("state_authority") == "candidate_import" else None,
+                "mirror_only_state": item.get("state") if item.get("state_authority") == "remote_mirror_only" else None,
+                "conflicts": item.get("conflicts", []),
+                "mirror_status": item.get("mirror_status"),
+                "remote_mirror_state": item.get("remote_mirror_state"),
+                "safe_next_actions": [recovery_next_action(classification) for classification in classifications],
+                "forbidden_actions": [
+                    "hidden repair",
+                    "guessing authority from Project mirror",
+                    "destructive ledger cleanup",
+                    "unapproved GitHub issue/PR write",
+                    "live GitHub Project mutation",
+                    "branch repair/apply or PR retarget",
+                ],
+            }
+        )
+    trusted = [item for item in recovery_items if item["trust_bucket"] == "trusted"]
+    candidate_only = [item for item in recovery_items if item["trust_bucket"] == "candidate_only"]
+    mirror_only = [item for item in recovery_items if item["trust_bucket"] == "mirror_only"]
+    conflicting = [item for item in recovery_items if item.get("conflicts") or len(item.get("classifications", [])) > 1]
+    cases = [
+        {
+            "case_type": classification,
+            "work_item_id": item["work_item_id"],
+            "trust_bucket": item["trust_bucket"],
+            "safe_next_action": recovery_next_action(classification)["title"],
+        }
+        for item in recovery_items
+        for classification in item["classifications"]
+    ]
+    return {
+        "schema_version": 1,
+        "command": "mixed-state-recovery",
+        "mode": "read_only",
+        "mutation_performed": False,
+        "apply_supported_now": False,
+        "source_of_truth": "local_collaboration_ledger",
+        "source_of_truth_detail": "local_collaboration_ledger_events",
+        "github_project_role": "optional_visual_mirror",
+        "board_summary": board.get("summary", {}),
+        "classification_counts": classification_counts,
+        "cases": cases,
+        "recovery_items": recovery_items,
+        "sections": {
+            "trusted": [item["work_item_id"] for item in trusted],
+            "candidate_only": [item["work_item_id"] for item in candidate_only],
+            "mirror_only": [item["work_item_id"] for item in mirror_only],
+            "conflicting": [item["work_item_id"] for item in conflicting],
+        },
+        "user_facing_report": {
+            "summary": f"Mixed-state recovery found {len(recovery_items)} item(s) needing explicit recovery review.",
+            "trusted": [item["work_item_id"] for item in trusted],
+            "candidate_only": [item["work_item_id"] for item in candidate_only],
+            "mirror_only": [item["work_item_id"] for item in mirror_only],
+            "conflicting": [item["work_item_id"] for item in conflicting],
+            "next_actions": [
+                "record_recovery_with_local-ledger-action-apply_after_review_when_needed",
+                *[action for item in recovery_items for action in item["safe_next_actions"]],
+            ],
+            "writes": "none",
+        },
+        "forbidden_actions": [
+            "live GitHub issue/PR mutation as product behavior",
+            "live GitHub Project mutation",
+            "branch repair/apply or PR retarget",
+            "destructive ledger rewrite",
+            "hidden repair or guessed authority",
+            "guessing authority from GitHub issue or Project mirror",
+            "runtime/Vault/private/generated mutation",
+            "generated Skill publish or capability-pack deploy/apply",
+            "main merge, release/tag, V2 final closure, reset/clean/force push, or destructive operation",
+        ],
+        "telemetry": {
+            "telemetry_issue": "#266",
+            "item_count": len(board.get("items", [])),
+            "recovery_item_count": len(recovery_items),
+            "classification_counts": classification_counts,
+            "project_attempts": project_attempts.get("attempts", 0),
+            "degraded_project_count": classification_counts["degraded_project"],
+            "elapsed_time_ms": round((time.perf_counter() - start) * 1000, 3),
+            "full_project_scan_performed": False,
+        },
+    }
+
+
+OPERATIONAL_COCKPIT_SECTIONS = [
+    "overview",
+    "board",
+    "item_detail",
+    "migration_review",
+    "local_apply_review",
+    "sync_handoff",
+    "mixed_state_recovery",
+    "health",
+    "telemetry",
+]
+
+
+def load_operational_health(args: argparse.Namespace) -> dict[str, Any]:
+    default = {
+        "local_runtime": {"status": "unknown", "confidence": "not_available"},
+        "generated_skill": {"status": "unknown", "confidence": "not_available"},
+        "core_helper": {"status": "present", "confidence": "observed"},
+        "ledger_schema": {"status": "unknown", "confidence": "not_available"},
+        "capability_pack": {"status": "unknown", "confidence": "not_available"},
+        "runtime_receipt": {"status": "unknown", "confidence": "not_available"},
+        "project_field_schema": {"status": "unknown", "confidence": "not_available"},
+        "local_private_paths": [],
+    }
+    if getattr(args, "health_json", None):
+        supplied = load_json(args.health_json)
+        if not isinstance(supplied, dict):
+            fail("invalid_health_json", "health JSON must be an object")
+        for key, value in supplied.items():
+            default[key] = value
+    return default
+
+
+def public_safe(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {str(k): public_safe(v) for k, v in value.items() if k not in {"local_private_paths", "private_paths", "token", "secret"}}
+    if isinstance(value, list):
+        return [public_safe(item) for item in value]
+    if isinstance(value, str):
+        value = re.sub(r"/Users/[^\\s\"']+", "[local-private-path]", value)
+        value = re.sub(r"~/?[^\\s\"']*", "[local-home-path]", value) if value.startswith("~") else value
+        return value
+    return value
+
+
+def health_warning(name: str, value: Any) -> dict[str, Any] | None:
+    status = value.get("status") if isinstance(value, dict) else value
+    if status in {"ok", "present", "current", "compatible", "not_configured"}:
+        return None
+    return {
+        "source": name,
+        "status": status or "unknown",
+        "impact": "Show this as an environment/version warning; do not infer hidden readiness.",
+        "safe_next_action": "rehydrate_or_verify_this_surface_before_claiming_cross_environment_readiness",
+    }
+
+
+def cockpit_next_action(board: dict[str, Any], recovery: dict[str, Any], project_status: dict[str, Any]) -> dict[str, Any]:
+    if project_status.get("status") in {"degraded", "unavailable", "permission_denied", "auth_unavailable"}:
+        return {
+            "action": "stay_local_and_retry_degraded_project_later",
+            "category": "agent_handled_existing_workflow",
+            "why": "Project readback is degraded; local ledger authority can still be inspected.",
+        }
+    if recovery.get("telemetry", {}).get("recovery_item_count", 0):
+        return {
+            "action": "review_mixed_state_recovery_before_apply_or_sync",
+            "category": "agent_handled_existing_workflow",
+            "why": "Conflicts or mirror-only/candidate-only states require explicit recovery review.",
+        }
+    if board.get("summary", {}).get("conflict_count", 0):
+        return {
+            "action": "inspect_item_detail_and_route_required_gate",
+            "category": "agent_handled_existing_workflow",
+            "why": "Board items include conflicts or gates.",
+        }
+    return {
+        "action": "continue_local_board_work_or_preview_project_sync_plan_when_remote_mirror_is_needed",
+        "category": "informational_only",
+        "why": "No blocking cockpit conflict is visible in the supplied evidence.",
+    }
+
+
+def build_operational_cockpit_viewmodel(
+    repo: str,
+    board: dict[str, Any],
+    ledger_report: dict[str, Any],
+    recovery: dict[str, Any],
+    project_status: dict[str, Any],
+    project_attempts: dict[str, Any],
+    local_git: dict[str, Any],
+    health: dict[str, Any],
+) -> dict[str, Any]:
+    start = time.perf_counter()
+    health_public = public_safe(health)
+    health_warnings = [
+        warning
+        for key, value in health_public.items()
+        if (warning := health_warning(key, value))
+    ]
+    if project_status.get("status") in {"degraded", "unavailable", "permission_denied", "auth_unavailable", "config_missing", "skipped"}:
+        health_warnings.append(
+            {
+                "source": "github_project",
+                "status": project_status.get("status"),
+                "impact": "Project remains optional mirror/control surface; local cockpit still renders from local evidence.",
+                "safe_next_action": "retry_project_readback_later_or_run_project_sync_plan_when_needed",
+            }
+        )
+    if local_git.get("dirty") or local_git.get("staged") or local_git.get("ahead") or local_git.get("behind"):
+        health_warnings.append(
+            {
+                "source": "local_git",
+                "status": "attention_required",
+                "impact": "Dirty, staged, ahead, or behind local checkout can affect branch-line dogfood evidence.",
+                "safe_next_action": "resolve_or_record_local_git_state_before_claiming_cross_line_readiness",
+            }
+        )
+    next_action = cockpit_next_action(board, recovery, project_status)
+    board_items = board.get("items", [])
+    viewmodel: dict[str, Any] = {
+        "schema_version": 1,
+        "command": "operational-cockpit",
+        "surface": "static_html_local_operational_cockpit",
+        "mode": "read_only",
+        "repo": repo,
+        "mutation_performed": False,
+        "apply_supported_now": False,
+        "writes_supported_now": False,
+        "html_external_asset_fetches": False,
+        "analytics_enabled": False,
+        "source_of_truth": "local_collaboration_ledger",
+        "github_project_role": "richer_remote_collaboration_control_surface_and_optional_mirror",
+        "sync_cadence": "on_demand_by_default",
+        "sections_present": OPERATIONAL_COCKPIT_SECTIONS,
+        "overview": {
+            "capability_layer": "local_orchestration",
+            "local_authority": "accepted_local_ledger_replay",
+            "project_mirror_status": project_status.get("status"),
+            "item_count": board.get("summary", {}).get("item_count", 0),
+            "conflict_count": board.get("summary", {}).get("conflict_count", 0),
+            "candidate_count": board.get("summary", {}).get("candidate_count", 0),
+            "remote_mirror_only_count": board.get("summary", {}).get("remote_mirror_only_count", 0),
+            "safe_next_action": next_action,
+        },
+        "board": {
+            "lanes": board.get("lanes", []),
+            "items": [
+                {
+                    "work_item_id": item.get("work_item_id"),
+                    "title": item.get("title"),
+                    "lane": item.get("lane"),
+                    "owner_role": item.get("owner_role"),
+                    "capability_layer": item.get("capability_layer") or item.get("layer") or "local_orchestration",
+                    "state_authority": item.get("state_authority"),
+                    "mirror_status": item.get("mirror_status"),
+                    "next_actions": item.get("recommended_next_actions", []),
+                    "conflict_badges": [conflict.get("type") or conflict.get("code") for conflict in item.get("conflicts", []) if isinstance(conflict, dict)],
+                }
+                for item in board_items
+            ],
+        },
+        "item_detail": [
+            {
+                "work_item_id": item.get("work_item_id"),
+                "ledger_timeline": item.get("latest_evidence", []),
+                "github_evidence": item.get("github_evidence") or item.get("url"),
+                "project_mirror_state": item.get("remote_mirror_state"),
+                "gates": item.get("required_gates", []),
+                "conflicts": item.get("conflicts", []),
+                "forbidden_actions": item.get("forbidden_actions", []),
+            }
+            for item in board_items
+        ],
+        "migration_review": {
+            "candidate_count": board.get("summary", {}).get("candidate_count", 0),
+            "accepted_count": board.get("summary", {}).get("accepted_count", 0),
+            "safe_decisions": ["accept_after_review", "reject_with_reason", "defer_with_review_note"],
+            "next_action": "use_local-ledger-migration-apply_only_after_reviewed_candidate_decision",
+        },
+        "local_apply_review": {
+            "purpose": "Review approved local board actions before append-only local ledger events.",
+            "write_target": "local_ledger_events_jsonl_only_after_accepted_local_action_apply",
+            "idempotency_required": True,
+            "rollback_guidance": "append compensating or superseding local ledger events; do not rewrite history",
+        },
+        "sync_handoff": {
+            "stay_local_when": [
+                "local ledger authority is clear",
+                "candidate events still need review",
+                "Project is degraded and no remote write is required",
+            ],
+            "open_or_check_github_project_when": [
+                "team lane, assignment, review, or Human coordination needs remote visibility",
+                "mirror drift may affect collaborators",
+                "dogfood needs local-vs-Project comparison evidence",
+            ],
+            "run_project_sync_plan_when": [
+                "accepted local state should be previewed for remote mirror update",
+                "Project drift is suspected and readback is available enough",
+            ],
+            "run_accepted_project_sync_apply_when": [
+                "a reviewed accepted sync plan exists",
+                "required Human gates are satisfied",
+                "readback/idempotency expectations are visible",
+            ],
+            "retry_degraded_project_later_when": [
+                "Project GraphQL/REST is degraded",
+                "local work can proceed without remote mutation",
+            ],
+        },
+        "mixed_state_recovery": recovery,
+        "health": {
+            "status": health_public,
+            "warnings": health_warnings,
+            "cross_environment": ["local_runtime", "generated_skill", "dirty_checkout", "multiple_worktrees", "project_unavailable"],
+            "cross_version": ["core_helper", "ledger_schema", "generated_skill", "capability_pack", "runtime_receipt", "project_field_schema"],
+        },
+        "telemetry": {
+            "telemetry_issue": "#266",
+            "board_item_count": board.get("summary", {}).get("item_count", 0),
+            "ledger_event_count": ledger_report.get("summary", {}).get("event_count", 0),
+            "recovery_item_count": recovery.get("telemetry", {}).get("recovery_item_count", 0),
+            "project_attempts": project_attempts.get("attempts", 0),
+            "degraded_source_count": len(health_warnings),
+            "render_time_ms": round((time.perf_counter() - start) * 1000, 3),
+        },
+        "forbidden_actions": [
+            "live GitHub Project mutation",
+            "automatic sync/apply cadence",
+            "GitHub issue/PR write-back as product behavior",
+            "runtime/Vault/private/generated mutation",
+            "generated Skill publish",
+            "capability-pack deploy/apply",
+            "main merge, release/tag, V2 final closure",
+            "branch repair/apply or destructive action",
+        ],
+    }
+    viewmodel["telemetry"]["user_facing_output_bytes"] = len(json.dumps(viewmodel, sort_keys=True).encode("utf-8"))
+    return viewmodel
+
+
+def render_operational_cockpit_html(viewmodel: dict[str, Any]) -> str:
+    def esc(value: Any) -> str:
+        return html.escape(str(value), quote=True)
+
+    def section(title: str, body: str) -> str:
+        return f"<section><h2>{esc(title)}</h2>{body}</section>"
+
+    overview = viewmodel["overview"]
+    board_rows = "".join(
+        "<tr>"
+        f"<td>{esc(item.get('work_item_id'))}</td>"
+        f"<td>{esc(item.get('title'))}</td>"
+        f"<td>{esc(item.get('lane'))}</td>"
+        f"<td>{esc(item.get('state_authority'))}</td>"
+        f"<td>{esc(item.get('mirror_status'))}</td>"
+        f"<td>{esc(', '.join(item.get('conflict_badges') or []))}</td>"
+        "</tr>"
+        for item in viewmodel["board"]["items"]
+    )
+    warnings = "".join(
+        f"<li><strong>{esc(item.get('source'))}</strong>: {esc(item.get('status'))} - {esc(item.get('safe_next_action'))}</li>"
+        for item in viewmodel["health"]["warnings"]
+    )
+    sync = viewmodel["sync_handoff"]
+    sync_lists = "".join(
+        f"<h3>{esc(key)}</h3><ul>{''.join(f'<li>{esc(value)}</li>' for value in values)}</ul>"
+        for key, values in sync.items()
+    )
+    recovery_cases = "".join(
+        f"<li>{esc(case.get('case_type'))}: {esc(case.get('work_item_id'))} -> {esc(case.get('safe_next_action'))}</li>"
+        for case in viewmodel["mixed_state_recovery"].get("cases", [])
+    )
+    return "\n".join(
+        [
+            "<!doctype html>",
+            '<html lang="en">',
+            "<head>",
+            '<meta charset="utf-8">',
+            '<meta name="viewport" content="width=device-width, initial-scale=1">',
+            f"<title>{esc(viewmodel.get('repo'))} Operational Cockpit</title>",
+            "<style>body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;margin:24px;line-height:1.45;color:#202124;background:#fff}section{border-top:1px solid #dadce0;padding:16px 0}table{border-collapse:collapse;width:100%}th,td{border:1px solid #dadce0;padding:6px;text-align:left;vertical-align:top}.pill{display:inline-block;border:1px solid #5f6368;border-radius:999px;padding:2px 8px;margin-right:6px}.warn{color:#8a4b00}</style>",
+            "</head>",
+            "<body>",
+            f"<h1>{esc(viewmodel.get('repo'))} Operational Cockpit</h1>",
+            '<p><span class="pill">read-only</span><span class="pill">writes: none</span><span class="pill">Project is mirror/control surface</span></p>',
+            section(
+                "Overview",
+                "<ul>"
+                f"<li>source_of_truth: {esc(viewmodel.get('source_of_truth'))}</li>"
+                f"<li>github_project_role: {esc(viewmodel.get('github_project_role'))}</li>"
+                f"<li>sync_cadence: {esc(viewmodel.get('sync_cadence'))}</li>"
+                f"<li>safe_next_action: {esc(overview.get('safe_next_action', {}).get('action'))}</li>"
+                f"<li>items/conflicts/candidates: {esc(overview.get('item_count'))}/{esc(overview.get('conflict_count'))}/{esc(overview.get('candidate_count'))}</li>"
+                "</ul>",
+            ),
+            section(
+                "Board",
+                "<table><thead><tr><th>Item</th><th>Title</th><th>Lane</th><th>Authority</th><th>Mirror</th><th>Conflict badges</th></tr></thead>"
+                f"<tbody>{board_rows}</tbody></table>",
+            ),
+            section("Item Detail", f"<pre>{esc(json.dumps(viewmodel['item_detail'], indent=2, sort_keys=True))}</pre>"),
+            section("Migration Review", f"<pre>{esc(json.dumps(viewmodel['migration_review'], indent=2, sort_keys=True))}</pre>"),
+            section("Local Apply Review", f"<pre>{esc(json.dumps(viewmodel['local_apply_review'], indent=2, sort_keys=True))}</pre>"),
+            section("Sync Handoff", sync_lists),
+            section("Mixed-State Recovery", f"<ul>{recovery_cases}</ul>"),
+            section("Health", f"<ul class=\"warn\">{warnings}</ul><pre>{esc(json.dumps(viewmodel['health']['status'], indent=2, sort_keys=True))}</pre>"),
+            section("Telemetry", f"<pre>{esc(json.dumps(viewmodel['telemetry'], indent=2, sort_keys=True))}</pre>"),
+            section("Forbidden Actions", "<ul>" + "".join(f"<li>{esc(action)}</li>" for action in viewmodel["forbidden_actions"]) + "</ul>"),
+            "</body>",
+            "</html>",
+        ]
+    )
+
+
+def write_operational_cockpit_html(path_text: str, viewmodel: dict[str, Any]) -> dict[str, Any]:
+    path = Path(path_text).expanduser().resolve()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    html_text = render_operational_cockpit_html(viewmodel)
+    path.write_text(html_text, encoding="utf-8")
+    return {
+        "html_output": str(path),
+        "html_output_written": True,
+        "html_bytes": len(html_text.encode("utf-8")),
+        "html_external_asset_fetches": False,
+        "analytics_enabled": False,
+    }
+
+
+SYNC_PLAN_FIELDS = ["Status", "Roadmap Status", "Owner Role", "Stage", "Risk", "Target Branch", "Branch Readiness", "Evidence Links"]
+SYNC_PLAN_OWNER_OPTIONS = ["Architect", "Implementer", "Tester", "Reviewer", "Human", "Harvester"]
+
+
+def board_state_to_project_status(state: str) -> str:
+    if state == "done":
+        return "Done"
+    if state in {"in_progress", "tester_evidence", "review", "architect_acceptance", "human_gate"}:
+        return "In Progress"
+    if state in {"blocked", "stale_conflict"}:
+        return "Blocked"
+    return "Todo"
+
+
+def board_state_to_roadmap_status(state: str) -> str:
+    if state == "done":
+        return "Done"
+    if state in {"in_progress", "tester_evidence", "review", "architect_acceptance", "human_gate"}:
+        return "In Progress"
+    if state in {"ready"}:
+        return "Ready"
+    if state in {"blocked", "stale_conflict"}:
+        return "Blocked"
+    return "Planned"
+
+
+def project_item_identity(item: dict[str, Any] | None) -> str | None:
+    if not item:
+        return None
+    for key in ("id", "item_id", "project_item_id"):
+        if item.get(key):
+            return str(item[key])
+    number = project_item_issue_number(item)
+    return f"project-item-for-{number}" if number is not None else None
+
+
+def field_value_for_sync_item(item: dict[str, Any], field: str) -> str | None:
+    if field == "Status":
+        return board_state_to_project_status(str(item.get("state", "planned")))
+    if field == "Roadmap Status":
+        return board_state_to_roadmap_status(str(item.get("state", "planned")))
+    if field == "Owner Role":
+        owner = item.get("next_owner_role") or item.get("owner_role")
+        return str(owner).replace("_", " ").title().replace(" ", "") if owner else None
+    if field == "Stage":
+        stage = item.get("stage")
+        return str(stage) if stage else None
+    if field == "Risk":
+        risk = item.get("risk")
+        return str(risk) if risk else None
+    if field == "Target Branch":
+        return item.get("target_branch")
+    if field == "Branch Readiness":
+        return item.get("branch_readiness")
+    if field == "Evidence Links":
+        refs = item.get("evidence_refs") or []
+        links = [
+            str(ref.get("url_or_path"))
+            for ref in refs
+            if isinstance(ref, dict) and ref.get("url_or_path") is not None
+        ]
+        return ", ".join(links) if links else None
+    return None
+
+
+def contains_sensitive_value(value: Any) -> bool:
+    text = json.dumps(value, sort_keys=True) if isinstance(value, (dict, list)) else str(value or "")
+    lowered = text.lower()
+    sensitive_markers = ("token", "secret", "credential", "private", "/users/", "~/.ssh", "ssh-rsa", "begin private key")
+    return any(marker in lowered for marker in sensitive_markers)
+
+
+def sync_conflict(code: str, item: dict[str, Any] | None, message: str, severity: str = "warning", details: dict[str, Any] | None = None) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "code": code,
+        "severity": severity,
+        "message": message,
+    }
+    if item is not None:
+        payload["work_item_id"] = item.get("work_item_id")
+        payload["board_item_id"] = item.get("board_item_id")
+    if details:
+        payload.update(details)
+    return payload
+
+
+def sync_human_gate(reason: str, item: dict[str, Any] | None, message: str, details: dict[str, Any] | None = None) -> dict[str, Any]:
+    gate: dict[str, Any] = {
+        "reason": reason,
+        "message": message,
+        "required_decision": "human_review_before_any_future_write_apply",
+    }
+    if item is not None:
+        gate["work_item_id"] = item.get("work_item_id")
+    if details:
+        gate.update(details)
+    return gate
+
+
+def compare_isoish(left: str | None, right: str | None) -> str | None:
+    if not left or not right or left == right:
+        return None
+    return "local_newer" if left > right else "remote_newer"
+
+
+def build_project_sync_plan(
+    repo: str,
+    board: dict[str, Any],
+    project_items: list[dict[str, Any]],
+    project_status: dict[str, Any],
+    project_attempts: dict[str, Any],
+    elapsed_time_ms: float,
+) -> dict[str, Any]:
+    fields_seen = set(project_status.get("fields_seen") or [])
+    options_seen = set(project_status.get("options_seen") or [])
+    project_by_issue: dict[int, list[dict[str, Any]]] = {}
+    for project_item in project_items:
+        number = project_item_issue_number(project_item)
+        if number is not None:
+            project_by_issue.setdefault(number, []).append(project_item)
+    conflicts: list[dict[str, Any]] = []
+    human_gates: list[dict[str, Any]] = [
+        sync_human_gate(
+            "future_write_apply_transition",
+            None,
+            "This helper only generates a dry-run plan; any future Project write/apply transition requires Human authorization.",
+        )
+    ]
+    operations: list[dict[str, Any]] = []
+    partial_results = []
+    if project_status.get("status") in {"config_missing", "skipped"}:
+        partial_results.append({"source": "github_graphql_project_v2", "status": project_status.get("status"), "impact": "Project mirror was not configured; plan reports local desired state only."})
+    elif project_status.get("status") != "ok":
+        conflicts.append(sync_conflict("degraded_project_readback", None, "Project readback is degraded; sync plan is partial.", details={"project_status": project_status.get("status"), "error": project_status.get("error")}))
+        partial_results.append({"source": "github_graphql_project_v2", "status": project_status.get("status"), "error": project_status.get("error")})
+    for field in SYNC_PLAN_FIELDS:
+        if field not in fields_seen and project_status.get("explicit_metadata"):
+            conflicts.append(sync_conflict("missing_project_field", None, f"Project field `{field}` is missing from configured metadata.", details={"field": field}))
+    if project_status.get("explicit_metadata"):
+        for option in SYNC_PLAN_OWNER_OPTIONS:
+            if option not in options_seen:
+                conflicts.append(sync_conflict("missing_project_option", None, f"Owner Role option `{option}` is missing.", details={"field": "Owner Role", "option": option}))
+    for item in board.get("items", []):
+        if item.get("state_authority") == "candidate_import":
+            conflicts.append(sync_conflict("candidate_state_not_authoritative", item, "Imported candidate state cannot be synced until a later migration acceptance gate."))
+            continue
+        number = None
+        match = re.search(r"#(?:issue|pr):(\d+)$", str(item.get("work_item_id", "")))
+        if match:
+            number = int(match.group(1))
+        project_matches = project_by_issue.get(number, []) if number is not None else []
+        if len(project_matches) > 1:
+            conflicts.append(sync_conflict("ambiguous_project_item", item, "Multiple Project items match the same work item.", details={"project_item_count": len(project_matches)}))
+            continue
+        project_item = project_matches[0] if project_matches else None
+        if project_status.get("status") == "ok" and project_item is None:
+            conflicts.append(sync_conflict("missing_project_item", item, "No Project mirror item exists for this local board item."))
+        remote_state = item.get("remote_mirror_state") if isinstance(item.get("remote_mirror_state"), dict) else {}
+        project_lane = project_field_value(project_item or {}, "Status")
+        project_roadmap = project_field_value(project_item or {}, "Roadmap Status")
+        github_state = str(remote_state.get("github_state") or "").upper()
+        if project_lane == "Done" and github_state == "OPEN":
+            conflicts.append(sync_conflict("project_done_while_issue_open", item, "Project is Done while GitHub issue is still open.", details={"project_status": project_lane, "github_state": github_state}))
+            human_gates.append(sync_human_gate("issue_closure_or_reopen_side_effect", item, "Do not infer issue closure/reopen from Project Done mismatch."))
+        if github_state == "CLOSED" and project_lane != "Done":
+            conflicts.append(sync_conflict("issue_closed_project_not_done", item, "GitHub issue is closed but Project mirror is not Done.", details={"project_status": project_lane, "github_state": github_state}))
+            human_gates.append(sync_human_gate("built_in_status_side_effect", item, "Changing built-in Project Status to Done can imply workflow movement and needs review."))
+        remote_owner = project_field_value(project_item or {}, "Owner Role")
+        desired_owner = field_value_for_sync_item(item, "Owner Role")
+        if remote_owner and desired_owner and remote_owner.lower() != desired_owner.lower():
+            conflicts.append(sync_conflict("owner_mismatch", item, "Project Owner Role differs from local board owner.", details={"remote_owner": remote_owner, "desired_owner": desired_owner}))
+        freshness = compare_isoish(item.get("local_updated_at"), (project_item or {}).get("updatedAt") or (project_item or {}).get("updated_at"))
+        if freshness:
+            conflicts.append(sync_conflict("local_remote_newer", item, "Local and remote mirror timestamps differ; review before any future apply.", details={"freshness": freshness, "local_updated_at": item.get("local_updated_at"), "remote_updated_at": (project_item or {}).get("updatedAt") or (project_item or {}).get("updated_at")}))
+        if contains_sensitive_value(item.get("evidence_refs")) or contains_sensitive_value(item.get("target_branch")):
+            conflicts.append(sync_conflict("privacy_sensitive_value", item, "Potentially private evidence or branch value would need redaction before sync.", severity="error"))
+            human_gates.append(sync_human_gate("privacy_security_sensitive_sync", item, "Privacy/security-sensitive values require Human review before any future write."))
+        target_branch = item.get("target_branch")
+        if target_branch:
+            release_line = "v2" if target_branch == V2_INTEGRATION_BRANCH else "v1" if target_branch == "main" else "custom"
+            stage = str(item.get("stage") or "").lower()
+            if (stage.startswith("v2") and release_line == "v1") or (stage in {"af-13", "af-14", "af-15", "v1.1"} and release_line == "v2"):
+                conflicts.append(sync_conflict("branch_line_mismatch", item, "Target branch does not match the item's stage/release line.", details={"target_branch": target_branch, "stage": item.get("stage")}))
+        for field in SYNC_PLAN_FIELDS:
+            desired = field_value_for_sync_item(item, field)
+            if desired is None:
+                continue
+            if contains_sensitive_value(desired):
+                conflicts.append(sync_conflict("privacy_sensitive_value", item, f"Desired `{field}` value may contain private data.", severity="error", details={"field": field}))
+                human_gates.append(sync_human_gate("privacy_security_sensitive_sync", item, f"Desired `{field}` value requires Human privacy review."))
+                continue
+            before = project_field_value(project_item or {}, field) if project_item else None
+            if before == desired:
+                continue
+            gate = "explicit_human_gate" if field == "Status" else "agent_handled_existing_workflow"
+            if field == "Status":
+                human_gates.append(sync_human_gate("built_in_status_side_effect", item, "Built-in Project Status changes are dry-run only and need Human review before any future write.", details={"before": before, "after": desired}))
+            operations.append(
+                {
+                    "operation": "set_project_field",
+                    "project_item_id": project_item_identity(project_item),
+                    "work_item_id": item.get("work_item_id"),
+                    "field": field,
+                    "before": before,
+                    "after": desired,
+                    "idempotency_key": f"{item.get('work_item_id')}::{field}::{desired}",
+                    "gate": gate,
+                    "evidence_refs": item.get("evidence_refs", []),
+                    "readback_required": {
+                        "source": "github_graphql_project_v2",
+                        "field": field,
+                        "expected": desired,
+                    },
+                    "mutation_performed": False,
+                }
+            )
+    broad_policy_fields = {"Status", "Roadmap Status", "Owner Role", "Stage", "Risk"} - fields_seen if project_status.get("explicit_metadata") else set()
+    if broad_policy_fields:
+        human_gates.append(sync_human_gate("broad_project_policy_change", None, "Creating or changing Project schema/options is out of scope for dry-run sync.", details={"fields": sorted(broad_policy_fields)}))
+    payload = {
+        "schema_version": 1,
+        "command": "project-sync-plan",
+        "repo": repo,
+        "mode": "dry_run",
+        "mutation_performed": False,
+        "writes_supported_now": False,
+        "apply_supported_now": False,
+        "source_of_truth": "local_collaboration_ledger_board",
+        "project_role": "optional_visual_mirror",
+        "field_mapping": {field: {"source": "foundry_board_item", "target": f"GitHub Project {field}"} for field in SYNC_PLAN_FIELDS},
+        "planned_operations": operations,
+        "conflicts": conflicts,
+        "human_gates": human_gates,
+        "unsupported_actions": [
+            "live Project mutation",
+            "GitHub write-back",
+            "issue closure automation",
+            "real sync/apply",
+            "branch repair/apply",
+            "checkout/switch",
+            "PR retarget",
+            "rebase",
+            "merge to main",
+            "reset/clean/force push/destructive action",
+            "runtime/Vault/private/generated mutation",
+            "generated publish or capability-pack deploy/apply",
+            "memory-system work",
+            "release/tag work",
+            "final V2 readiness closure",
+        ],
+        "readback": {
+            "project_status": project_status,
+            "project_attempts": project_attempts,
+            "partial_results": partial_results,
+            "full_project_scan_performed": False,
+        },
+        "user_facing_report": {
+            "summary": f"Dry-run Project sync plan prepared {len(operations)} would-change operations, {len(conflicts)} conflicts, and {len(human_gates)} Human gates.",
+            "next_actions": [
+                "review_conflicts_before_any_future_apply",
+                "collect_human_decision_for_human_gates",
+                "rerun_after_project_readback_if_degraded",
+            ],
+            "writes": "none",
+        },
+        "telemetry": {
+            "telemetry_issue": "#266",
+            "api_attempts": project_attempts.get("attempts", 0),
+            "elapsed_time_ms": elapsed_time_ms,
+            "item_count": len(board.get("items", [])),
+            "planned_operation_count": len(operations),
+            "conflict_count": len(conflicts),
+            "human_gate_count": len(human_gates),
+            "full_project_scan_performed": False,
+        },
+    }
+    return payload
+
+
+def load_project_sync_operations(plan_doc: Any) -> tuple[list[dict[str, Any]], list[str]]:
+    if not isinstance(plan_doc, dict):
+        return [], ["sync plan JSON must be an object"]
+    if plan_doc.get("command") != "project-sync-plan":
+        return [], ["sync plan must come from project-sync-plan"]
+    if plan_doc.get("mode") != "dry_run":
+        return [], ["sync plan must be a dry_run plan"]
+    operations = plan_doc.get("planned_operations")
+    if not isinstance(operations, list):
+        return [], ["sync plan must include planned_operations list"]
+    normalized: list[dict[str, Any]] = []
+    errors: list[str] = []
+    for index, operation in enumerate(operations, start=1):
+        if not isinstance(operation, dict):
+            errors.append(f"operation #{index} must be an object")
+            continue
+        if operation.get("operation") != "set_project_field":
+            errors.append(f"operation #{index} has unsupported operation {operation.get('operation')!r}")
+            continue
+        if not operation.get("idempotency_key"):
+            errors.append(f"operation #{index} must include idempotency_key")
+            continue
+        normalized.append(operation)
+    return normalized, errors
+
+
+def fake_project_write_results(fake_doc: Any) -> tuple[dict[str, dict[str, Any]], list[str]]:
+    if fake_doc is None:
+        return {}, ["fake Project write executor is required; live Project mutation is not supported"]
+    if not isinstance(fake_doc, dict):
+        return {}, ["fake Project write JSON must be an object"]
+    raw = fake_doc.get("results", fake_doc)
+    if not isinstance(raw, dict):
+        return {}, ["fake Project write results must be an object keyed by idempotency_key"]
+    results: dict[str, dict[str, Any]] = {}
+    for key, value in raw.items():
+        if isinstance(value, dict):
+            results[str(key)] = value
+        else:
+            results[str(key)] = {"status": str(value)}
+    return results, []
+
+
+def load_project_sync_acceptance(acceptance_doc: Any) -> tuple[dict[str, Any], list[str]]:
+    if not isinstance(acceptance_doc, dict):
+        return {}, ["acceptance JSON must be an object"]
+    if acceptance_doc.get("accepted") is not True:
+        return {}, ["accepted plan evidence must set accepted: true"]
+    evidence_refs = acceptance_doc.get("evidence_refs")
+    if not isinstance(evidence_refs, list) or not any(isinstance(ref, str) and ref.strip() for ref in evidence_refs):
+        return {}, ["accepted plan evidence must include evidence_refs"]
+    approved_keys = acceptance_doc.get("human_approved_idempotency_keys", [])
+    if approved_keys is None:
+        approved_keys = []
+    if not isinstance(approved_keys, list) or not all(isinstance(key, str) and key.strip() for key in approved_keys):
+        return {}, ["human_approved_idempotency_keys must be a list of strings when present"]
+    return {
+        "evidence_refs": [str(ref) for ref in evidence_refs if isinstance(ref, str) and ref.strip()],
+        "approved_human_gate_keys": {str(key) for key in approved_keys},
+        "approved_by_role": str(acceptance_doc.get("approved_by_role") or "unknown"),
+    }, []
+
+
+def project_sync_apply_event(operation: dict[str, Any], result: dict[str, Any]) -> dict[str, Any]:
+    work_item_id = str(operation.get("work_item_id") or "unknown")
+    number_match = re.search(r"#(?:issue|pr):(\d+)$", work_item_id)
+    item_type_match = re.search(r"#(issue|pr):", work_item_id)
+    work_item = {
+        "id": work_item_id,
+        "repo": "unknown",
+        "type": item_type_match.group(1) if item_type_match else "issue",
+        "number": int(number_match.group(1)) if number_match else 0,
+    }
+    repo_match = re.match(r"([^#]+)#", work_item_id)
+    if repo_match:
+        work_item["repo"] = repo_match.group(1)
+    return {
+        "schema_version": LOCAL_LEDGER_SCHEMA_VERSION,
+        "event_id": f"project-sync-readback-{sanitized_event_id(str(operation['idempotency_key']))}",
+        "event_type": "sync_readback",
+        "occurred_at": str(result.get("occurred_at") or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())),
+        "work_item": work_item,
+        "actor_role": "sync",
+        "confidence": "observed",
+        "unknown_fields": [],
+        "not_available_fields": [],
+        "degraded_evidence": result.get("degraded_evidence", []),
+        "provenance": {"links": operation.get("evidence_refs", []), "idempotency_key": operation["idempotency_key"]},
+        "payload": {
+            "source": "github_project_mirror",
+            "local_state": operation.get("after"),
+            "observed_state": result.get("readback", operation.get("after")),
+            "field": operation.get("field"),
+            "project_item_id": operation.get("project_item_id"),
+            "fake_project_write": True,
+        },
+    }
+
+
+def build_project_sync_apply_from_plan(root: Path, plan_doc: Any, acceptance_doc: Any, fake_doc: Any) -> dict[str, Any]:
+    start = time.perf_counter()
+    operations, operation_errors = load_project_sync_operations(plan_doc)
+    acceptance, acceptance_errors = load_project_sync_acceptance(acceptance_doc)
+    fake_results, fake_errors = fake_project_write_results(fake_doc)
+    if operation_errors or acceptance_errors or fake_errors:
+        return {
+            "schema_version": 1,
+            "command": "project-sync-apply",
+            "status": "invalid",
+            "errors": operation_errors + acceptance_errors + fake_errors,
+            "mutation_performed": False,
+            "project_mutation_performed": False,
+            "live_project_mutation_performed": False,
+        }
+    before_events, before_invalid, before_storage = read_local_ledger_events(root)
+    before_replay = replay_local_ledger(before_events)
+    existing_ids = {event["event_id"] for event in before_events}
+    applied_operations: list[dict[str, Any]] = []
+    skipped_operations: list[dict[str, Any]] = []
+    partial_failures: list[dict[str, Any]] = []
+    human_gates: list[dict[str, Any]] = []
+    unsupported_operations: list[dict[str, Any]] = []
+    readback_events: list[dict[str, Any]] = []
+    approved_human_gate_count = 0
+    for operation in operations:
+        key = str(operation["idempotency_key"])
+        field = str(operation.get("field") or "")
+        if operation.get("gate") == "explicit_human_gate" or field == "Status":
+            if key not in acceptance["approved_human_gate_keys"]:
+                human_gates.append({"idempotency_key": key, "field": field, "reason": "explicit_human_gate_required"})
+                skipped_operations.append({"idempotency_key": key, "reason": "human_gate_required"})
+                continue
+            approved_human_gate_count += 1
+        if not operation.get("project_item_id"):
+            unsupported_operations.append({"idempotency_key": key, "reason": "missing_project_item_id"})
+            skipped_operations.append({"idempotency_key": key, "reason": "missing_project_item_id"})
+            continue
+        result = fake_results.get(key)
+        if not result:
+            unsupported_operations.append({"idempotency_key": key, "reason": "missing_fake_project_write_result"})
+            skipped_operations.append({"idempotency_key": key, "reason": "missing_fake_project_write_result"})
+            continue
+        status = str(result.get("status") or "ok")
+        if status not in {"ok", "idempotent"}:
+            partial_failures.append({"idempotency_key": key, "status": status, "error": result.get("error", "unknown")})
+            skipped_operations.append({"idempotency_key": key, "reason": "fake_project_write_failed", "status": status})
+            continue
+        readback = result.get("readback", operation.get("after"))
+        readback_ok = readback == operation.get("after")
+        applied_operations.append(
+            {
+                "operation": operation["operation"],
+                "idempotency_key": key,
+                "project_item_id": operation.get("project_item_id"),
+                "field": field,
+                "before": operation.get("before"),
+                "after": operation.get("after"),
+                "fake_write_status": status,
+                "readback": readback,
+                "readback_ok": readback_ok,
+                "evidence_refs": operation.get("evidence_refs", []),
+            }
+        )
+        if not readback_ok:
+            partial_failures.append({"idempotency_key": key, "status": "readback_mismatch", "expected": operation.get("after"), "observed": readback})
+        readback_events.append(project_sync_apply_event(operation, {**result, "readback": readback}))
+    appended_events, duplicate_skips = append_events_if_absent(root, readback_events, existing_ids)
+    after_events, after_invalid, after_storage = read_local_ledger_events(root)
+    after_replay = replay_local_ledger(after_events)
+    payload = {
+        "schema_version": 1,
+        "command": "project-sync-apply",
+        "mode": "apply",
+        "status": "partial" if partial_failures or unsupported_operations or human_gates else "ok",
+        "ledger_root": str(root),
+        "mutation_performed": bool(appended_events or applied_operations),
+        "project_mutation_performed": False,
+        "live_project_mutation_performed": False,
+        "fake_project_write_performed": bool(applied_operations),
+        "write_scope": "fake_project_write_executor_and_local_sync_readback_events_only",
+        "source_of_truth": "local_collaboration_ledger",
+        "project_role": "optional_visual_mirror",
+        "accepted_plan_evidence_refs": acceptance["evidence_refs"],
+        "approved_by_role": acceptance["approved_by_role"],
+        "operation_count": len(operations),
+        "applied_operation_count": len(applied_operations),
+        "human_gate_count": len(human_gates),
+        "approved_human_gate_count": approved_human_gate_count,
+        "unsupported_operation_count": len(unsupported_operations),
+        "partial_failure_count": len(partial_failures),
+        "duplicate_skip_count": len(duplicate_skips),
+        "applied_operations": applied_operations,
+        "skipped_operations": skipped_operations,
+        "human_gates": human_gates,
+        "unsupported_operations": unsupported_operations,
+        "partial_failures": partial_failures,
+        "appended_sync_readback_events": appended_events,
+        "duplicate_skips": duplicate_skips,
+        "before": {
+            "storage": before_storage,
+            "invalid_event_count": len(before_invalid),
+            "summary": before_replay["summary"],
+        },
+        "after": {
+            "storage": after_storage,
+            "invalid_event_count": len(after_invalid),
+            "summary": after_replay["summary"],
+            "derived_work_items": after_replay["derived_work_items"],
+        },
+        "user_facing_report": {
+            "summary": f"Applied {len(applied_operations)} fake Project mirror operation(s); {len(human_gates)} Human gates and {len(partial_failures)} partial failures remain.",
+            "next_actions": [
+                "review_human_gates_before_live_project_writes",
+                "rerun_project-sync-plan_after_degraded_readback",
+                "continue_to_V2-12_after_review_acceptance",
+            ],
+            "writes": "fake_project_write_executor_and_local_sync_readback_events_only",
+            "residual_risks": [
+                "real GitHub Project mutation remains unsupported without later explicit gate",
+                "GitHub Project remains mirror-only, not source of truth",
+                *("partial Project write/readback failures remain visible" for _ in ([1] if partial_failures else [])),
+            ],
+        },
+        "forbidden_actions": [
+            "live issue closure/reopen automation",
+            "broad Project scan by default",
+            "broad Project policy/schema mutation",
+            "privacy/security-sensitive Project writes without Human gate",
+            "#373 mixed-state recovery implementation",
+            "#378 management surface implementation",
+            "branch repair/apply or PR retarget",
+            "runtime/Vault/private/generated mutation",
+            "generated Skill publish or capability-pack deploy/apply",
+            "main merge or release/tag work",
+            "destructive git operation, reset/clean/force push",
+        ],
+        "telemetry": {
+            "telemetry_issue": "#266",
+            "operation_count": len(operations),
+            "targeted_api_attempts": len(applied_operations),
+            "degraded_source_count": len(partial_failures),
+            "partial_failure_count": len(partial_failures),
+            "human_gate_count": len(human_gates),
+            "idempotent_skip_count": len(duplicate_skips),
+            "elapsed_time_ms": round((time.perf_counter() - start) * 1000, 3),
+            "full_project_scan_performed": False,
+        },
+    }
+    return payload
+
+
+def cmd_project_sync_apply(args: argparse.Namespace) -> None:
+    result = build_project_sync_apply_from_plan(
+        local_ledger_root(args),
+        load_json(args.sync_plan_json),
+        load_json(args.acceptance_json),
+        load_json(args.fake_project_write_json),
+    )
+    print_json_or_text(result, args.json)
+    if result["status"] == "invalid":
+        raise SystemExit(6)
+
+
+def cmd_project_sync_plan(args: argparse.Namespace) -> None:
+    start = time.perf_counter()
+    repo, repo_source = resolve_repo(args)
+    if args.issues_json or args.fixture_json:
+        issues = normalize_issue_collection(load_json(args.issues_json or args.fixture_json))
+        scope = {"mode": "fixture", "issue_numbers": [issue_number(issue) for issue in issues if issue_number(issue) is not None]}
+        project_items, project_status, project_attempts = read_project_items(args)
+    else:
+        issues, scope = read_live_issues(repo, args)
+        project_items, project_status, project_attempts = read_project_items(args)
+    local_git, _local_git_status, _local_git_attempts = read_local_git_state(args)
+    ledger_report = build_local_ledger_report(local_ledger_root(args))
+    candidate_events = normalize_candidate_events(load_json(args.candidate_events_json)) if args.candidate_events_json else []
+    board = build_foundry_board(
+        repo,
+        issues[: args.limit],
+        project_items,
+        project_status,
+        local_git,
+        args.name,
+        {"repo_source": repo_source, **scope, "ledger_root": ledger_report["ledger_root"], "sync_plan_source": True},
+        accepted_replay={"derived_work_items": ledger_report["derived_work_items"], "summary": ledger_report["summary"]},
+        candidate_events=candidate_events,
+    )
+    elapsed_time_ms = round((time.perf_counter() - start) * 1000, 3)
+    print_json_or_text(build_project_sync_plan(repo, board, project_items, project_status, project_attempts, elapsed_time_ms), args.json)
+
+
+def cmd_mixed_state_recovery(args: argparse.Namespace) -> None:
+    repo, repo_source = resolve_repo(args)
+    if getattr(args, "board_items_json", None):
+        issues = normalize_board_items(load_json(args.board_items_json))
+        scope = {"mode": "board_items_fixture", "item_count": len(issues)}
+        project_items: list[dict[str, Any]] = []
+        project_status = {"source": "skipped", "status": "skipped", "item_count": 0}
+        project_attempts = {"attempts": 0, "transient_failures": []}
+    elif args.issues_json or args.fixture_json:
+        issues = normalize_issue_collection(load_json(args.issues_json or args.fixture_json))
+        scope = {"mode": "fixture", "issue_numbers": [issue_number(issue) for issue in issues if issue_number(issue) is not None]}
+        project_items, project_status, project_attempts = read_project_items(args)
+    else:
+        issues, scope = read_live_issues(repo, args)
+        project_items, project_status, project_attempts = read_project_items(args)
+    local_git, _local_git_status, _local_git_attempts = read_local_git_state(args)
+    ledger_report = build_local_ledger_report(local_ledger_root(args))
+    candidate_events = normalize_candidate_events(load_json(args.candidate_events_json)) if args.candidate_events_json else []
+    board = build_foundry_board(
+        repo,
+        issues[: args.limit],
+        project_items,
+        project_status,
+        local_git,
+        args.name,
+        {"repo_source": repo_source, **scope, "ledger_root": ledger_report["ledger_root"], "mixed_state_recovery_source": True},
+        accepted_replay={"derived_work_items": ledger_report["derived_work_items"], "summary": ledger_report["summary"]},
+        candidate_events=candidate_events,
+    )
+    print_json_or_text(build_mixed_state_recovery_report(board, project_status, project_attempts), args.json)
+
+
+def cockpit_inputs(args: argparse.Namespace) -> tuple[str, str, list[dict[str, Any]], dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any], list[dict[str, Any]], dict[str, Any]]:
+    repo, repo_source = resolve_repo(args)
+    if getattr(args, "board_items_json", None):
+        issues = normalize_board_items(load_json(args.board_items_json))
+        scope = {"mode": "board_items_fixture", "item_count": len(issues)}
+        project_items: list[dict[str, Any]] = []
+        project_status = {"source": "skipped", "status": "skipped", "item_count": 0}
+        project_attempts = {"attempts": 0, "transient_failures": []}
+    elif args.issues_json or args.fixture_json:
+        issues = normalize_issue_collection(load_json(args.issues_json or args.fixture_json))
+        scope = {"mode": "fixture", "issue_numbers": [issue_number(issue) for issue in issues if issue_number(issue) is not None]}
+        project_items, project_status, project_attempts = read_project_items(args)
+    else:
+        issues, scope = read_live_issues(repo, args)
+        project_items, project_status, project_attempts = read_project_items(args)
+    local_git, _local_git_status, _local_git_attempts = read_local_git_state(args)
+    ledger_report = build_local_ledger_report(local_ledger_root(args))
+    candidate_events = normalize_candidate_events(load_json(args.candidate_events_json)) if args.candidate_events_json else []
+    return repo, repo_source, issues, scope, project_items, project_status, project_attempts, local_git, candidate_events, ledger_report
+
+
+def cmd_operational_cockpit(args: argparse.Namespace) -> None:
+    repo, repo_source, issues, scope, project_items, project_status, project_attempts, local_git, candidate_events, ledger_report = cockpit_inputs(args)
+    board = build_foundry_board(
+        repo,
+        issues[: args.limit],
+        project_items,
+        project_status,
+        local_git,
+        args.name,
+        {"repo_source": repo_source, **scope, "ledger_root": ledger_report["ledger_root"], "operational_cockpit_source": True},
+        accepted_replay={"derived_work_items": ledger_report["derived_work_items"], "summary": ledger_report["summary"]},
+        candidate_events=candidate_events,
+    )
+    recovery = build_mixed_state_recovery_report(board, project_status, project_attempts)
+    viewmodel = build_operational_cockpit_viewmodel(
+        repo,
+        board,
+        ledger_report,
+        recovery,
+        project_status,
+        project_attempts,
+        local_git,
+        load_operational_health(args),
+    )
+    if getattr(args, "html_out", None):
+        viewmodel["static_html_report"] = write_operational_cockpit_html(args.html_out, viewmodel)
+    print_json_or_text(viewmodel, args.json)
+
+
+def cmd_foundry_board(args: argparse.Namespace) -> None:
+    repo, repo_source = resolve_repo(args)
+    if args.board_items_json:
+        issues = normalize_board_items(load_json(args.board_items_json))
+        scope = {"mode": "board_items_fixture", "item_count": len(issues)}
+        project_items: list[dict[str, Any]] = []
+        project_status = {"source": "skipped", "status": "skipped", "item_count": 0}
+    elif args.issues_json or args.fixture_json:
+        issues = normalize_issue_collection(load_json(args.issues_json or args.fixture_json))
+        scope = {"mode": "fixture", "issue_numbers": [issue_number(issue) for issue in issues if issue_number(issue) is not None]}
+        project_items, project_status, _project_attempts = read_project_items(args)
+    else:
+        issues, scope = read_live_issues(repo, args)
+        project_items, project_status, _project_attempts = read_project_items(args)
+    local_git, _local_git_status, _local_git_attempts = read_local_git_state(args)
+    ledger_report = build_local_ledger_report(local_ledger_root(args))
+    candidate_events = normalize_candidate_events(load_json(args.candidate_events_json)) if args.candidate_events_json else []
+    board = build_foundry_board(
+        repo,
+        issues[: args.limit],
+        project_items,
+        project_status,
+        local_git,
+        args.name,
+        {"repo_source": repo_source, **scope, "ledger_root": ledger_report["ledger_root"]},
+        accepted_replay={"derived_work_items": ledger_report["derived_work_items"], "summary": ledger_report["summary"]},
+        candidate_events=candidate_events,
+    )
+    print_json_or_text(board, args.json)
+
+
 def cmd_collaboration_readiness(args: argparse.Namespace) -> None:
     repo, repo_source = resolve_repo(args)
     config = parse_simple_yaml(Path(args.config)) if args.config else {}
@@ -2310,6 +6284,9 @@ def cmd_permission_smoke(args: argparse.Namespace) -> None:
         code = "ok"
     elif action in DRY_RUN_ACTIONS:
         status = "dry_run_allowed"
+        code = "ok"
+    elif action in LOCAL_WRITE_ACTIONS:
+        status = "local_write_allowed"
         code = "ok"
     else:
         status = "unknown_requires_architect_review"
@@ -2673,6 +6650,181 @@ def build_parser() -> argparse.ArgumentParser:
     readiness.add_argument("--project-retry-backoff", type=float, default=0.5, help="Seconds between transient Project read retries.")
     readiness.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON for collaboration-readiness.")
     readiness.set_defaults(func=cmd_collaboration_readiness)
+
+    guided = sub.add_parser("guided-onboarding")
+    guided.add_argument("--fixture-json", help="Legacy issue fixture; prefer --issues-json.")
+    guided.add_argument("--issues-json", help="Fixture issue object, list, or object with issues/items.")
+    guided.add_argument("--prs-json", help="Fixture PR object, list, or object with issues/items.")
+    guided.add_argument("--project-items-json", help="Fixture Project item list or gh project item-list JSON.")
+    guided.add_argument("--issues", help="Comma-separated explicit issue numbers for bounded live onboarding.")
+    guided.add_argument("--prs", help="Comma-separated explicit PR numbers for bounded live onboarding.")
+    guided.add_argument("--stage", help="Stage value or label for bounded live onboarding preflight.")
+    guided.add_argument("--limit", type=int, default=20, help="Maximum issues/PRs to inspect.")
+    guided.add_argument("--project-owner", help="Project owner for targeted live Project readback.")
+    guided.add_argument("--project-number", type=int, help="Project number for targeted live Project readback.")
+    guided.add_argument("--project-limit", type=int, default=50, help="Maximum Project items to read when explicitly configured.")
+    guided.add_argument("--project-retries", type=int, default=2, help="Bounded retries for transient Project reads.")
+    guided.add_argument("--project-retry-backoff", type=float, default=0.5, help="Seconds between transient Project read retries.")
+    guided.add_argument("--trial-root", default="/private/tmp/agent-foundry-guided-onboarding-trial", help="Isolated trial evidence root shown to the Human.")
+    guided.add_argument("--adopter-path", default="not_provided", help="Adopter project path shown in the guided packet.")
+    guided.add_argument("--adopter-branch", default="not_provided", help="Adopter project branch shown in the guided packet.")
+    guided.add_argument("--selected-mode", default="explicit_local_orchestration_read_only_trial", help="Selected onboarding mode shown in the guided packet.")
+    guided.add_argument("--trial-response-json", help="Human trial response JSON; required to advance past each protocol step.")
+    guided.add_argument("--transcript-out", help="Optional local transcript output path. Must stay inside --trial-root.")
+    guided.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON for guided-onboarding.")
+    guided.set_defaults(func=cmd_guided_onboarding)
+
+    board = sub.add_parser("foundry-board")
+    board.add_argument("--config", help="Reserved for future board config; currently informational.")
+    board.add_argument("--fixture-json", help="Legacy issue fixture; prefer --issues-json or --board-items-json for tests.")
+    board.add_argument("--issues-json", help="Fixture issue object, list, or object with issues/items.")
+    board.add_argument("--board-items-json", help="Fixture board items in issue-like or board item form.")
+    board.add_argument("--project-items-json", help="Fixture Project item list or gh project item-list JSON.")
+    board.add_argument("--local-git-json", help="Fixture local git state for branch/readiness display.")
+    board.add_argument("--ledger-root", help="Accepted local ledger root. Defaults to usage/local/collaboration-ledger.")
+    board.add_argument("--candidate-events-json", help="Read-only candidate event list or backfill preview output for board display.")
+    board.add_argument("--issues", help="Comma-separated explicit issue numbers for bounded live board report.")
+    board.add_argument("--stage", help="Stage value or label for bounded live issue report.")
+    board.add_argument("--limit", type=int, default=20, help="Maximum issues/items to render.")
+    board.add_argument("--project-owner", help="Project owner for targeted live Project item-list, such as @me or an org.")
+    board.add_argument("--project-number", type=int, help="Project number for targeted live Project item-list.")
+    board.add_argument("--project-limit", type=int, default=50, help="Maximum Project items to read when explicitly configured.")
+    board.add_argument("--project-retries", type=int, default=2, help="Bounded retries for transient Project reads.")
+    board.add_argument("--project-retry-backoff", type=float, default=0.5, help="Seconds between transient Project read retries.")
+    board.add_argument("--name", default="Foundry Board", help="Board name shown in the read-only report.")
+    board.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON for foundry-board.")
+    board.set_defaults(func=cmd_foundry_board)
+
+    cockpit = sub.add_parser("operational-cockpit")
+    cockpit.add_argument("--fixture-json", help="Legacy issue fixture; prefer --issues-json.")
+    cockpit.add_argument("--issues-json", help="Fixture issue object, list, or object with issues/items.")
+    cockpit.add_argument("--board-items-json", help="Fixture board items in issue-like or board item form.")
+    cockpit.add_argument("--project-items-json", help="Fixture Project item list or gh project item-list JSON.")
+    cockpit.add_argument("--local-git-json", help="Fixture local git state for branch/readiness display.")
+    cockpit.add_argument("--ledger-root", help="Accepted local ledger root. Defaults to usage/local/collaboration-ledger.")
+    cockpit.add_argument("--candidate-events-json", help="Read-only candidate event list or backfill preview output for cockpit display.")
+    cockpit.add_argument("--health-json", help="Optional runtime/environment/version health fixture for cockpit warnings.")
+    cockpit.add_argument("--issues", help="Comma-separated explicit issue numbers for bounded live cockpit report.")
+    cockpit.add_argument("--stage", help="Stage value or label for bounded live cockpit report.")
+    cockpit.add_argument("--limit", type=int, default=20, help="Maximum issues/items to render.")
+    cockpit.add_argument("--project-owner", help="Project owner for targeted live Project item-list.")
+    cockpit.add_argument("--project-number", type=int, help="Project number for targeted live Project item-list.")
+    cockpit.add_argument("--project-limit", type=int, default=50, help="Maximum Project items to read when explicitly configured.")
+    cockpit.add_argument("--project-retries", type=int, default=2, help="Bounded retries for transient Project reads.")
+    cockpit.add_argument("--project-retry-backoff", type=float, default=0.5, help="Seconds between transient Project read retries.")
+    cockpit.add_argument("--name", default="V2 Operational Cockpit", help="Cockpit report name.")
+    cockpit.add_argument("--html-out", help="Write static local HTML report to this path.")
+    cockpit.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON for operational-cockpit.")
+    cockpit.set_defaults(func=cmd_operational_cockpit)
+
+    recovery = sub.add_parser("mixed-state-recovery")
+    recovery.add_argument("--fixture-json", help="Legacy issue fixture; prefer --issues-json.")
+    recovery.add_argument("--issues-json", help="Fixture issue object, list, or object with issues/items.")
+    recovery.add_argument("--board-items-json", help="Fixture board items in issue-like or board item form.")
+    recovery.add_argument("--project-items-json", help="Fixture Project item list or gh project item-list JSON.")
+    recovery.add_argument("--local-git-json", help="Fixture local git state for branch/readiness display.")
+    recovery.add_argument("--ledger-root", help="Accepted local ledger root. Defaults to usage/local/collaboration-ledger.")
+    recovery.add_argument("--candidate-events-json", help="Read-only candidate event list or backfill preview output for recovery display.")
+    recovery.add_argument("--issues", help="Comma-separated explicit issue numbers for bounded live recovery report.")
+    recovery.add_argument("--stage", help="Stage value or label for bounded live recovery report.")
+    recovery.add_argument("--limit", type=int, default=20, help="Maximum issues/items to inspect.")
+    recovery.add_argument("--project-owner", help="Project owner for targeted live Project item-list.")
+    recovery.add_argument("--project-number", type=int, help="Project number for targeted live Project item-list.")
+    recovery.add_argument("--project-limit", type=int, default=50, help="Maximum Project items to read when explicitly configured.")
+    recovery.add_argument("--project-retries", type=int, default=2, help="Bounded retries for transient Project reads.")
+    recovery.add_argument("--project-retry-backoff", type=float, default=0.5, help="Seconds between transient Project read retries.")
+    recovery.add_argument("--name", default="Foundry Board", help="Board name for the internal read-only board source.")
+    recovery.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON for mixed-state-recovery.")
+    recovery.set_defaults(func=cmd_mixed_state_recovery)
+
+    sync_plan = sub.add_parser("project-sync-plan")
+    sync_plan.add_argument("--fixture-json", help="Legacy issue fixture; prefer --issues-json.")
+    sync_plan.add_argument("--issues-json", help="Fixture issue object, list, or object with issues/items.")
+    sync_plan.add_argument("--project-items-json", help="Fixture Project item list or gh project item-list JSON.")
+    sync_plan.add_argument("--local-git-json", help="Fixture local git state for branch/readiness display.")
+    sync_plan.add_argument("--ledger-root", help="Accepted local ledger root. Defaults to usage/local/collaboration-ledger.")
+    sync_plan.add_argument("--candidate-events-json", help="Read-only candidate event list or backfill preview output for conflict display.")
+    sync_plan.add_argument("--issues", help="Comma-separated explicit issue numbers for bounded live sync plan.")
+    sync_plan.add_argument("--stage", help="Stage value or label for bounded live issue report.")
+    sync_plan.add_argument("--limit", type=int, default=20, help="Maximum issues/items to inspect.")
+    sync_plan.add_argument("--project-owner", help="Project owner for targeted live Project item-list, such as @me or an org.")
+    sync_plan.add_argument("--project-number", type=int, help="Project number for targeted live Project item-list.")
+    sync_plan.add_argument("--project-limit", type=int, default=50, help="Maximum Project items to read when explicitly configured.")
+    sync_plan.add_argument("--project-retries", type=int, default=2, help="Bounded retries for transient Project reads.")
+    sync_plan.add_argument("--project-retry-backoff", type=float, default=0.5, help="Seconds between transient Project read retries.")
+    sync_plan.add_argument("--name", default="Foundry Board", help="Board name for the internal read-only board source.")
+    sync_plan.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON for project-sync-plan.")
+    sync_plan.set_defaults(func=cmd_project_sync_plan)
+
+    sync_apply = sub.add_parser("project-sync-apply")
+    sync_apply.add_argument("--ledger-root", help="Local ledger root. Defaults to usage/local/collaboration-ledger.")
+    sync_apply.add_argument("--sync-plan-json", required=True, help="Accepted project-sync-plan output or revalidated equivalent.")
+    sync_apply.add_argument("--acceptance-json", required=True, help="Accepted plan evidence with accepted:true and evidence_refs.")
+    sync_apply.add_argument("--fake-project-write-json", required=True, help="Fake Project write/readback result map keyed by operation idempotency_key.")
+    sync_apply.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON for project-sync-apply.")
+    sync_apply.set_defaults(func=cmd_project_sync_apply)
+
+    ledger_append = sub.add_parser("local-ledger-append")
+    ledger_append.add_argument("--ledger-root", help="Local ledger root. Defaults to usage/local/collaboration-ledger.")
+    ledger_append.add_argument("--event-json", required=True, help="Path to one ledger event JSON object.")
+    ledger_append.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON for local-ledger-append.")
+    ledger_append.set_defaults(func=cmd_local_ledger_append)
+
+    migration_apply = sub.add_parser("local-ledger-migration-apply")
+    migration_apply.add_argument("--ledger-root", help="Local ledger root. Defaults to usage/local/collaboration-ledger.")
+    migration_apply.add_argument("--candidate-events-json", required=True, help="Backfill preview output or candidate event list to review/apply.")
+    migration_apply.add_argument("--decision-json", required=True, help="Migration decision JSON with accept/reject/skip event ids.")
+    migration_apply.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON for local-ledger-migration-apply.")
+    migration_apply.set_defaults(func=cmd_local_ledger_migration_apply)
+
+    action_apply = sub.add_parser("local-ledger-action-apply")
+    action_apply.add_argument("--ledger-root", help="Local ledger root. Defaults to usage/local/collaboration-ledger.")
+    action_apply.add_argument("--action-json", required=True, help="Approved local orchestration action object, list, or object with actions.")
+    action_apply.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON for local-ledger-action-apply.")
+    action_apply.set_defaults(func=cmd_local_ledger_action_apply)
+
+    dogfood = sub.add_parser("ledger-dogfood")
+    dogfood.add_argument("--trial-root", required=True, help="Explicit isolated root for every dogfood artifact and local ledger write.")
+    dogfood.add_argument("--decision-json", required=True, help="Human response, candidate decisions, and local action decisions required before progression.")
+    dogfood.add_argument("--fixture-json", help="Legacy issue fixture; prefer --issues-json.")
+    dogfood.add_argument("--issues-json", help="Fixture issue object, list, or object with issues/items.")
+    dogfood.add_argument("--prs-json", help="Fixture PR object, list, or object with issues/items.")
+    dogfood.add_argument("--project-items-json", help="Fixture Project item list for mirror/control-surface evidence.")
+    dogfood.add_argument("--local-git-json", help="Fixture local git state for board/cockpit output.")
+    dogfood.add_argument("--issues", help="Comma-separated explicit issue numbers for bounded live dogfood evidence.")
+    dogfood.add_argument("--prs", help="Comma-separated explicit PR numbers for bounded live dogfood evidence.")
+    dogfood.add_argument("--stage", help="Stage value or label for bounded live evidence.")
+    dogfood.add_argument("--limit", type=int, default=20, help="Maximum issues/items to inspect.")
+    dogfood.add_argument("--project-owner", help="Project owner for targeted optional Project mirror readback.")
+    dogfood.add_argument("--project-number", type=int, help="Project number for targeted optional Project mirror readback.")
+    dogfood.add_argument("--project-limit", type=int, default=50, help="Maximum Project items to read when explicitly configured.")
+    dogfood.add_argument("--project-retries", type=int, default=2, help="Bounded retries for transient Project reads.")
+    dogfood.add_argument("--project-retry-backoff", type=float, default=0.5, help="Seconds between transient Project read retries.")
+    dogfood.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON for ledger-dogfood.")
+    dogfood.set_defaults(func=cmd_ledger_dogfood)
+
+    ledger_report = sub.add_parser("local-ledger-report")
+    ledger_report.add_argument("--ledger-root", help="Local ledger root. Defaults to usage/local/collaboration-ledger.")
+    ledger_report.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON for local-ledger-report.")
+    ledger_report.set_defaults(func=cmd_local_ledger_report)
+
+    backfill = sub.add_parser("local-ledger-backfill-preview")
+    backfill.add_argument("--ledger-root", help="Optional accepted local ledger root for read-only comparison.")
+    backfill.add_argument("--fixture-json", help="Legacy issue fixture; prefer --issues-json.")
+    backfill.add_argument("--issues-json", help="Fixture issue object, list, or object with issues/items.")
+    backfill.add_argument("--prs-json", help="Fixture PR object, list, or object with issues/items.")
+    backfill.add_argument("--project-items-json", help="Fixture Project item list or gh project item-list JSON.")
+    backfill.add_argument("--issues", help="Comma-separated explicit issue numbers for bounded live preview.")
+    backfill.add_argument("--prs", help="Comma-separated explicit PR numbers for bounded live preview.")
+    backfill.add_argument("--stage", help="Stage value or label for bounded live issue preview.")
+    backfill.add_argument("--limit", type=int, default=20, help="Maximum issues/PRs to inspect.")
+    backfill.add_argument("--project-owner", help="Project owner for targeted live Project item-list.")
+    backfill.add_argument("--project-number", type=int, help="Project number for targeted live Project item-list.")
+    backfill.add_argument("--project-limit", type=int, default=50, help="Maximum Project items to read when explicitly configured.")
+    backfill.add_argument("--project-retries", type=int, default=2, help="Bounded retries for transient Project reads.")
+    backfill.add_argument("--project-retry-backoff", type=float, default=0.5, help="Seconds between transient Project read retries.")
+    backfill.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON for local-ledger-backfill-preview.")
+    backfill.set_defaults(func=cmd_local_ledger_backfill_preview)
 
     activation = sub.add_parser("activation-report")
     activation.add_argument("--core-root", help="Agent Foundry Core root. Defaults to this helper's checkout.")

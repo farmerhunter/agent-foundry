@@ -52,6 +52,13 @@ The report shape should be stable enough for future local-first orchestration
 and Foundry Board backfill. GitHub Project remains a sync or visibility surface;
 it does not become the authority.
 
+For V2 local-first orchestration, the Foundry Board preview is the user-facing
+read-only board/report built on the same evidence discipline. It can summarize
+lanes, owners, latest evidence, branch readiness, human gates, candidate versus
+accepted migrated state, and Project mirror drift. It does not write GitHub,
+mutate Project v2, sync a ledger, perform migration/backfill writes, or repair
+branches.
+
 **中文要点：** readiness audit 用来判断 repo 是否具备 role-based collaboration 条件。
 它只读、低成本、可 degraded；可以给 dry-run repair plan，但不执行修复。报告结构要能
 服务未来 Foundry Board / local-first backfill，同时明确 GitHub Project 不是权威状态。

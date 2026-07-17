@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.4.0
+
+- Added V2 Local Orchestration capability-layer activation guidance.
+- Preserved Base as the default behavior for ordinary collaboration, practice
+  harvest, generated Skill guidance, runtime actions, and capability-pack
+  behavior.
+- Clarified that Local Orchestration guidance requires durable signals such as
+  explicit user request, local capability config, accepted ledger state, issue
+  contract, runtime profile, or accepted operational UX contract.
+- Kept branch names, release lines, and PR targets as readiness or warning
+  evidence only, not canonical Local Orchestration triggers.
+- Kept runtime publish/apply, generated Skill publish, capability-pack
+  deploy/apply, live Project mutation, and final V2 closure outside pack
+  authority.
+
 ## 0.3.2
 
 - Added AF16 branch-aware collaboration guidance to the optional collaboration

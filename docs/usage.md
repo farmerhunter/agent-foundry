@@ -105,6 +105,237 @@ Branch action-plan concepts are also read-only:
 Branch action plan 也只读：它可以提示 split、switch context、forward-merge 或多线验证，
 但不会自动 checkout、retarget、merge、reset 或 clean。
 
+## Foundry Board Preview
+
+For V2 local-first orchestration work, ask for a read-only Foundry Board preview:
+
+```text
+show Foundry Board
+显示 Foundry Board
+```
+
+The preview reads accepted Local Collaboration Ledger replay first and turns it into a board-shaped report. GitHub issue, PR, and Project evidence are shown as provenance, mirror state, or drift signals. Normal users should look first at lanes, owner role, latest evidence, blocking reason, mirror status, branch readiness, and recommended next actions.
+
+The current MVP is read-only. It can show accepted local state, imported candidate migration state, remote mirror-only items, stale/conflicting evidence, human gates, degraded Project visibility, and whether the current checkout is on the expected branch line. It does not perform GitHub write-back, Project v2 mutation, real migration/backfill writes, branch repair/apply, checkout/switch, PR retarget, runtime/Vault/private/generated mutation, generated Skill publish, or capability-pack deploy/apply.
+
+Use the board preview to decide the next workflow action:
+
+- if an item is `ready`, dispatch the named owner through the normal issue workflow;
+- if it is `human_gate`, read the decision basis and approve, reject, or revise explicitly;
+- if it is `stale_conflict`, rehydrate issue/PR/branch evidence before advancing;
+- if Project visibility is degraded or drifted, treat Project as a mirror and use accepted local ledger replay plus durable issue/PR evidence as the safer source.
+
+**中文要点：** Foundry Board preview 是 V2 的只读操作面板。它优先读取 accepted local ledger replay，把 GitHub/Project 当作 mirror/drift 证据；它不会自动写 GitHub/Project，也不会做真实 sync、backfill 或 branch 操作。
+
+## Local Collaboration Ledger Report
+
+For V2 local-first orchestration work, ask for a local ledger replay report:
+
+```text
+show local collaboration ledger report
+显示 local collaboration ledger report
+```
+
+The MVP stores append-only local event records under `usage/local/collaboration-ledger/` by default. The report replays assignment, dispatch, callback, review, acceptance, merge, closure, blocked, and sync-readback events into derived work-item state with provenance links, confidence, unknown/not_available fields, conflicts, degraded evidence, and #266 telemetry.
+
+The report is read-only and does not need live GitHub access. Append mode writes only the local ledger JSONL event file or an explicit test ledger root; it does not backfill existing GitHub projects, update the Foundry Board, generate Project sync plans, write GitHub/Project, close issues, mutate runtime/Vault/private/generated state, or publish generated Skills.
+
+**中文要点：** Local ledger report 会 replay 本地 append-only events，显示 work item state、证据、conflict、unknown/not_available 和 telemetry。它不依赖 GitHub live read，也不会做 #360 backfill、#361 board、#362 sync 或任何 GitHub/Project 写入。
+
+For an existing adopter project, start with a ten-minute guided onboarding packet before running previews:
+
+```text
+onboard this existing project into V2 Local Orchestration as a ten-minute read-only trial
+把这个 existing project 作为十分钟只读 trial 接入 V2 Local Orchestration
+```
+
+The primary Human path is a guided packet, not raw JSON. It must show what the agent reads, what it may write with the exact isolated location, what it will not touch, and the one Human decision required now at each step. Base remains the default for ordinary project work. Local Orchestration is selected only by explicit user trial intent, local capability config, ledger manifest/state, issue/task contract, or an accepted capability profile.
+
+```bash
+python3 scripts/github_collaboration_helper.py --repo <owner>/<repo> guided-onboarding \
+  --issues <explicit-current-issue-list> \
+  --prs <optional-current-pr-list> \
+  --trial-root /private/tmp/agent-foundry-guided-onboarding-trial
+```
+
+For a real Human trial, do not treat the generated packet as acceptance. Run the protocol one step at a time and capture the Human response before continuing. A response file is the portable transcript input:
+
+```json
+{
+  "responses": [
+    {
+      "step": 1,
+      "choice": "start trial",
+      "human_response": "I understand this is a read-only trial and want to continue."
+    }
+  ],
+  "final_evaluation": {
+    "clarity_of_starting_context": "clear",
+    "confidence_in_current_state_evidence": "medium",
+    "candidate_non_authority_clarity": "clear",
+    "isolated_ledger_boundary_clarity": "clear",
+    "project_sync_not_executed_clarity": "clear",
+    "next_step_actionability": "actionable",
+    "remaining_friction": "Need to inspect #282 before accepting.",
+    "final_decision": "deferred"
+  }
+}
+```
+
+```bash
+python3 scripts/github_collaboration_helper.py --repo <owner>/<repo> guided-onboarding \
+  --issues <explicit-current-issue-list> \
+  --trial-root /private/tmp/agent-foundry-guided-onboarding-trial \
+  --trial-response-json /private/tmp/agent-foundry-guided-onboarding-trial/responses.json \
+  --transcript-out /private/tmp/agent-foundry-guided-onboarding-trial/transcripts/trial.json
+```
+
+If the next required Human response is missing, the protocol reports `blocked_waiting_for_human_response` and does not proceed. The transcript captures the Human response, choice, timestamp if supplied, and evidence refs before progression. Supported choices include setup inspection, fallback-set accept/edit/inspect/stop, candidate accept/skip/inspect/defer, preview-only isolated ledger decision, stop/recovery, and final decision `accepted`, `accepted_with_cleanup`, `rejected`, or `deferred`.
+
+The agent reads durable GitHub evidence such as issues, PRs, labels, comments, branch/status, and relevant docs/helpers. It may write temporary JSON, HTML, or ledger evidence only under the shown isolated trial root, for example `/private/tmp/...` or a user-supplied trial directory. It must not touch adopter repo files, live GitHub Project fields, runtime/Vault/private/generated state, generated Skills, or capability packs.
+
+If a stage-based query such as `stage:M14` or another expected `stage:*` label returns no candidates, do not assume the adopter repo is empty or incorrectly configured. Fall back to an explicit issue/PR set chosen from durable GitHub evidence, and tell the user which issue and PR numbers are being used.
+
+For the tiny-ipa renewed trial, rehydrate current durable state instead of reusing the old #386 active-item snapshot. The expected current readback before #390 is #276-#281 closed and #282 labeled `needs:user`, unless fresh GitHub evidence changes it. The guided packet should derive that concrete issue fallback set, show provenance, and ask the Human to confirm or edit it before candidate review.
+
+Candidate review is plain language: each candidate offers `accept`, `skip`, `inspect evidence`, or `defer`. Candidates are not authoritative and change no project state until accepted into the isolated ledger. Before local apply, the agent must show the isolated ledger location, cleanup boundary, and no-effect guarantee. Project sync plans are proposed operations and risks with visible `not executed` status; live Project apply remains separately reviewed and Human-gated.
+
+Human-owned decisions remain explicit: fallback-set confirmation, candidate accept/skip/inspect, isolated local apply, sync apply choice, and final trust/readiness judgment. Stop or defer when the path or branch is wrong, provenance is unclear, output implies live mutation, Project/sync would be unsafe, or the user cannot identify the next safe action.
+
+**中文要点：** Existing-project onboarding 先给十分钟 guided packet，但 packet 本身不是 Human acceptance。真实 trial 必须一步一步收集 Human response；缺少 response 时 helper 会 `blocked_waiting_for_human_response`，不能继续。Transcript 只能写在 isolated trial root 里面，默认不写 adopter repo、GitHub、Project、runtime、Vault/private/generated state、generated Skills 或 capability packs。`stage:*` 查不到时 fallback 到当前 durable evidence 推导出的明确 issue/PR 列表；candidate 只有 accept / skip / inspect evidence / defer，未写入 isolated ledger 前不是 authority；Project sync plan 必须显示 `not executed`。
+
+For existing GitHub-first projects, ask for a read-only backfill preview:
+
+```text
+preview existing project ledger backfill
+预览 existing project ledger backfill
+```
+
+The preview converts bounded issue/PR/comment/label/milestone/Project mirror evidence into candidate local ledger events with provenance, confidence, conflicts, manual review needs, and #266 telemetry. Candidate events are not authoritative and are kept separate from accepted local ledger state until a later reviewed migration/apply gate accepts them.
+
+**中文要点：** Backfill preview 只生成 candidate events 给 review；不会写 GitHub/Project，不会把 candidate 变成 accepted ledger state，也不会启动 #361 board 或 #362 sync。
+
+After review, apply only the approved migration decisions into the accepted local ledger:
+
+```text
+apply reviewed migration candidates
+应用 reviewed migration candidates
+```
+
+```bash
+python3 scripts/github_collaboration_helper.py --repo <owner>/<repo> local-ledger-migration-apply \
+  --ledger-root usage/local/collaboration-ledger \
+  --candidate-events-json /tmp/backfill-preview.json \
+  --decision-json /tmp/migration-decisions.json \
+  --json
+```
+
+The decision file records explicit `accept`, `reject`, or `skip` choices for candidate event ids. The helper appends deterministic local ledger events, preserves provenance and manual review notes, and is idempotent when rerun. It writes only the local ledger JSONL file; it does not mutate GitHub issues, PRs, Project fields, runtime, Vault, generated Skills, or capability packs. Local action apply (#371), Project sync apply (#372), and mixed-state recovery (#373) remain separate gates.
+
+**中文要点：** Migration apply 只把 review 后的 accept/reject/skip 决策写入本地 ledger JSONL，不改 GitHub/Project。重复运行会跳过已写入的 deterministic events；#371/#372/#373 仍是后续 gate。
+
+After a Foundry Board next action has the required local review gate, apply that local action into the ledger:
+
+```text
+apply approved local board action
+应用 approved local board action
+```
+
+```bash
+python3 scripts/github_collaboration_helper.py --repo <owner>/<repo> local-ledger-action-apply \
+  --ledger-root usage/local/collaboration-ledger \
+  --action-json /tmp/local-actions.json \
+  --json
+```
+
+The action file records approved local actions such as assignment, handoff, blocked/unblocked, review result, Architect acceptance, Human approval evidence, local closure evidence, supersession, or recovery evidence. Reviewer-, Architect-, and Human-owned actions must name the matching `required_gate` and `approved_by_role`; otherwise the helper fails closed before writing. Successful apply appends only deterministic local ledger events, reports before/after replay state, and leaves GitHub/Project sync for later gates.
+
+**中文要点：** Local action apply 只写 accepted local ledger。Reviewer/Architect/Human gate 不匹配时会 fail closed；它不会改 GitHub issue/PR、Project、runtime、Vault 或 generated artifacts。Project sync 仍属于 #372。
+
+## Controlled Ledger Dogfood
+
+For a bounded adopter trial that must demonstrate operating Local Orchestration rather than only preview text, ask for controlled ledger dogfood for the selected issue. The runner must provide an explicit isolated trial root and a Human decision JSON that contains the confirmed context, candidate `accept`/`reject`/`skip` decisions, and one approved safe local action such as a Human-gated `blocked` or `deferred` transition.
+
+The command writes only inside that trial root: accepted `local-collaboration-ledger/events.jsonl`, backfill preview, reviewed decisions, before/after replay, Foundry Board, operational cockpit JSON/HTML, dry-run Project sync plan, mixed-state recovery report, Human decision record, and audit manifest. Foundry Board and cockpit derive from accepted local ledger replay. GitHub issue/PR state is provenance and a remote reality check; GitHub Project is the remote collaboration/control surface and mirror target, never this trial's source of truth. The sync plan visibly remains `not executed`.
+
+Use the audit manifest to inspect the artifact list and cleanup guidance. To abandon a trial, remove only its explicit trial root. To correct accepted local state, append compensating or superseding events rather than rewriting ledger history. This workflow never changes adopter repo files, GitHub issues/labels/Project, runtime, Vault/private/generated state, generated Skills, or capability packs.
+
+**中文要点：** Controlled dogfood 不是只读 packet：它在隔离 trial root 内实际写入 accepted local ledger events，并用 replay 驱动 Board/Cockpit；但这不等于改 tiny-ipa、GitHub 或 Project。Human 先确认 context、candidate 决策和一个安全的 local transition。Project sync 只给 mirror/control-surface 的 `not executed` dry-run 证据。放弃 trial 时只清理该 trial root；纠正 ledger 要追加 compensating/superseding event，不能改写历史。
+
+For GitHub Project mirroring, ask for a dry-run sync plan:
+
+```text
+preview GitHub Project sync plan
+预览 GitHub Project sync plan
+```
+
+The plan reads the ledger-backed Foundry Board and reports what Project fields would change, conflicts, Human gates, unsupported actions, and readback requirements. It is dry-run only: `mutation_performed: false`, `writes_supported_now: false`, and no Project/GitHub/branch/runtime/Vault/generated writes.
+
+**中文要点：** Project sync plan 只说明如果同步会改什么、哪里冲突、哪些需要 Human gate；它不会真正改 Project、GitHub issue、branch、runtime 或 Vault。
+
+After a dry-run sync plan has been reviewed and accepted, test the apply path with the gated fake executor:
+
+```text
+apply accepted Project sync plan
+应用 accepted Project sync plan
+```
+
+```bash
+python3 scripts/github_collaboration_helper.py --repo <owner>/<repo> project-sync-apply \
+  --ledger-root usage/local/collaboration-ledger \
+  --sync-plan-json /tmp/project-sync-plan.json \
+  --acceptance-json /tmp/project-sync-acceptance.json \
+  --fake-project-write-json /tmp/fake-project-write-results.json \
+  --json
+```
+
+The acceptance file must include `accepted: true` and durable `evidence_refs`; Human-gated operations also need their exact `idempotency_key` listed in `human_approved_idempotency_keys`. This command is the V2 apply contract for Project mirror writes, but the current Core implementation uses a reviewed fake/mock executor and records local `sync_readback` evidence only. Operations that need Human approval, miss Project item identity, hit partial write/readback failures, or touch unsupported policy/schema paths remain skipped and visible. Live Project mutation requires a later explicit gate.
+
+**中文要点：** `project-sync-apply` 现在验证 accepted plan、分类 Human gate、模拟 targeted Project write/readback，并把 sync-readback 写回本地 ledger。它不做真实 Project mutation；真实写入仍需要后续明确 gate。
+
+When local ledger state and GitHub/Project evidence disagree, ask for a mixed-state recovery report:
+
+```text
+review mixed local and GitHub state
+检查 local ledger 和 GitHub/Project 的混杂状态
+```
+
+```bash
+python3 scripts/github_collaboration_helper.py --repo <owner>/<repo> mixed-state-recovery \
+  --ledger-root usage/local/collaboration-ledger \
+  --issues 370,371,372 \
+  --candidate-events-json /tmp/backfill-preview.json \
+  --project-owner @me \
+  --project-number 3 \
+  --json
+```
+
+The report classifies `local_newer`, `remote_newer`, `remote_only`, `candidate_only`, `partial_sync`, `stale_comment`, `branch_line_drift`, `superseded_work`, `degraded_project`, and `out_of_band_human_edit`. It says what is trusted, what is candidate-only, what is mirror-only, what conflicts, and which safe next action is available. It does not repair branches, rewrite ledger history, retarget PRs, mutate GitHub issues/Project fields, or guess authority from mirror state.
+
+**中文要点：** `mixed-state-recovery` 是“混杂状态解释器”，不是自动修复器。它帮助用户决定下一步是 backfill preview、migration apply、local action apply、sync plan，还是 Human/Architect gate。
+
+To inspect the full V2 local-first operation loop before dogfood, ask for the local operational cockpit:
+
+```text
+show the V2 operational cockpit
+显示 V2 本地操作 cockpit
+```
+
+```bash
+python3 scripts/github_collaboration_helper.py --repo <owner>/<repo> operational-cockpit \
+  --ledger-root usage/local/collaboration-ledger \
+  --issues 370,371,372,373 \
+  --candidate-events-json /tmp/backfill-preview.json \
+  --project-owner @me \
+  --project-number 3 \
+  --html-out /tmp/agent-foundry-operational-cockpit.html \
+  --json
+```
+
+The cockpit is a read-only local decision-support report. It renders a stable ViewModel as JSON plus optional static HTML, covering board state, item detail, migration review, local apply review, sync handoff, mixed-state recovery, health, and telemetry. It tells you when to stay local, open/check GitHub Project, run `project-sync-plan`, run accepted `project-sync-apply`, or retry degraded Project later. GitHub Project remains the richer remote collaboration/control surface; the cockpit does not replace it, run a server, auto-sync, mutate Project fields, or publish generated/runtime/capability-pack artifacts.
+
+**中文要点：** `operational-cockpit` 是只读的本地决策面板，可以输出 JSON fallback 和 static HTML。它说明 local ledger authority、Project mirror 状态、gate、conflict、health warning 和下一步安全动作；GitHub Project 仍是远端协作/control surface，不会被自动替代或自动写入。
+
 ## First-Time Setup
 
 On a new machine, use `docs/deployment.md` for the full split Core/Vault install flow. Short version:

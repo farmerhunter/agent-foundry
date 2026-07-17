@@ -468,6 +468,626 @@ owner role, and workflow route. AF15 does not implement V2, does not create a
 Foundry Board or Local Collaboration Ledger, and does not make GitHub Project
 the source of truth.
 
+## Foundry Board Preview
+
+Use `foundry-board` when a user needs a board-shaped, read-only view of current
+local-first orchestration state before sync or write-back exists.
+
+Skill-facing request:
+
+```text
+show Foundry Board
+```
+
+Debug/helper surface:
+
+```text
+agent-foundry-github-collab --repo <owner>/<repo> foundry-board \
+  --ledger-root usage/local/collaboration-ledger \
+  --issues 293,294,295 \
+  --json
+```
+
+The report is read-only. It reads accepted Local Collaboration Ledger replay as
+the board source of truth, may show imported candidate events as separate
+review state, and treats bounded issue/PR/Project reads as remote mirror or
+drift evidence only. It must keep:
+
+```text
+mutation_performed: false
+apply_supported_now: false
+full_project_scan_performed: false
+```
+
+The user-facing board should include:
+
+- lanes such as `planned`, `ready`, `in_progress`, `tester_evidence`, `review`,
+  `architect_acceptance`, `human_gate`, `blocked`, `stale_conflict`, `done`, and
+  `superseded`;
+- owner role and next owner role;
+- target branch and branch-readiness status;
+- latest evidence and evidence refs;
+- accepted local ledger, imported candidate, and remote mirror state authority;
+- confidence for migrated or inferred records;
+- Project mirror status such as `in_sync`, `drift`, `degraded`,
+  `not_configured`, or `unknown`;
+- recommended next actions and forbidden actions.
+
+GitHub issue/PR/Project evidence remains optional mirror evidence. A label,
+issue-state, or Project mismatch should appear as mirror drift or conflict
+evidence; it should not replace accepted local ledger replay and should not
+cause the helper to write Project fields, close issues, retarget PRs, or repair
+branch state. #360 candidate backfill events stay candidate/imported state until
+a later reviewed migration gate accepts them.
+
+The read-only MVP is allowed to say what a user or agent should do next through
+existing workflow gates. It is not allowed to perform live repair/apply, Project
+v2 mutation, GitHub write-back, real migration/backfill writes, branch
+repair/apply, checkout/switch, PR retarget, rebase, merge, reset, clean,
+runtime/Vault/private/generated mutation, generated Skill/adapter publish, or
+capability-pack deploy/apply.
+
+## Local Collaboration Ledger Storage And Replay
+
+Use `local-ledger-report` when V2 local-first orchestration needs to inspect
+the first durable local ledger slice without reading live GitHub.
+
+Skill-facing request:
+
+```text
+show local collaboration ledger report
+```
+
+Debug/helper surfaces:
+
+```text
+agent-foundry-github-collab local-ledger-append \
+  --ledger-root usage/local/collaboration-ledger \
+  --event-json <event.json>
+
+agent-foundry-github-collab local-ledger-report \
+  --ledger-root usage/local/collaboration-ledger \
+  --json
+```
+
+Default storage is append-only JSONL at
+`usage/local/collaboration-ledger/events.jsonl`. Tests and temporary reviews
+should pass an explicit `--ledger-root` under a temporary directory. The replay
+surface derives work-item state from assignment, dispatch, callback, review,
+acceptance, merge, closure, blocked, and sync-readback events. Every event must
+carry provenance, confidence, and explicit `unknown` or `not_available` fields
+when evidence is incomplete.
+
+The report must include #266 telemetry for event count, active event count,
+replay time, degraded evidence count, and user-facing output size. It is a
+local source-of-truth slice for replay evidence, not a GitHub sync authority.
+
+Forbidden in this MVP:
+
+- #360 existing-project backfill;
+- #361 ledger-backed Foundry Board behavior;
+- #362 Project sync-plan generation;
+- GitHub Project mutation or real GitHub write-back;
+- issue closure automation;
+- runtime/Vault/private/generated mutation;
+- generated Skill/adapter publish;
+- release/tag work;
+- memory-system work.
+
+## Existing Project Ledger Backfill Preview
+
+Before previewing an existing adopter project, present a ten-minute guided
+onboarding packet in user-facing language. The packet is the primary Human
+interface; raw JSON is debug/evidence only. The packet should say at every
+step:
+
+- what the user says to start: "onboard this existing project into V2 Local
+  Orchestration as a ten-minute read-only trial";
+- what the agent reads: bounded issues, PRs, labels, comments, branch/status,
+  durable issue/PR evidence, and relevant helper docs;
+- what may be written: temporary JSON, HTML, and isolated local ledger evidence
+  under an explicit temp root or user-supplied trial root;
+- what must not be touched: adopter repo files, live GitHub Project fields,
+  runtime/Vault/private/generated state, generated Skills, and capability
+  packs;
+- the one Human decision required now: fallback-set confirmation,
+  candidate accept/skip/inspect evidence, local apply decision, sync apply
+  choice, or final trust/readiness judgment;
+- stop/defer conditions: wrong path or branch, unclear provenance, implied live
+  mutation, unsafe Project/sync operation, or user cannot identify the next
+  safe action.
+
+Debug/helper surface:
+
+```text
+agent-foundry-github-collab --repo <owner>/<repo> guided-onboarding \
+  --issues <explicit-current-issue-list> \
+  --prs <optional-current-pr-list> \
+  --trial-root /private/tmp/agent-foundry-guided-onboarding-trial
+```
+
+The packet is not itself a valid Human trial. For #390-style acceptance, the
+trial must use response capture:
+
+```text
+agent-foundry-github-collab --repo <owner>/<repo> guided-onboarding \
+  --issues <explicit-current-issue-list> \
+  --trial-root /private/tmp/agent-foundry-guided-onboarding-trial \
+  --trial-response-json /private/tmp/agent-foundry-guided-onboarding-trial/responses.json \
+  --transcript-out /private/tmp/agent-foundry-guided-onboarding-trial/transcripts/trial.json
+```
+
+The protocol must report `blocked_waiting_for_human_response` and stop when the
+next required Human response is missing. A transcript entry is required before
+the agent treats a step as progressed. Captured responses should include the
+step number, Human choice, Human response, optional timestamp, evidence refs,
+and notes. The transcript may be written only inside the explicit trial root.
+It is local evidence, not accepted local ledger authority.
+
+Base remains the default mode for ordinary project work. Local Orchestration is
+selected only through explicit trial/user intent, local capability config,
+ledger manifest/state, an issue/task contract, or an accepted capability
+profile. Do not infer Local Orchestration from merely seeing a GitHub project or
+stage label.
+
+If a stage-based query returns no candidates, do not imply the adopter project
+must have a matching `stage:*` label. Fall back to explicit issue/PR selection
+from durable GitHub evidence and report the selected issue/PR numbers. For
+example, a renewed tiny-ipa trial should rehydrate current durable state; the
+expected readback before #390 is #276-#281 closed and #282 labeled
+`needs:user`, unless fresh GitHub evidence changes it. Do not reuse the stale
+#386 active-item snapshot.
+
+Candidate review stays non-authoritative: each candidate should show
+`accept`, `skip`, `inspect evidence`, or `defer`, and no project state changes
+until a later reviewed local apply accepts the candidate into the isolated
+ledger.
+Before local apply, show the isolated ledger location, cleanup boundary, and
+no-effect guarantee. Project sync remains dry-run decision support with
+visible `not executed` status until a separate reviewed and Human-gated apply
+path is authorized.
+
+Final structured Human evaluation is required before #390 can ask for
+acceptance again. Capture clarity of starting context, confidence in
+current-state evidence, candidate non-authority clarity, isolated
+ledger/no-effect clarity, Project sync `not executed` clarity, next-step
+actionability, remaining friction, and final decision:
+`accepted`, `accepted_with_cleanup`, `rejected`, or `deferred`.
+
+Use `local-ledger-backfill-preview` when an existing GitHub-first project needs
+candidate Local Collaboration Ledger events for review before any authoritative
+migration.
+
+Skill-facing request:
+
+```text
+preview existing project ledger backfill
+```
+
+Debug/helper surface:
+
+```text
+agent-foundry-github-collab --repo <owner>/<repo> local-ledger-backfill-preview \
+  --issues <bounded-issue-list> \
+  --prs <bounded-pr-list> \
+  --project-owner @me \
+  --project-number <number> \
+  --json
+```
+
+The preview may read bounded issue, PR, comment, label, milestone, and optional
+Project mirror evidence. It produces candidate events compatible with
+`local-ledger-append`, but does not append them. The report must separate
+accepted local ledger state from candidate imported state and surface
+contradictory history, stale labels, superseded work, missing evidence, owner
+mismatches, closed issue not mirrored Done, Project Done while issue is open,
+and degraded Project readback.
+
+The report must include #266 telemetry for source count, API attempts, degraded
+source count, candidate count, conflict count, and manual review count.
+
+Forbidden in this preview:
+
+- authoritative migration of candidate events without later approval;
+- GitHub or Project mutation;
+- branch repair/apply or PR retarget;
+- #361 ledger-backed Foundry Board behavior;
+- #362 Project sync-plan generation;
+- runtime/Vault/private/generated mutation;
+- generated publish or capability-pack deploy/apply;
+- memory-system work.
+
+Adopter-side validation note: the tiny-ipa trial validation request for #386/#387
+is recorded at
+https://github.com/farmerhunter/tiny-ipa/issues/27#issuecomment-4934556479.
+If a maintainer response arrives before review, incorporate or answer it in the
+cleanup/readiness evidence. If no response is present before final V2 readiness
+resumes, the #376 Human Decision Contract must explicitly say the adopter-side
+response is pending and ask whether Human defers that response.
+
+## Accepted Migration Apply
+
+Use `local-ledger-migration-apply` when reviewed backfill candidates have an
+explicit accept/reject/skip decision and should be recorded in the accepted
+Local Collaboration Ledger.
+
+Skill-facing request:
+
+```text
+apply reviewed migration candidates
+```
+
+Debug/helper surface:
+
+```text
+agent-foundry-github-collab --repo <owner>/<repo> local-ledger-migration-apply \
+  --ledger-root usage/local/collaboration-ledger \
+  --candidate-events-json /tmp/backfill-preview.json \
+  --decision-json /tmp/migration-decisions.json \
+  --json
+```
+
+The candidate input should come from a reviewed `local-ledger-backfill-preview`
+report or an equivalent candidate event list. The decision JSON must name
+candidate event ids and the reviewed decision for each item: `accept`, `reject`,
+or `skip`. The helper appends deterministic local ledger events, so reruns skip
+already-recorded decisions instead of duplicating state.
+
+The report must show before/after local replay summaries, appended and skipped
+decision counts, provenance, manual review notes, #266 telemetry, and
+compensating-event guidance. Accepted candidate events become local ledger
+events; rejected or skipped candidates are recorded as evidence so the review
+decision remains durable without rewriting history.
+
+Allowed write scope:
+
+- append-only local ledger JSONL under the selected `--ledger-root`;
+- no GitHub issue/PR write-back;
+- no GitHub Project mutation.
+
+Forbidden in this apply step:
+
+- #371 local action apply;
+- #372 Project sync apply;
+- #373 mixed-state recovery implementation;
+- #378 management surface implementation;
+- GitHub issue/PR mutation;
+- GitHub Project mutation;
+- issue closure automation;
+- destructive ledger history rewrite;
+- branch repair/apply or PR retarget;
+- runtime/Vault/private/generated mutation;
+- generated Skill publish or capability-pack deploy/apply;
+- main merge, release, or tag work.
+
+## Local Orchestration Action Apply
+
+Use `local-ledger-action-apply` when an approved Foundry Board next action or
+local orchestration action should become an accepted append-only Local
+Collaboration Ledger event.
+
+Skill-facing request:
+
+```text
+apply approved local board action
+```
+
+Debug/helper surface:
+
+```text
+agent-foundry-github-collab --repo <owner>/<repo> local-ledger-action-apply \
+  --ledger-root usage/local/collaboration-ledger \
+  --action-json /tmp/local-actions.json \
+  --json
+```
+
+Supported action families are `assignment`, `handoff`, `blocked`,
+`unblocked`, `review_result`, `architect_acceptance`, `human_approval`,
+`local_done`, `closure`, `supersession`, and `recovery`. The action input must
+name the work item, evidence refs when available, owner or target role when
+relevant, required gate, approving role, and capability layer when the action is
+not clearly local orchestration. `base`, `local_orchestration`, and `mixed`
+must remain explicit report values rather than branch-derived assumptions.
+
+Gate enforcement:
+
+- `review_result`, `local_done`, and `closure` require reviewer approval.
+- `architect_acceptance` requires architect approval.
+- `human_approval` requires human approval.
+- If the named `approved_by_role` does not match the required gate, the helper
+  must fail closed before appending any ledger event.
+
+The report must include before/after local replay state, appended and
+idempotently skipped events, evidence refs, owner role, required gate, residual
+risks, #266 telemetry, and forbidden remote side effects. Re-running the same
+approved actions must not duplicate local state.
+
+Forbidden in this apply step:
+
+- #372 Project sync apply;
+- #373 mixed-state recovery implementation beyond visible residual risks;
+- #378 management surface implementation;
+- GitHub issue/PR mutation;
+- GitHub Project mutation;
+- branch repair/apply or PR retarget;
+- runtime/Vault/private/generated mutation;
+- generated Skill publish or capability-pack deploy/apply;
+- main merge, release, or tag work;
+- destructive ledger history rewrite.
+
+## Controlled Ledger Dogfood
+
+Use `ledger-dogfood` only for a reviewed adopter-facing trial that needs to
+demonstrate a real local workflow transition without changing the adopter
+repository or remote collaboration state. It is a controlled local-write
+workflow, not a general migration or sync command.
+
+The runner must provide an explicit `--trial-root` and a Human decision JSON.
+That JSON must contain `human_response`, reviewed `candidate_decisions`, and
+`local_actions`; the helper blocks before ledger progression when any are
+missing. All generated artifacts, including
+`local-collaboration-ledger/events.jsonl`, remain below the explicit trial
+root.
+
+The workflow is: bounded GitHub evidence -> candidate backfill preview ->
+Human-reviewed migration decisions -> accepted append-only local events -> one
+approved local action -> replay-derived Foundry Board and operational cockpit
+-> dry-run Project mirror plan -> recovery and audit artifacts. The local ledger
+is authority for this trial. GitHub issue/PR data is provenance and a remote
+reality check. GitHub Project is the richer remote collaboration/control surface
+and optional mirror, never the local trial source of truth.
+
+The generated audit manifest includes artifact paths, stable checks, cleanup
+guidance, and forbidden-action assertions. Cleanup means abandoning only the
+explicit trial root. Corrections to accepted local state require compensating or
+superseding events; do not rewrite ledger history. Project sync remains `not
+executed`; no live GitHub or Project mutation is permitted.
+
+## Project Sync Plan Dry Run
+
+Use `project-sync-plan` when V2 local-first orchestration needs to preview how
+accepted local board/ledger state would mirror into GitHub Project fields.
+
+Skill-facing request:
+
+```text
+preview GitHub Project sync plan
+```
+
+Debug/helper surface:
+
+```text
+agent-foundry-github-collab --repo <owner>/<repo> project-sync-plan \
+  --ledger-root usage/local/collaboration-ledger \
+  --issues <bounded-issue-list> \
+  --project-owner @me \
+  --project-number <number> \
+  --json
+```
+
+The report must be dry-run only:
+
+```text
+mode: dry_run
+mutation_performed: false
+writes_supported_now: false
+```
+
+The sync plan reads the ledger-backed Foundry Board as local source of truth and
+uses GitHub Project as an optional mirror. It should describe proposed
+operations with before/after values, idempotency keys, evidence refs, gate
+classification, and readback requirements. It should classify conflicts for
+missing fields/options, ambiguous items, Project Done while issue open, issue
+closed while Project is not Done, owner mismatch, local/remote freshness,
+degraded Project readback, privacy-sensitive values, and branch-line mismatch.
+
+Human gates include built-in Project Status side effects, issue closure/reopen
+implications, privacy/security-sensitive sync, broad Project policy/schema
+changes, and any future transition from dry-run to write/apply.
+
+For adopter onboarding, `project-sync-plan` is decision support only. Live sync
+or apply remains separately reviewed and Human-authorized. Degraded Project
+visibility should be retried later or carried as `unknown` / `not_available`
+unless the current step actually requires Project write/readback evidence.
+
+Forbidden in this dry-run:
+
+- live Project mutation or GitHub write-back;
+- issue closure automation;
+- real sync/apply;
+- branch repair/apply, checkout/switch, PR retarget, rebase, merge, reset,
+  clean, force push, or destructive action;
+- runtime/Vault/private/generated mutation;
+- generated publish or capability-pack deploy/apply;
+- memory-system work;
+- release/tag work;
+- final V2 readiness closure.
+
+## Project Sync Apply Gate
+
+Use `project-sync-apply` only after a `project-sync-plan` has been reviewed and
+accepted or revalidated. This is the V2 apply contract for GitHub Project mirror
+operations, but current Core support is intentionally fake/mock backed: it
+validates the plan, classifies gates, simulates targeted Project write/readback
+results, and records local `sync_readback` evidence. It must not mutate a live
+GitHub Project unless a later explicit gate adds and approves that behavior.
+
+Skill-facing request:
+
+```text
+apply accepted Project sync plan
+```
+
+Debug/helper surface:
+
+```text
+agent-foundry-github-collab --repo <owner>/<repo> project-sync-apply \
+  --ledger-root usage/local/collaboration-ledger \
+  --sync-plan-json /tmp/project-sync-plan.json \
+  --acceptance-json /tmp/project-sync-acceptance.json \
+  --fake-project-write-json /tmp/fake-project-write-results.json \
+  --json
+```
+
+The acceptance file must include `accepted: true` and durable `evidence_refs`.
+Human-gated operations, such as built-in `Status` changes or
+privacy/security-sensitive values, stay skipped unless their exact
+`idempotency_key` appears in `human_approved_idempotency_keys`.
+
+The fake write result file is keyed by operation `idempotency_key`. Each result
+should include `status` and optional `readback` or error/degraded evidence.
+
+The apply report must include applied operations, skipped operations, Human
+gates, partial failures, appended local sync-readback events, idempotent skips,
+before/after local replay summaries, residual risks, forbidden actions, and
+#266 telemetry.
+
+Human gates remain required for:
+
+- built-in Project Status side effects;
+- issue closure/reopen implications;
+- privacy/security-sensitive Project values;
+- broad Project policy/schema changes.
+
+Forbidden in this apply step:
+
+- live issue closure/reopen automation;
+- broad Project scan by default;
+- broad Project policy/schema mutation;
+- privacy/security-sensitive Project writes without Human gate;
+- #373 mixed-state recovery implementation;
+- #378 management surface implementation;
+- branch repair/apply or PR retarget;
+- runtime/Vault/private/generated mutation;
+- generated publish or capability-pack deploy/apply;
+- main merge, release, or tag work;
+- destructive git operation, reset, clean, or force push.
+
+## Mixed-State Recovery Report
+
+Use `mixed-state-recovery` when local-first ledger state, GitHub issue/PR
+evidence, Project mirror state, candidate migration evidence, or branch-line
+evidence disagree. This is the V2 recovery UX for messy overlap between
+local-first and GitHub-first operation. It explains what is trusted, what is
+candidate-only, what is mirror-only, what conflicts, and which safe next action
+is available.
+
+Skill-facing request:
+
+```text
+review mixed local and GitHub state
+```
+
+Debug/helper surface:
+
+```text
+agent-foundry-github-collab --repo <owner>/<repo> mixed-state-recovery \
+  --ledger-root usage/local/collaboration-ledger \
+  --issues 370,371,372 \
+  --candidate-events-json /tmp/backfill-preview.json \
+  --project-owner @me \
+  --project-number 3 \
+  --json
+```
+
+The report must classify:
+
+- `local_newer`;
+- `remote_newer`;
+- `remote_only`;
+- `candidate_only`;
+- `partial_sync`;
+- `stale_comment`;
+- `branch_line_drift`;
+- `superseded_work`;
+- `degraded_project`;
+- `out_of_band_human_edit`.
+
+Recovery remains report-only. Safe next actions usually point to
+`local-ledger-backfill-preview`, `local-ledger-migration-apply`,
+`local-ledger-action-apply`, `project-sync-plan`, or a Human/Architect gate.
+The helper must not guess authority from GitHub issue labels or Project fields,
+rewrite ledger history, repair branches, retarget PRs, or mutate GitHub/Project
+state.
+
+Forbidden in this recovery step:
+
+- hidden repair;
+- guessing authority from GitHub issue or Project mirror;
+- destructive ledger cleanup or rewrite;
+- live GitHub issue/PR mutation;
+- live GitHub Project mutation;
+- branch repair/apply or PR retarget;
+- runtime/Vault/private/generated mutation;
+- generated Skill publish or capability-pack deploy/apply;
+- main merge, release, or tag work.
+
+## Operational Cockpit
+
+Use `operational-cockpit` when V2 local-first orchestration needs a dogfoodable
+management surface rather than raw JSON from separate helper commands. The
+surface is a local operational cockpit and decision-support report. It is not a
+replacement for GitHub Project; Project remains the richer remote
+collaboration/control surface and optional mirror.
+
+Skill-facing request:
+
+```text
+show the V2 operational cockpit
+```
+
+Debug/helper surface:
+
+```text
+agent-foundry-github-collab --repo <owner>/<repo> operational-cockpit \
+  --ledger-root usage/local/collaboration-ledger \
+  --issues 370,371,372,373 \
+  --candidate-events-json /tmp/backfill-preview.json \
+  --project-owner @me \
+  --project-number 3 \
+  --html-out /tmp/agent-foundry-operational-cockpit.html \
+  --json
+```
+
+The ViewModel must keep identifiers stable across CLI JSON, human-readable
+output, static HTML, and Skill-facing summaries. Required sections are:
+
+- overview;
+- board;
+- item detail;
+- migration review;
+- local apply review;
+- sync handoff;
+- mixed-state recovery;
+- health;
+- telemetry.
+
+The cockpit must tell users when to:
+
+- stay local;
+- open or check GitHub Project;
+- run `project-sync-plan`;
+- run accepted `project-sync-apply`;
+- retry degraded Project later.
+
+Report generation is no-write for product state. Writing the static HTML file is
+only the local report artifact; it must not mutate GitHub, Project, runtime,
+Vault, generated artifacts, or capability-pack state. HTML must not fetch
+external assets, enable analytics, or expose local-private paths. Degraded or
+unknown environment/version evidence must stay visible instead of being guessed
+clean.
+
+Forbidden in this cockpit step:
+
+- live GitHub Project mutation;
+- automatic sync/apply cadence;
+- GitHub issue/PR write-back as product behavior;
+- runtime/Vault/private/generated mutation;
+- generated Skill publish;
+- capability-pack deploy/apply;
+- main merge, release, or tag work;
+- branch repair/apply or destructive action.
+
 ## Dispatch Evidence Modes
 
 Dispatch evidence must name the mechanism actually used:
