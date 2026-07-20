@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import re
 from datetime import date
 from pathlib import Path
@@ -52,6 +53,14 @@ def simple_yaml_entries(index_text: str, list_key: str) -> list[dict[str, str]]:
 def active_entries(vault_root: Path, index_rel: str, list_key: str) -> list[dict[str, str]]:
     entries = simple_yaml_entries(read(vault_root / index_rel), list_key)
     return [entry for entry in entries if entry.get("status") in ACTIVE_STATUSES]
+
+
+def active_practice_records(vault_root: Path) -> dict[str, dict[str, str]]:
+    return {
+        entry["id"]: entry
+        for entry in active_entries(vault_root, "indexes/practice_index.yaml", "practices")
+        if entry.get("id") and entry.get("path")
+    }
 
 
 def inline_list(value: str) -> list[str]:
@@ -204,6 +213,77 @@ def skill_artifact_records(output_root: Path, skill_assets: list[dict[str, objec
     return records
 
 
+def semantic_route_condition(practice_id: str) -> str:
+    if practice_id == "ARCH-001":
+        return "always_preflight"
+    if practice_id == "ARCH-006":
+        return "when_scoping_mvp_or_phase"
+    return "always_for_declared_asset"
+
+
+def semantic_route_paths(adapter_id: str, slug: str, practice_id: str) -> tuple[str, str, str]:
+    if adapter_id in SKILL_FOLDER_ADAPTERS:
+        root = f"{adapter_id}/skills/{slug}"
+        return f"{root}/SKILL.md", f"{root}/references/{practice_id}.md", "skill_reference"
+    if adapter_id == "claude-code":
+        return "claude-code/CLAUDE.md", f"claude-code/references/{slug}/{practice_id}.md", "claude_reference"
+    if adapter_id == "chatgpt":
+        return "chatgpt/custom-instructions.md", f"chatgpt/knowledge/{slug}/{practice_id}.md", "knowledge_file"
+    raise ValueError(f"unsupported semantic adapter target: {adapter_id}")
+
+
+def semantic_reachability_routes(
+    vault_root: Path,
+    skill_assets: list[dict[str, object]],
+    practice_records: dict[str, dict[str, str]],
+) -> list[dict[str, str]]:
+    routes: list[dict[str, str]] = []
+    for asset in skill_assets:
+        practice_ids = asset.get("canonical_practices", [])
+        published_to = asset.get("published_to", [])
+        if not isinstance(practice_ids, list) or not isinstance(published_to, list):
+            continue
+        targets = {
+            adapter_id
+            for adapter_id in SKILL_FOLDER_ADAPTERS | {"claude-code", "chatgpt"}
+            if adapter_id in published_to
+            or (adapter_id == "trae" and TRAE_COMPATIBLE_SKILL_ADAPTERS.intersection(published_to))
+        }
+        for practice_id in practice_ids:
+            practice = practice_records.get(str(practice_id))
+            if practice is None:
+                raise ValueError(
+                    f"active skill asset {asset['id']} declares missing or non-active canonical practice {practice_id}"
+                )
+            source_path = practice["path"]
+            source = vault_root / source_path
+            if not source.is_file():
+                raise ValueError(
+                    f"active skill asset {asset['id']} canonical practice source missing: {source_path}"
+                )
+            source_sha256 = hashlib.sha256(source.read_bytes()).hexdigest()
+            for adapter_id in sorted(targets):
+                router_path, target_path, packaging = semantic_route_paths(
+                    adapter_id, str(asset["slug"]), str(practice_id)
+                )
+                routes.append(
+                    {
+                        "target": adapter_id,
+                        "asset_id": str(asset["id"]),
+                        "practice_id": str(practice_id),
+                        "source_path": source_path,
+                        "source_sha256": source_sha256,
+                        "route_kind": "reference_file",
+                        "router_path": router_path,
+                        "target_path": target_path,
+                        "declared_required": "true",
+                        "condition": semantic_route_condition(str(practice_id)),
+                        "packaging": packaging,
+                    }
+                )
+    return routes
+
+
 def manifest_text(
     active_practices: list[dict[str, str]],
     active_assets: list[dict[str, str]],
@@ -214,6 +294,7 @@ def manifest_text(
         f"updated: {date.today().isoformat()}",
         "source: selected_vault",
         "private_paths_recorded: false",
+        "semantic_reachability_manifest: semantic-reachability-manifest.yaml",
         "",
     ]
     if active_practices:
@@ -244,6 +325,34 @@ def manifest_text(
     return "\n".join(lines)
 
 
+def semantic_manifest_text(routes: list[dict[str, str]]) -> str:
+    lines = [
+        "schema_version: 1",
+        "surface: selected_output",
+        "authoritative_generated_root: true",
+        "routes:",
+    ]
+    if not routes:
+        lines[-1] = "routes: []"
+    for route in routes:
+        lines.append(f"  - target: {route['target']}")
+        for key in [
+            "asset_id",
+            "practice_id",
+            "source_path",
+            "source_sha256",
+            "route_kind",
+            "router_path",
+            "target_path",
+            "declared_required",
+            "condition",
+            "packaging",
+        ]:
+            lines.append(f"    {key}: {route[key]}")
+    lines.append("")
+    return "\n".join(lines)
+
+
 def write_manifest(output_root: Path, text: str, apply: bool) -> None:
     path = output_root / "adapter-publish-manifest.yaml"
     print(f"{'write' if apply else 'would write'}: {path}")
@@ -252,11 +361,20 @@ def write_manifest(output_root: Path, text: str, apply: bool) -> None:
         path.write_text(text, encoding="utf-8")
 
 
+def write_semantic_manifest(output_root: Path, routes: list[dict[str, str]], apply: bool) -> None:
+    path = output_root / "semantic-reachability-manifest.yaml"
+    print(f"{'write' if apply else 'would write'}: {path}")
+    if apply:
+        output_root.mkdir(parents=True, exist_ok=True)
+        path.write_text(semantic_manifest_text(routes), encoding="utf-8")
+
+
 def adapter_body(
     adapter_id: str,
     profile: dict[str, object],
     active_practices: list[dict[str, str]],
     active_assets: list[dict[str, str]],
+    semantic_routes: list[dict[str, str]],
 ) -> str:
     practice_ids = [entry["id"] for entry in active_practices]
     asset_ids = [entry["id"] for entry in active_assets]
@@ -279,7 +397,15 @@ def adapter_body(
     lines.extend(["", "## Command Vocabulary"])
     lines.extend(f"- {phrase}" for phrase in phrases if phrase)
     lines.extend(["", "## Boundary"])
-    lines.append("Full semantic regeneration from canonical sections is future generator work.")
+    lines.append("Canonical practice references are generated under the selected output root and remain downstream from the selected Vault.")
+    adapter_routes = [route for route in semantic_routes if route["target"] == adapter_id]
+    if adapter_routes:
+        lines.extend(["", "## Semantic Practice References"])
+        for route in adapter_routes:
+            lines.append(
+                f"- {route['asset_id']} -> {route['practice_id']}: `{route['target_path']}` "
+                f"({route['condition']})"
+            )
     lines.append("")
     return "\n".join(lines)
 
@@ -298,6 +424,7 @@ def write_adapter_outputs(
     output_root: Path,
     active_practices: list[dict[str, str]],
     active_assets: list[dict[str, str]],
+    semantic_routes: list[dict[str, str]],
     apply: bool,
 ) -> list[Path]:
     profiles = parse_profiles(core_root)
@@ -308,7 +435,7 @@ def write_adapter_outputs(
         outputs = list(profile.get("outputs", []))
         if not outputs:
             continue
-        text = adapter_body(adapter_id, profile, active_practices, active_assets)
+        text = adapter_body(adapter_id, profile, active_practices, active_assets, semantic_routes)
         for output in outputs:
             target = output_file(output_root, str(output))
             written.append(target)
@@ -324,7 +451,7 @@ def bullet_lines(values: object) -> list[str]:
     return [f"- {item}" for item in items] or ["- Not specified in canonical asset record."]
 
 
-def generated_skill_body(record: dict[str, object]) -> str:
+def generated_skill_body(record: dict[str, object], adapter_id: str, semantic_routes: list[dict[str, str]]) -> str:
     slug = str(record["slug"])
     title = str(record.get("title") or record["id"])
     purpose = str(record.get("purpose") or "Generated Agent Foundry runtime skill.")
@@ -375,18 +502,37 @@ def generated_skill_body(record: dict[str, object]) -> str:
         "## Canonical Practices",
         *bullet_lines(record.get("canonical_practices", [])),
         "",
+        "## Semantic Practice Routes",
+    ]
+    routes = [
+        route
+        for route in semantic_routes
+        if route["target"] == adapter_id and route["asset_id"] == str(record["id"])
+    ]
+    if routes:
+        lines.extend(
+            f"- {route['practice_id']}: read `{route['target_path']}` "
+            f"when {route['condition']}."
+            for route in routes
+        )
+    else:
+        lines.append("- No canonical practice routes are declared for this generated asset.")
+    lines.extend(
+        [
         "## Safety Boundaries",
         "- Treat the Vault YAML asset record as the source of truth.",
         "- Do not perform high-risk actions without explicit approval.",
         "- Do not mutate runtime, config, private remote, or canonical practice state unless the user explicitly approves that action.",
         "",
-    ]
+        ]
+    )
     return "\n".join(lines)
 
 
 def write_generated_skill_outputs(
     output_root: Path,
     skill_assets: list[dict[str, object]],
+    semantic_routes: list[dict[str, str]],
     apply: bool,
 ) -> list[Path]:
     written: list[Path] = []
@@ -404,7 +550,41 @@ def write_generated_skill_outputs(
             print(f"{'write' if apply else 'would write'}: {target}")
             if apply:
                 target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_text(generated_skill_body(record), encoding="utf-8")
+                target.write_text(generated_skill_body(record, adapter_id, semantic_routes), encoding="utf-8")
+    return written
+
+
+def generated_practice_reference(vault_root: Path, route: dict[str, str]) -> str:
+    source = vault_root / route["source_path"]
+    return "\n".join(
+        [
+            f"# Canonical Practice {route['practice_id']}",
+            "",
+            "Generated full reference from the selected Agent Foundry Vault.",
+            f"Asset ID: `{route['asset_id']}`.",
+            f"Canonical practice ID: `{route['practice_id']}`.",
+            f"Source path: `{route['source_path']}`.",
+            f"Source SHA-256: `{route['source_sha256']}`.",
+            "",
+            "## Canonical Practice",
+            "",
+            read(source).rstrip(),
+            "",
+        ]
+    )
+
+
+def write_semantic_reference_outputs(
+    vault_root: Path, output_root: Path, routes: list[dict[str, str]], apply: bool
+) -> list[Path]:
+    written: list[Path] = []
+    for route in routes:
+        target = output_root / route["target_path"]
+        written.append(target)
+        print(f"{'write' if apply else 'would write'}: {target}")
+        if apply:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(generated_practice_reference(vault_root, route), encoding="utf-8")
     return written
 
 
@@ -433,6 +613,7 @@ def publish(core_root: Path, vault_root: Path, output_root: Path, apply: bool) -
     active_assets = active_entries(vault_root, "indexes/asset_index.yaml", "assets")
     if not active_practices and not active_assets:
         print("Selected Vault has no active or revised practices/assets. Nothing to publish.")
+        write_semantic_manifest(output_root, [], apply)
         write_manifest(output_root, manifest_text(active_practices, active_assets, []), apply)
         print_follow_up_commands(core_root, vault_root, output_root)
         return 0
@@ -446,9 +627,18 @@ def publish(core_root: Path, vault_root: Path, output_root: Path, apply: bool) -
         return 1
 
     skill_assets = skill_asset_records(vault_root, active_assets)
+    try:
+        semantic_routes = semantic_reachability_routes(
+            vault_root, skill_assets, active_practice_records(vault_root)
+        )
+    except ValueError as error:
+        print(f"Semantic reachability publish failed: {error}")
+        return 1
     skill_artifacts = skill_artifact_records(output_root, skill_assets)
-    written = write_adapter_outputs(core_root, output_root, active_practices, active_assets, apply)
-    written.extend(write_generated_skill_outputs(output_root, skill_assets, apply))
+    written = write_adapter_outputs(core_root, output_root, active_practices, active_assets, semantic_routes, apply)
+    written.extend(write_generated_skill_outputs(output_root, skill_assets, semantic_routes, apply))
+    written.extend(write_semantic_reference_outputs(vault_root, output_root, semantic_routes, apply))
+    write_semantic_manifest(output_root, semantic_routes, apply)
     write_manifest(output_root, manifest_text(active_practices, active_assets, skill_artifacts), apply)
     print(f"Adapter publish {'wrote' if apply else 'planned'} {len(written)} files.")
     print(f"Active practices selected: {len(active_practices)}")
