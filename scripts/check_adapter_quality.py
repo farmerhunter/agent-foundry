@@ -8,6 +8,7 @@ adapter validation from selected-Vault generated output validation.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import re
 from pathlib import Path
 
@@ -157,11 +158,13 @@ def active_skill_assets(vault_root: Path) -> list[dict[str, object]]:
         record.update(
             {
                 "slug": slug_from_asset(entry),
+                "source_path": entry.get("path", ""),
                 "title": yaml_scalar(text, "title") or entry.get("title", entry["id"]),
                 "purpose": yaml_scalar(text, "purpose"),
                 "responsibility": yaml_scalar(text, "responsibility"),
                 "usage_triggers": yaml_list(text, "usage_triggers"),
                 "process": yaml_list(text, "process"),
+                "canonical_practices": yaml_list(text, "canonical_practices"),
                 "published_to": yaml_list(text, "published_to") or inline_list(entry.get("published_to", "")),
             }
         )
@@ -350,6 +353,171 @@ def check_generated_skill_artifacts(generated_root: Path, vault_root: Path, mani
     return errors
 
 
+def active_practice_records(vault_root: Path) -> dict[str, dict[str, str]]:
+    return {
+        entry["id"]: entry
+        for entry in parse_index_entries(vault_root / "indexes" / "practice_index.yaml")
+        if entry.get("status") in ACTIVE_STATUSES and entry.get("id") and entry.get("path")
+    }
+
+
+def semantic_route_paths(adapter_id: str, slug: str, practice_id: str) -> tuple[str, str, str]:
+    if adapter_id in SKILL_FOLDER_ADAPTERS:
+        root = f"{adapter_id}/skills/{slug}"
+        return f"{root}/SKILL.md", f"{root}/references/{practice_id}.md", "skill_reference"
+    if adapter_id == "claude-code":
+        return "claude-code/CLAUDE.md", f"claude-code/references/{slug}/{practice_id}.md", "claude_reference"
+    if adapter_id == "chatgpt":
+        return "chatgpt/custom-instructions.md", f"chatgpt/knowledge/{slug}/{practice_id}.md", "knowledge_file"
+    raise ValueError(f"unsupported semantic adapter target: {adapter_id}")
+
+
+def semantic_manifest_routes(path: Path) -> list[dict[str, str]]:
+    routes: list[dict[str, str]] = []
+    current: dict[str, str] | None = None
+    in_routes = False
+    for raw in read(path).splitlines():
+        line = raw.rstrip()
+        if line.startswith("routes:"):
+            in_routes = line.split(":", 1)[1].strip() != "[]"
+            continue
+        if in_routes and line and not line.startswith(" "):
+            break
+        if not in_routes:
+            continue
+        stripped = line.strip()
+        if stripped.startswith("- target:"):
+            if current:
+                routes.append(current)
+            current = {"target": stripped.split(":", 1)[1].strip().strip('"').strip("'")}
+        elif current is not None and ":" in stripped:
+            key, value = stripped.split(":", 1)
+            current[key] = value.strip().strip('"').strip("'")
+    if current:
+        routes.append(current)
+    return routes
+
+
+def contained_generated_path(generated_root: Path, relative: str) -> Path | None:
+    path = Path(relative)
+    if not relative or path.is_absolute() or ".." in path.parts:
+        return None
+    candidate = (generated_root / path).resolve()
+    try:
+        candidate.relative_to(generated_root.resolve())
+    except ValueError:
+        return None
+    return candidate
+
+
+def expected_semantic_routes(vault_root: Path) -> dict[tuple[str, str, str], dict[str, str]]:
+    practices = active_practice_records(vault_root)
+    expected: dict[tuple[str, str, str], dict[str, str]] = {}
+    for asset in active_skill_assets(vault_root):
+        practices_for_asset = asset.get("canonical_practices", [])
+        published_to = asset.get("published_to", [])
+        if not isinstance(practices_for_asset, list) or not isinstance(published_to, list):
+            continue
+        for practice_id in practices_for_asset:
+            practice = practices.get(str(practice_id))
+            if practice is None:
+                continue
+            source = vault_root / practice["path"]
+            if not source.is_file():
+                continue
+            source_sha256 = hashlib.sha256(source.read_bytes()).hexdigest()
+            for target in sorted(SKILL_FOLDER_ADAPTERS | {"claude-code", "chatgpt"}):
+                if target not in published_to and not (
+                    target == "trae" and TRAE_COMPATIBLE_SKILL_ADAPTERS.intersection(published_to)
+                ):
+                    continue
+                router_path, target_path, packaging = semantic_route_paths(target, str(asset["slug"]), str(practice_id))
+                expected[(target, str(asset["id"]), str(practice_id))] = {
+                    "source_path": practice["path"],
+                    "source_sha256": source_sha256,
+                    "router_path": router_path,
+                    "target_path": target_path,
+                    "packaging": packaging,
+                }
+    return expected
+
+
+def check_semantic_reachability(generated_root: Path, vault_root: Path, manifest: Path) -> list[str]:
+    errors: list[str] = []
+    pointer = yaml_scalar(read(manifest), "semantic_reachability_manifest")
+    if pointer != "semantic-reachability-manifest.yaml":
+        return [
+            "Selected output semantic reachability: publish manifest missing the authoritative "
+            "semantic_reachability_manifest pointer. Re-run publish_adapters.py for this generated root."
+        ]
+    semantic_path = contained_generated_path(generated_root, pointer)
+    if semantic_path is None or not semantic_path.is_file():
+        return [
+            "Selected output semantic reachability: missing semantic_reachability_manifest under the exact "
+            "--generated-root. Core adapter templates are not a substitute."
+        ]
+
+    semantic_text = read(semantic_path)
+    if yaml_scalar(semantic_text, "surface") != "selected_output" or yaml_scalar(
+        semantic_text, "authoritative_generated_root"
+    ) != "true":
+        return [
+            "Selected output semantic reachability: manifest is not marked as the authoritative "
+            "selected-output root. Re-run publish_adapters.py for the exact --generated-root."
+        ]
+
+    expected = expected_semantic_routes(vault_root)
+    routes = semantic_manifest_routes(semantic_path)
+    seen: set[tuple[str, str, str]] = set()
+    for route in routes:
+        key = (route.get("target", ""), route.get("asset_id", ""), route.get("practice_id", ""))
+        if key in seen:
+            errors.append(f"Selected output semantic reachability: duplicate mapping: {key}")
+            continue
+        seen.add(key)
+        contract = expected.get(key)
+        if contract is None:
+            errors.append(
+                "Selected output semantic reachability: dangling mapping for "
+                f"target={key[0]} asset={key[1]} practice={key[2]}"
+            )
+            continue
+        if route.get("declared_required") != "true":
+            errors.append(f"Selected output semantic reachability: required mapping not declared required: {key}")
+        if not route.get("condition") or route.get("condition") == "not_applicable":
+            errors.append(f"Selected output semantic reachability: missing conditional route: {key}")
+        if route.get("route_kind") != "reference_file":
+            errors.append(f"Selected output semantic reachability: unsupported or ID-only route kind: {key}")
+        for field in ["source_path", "source_sha256", "router_path", "target_path", "packaging"]:
+            if route.get(field) != contract[field]:
+                reason = "stale or missing provenance" if field.startswith("source_") else "target-specific packaging omission"
+                errors.append(
+                    f"Selected output semantic reachability: {reason} for {key}: "
+                    f"expected {field}={contract[field]!r}, got {route.get(field, '')!r}"
+                )
+
+        router = contained_generated_path(generated_root, route.get("router_path", ""))
+        target = contained_generated_path(generated_root, route.get("target_path", ""))
+        if router is None or not router.is_file():
+            errors.append(f"Selected output semantic reachability: missing or out-of-root router for {key}")
+        elif key[2] not in read(router) or route.get("target_path", "") not in read(router):
+            errors.append(
+                f"Selected output semantic reachability: ID-only router has no readable reference route for {key}"
+            )
+        if target is None or not target.is_file():
+            errors.append(f"Selected output semantic reachability: missing or out-of-root readable target for {key}")
+        elif key[2] not in read(target) or route.get("source_sha256", "") not in read(target):
+            errors.append(f"Selected output semantic reachability: readable target lacks provenance for {key}")
+
+    for key in expected:
+        if key not in seen:
+            errors.append(
+                "Selected output semantic reachability: missing declared practice route "
+                f"for target={key[0]} asset={key[1]} practice={key[2]}"
+            )
+    return errors
+
+
 def manifest_ids(manifest: Path, key: str) -> list[str]:
     ids: list[str] = []
     in_list = False
@@ -460,6 +628,7 @@ def check_selected_output_surface(core_root: Path, vault_root: Path, generated_r
             if phrase and phrase not in text:
                 errors.append(f"Selected output coverage: {name} generated output missing command phrase: {phrase}")
     errors.extend(check_generated_skill_artifacts(generated_root, vault_root, manifest))
+    errors.extend(check_semantic_reachability(generated_root, vault_root, manifest))
     return errors
 
 
