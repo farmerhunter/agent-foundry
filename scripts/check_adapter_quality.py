@@ -372,6 +372,12 @@ def semantic_route_paths(adapter_id: str, slug: str, practice_id: str) -> tuple[
     raise ValueError(f"unsupported semantic adapter target: {adapter_id}")
 
 
+def semantic_installed_path(adapter_id: str, slug: str, practice_id: str) -> str:
+    if adapter_id == "claude-code":
+        return f"references/{slug}/{practice_id}.md"
+    return ""
+
+
 def semantic_manifest_routes(path: Path) -> list[dict[str, str]]:
     routes: list[dict[str, str]] = []
     current: dict[str, str] | None = None
@@ -437,6 +443,7 @@ def expected_semantic_routes(vault_root: Path) -> dict[tuple[str, str, str], dic
                     "source_sha256": source_sha256,
                     "router_path": router_path,
                     "target_path": target_path,
+                    "installed_path": semantic_installed_path(target, str(asset["slug"]), str(practice_id)),
                     "packaging": packaging,
                 }
     return expected
@@ -488,7 +495,7 @@ def check_semantic_reachability(generated_root: Path, vault_root: Path, manifest
             errors.append(f"Selected output semantic reachability: missing conditional route: {key}")
         if route.get("route_kind") != "reference_file":
             errors.append(f"Selected output semantic reachability: unsupported or ID-only route kind: {key}")
-        for field in ["source_path", "source_sha256", "router_path", "target_path", "packaging"]:
+        for field in ["source_path", "source_sha256", "router_path", "target_path", "installed_path", "packaging"]:
             if route.get(field) != contract[field]:
                 reason = "stale or missing provenance" if field.startswith("source_") else "target-specific packaging omission"
                 errors.append(
@@ -500,7 +507,9 @@ def check_semantic_reachability(generated_root: Path, vault_root: Path, manifest
         target = contained_generated_path(generated_root, route.get("target_path", ""))
         if router is None or not router.is_file():
             errors.append(f"Selected output semantic reachability: missing or out-of-root router for {key}")
-        elif key[2] not in read(router) or route.get("target_path", "") not in read(router):
+        elif key[2] not in read(router) or (
+            route.get("installed_path") or route.get("target_path", "")
+        ) not in read(router):
             errors.append(
                 f"Selected output semantic reachability: ID-only router has no readable reference route for {key}"
             )
