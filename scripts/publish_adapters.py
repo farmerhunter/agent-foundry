@@ -232,6 +232,12 @@ def semantic_route_paths(adapter_id: str, slug: str, practice_id: str) -> tuple[
     raise ValueError(f"unsupported semantic adapter target: {adapter_id}")
 
 
+def semantic_installed_path(adapter_id: str, slug: str, practice_id: str) -> str:
+    if adapter_id == "claude-code":
+        return f"references/{slug}/{practice_id}.md"
+    return ""
+
+
 def semantic_reachability_routes(
     vault_root: Path,
     skill_assets: list[dict[str, object]],
@@ -276,6 +282,9 @@ def semantic_reachability_routes(
                         "route_kind": "reference_file",
                         "router_path": router_path,
                         "target_path": target_path,
+                        "installed_path": semantic_installed_path(
+                            adapter_id, str(asset["slug"]), str(practice_id)
+                        ),
                         "declared_required": "true",
                         "condition": semantic_route_condition(str(practice_id)),
                         "packaging": packaging,
@@ -344,6 +353,7 @@ def semantic_manifest_text(routes: list[dict[str, str]]) -> str:
             "route_kind",
             "router_path",
             "target_path",
+            "installed_path",
             "declared_required",
             "condition",
             "packaging",
@@ -402,8 +412,9 @@ def adapter_body(
     if adapter_routes:
         lines.extend(["", "## Semantic Practice References"])
         for route in adapter_routes:
+            locator = route["installed_path"] or route["target_path"]
             lines.append(
-                f"- {route['asset_id']} -> {route['practice_id']}: `{route['target_path']}` "
+                f"- {route['asset_id']} -> {route['practice_id']}: `{locator}` "
                 f"({route['condition']})"
             )
     lines.append("")
