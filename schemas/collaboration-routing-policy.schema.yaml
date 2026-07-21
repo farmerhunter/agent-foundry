@@ -1,0 +1,61 @@
+# Portable Collaboration Routing Policy schema.
+# This AF18 schema is advisory and runtime-neutral. It never stores provider
+# or model identifiers and does not authorize dispatch or runtime mutation.
+
+schema_version: 1
+objects:
+  PolicySet:
+    required: [schema_version, policy_id, quality_floor, automatic_budget, allowed_tiers, enforcement]
+    rules:
+      - "portable policy uses named capability and reasoning tiers, never provider or model slugs"
+      - "lower-precedence policy cannot relax Human gates, authority boundaries, or budget limits"
+  WorkUnit:
+    required: [work_unit_id, purpose, risk, ambiguity, verification_oracle, stop_conditions]
+    rules:
+      - "one bounded issue, PR, review target, experiment, or batch only"
+      - "Human-owned actions stop advisory routing until an explicit decision exists"
+  RoleContext:
+    required: [required_role, specialization_available, continuity_value, context_relevance, independence_requirement]
+    rules:
+      - "role specialization, continuity, and independence are separate inputs"
+  RuntimeCapabilities:
+    required: [observed_at, mechanisms]
+    rules:
+      - "runtime discovery is timestamped evidence, not permanent truth"
+      - "effective retained settings are unknown when unobserved"
+      - "fork and heartbeat are non-enforcing"
+      - "hook and custom-agent enforcement are unsupported in this slice"
+  RouteCandidate:
+    required: [candidate_id, topology, context_mode, eligible, expected_cost_band, expected_quality_band, confidence]
+    rules:
+      - "at most four candidates, including serial whenever it is eligible"
+      - "eligibility failures stay visible instead of being silently repaired"
+  DispatchPlan:
+    required: [route_decision, selected_candidate, explanation, runtime_mapping, reset, stop_conditions]
+    rules:
+      - "advisory only; mutation_performed and dispatch_performed must be false"
+      - "unsupported runtime paths report enforcement_not_available"
+  OverrideGrant:
+    required: [active, scope, expires_after_work_unit, reset_required]
+    rules:
+      - "an override is scoped to one work unit and never follows a target thread implicitly"
+  EvaluationRecord:
+    required: [work_unit_id, outcome, estimate_band, confidence, quality_guardrails]
+    rules:
+      - "ordinal estimates are not billing-grade token or cost claims"
+
+allowed_values:
+  capability_tier: [economy, balanced, frontier]
+  reasoning_tier: [low, medium, high]
+  topology: [serial, durable_thread, fresh_thread, fork, subagent, team, batch, portable]
+  context_mode: [fresh, compact, filtered_history, full_continuity, artifact_reference]
+  independence_requirement: [none, separate_context, separate_evidence]
+  confidence: [high, medium, low, unknown]
+  runtime_status: [supported, unsupported, unknown, degraded, not_available]
+  effective_configuration: [observed, unknown, not_available]
+  route_decision: [no_dispatch, dispatch_advisory, human_stop]
+
+forbidden:
+  - "provider, provider_slug, model, or model_slug fields in PolicySet"
+  - "dispatch, thread, subagent, automation, runtime, config, hook, custom-agent, Vault, generated, or Project mutation"
+  - "claims that omitted runtime envelope fields reveal effective retained settings"
