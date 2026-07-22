@@ -100,11 +100,14 @@ slice owns any approved policy-record write/readback path.
 AF18's optional Codex adapter is a separate dry-run projection at
 `scripts/plan_codex_route_adapter.py`. It consumes a portable plan and a
 timestamped current Codex tool-schema observation supplied by the executing
-host. The observation must carry a host-collected mode, runtime identity,
-traceable discovery evidence, and a digest of the observed tools; fixture,
-stale, absent, or untrusted observations remain unknown and cannot make a
-route dry-run-ready. Codex-specific fields and model names stay adapter-local;
-they are never written into `collaboration-routing-policy.schema.yaml`.
+host. A caller-provided JSON observation is only reported evidence: it cannot
+make a route dry-run-ready unless the adapter can verify a runtime-owned
+capture with runtime identity, resolvable discovery evidence, and a digest of
+the observed tools. The current pilot has no such capture producer, so it
+fails closed with one recovery action rather than trusting fixture, stale,
+absent, untrusted, or self-asserted host-collected input. Codex-specific
+fields and model names stay adapter-local; they are never written into
+`collaboration-routing-policy.schema.yaml`.
 
 The adapter maps durable routes to `send_message_to_thread`, fresh routes to
 `create_thread`, and subagent routes to `spawn_agent` only when the observed

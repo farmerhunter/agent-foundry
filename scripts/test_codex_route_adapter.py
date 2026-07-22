@@ -82,7 +82,7 @@ def provenance_recovery(output: dict, status: str) -> bool:
         and output["adapter_plan"]["explicit_envelope"] == {}
         and output["schema_provenance"]["status"] == status
         and len(conversation["attention"]) == 1
-        and conversation["next_action"] == "Collect a current host-observed Codex tool schema before proposing any envelope."
+        and conversation["next_action"] == "Obtain a verified runtime-owned Codex schema capture before proposing any envelope."
         and output["mutation_performed"] is False
         and output["dispatch_performed"] is False
     )
@@ -105,40 +105,14 @@ def expect(name: str, condition: bool, detail: object, errors: list[str]) -> Non
 
 def main() -> int:
     errors: list[str] = []
-    base = input_for(portable())
+    base = input_for(portable("subagent"))
     code, output = run(base)
-    expect("fresh-host-observation-explicit-envelope", code == 0 and output["adapter_plan"]["adapter_decision"] == "dry_run_ready" and output["schema_provenance"]["status"] == "current" and output["adapter_plan"]["explicit_envelope"] == {"model": "gpt-5.4", "thinking": "medium"}, output, errors)
-    expect("fresh-no-write", code == 0 and output["mutation_performed"] is False and output["dispatch_performed"] is False and output["adapter_plan"]["lifecycle_evidence"]["close_archive_resume"] == "not_executed_dry_run_only", output, errors)
-
-    durable = input_for(portable("durable_thread"))
-    code, output = run(durable)
-    expect("durable-envelope", code == 0 and output["adapter_plan"]["tool_call_proposed"] == "send_message_to_thread" and output["adapter_plan"]["explicit_envelope"]["thinking"] == "medium", output, errors)
-
-    subagent = input_for(portable("subagent"))
-    code, output = run(subagent)
-    expect("subagent-envelope", code == 0 and output["adapter_plan"]["explicit_envelope"] == {"model": "gpt-5.4", "reasoning_effort": "medium"}, output, errors)
-
-    fork = input_for(portable("fork"))
-    code, output = run(fork)
-    expect("fork-unsupported", code == 0 and output["adapter_plan"]["adapter_decision"] == "unsupported" and output["mutation_performed"] is False, output, errors)
-
-    omitted = input_for(portable("durable_thread", explicit=False), adapter_envelopes={})
-    code, output = run(omitted)
-    expect("omitted-inheritance-human-stop", code == 0 and output["adapter_plan"]["adapter_decision"] == "human_stop" and output["conversation_projection"]["requested_vs_observable"]["observable"]["effective_configuration"] == "unknown", output, errors)
-
-    stale = input_for(portable("durable_thread"), adapter_envelopes={})
-    code, output = run(stale)
-    expect("stale-explicit-envelope-unsupported", code == 0 and output["adapter_plan"]["adapter_decision"] == "unsupported", output, errors)
+    expect("runtime-capture-unavailable", code == 0 and provenance_recovery(output, "unknown") and output["schema_provenance"]["evidence_ref_status"] == "unverified", output, errors)
+    expect("runtime-capture-no-write", code == 0 and output["mutation_performed"] is False and output["dispatch_performed"] is False and output["adapter_plan"]["lifecycle_evidence"]["close_archive_resume"] == "not_executed_dry_run_only", output, errors)
 
     no_dispatch = input_for(portable(decision="no_dispatch"))
     code, output = run(no_dispatch)
     expect("no-dispatch-remains-no-call", code == 0 and output["adapter_plan"]["adapter_decision"] == "no_adapter_dispatch" and output["adapter_plan"]["tool_call_proposed"] == "not_available", output, errors)
-
-    unsupported = schemas()
-    unsupported["tools"]["create_thread"]["status"] = "unsupported"
-    unsupported["provenance"]["schema_digest"] = digest(unsupported["tools"])
-    code, output = run(input_for(portable(), observation=unsupported))
-    expect("unsupported-runtime-visible", code == 0 and output["adapter_plan"]["adapter_decision"] == "unsupported" and "is unsupported" in output["conversation_projection"]["attention"][0], output, errors)
 
     absent = input_for(portable("subagent"))
     absent.pop("schema_observation")
@@ -159,6 +133,19 @@ def main() -> int:
     fixture_spawn["provenance"]["collection_mode"] = "fixture"
     code, output = run(input_for(portable("subagent"), observation=fixture_spawn))
     expect("spawn-agent-fixture-only-observation", code == 0 and provenance_recovery(output, "untrusted"), output, errors)
+
+    forged_spawn = schemas()
+    forged_spawn["runtime_id"] = "claimed-current-runtime"
+    forged_spawn["provenance"]["evidence_ref"] = "https://example.invalid/forged-current-schema"
+    context = adapter_context()
+    context["runtime_id"] = "claimed-current-runtime"
+    code, output = run({
+        "portable_plan": portable("subagent"),
+        "schema_observation": forged_spawn,
+        "adapter_context": context,
+        "adapter_envelopes": envelopes(),
+    })
+    expect("spawn-agent-forged-host-collected-is-unverified", code == 0 and provenance_recovery(output, "unknown") and output["schema_provenance"]["evidence_ref_status"] == "unverified", output, errors)
 
     if errors:
         print("\n".join(errors), file=sys.stderr)

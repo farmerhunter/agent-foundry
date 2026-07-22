@@ -78,7 +78,16 @@ def validate_observation(root: dict[str, Any]) -> tuple[dict[str, Any] | None, d
     age_seconds = abs((evaluated_at - observed_at).total_seconds())
     if age_seconds > max_age:
         return None, {"status": "stale", "reason": f"schema observation is stale by {int(age_seconds)} seconds"}
-    return observation, {"status": "current", "reason": "host-collected current schema observation validated", "age_seconds": int(age_seconds)}
+    # This JSON-only adapter has no runtime-owned schema capture or verifier.
+    # Caller-provided fields can be internally consistent without proving the
+    # executing host currently exposes the reported tools.
+    return None, {
+        "status": "unknown",
+        "reason": "runtime-owned Codex schema capture is unavailable; caller-supplied observation is unverified",
+        "evidence_ref": provenance["evidence_ref"],
+        "evidence_ref_status": "unverified",
+        "reported_age_seconds": int(age_seconds),
+    }
 
 
 def tool_observation(schema: dict[str, Any], tool_name: str) -> dict[str, Any]:
@@ -158,7 +167,7 @@ def project(root: dict[str, Any]) -> dict[str, Any]:
     if schema is None:
         return output(
             portable, topology, None, "unknown", [provenance["reason"]],
-            "Collect a current host-observed Codex tool schema before proposing any envelope.", provenance=provenance,
+            "Obtain a verified runtime-owned Codex schema capture before proposing any envelope.", provenance=provenance,
         )
     tool_name, required_fields = TOPOLOGY_TO_TOOL[topology]
     observed = tool_observation(schema, tool_name)
