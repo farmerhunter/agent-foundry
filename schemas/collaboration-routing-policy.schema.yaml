@@ -9,11 +9,14 @@ objects:
     rules:
       - "portable policy uses named capability and reasoning tiers, never provider or model slugs"
       - "lower-precedence policy cannot relax Human gates, authority boundaries, or budget limits"
+      - "effective policy precedence is current-work-unit Human grant, then project record, then personal record, then unsaved normal default"
+      - "invalid, missing, or drifted records remain visible and are never represented as valid persisted policy"
   WorkUnit:
     required: [work_unit_id, purpose, risk, ambiguity, verification_oracle, stop_conditions]
     rules:
       - "one bounded issue, PR, review target, experiment, or batch only"
       - "Human-owned actions stop advisory routing until an explicit decision exists"
+      - "task_class is routine, standard, complex, or human_owned; any correction is bounded to one work unit and resets afterward"
   RoleContext:
     required: [required_role, specialization_available, continuity_value, context_relevance, independence_requirement]
     rules:
@@ -35,6 +38,13 @@ objects:
     rules:
       - "advisory only; mutation_performed and dispatch_performed must be false"
       - "unsupported runtime paths report enforcement_not_available"
+  ConversationProjection:
+    required: [effective_policy, work_unit, recommendation, runtime_projection, attention, evidence, next_action]
+    rules:
+      - "primary fields are compact conversation guidance; JSON stays secondary technical evidence"
+      - "routine serial/no_dispatch paths emit no separate marker unless attention or a material correction exists"
+      - "runtime projection distinguishes requested abstract tier from observable, unknown, or unsupported runtime configuration"
+      - "explicit set up collaboration policy intent is a no-write handoff to the later lifecycle slice"
   OverrideGrant:
     required: [active, scope, expires_after_work_unit, reset_required]
     rules:
@@ -54,8 +64,12 @@ allowed_values:
   runtime_status: [supported, unsupported, unknown, degraded, not_available]
   effective_configuration: [observed, unknown, not_available]
   route_decision: [no_dispatch, dispatch_advisory, human_stop]
+  policy_profile: [economy, normal, high_performance]
+  policy_validity: [valid, invalid, drifted, missing, unsaved_default]
+  task_class: [routine, standard, complex, human_owned]
 
 forbidden:
   - "provider, provider_slug, model, or model_slug fields in PolicySet"
   - "dispatch, thread, subagent, automation, runtime, config, hook, custom-agent, Vault, generated, or Project mutation"
   - "claims that omitted runtime envelope fields reveal effective retained settings"
+  - "policy record writes, readback writes, telemetry persistence, monitoring, dashboards, or report products in this advisory planner"

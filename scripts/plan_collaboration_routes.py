@@ -11,6 +11,8 @@ from typing import Any
 
 CAPABILITY_TIERS = {"economy", "balanced", "frontier"}
 REASONING_TIERS = {"low", "medium", "high"}
+POLICY_PROFILES = {"economy", "normal", "high_performance"}
+TASK_CLASSES = {"routine", "standard", "complex", "human_owned"}
 RUNTIME_STATUSES = {"supported", "unsupported", "unknown", "degraded", "not_available"}
 TOPOLOGY_MECHANISMS = {
     "durable_thread": "send_message_to_thread",
@@ -78,7 +80,114 @@ def validate_input(root: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]
         fail("role_context.independence_requirement is invalid")
     if not isinstance(runtime.get("mechanisms"), dict):
         fail("runtime_capabilities.mechanisms must be an object")
+    if not isinstance(root.get("policy_sources", {}), dict):
+        fail("policy_sources must be an object")
     return policy, work, role, runtime
+
+
+def validate_policy(policy: dict[str, Any]) -> None:
+    forbidden = nested_forbidden_keys(policy)
+    if forbidden:
+        fail(f"portable policy forbids provider/model identifiers: {', '.join(forbidden)}")
+    allowed = policy.get("allowed_tiers", {})
+    if not set(allowed.get("capability", [])).issubset(CAPABILITY_TIERS):
+        fail("policy_set allowed capability tiers are invalid")
+    if not set(allowed.get("reasoning", [])).issubset(REASONING_TIERS):
+        fail("policy_set allowed reasoning tiers are invalid")
+
+
+def resolve_policy(root: dict[str, Any], fallback_policy: dict[str, Any]) -> dict[str, Any]:
+    sources = root.get("policy_sources", {})
+    checks: list[dict[str, Any]] = []
+    selected: dict[str, Any] | None = None
+    for source_name in ("current_work_unit_grant", "project", "personal"):
+        record = sources.get(source_name)
+        if record is None:
+            checks.append({"source": source_name, "validity": "missing"})
+            continue
+        if not isinstance(record, dict):
+            checks.append({"source": source_name, "validity": "invalid", "reason": "record is not an object"})
+            continue
+        validity = record.get("validity", "invalid")
+        profile = record.get("profile")
+        fingerprint = record.get("fingerprint")
+        if validity != "valid" or profile not in POLICY_PROFILES or not isinstance(fingerprint, str) or not fingerprint:
+            checks.append({"source": source_name, "validity": validity if validity in {"invalid", "drifted", "missing"} else "invalid", "reason": "profile or fingerprint is unavailable"})
+            continue
+        source_policy = record.get("policy_set", fallback_policy)
+        if not isinstance(source_policy, dict):
+            checks.append({"source": source_name, "validity": "invalid", "reason": "policy_set is not an object"})
+            continue
+        validate_policy(source_policy)
+        checks.append({"source": source_name, "validity": "valid", "fingerprint": fingerprint})
+        if selected is None:
+            selected = {
+                "profile": profile,
+                "source": source_name,
+                "validity": "valid",
+                "fingerprint_or_unsaved_default": fingerprint,
+                "policy_set": source_policy,
+            }
+    if selected is not None:
+        selected["source_checks"] = checks
+        return selected
+    return {
+        "profile": "normal",
+        "source": "unsaved_normal_default",
+        "validity": "unsaved_default",
+        "fingerprint_or_unsaved_default": "unsaved-normal-default",
+        "policy_set": fallback_policy,
+        "source_checks": checks,
+    }
+
+
+def resolve_task_class(work: dict[str, Any]) -> tuple[str, dict[str, Any], str | None]:
+    task_class = work.get("task_class", "standard")
+    if task_class not in TASK_CLASSES:
+        fail("work_unit.task_class is invalid")
+    signals = work.get("material_signals", [])
+    if not isinstance(signals, list) or not all(isinstance(signal, str) and signal for signal in signals):
+        fail("work_unit.material_signals must be a list of strings")
+    correction = work.get("task_class_correction")
+    state = {"applied": False, "bounded_to_work_unit": True, "material_signals": signals[:3]}
+    if correction is None:
+        return task_class, state, None
+    if not isinstance(correction, dict):
+        fail("work_unit.task_class_correction must be an object")
+    corrected_class = correction.get("task_class")
+    if corrected_class not in TASK_CLASSES:
+        return task_class, state, "Task-class correction is invalid; inspect and correct the current work-unit input"
+    if correction.get("scope") != work["work_unit_id"] or correction.get("expires_after_work_unit") is not True:
+        return task_class, state, "Task-class correction is not bounded to this work unit; Human decision required"
+    state.update({"applied": True, "from": task_class, "to": corrected_class, "bounded_to_work_unit": True})
+    return corrected_class, state, None
+
+
+def profile_tier(policy: dict[str, Any], profile: str, task_class: str, signal_count: int, root: dict[str, Any]) -> tuple[str, str, dict[str, Any], str | None]:
+    thresholds = policy.get("material_thresholds", {})
+    if not isinstance(thresholds, dict):
+        thresholds = {}
+    economy_complex = thresholds.get("economy_complex", 2)
+    high_performance_complex = thresholds.get("high_performance_complex", 1)
+    reset = {"required": True, "persists": False, "after_work_unit": True}
+    if task_class == "human_owned":
+        return "balanced", "medium", reset, "Human-owned task class requires a Human decision"
+    if task_class == "routine":
+        return "economy", "low", reset, None
+    if task_class == "standard":
+        return ("economy", "low", reset, None) if profile == "economy" else ("balanced", "medium", reset, None)
+    if profile == "economy":
+        return ("balanced", "medium", reset, None) if signal_count >= economy_complex else ("economy", "low", reset, None)
+    if profile == "high_performance" and signal_count >= high_performance_complex:
+        return "frontier", "high", reset, None
+    attempt = root.get("attempt_state", {})
+    if isinstance(attempt, dict) and attempt.get("outcome") == "escalation_candidate":
+        if not attempt.get("evidence"):
+            return "balanced", "medium", reset, "Escalation lacks explicit evidence"
+        if not isinstance(attempt.get("escalation_count", 0), int) or attempt.get("escalation_count", 0) >= policy.get("automatic_budget", {}).get("max_escalations_per_work_unit", 0):
+            return "balanced", "medium", reset, "Escalation budget exhausted; Human decision required"
+        return "frontier", "high", reset, None
+    return "balanced", "medium", reset, None
 
 
 def mechanism(runtime: dict[str, Any], name: str) -> dict[str, Any]:
@@ -94,26 +203,6 @@ def mechanism(runtime: dict[str, Any], name: str) -> dict[str, Any]:
         "supports_explicit_envelope": value.get("supports_explicit_envelope", False) is True,
         "effective_configuration": value.get("effective_configuration", "unknown"),
     }
-
-
-def escalation(policy: dict[str, Any], root: dict[str, Any]) -> tuple[str, str, dict[str, Any], str | None]:
-    attempt = root.get("attempt_state", {})
-    if not isinstance(attempt, dict):
-        attempt = {}
-    state = attempt.get("outcome", "planned")
-    count = attempt.get("escalation_count", 0)
-    max_count = policy.get("automatic_budget", {}).get("max_escalations_per_work_unit", 0)
-    if state == "human_owned":
-        return "balanced", "medium", {"required": True, "persists": False}, "Human-owned action requires a Human decision"
-    if state == "escalation_candidate":
-        if not attempt.get("evidence"):
-            return "balanced", "medium", {"required": True, "persists": False}, "Escalation lacks explicit evidence"
-        if not isinstance(count, int) or count >= max_count:
-            return "balanced", "medium", {"required": True, "persists": False}, "Escalation budget exhausted; Human decision required"
-        return "frontier", "high", {"required": True, "persists": False, "after_work_unit": True}, None
-    if state == "downgrade_candidate":
-        return "economy", "low", {"required": True, "persists": False, "after_work_unit": True}, None
-    return "balanced", "medium", {"required": True, "persists": False, "after_work_unit": True}, None
 
 
 def candidate(
@@ -204,16 +293,71 @@ def validate_override(root: dict[str, Any], work: dict[str, Any]) -> tuple[dict[
     return normalized, None
 
 
+def conversation_projection(policy_resolution: dict[str, Any], task_class: str, task_state: dict[str, Any], decision: str, selected: dict[str, Any] | None, candidates: list[dict[str, Any]], stops: list[str], tier: str, reasoning: str, setup_requested: bool) -> dict[str, Any]:
+    source_attention = [check for check in policy_resolution["source_checks"] if check["validity"] in {"invalid", "drifted"}]
+    observed_candidate = selected or next((item for item in candidates if item["topology"] != "serial"), None)
+    runtime_mapping = observed_candidate.get("runtime_mapping") if observed_candidate else {"status": "not_available", "effective_configuration": "unknown", "enforcement": "not_available"}
+    attention = list(stops)
+    if source_attention:
+        attention.append("One or more explicit policy sources are invalid or drifted; no persisted policy is assumed valid")
+    if decision != "no_dispatch" and (runtime_mapping.get("status") != "supported" or runtime_mapping.get("effective_configuration") != "observed"):
+        attention.append("Runtime projection is requested versus observable evidence; retained settings are not assumed")
+    if setup_requested:
+        next_action = "Set up collaboration policy requires the later lifecycle write/readback flow; this planner will not write a record"
+    elif decision == "human_stop":
+        next_action = "Provide the single Human decision or inspect the invalid policy source before continuing"
+    elif source_attention:
+        next_action = "Inspect the invalid or drifted policy source; ordinary work may continue only with the labelled unsaved normal default"
+    elif decision == "no_dispatch":
+        next_action = "Continue serial work; no dispatch action is requested"
+    else:
+        next_action = "Review the advisory route before any later runtime adapter action"
+    emit = not (task_class == "routine" and decision == "no_dispatch" and not attention and not task_state["applied"])
+    return {
+        "effective_policy": {
+            "profile": policy_resolution["profile"],
+            "source": policy_resolution["source"],
+            "validity": policy_resolution["validity"],
+            "fingerprint_or_unsaved_default": policy_resolution["fingerprint_or_unsaved_default"],
+        },
+        "work_unit": {"task_class": task_class, "material_signals": task_state["material_signals"], "correction": task_state},
+        "recommendation": {
+            "route_decision": decision,
+            "role": selected.get("topology") if selected else "not_available",
+            "topology": selected.get("topology") if selected else "not_available",
+            "context_mode": selected.get("context_mode") if selected else "not_available",
+            "abstract_tier": {"capability": tier, "reasoning": reasoning},
+        },
+        "runtime_projection": {
+            "requested": {"capability_tier": tier, "reasoning_tier": reasoning},
+            "observable": {
+                "status": runtime_mapping.get("status", "not_available"),
+                "effective_configuration": runtime_mapping.get("effective_configuration", "unknown"),
+                "enforcement": runtime_mapping.get("enforcement", "not_available"),
+            },
+        },
+        "attention": attention,
+        "evidence": {"policy_source_checks": policy_resolution["source_checks"], "json_is_secondary_debug": True},
+        "next_action": next_action,
+        "policy_setup_intent": {"requested": setup_requested, "apply_supported_now": False, "write_performed": False},
+        "emit_compact_marker": emit,
+        "recovery": {"writes_performed": False, "retains_prior_valid_policy": policy_resolution["source"] in {"current_work_unit_grant", "project", "personal"}},
+    }
+
+
 def plan(root: dict[str, Any]) -> dict[str, Any]:
     policy, work, role, runtime = validate_input(root)
+    policy_resolution = resolve_policy(root, policy)
+    policy = policy_resolution["policy_set"]
+    task_class, task_state, correction_stop = resolve_task_class(work)
     override, override_stop = validate_override(root, work)
-    tier, reasoning, reset, early_stop = escalation(policy, root)
+    tier, reasoning, reset, early_stop = profile_tier(policy, policy_resolution["profile"], task_class, len(task_state["material_signals"]), root)
     human_actions = work.get("human_owned_actions", [])
     if not isinstance(human_actions, list):
         fail("work_unit.human_owned_actions must be a list")
-    if human_actions or work.get("requires_human_decision") is True or early_stop or override_stop:
-        reason = early_stop or override_stop or "Human-owned action requires a Human decision"
-        return result(root, [], "human_stop", None, [reason], reset, tier, reasoning, override)
+    if human_actions or work.get("requires_human_decision") is True or early_stop or override_stop or correction_stop:
+        reason = early_stop or override_stop or correction_stop or "Human-owned action requires a Human decision"
+        return result(root, policy_resolution, task_class, task_state, [], "human_stop", None, [reason], reset, tier, reasoning, override)
 
     required_independence = role.get("independence_requirement", "none")
     envelope_required = work.get("requires_explicit_envelope", False) is True
@@ -251,16 +395,16 @@ def plan(root: dict[str, Any]) -> dict[str, Any]:
     candidates = candidates[:4]
     eligible = [item for item in candidates if item["eligible"]]
     if not eligible:
-        return result(root, candidates, "human_stop", None, ["No route meets the authority, evidence, and runtime quality floor."], reset, tier, reasoning, override)
+        return result(root, policy_resolution, task_class, task_state, candidates, "human_stop", None, ["No route meets the authority, evidence, and runtime quality floor."], reset, tier, reasoning, override)
     material_benefit = any((role.get("specialization_available") is True, continuity in {"medium", "high"} and relevance in {"medium", "high"}, required_independence != "none", work.get("safe_parallelism") is True))
     selected = sorted(eligible, key=lambda item: (COST_RANK[item["expected_cost_band"]], -{"low": 1, "medium": 2, "high": 3}[item["expected_quality_band"]], item["candidate_id"]))[0]
     decision = "dispatch_advisory" if material_benefit and selected["topology"] != "serial" else "no_dispatch"
     if decision == "no_dispatch":
         selected = next(item for item in eligible if item["topology"] == "serial")
-    return result(root, candidates, decision, selected, [], reset, tier, reasoning, override)
+    return result(root, policy_resolution, task_class, task_state, candidates, decision, selected, [], reset, tier, reasoning, override)
 
 
-def result(root: dict[str, Any], candidates: list[dict[str, Any]], decision: str, selected: dict[str, Any] | None, stops: list[str], reset: dict[str, Any], tier: str, reasoning: str, override: dict[str, Any]) -> dict[str, Any]:
+def result(root: dict[str, Any], policy_resolution: dict[str, Any], task_class: str, task_state: dict[str, Any], candidates: list[dict[str, Any]], decision: str, selected: dict[str, Any] | None, stops: list[str], reset: dict[str, Any], tier: str, reasoning: str, override: dict[str, Any]) -> dict[str, Any]:
     runtime = root["runtime_capabilities"]
     confidence = "low" if any(item.get("runtime_mapping", {}).get("effective_configuration") == "unknown" for item in candidates) else "medium"
     return {
@@ -269,6 +413,8 @@ def result(root: dict[str, Any], candidates: list[dict[str, Any]], decision: str
         "role_context": root["role_context"],
         "runtime_capabilities": {"observed_at": runtime.get("observed_at", "not_available"), "mechanisms": runtime.get("mechanisms", {})},
         "runtime_limitations": runtime_limitations(runtime),
+        "policy_resolution": {key: value for key, value in policy_resolution.items() if key != "policy_set"},
+        "conversation_projection": conversation_projection(policy_resolution, task_class, task_state, decision, selected, candidates, stops, tier, reasoning, root.get("policy_setup_requested") is True),
         "route_candidates": candidates,
         "dispatch_plan": {
             "route_decision": decision,

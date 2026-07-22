@@ -51,7 +51,7 @@ def expect(name: str, condition: bool, detail: object) -> list[str]:
 def main() -> int:
     errors: list[str] = []
     schema = SCHEMA.read_text(encoding="utf-8")
-    for anchor in ("PolicySet", "WorkUnit", "RoleContext", "RuntimeCapabilities", "RouteCandidate", "DispatchPlan", "OverrideGrant", "EvaluationRecord", "provider, provider_slug, model, or model_slug"):
+    for anchor in ("PolicySet", "WorkUnit", "RoleContext", "RuntimeCapabilities", "RouteCandidate", "DispatchPlan", "OverrideGrant", "EvaluationRecord", "ConversationProjection", "policy_profile", "task_class", "provider, provider_slug, model, or model_slug"):
         errors.extend(expect(f"schema-{anchor}", anchor in schema, "missing schema anchor"))
 
     no_dispatch = base_fixture()
@@ -61,6 +61,57 @@ def main() -> int:
         errors.extend(expect("no-dispatch", output["dispatch_plan"]["route_decision"] == "no_dispatch", output))
         errors.extend(expect("no-mutation", output["mutation_performed"] is False and output["dispatch_performed"] is False, output))
         errors.extend(expect("candidate-limit", len(output["route_candidates"]) <= 4, output))
+        projection = output["conversation_projection"]
+        errors.extend(expect("unsaved-normal-default", projection["effective_policy"] == {"profile": "normal", "source": "unsaved_normal_default", "validity": "unsaved_default", "fingerprint_or_unsaved_default": "unsaved-normal-default"}, projection))
+
+    routine = base_fixture()
+    routine["work_unit"].update({"task_class": "routine", "material_signals": []})
+    code, output = run_fixture(routine)
+    if code == 0:
+        errors.extend(expect("routine-quiet", output["conversation_projection"]["emit_compact_marker"] is False and output["conversation_projection"]["next_action"] == "Continue serial work; no dispatch action is requested", output))
+
+    setup_intent = base_fixture()
+    setup_intent["policy_setup_requested"] = True
+    code, output = run_fixture(setup_intent)
+    if code == 0:
+        intent = output["conversation_projection"]["policy_setup_intent"]
+        errors.extend(expect("setup-intent-no-write", intent == {"requested": True, "apply_supported_now": False, "write_performed": False} and output["conversation_projection"]["next_action"].startswith("Set up collaboration policy"), output))
+
+    material = base_fixture()
+    material["work_unit"].update({"task_class": "complex", "material_signals": ["cross_boundary", "contradictory_evidence"], "task_class_correction": {"task_class": "complex", "scope": "AF18-fixture", "expires_after_work_unit": True}})
+    material["policy_sources"] = {"personal": {"validity": "valid", "profile": "high_performance", "fingerprint": "sha256:personal", "policy_set": material["policy_set"]}}
+    code, output = run_fixture(material)
+    if code == 0:
+        projection = output["conversation_projection"]
+        errors.extend(expect("material-correction", projection["work_unit"]["correction"]["applied"] is True and projection["recommendation"]["abstract_tier"] == {"capability": "frontier", "reasoning": "high"}, output))
+        errors.extend(expect("material-marker", projection["emit_compact_marker"] is True, projection))
+
+    retained = base_fixture()
+    retained["policy_sources"] = {
+        "project": {"validity": "drifted", "profile": "high_performance", "fingerprint": "sha256:drifted"},
+        "personal": {"validity": "valid", "profile": "economy", "fingerprint": "sha256:prior", "policy_set": retained["policy_set"]},
+    }
+    code, output = run_fixture(retained)
+    if code == 0:
+        projection = output["conversation_projection"]
+        errors.extend(expect("prior-policy-retention", projection["effective_policy"]["source"] == "personal" and projection["effective_policy"]["fingerprint_or_unsaved_default"] == "sha256:prior", output))
+        errors.extend(expect("drifted-source-visible", any(item["validity"] == "drifted" for item in projection["evidence"]["policy_source_checks"]) and projection["recovery"]["writes_performed"] is False, output))
+
+    invalid = base_fixture()
+    invalid["policy_sources"] = {"project": {"validity": "invalid", "profile": "normal"}}
+    code, output = run_fixture(invalid)
+    if code == 0:
+        errors.extend(expect("invalid-source-unsaved-recovery", output["conversation_projection"]["effective_policy"]["source"] == "unsaved_normal_default" and any("invalid or drifted" in attention for attention in output["conversation_projection"]["attention"]), output))
+
+    precedence = base_fixture()
+    precedence["policy_sources"] = {
+        "current_work_unit_grant": {"validity": "valid", "profile": "high_performance", "fingerprint": "sha256:grant", "policy_set": precedence["policy_set"]},
+        "project": {"validity": "valid", "profile": "economy", "fingerprint": "sha256:project", "policy_set": precedence["policy_set"]},
+        "personal": {"validity": "valid", "profile": "normal", "fingerprint": "sha256:personal", "policy_set": precedence["policy_set"]},
+    }
+    code, output = run_fixture(precedence)
+    if code == 0:
+        errors.extend(expect("policy-precedence", output["conversation_projection"]["effective_policy"]["source"] == "current_work_unit_grant" and output["conversation_projection"]["effective_policy"]["fingerprint_or_unsaved_default"] == "sha256:grant", output))
 
     durable = base_fixture()
     durable["role_context"].update({"continuity_value": "high", "context_relevance": "high"})
@@ -96,6 +147,14 @@ def main() -> int:
     code, output = run_fixture(omitted)
     if code == 0:
         errors.extend(expect("omitted-envelope-human-stop", output["dispatch_plan"]["route_decision"] == "human_stop", output))
+        errors.extend(expect("omitted-envelope-observable-unknown", output["conversation_projection"]["runtime_projection"]["observable"]["effective_configuration"] == "unknown", output))
+
+    unknown_runtime = base_fixture()
+    unknown_runtime["role_context"].update({"specialization_available": True})
+    unknown_runtime["runtime_capabilities"]["mechanisms"]["create_thread"]["status"] = "unknown"
+    code, output = run_fixture(unknown_runtime)
+    if code == 0:
+        errors.extend(expect("unknown-runtime-human-stop", output["dispatch_plan"]["route_decision"] == "human_stop" and output["conversation_projection"]["runtime_projection"]["observable"]["status"] == "unknown", output))
 
     unsupported = base_fixture()
     unsupported["runtime_capabilities"]["mechanisms"]["fork_thread"]["status"] = "unsupported"
@@ -110,6 +169,7 @@ def main() -> int:
 
     escalation = base_fixture()
     escalation["role_context"].update({"specialization_available": True})
+    escalation["work_unit"].update({"task_class": "complex", "material_signals": ["contradictory_evidence"]})
     escalation["attempt_state"] = {"outcome": "escalation_candidate", "escalation_count": 0, "evidence": "contradictory verification"}
     code, output = run_fixture(escalation)
     if code == 0:
