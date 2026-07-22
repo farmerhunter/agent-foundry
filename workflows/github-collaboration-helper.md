@@ -52,6 +52,49 @@ Useful smoke commands:
 The last command must fail closed because `agent-label` mutates scheduler
 ownership and is outside AF11 activation scope.
 
+## Portable Route Planning
+
+AF18 provides a read-only, portable route-planning surface at
+`scripts/plan_collaboration_routes.py`. It consumes a JSON fixture containing
+PolicySet, WorkUnit, RoleContext, RuntimeCapabilities, an optional
+OverrideGrant, and prior EvaluationRecord evidence. It returns a bounded
+DispatchPlan with at most four candidates, a Pareto-style explanation, explicit
+confidence, reset, and Human-stop conditions.
+
+The conversation-facing projection resolves policy deterministically: current
+work-unit Human grant, project record, personal record, then an explicitly
+labelled unsaved `normal` default. It exposes the selected profile, source,
+validity, and fingerprint or `unsaved-normal-default`; invalid or drifted
+sources remain visible. It also projects task class, bounded one-work-unit
+corrections, material signals, a compact recommendation, requested-versus-
+observable runtime state, attention, and exactly one next action. Routine
+serial/no-dispatch work suppresses a separate marker unless attention or a
+material correction exists.
+
+The planner is advisory only: it always reports `mutation_performed: false` and
+`dispatch_performed: false`. It does not create, fork, resume, or message a
+thread; it does not start subagents or automation; and it does not change
+runtime settings. Portable policy uses named capability/reasoning tiers rather
+than provider or model identifiers. Missing effective retained settings remain
+`unknown`; fork and heartbeat are non-enforcing; hook and custom-agent
+enforcement remain unsupported until a later Human-gated adapter scope.
+
+Example:
+
+```bash
+python3 scripts/plan_collaboration_routes.py --input-json route-fixture.json --json
+```
+
+Treat a `human_stop` result as a decision boundary, not a failed dispatch. A
+later runtime adapter may map an accepted advisory plan to supported tool calls;
+that adapter is outside this workflow slice.
+
+This planner does not set up, write, read back, or retain personal/project
+policy records. It does not create telemetry, a monitoring history, dashboard,
+or report product. The JSON result is secondary technical evidence; a later
+conversation surface owns compact Human-facing wording and a later lifecycle
+slice owns any approved policy-record write/readback path.
+
 ## User-Facing Entry Points
 
 Agents should expose these as natural-language workflows rather than requiring
