@@ -4,8 +4,10 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
+from datetime import datetime
 from typing import Any
 
 
@@ -16,6 +18,7 @@ TOPOLOGY_TO_TOOL = {
     "fork": ("fork_thread", ()),
 }
 VALID_STATUSES = {"supported", "unsupported", "unknown", "degraded", "not_available"}
+HOST_COLLECTION_MODE = "host_collected"
 
 
 def fail(message: str) -> None:
@@ -34,6 +37,48 @@ def require_object(root: dict[str, Any], name: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         fail(f"missing object: {name}")
     return value
+
+
+def parse_timestamp(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def schema_digest(tools: dict[str, Any]) -> str:
+    encoded = json.dumps(tools, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
+
+
+def validate_observation(root: dict[str, Any]) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+    observation = root.get("schema_observation")
+    context = root.get("adapter_context")
+    if not isinstance(observation, dict) or not isinstance(context, dict):
+        return None, {"status": "unknown", "reason": "host-collected schema observation and adapter context are required"}
+    tools = observation.get("tools")
+    provenance = observation.get("provenance")
+    observed_at = parse_timestamp(observation.get("observed_at"))
+    evaluated_at = parse_timestamp(context.get("evaluated_at"))
+    max_age = context.get("max_observation_age_seconds")
+    if not isinstance(tools, dict) or not isinstance(provenance, dict):
+        return None, {"status": "unknown", "reason": "schema observation is incomplete"}
+    if provenance.get("collection_mode") != HOST_COLLECTION_MODE:
+        return None, {"status": "untrusted", "reason": "schema observation is not host-collected"}
+    if not isinstance(provenance.get("evidence_ref"), str) or not provenance["evidence_ref"]:
+        return None, {"status": "untrusted", "reason": "host-collected schema observation lacks an evidence reference"}
+    if provenance.get("schema_digest") != schema_digest(tools):
+        return None, {"status": "untrusted", "reason": "host-collected schema observation digest does not match tools"}
+    if not isinstance(observation.get("runtime_id"), str) or observation.get("runtime_id") != context.get("runtime_id"):
+        return None, {"status": "untrusted", "reason": "schema observation runtime does not match the executing runtime"}
+    if observed_at is None or evaluated_at is None or not isinstance(max_age, int) or max_age < 0:
+        return None, {"status": "unknown", "reason": "schema observation freshness is not auditable"}
+    age_seconds = abs((evaluated_at - observed_at).total_seconds())
+    if age_seconds > max_age:
+        return None, {"status": "stale", "reason": f"schema observation is stale by {int(age_seconds)} seconds"}
+    return observation, {"status": "current", "reason": "host-collected current schema observation validated", "age_seconds": int(age_seconds)}
 
 
 def tool_observation(schema: dict[str, Any], tool_name: str) -> dict[str, Any]:
@@ -90,9 +135,8 @@ def lifecycle_evidence(portable: dict[str, Any], topology: str) -> dict[str, Any
 
 def project(root: dict[str, Any]) -> dict[str, Any]:
     portable = require_object(root, "portable_plan")
-    schema = require_object(root, "schema_observation")
     dispatch_plan = require_object(portable, "dispatch_plan")
-    conversation = require_object(portable, "conversation_projection")
+    require_object(portable, "conversation_projection")
     decision = dispatch_plan.get("route_decision")
     selected = dispatch_plan.get("selected_candidate")
     if decision not in {"no_dispatch", "dispatch_advisory", "human_stop"}:
@@ -109,6 +153,12 @@ def project(root: dict[str, Any]) -> dict[str, Any]:
         return output(
             portable, topology, None, "unsupported", [f"Codex adapter has no supported mapping for topology {topology}"],
             "Choose a supported fresh, durable, or subagent route, or stop for a Human decision.",
+        )
+    schema, provenance = validate_observation(root)
+    if schema is None:
+        return output(
+            portable, topology, None, "unknown", [provenance["reason"]],
+            "Collect a current host-observed Codex tool schema before proposing any envelope.", provenance=provenance,
         )
     tool_name, required_fields = TOPOLOGY_TO_TOOL[topology]
     observed = tool_observation(schema, tool_name)
@@ -128,20 +178,20 @@ def project(root: dict[str, Any]) -> dict[str, Any]:
     if requires_explicit and attention:
         return output(
             portable, topology, observed, "unsupported", attention,
-            "Provide a currently supported explicit Codex envelope or keep the portable plan at no dispatch.",
+            "Provide a currently supported explicit Codex envelope or keep the portable plan at no dispatch.", provenance=provenance,
         )
     if attention:
         return output(
             portable, topology, observed, "human_stop", attention,
-            "Do not inherit unknown Codex settings; provide an explicit envelope or stop for a Human decision.",
+            "Do not inherit unknown Codex settings; provide an explicit envelope or stop for a Human decision.", provenance=provenance,
         )
     return output(
         portable, topology, observed, "dry_run_ready", [],
-        "Review this dry-run Codex envelope before any separately authorized dispatch.", envelope,
+        "Review this dry-run Codex envelope before any separately authorized dispatch.", envelope, provenance,
     )
 
 
-def output(portable: dict[str, Any], topology: str | None, observed: dict[str, Any] | None, decision: str, attention: list[str], next_action: str, envelope: dict[str, Any] | None = None) -> dict[str, Any]:
+def output(portable: dict[str, Any], topology: str | None, observed: dict[str, Any] | None, decision: str, attention: list[str], next_action: str, envelope: dict[str, Any] | None = None, provenance: dict[str, Any] | None = None) -> dict[str, Any]:
     dispatch_plan = portable["dispatch_plan"]
     requested = {
         "capability_tier": dispatch_plan.get("requested_capability_tier", "not_available"),
@@ -157,6 +207,7 @@ def output(portable: dict[str, Any], topology: str | None, observed: dict[str, A
     return {
         "adapter": "codex",
         "schema_observation": observed or {"observed_at": "not_available", "schema_source": "not_available"},
+        "schema_provenance": provenance or {"status": "not_available", "reason": "no adapter schema observation was needed"},
         "adapter_plan": {
             "mode": "dry_run",
             "adapter_decision": decision,
