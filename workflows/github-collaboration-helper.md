@@ -95,6 +95,33 @@ or report product. The JSON result is secondary technical evidence; a later
 conversation surface owns compact Human-facing wording and a later lifecycle
 slice owns any approved policy-record write/readback path.
 
+### Optional Codex Adapter Pilot
+
+AF18's optional Codex adapter is a separate dry-run projection at
+`scripts/plan_codex_route_adapter.py`. It consumes a portable plan and a
+timestamped current Codex tool-schema observation supplied by the executing
+host. A caller-provided JSON observation is only reported evidence: it cannot
+make a route dry-run-ready unless the adapter can verify a runtime-owned
+capture with runtime identity, resolvable discovery evidence, and a digest of
+the observed tools. The current pilot has no such capture producer, so it
+fails closed with one recovery action rather than trusting fixture, stale,
+absent, untrusted, or self-asserted host-collected input. Codex-specific
+fields and model names stay adapter-local; they are never written into
+`collaboration-routing-policy.schema.yaml`.
+
+The adapter maps durable routes to `send_message_to_thread`, fresh routes to
+`create_thread`, and subagent routes to `spawn_agent` only when the observed
+tool exposes the required explicit envelope fields. Forks remain visibly
+unsupported for envelope enforcement. Omitted, stale, unknown, or unsupported
+configuration produces one recovery action and never silently inherits a
+retained setting. Its lifecycle evidence is bounded to one work unit and states
+that close/archive/resume was not executed in dry-run mode.
+
+It proposes no real tool call: all adapter output reports
+`mutation_performed: false` and `dispatch_performed: false`. User config,
+hooks, custom agents, policy records, runtime installation, and telemetry stay
+outside this pilot.
+
 ## User-Facing Entry Points
 
 Agents should expose these as natural-language workflows rather than requiring
