@@ -96,6 +96,7 @@ def main() -> int:
         projection = output["conversation_projection"]
         errors.extend(expect("prior-policy-retention", projection["effective_policy"]["source"] == "personal" and projection["effective_policy"]["fingerprint_or_unsaved_default"] == "sha256:prior", output))
         errors.extend(expect("drifted-source-visible", any(item["validity"] == "drifted" for item in projection["evidence"]["policy_source_checks"]) and projection["recovery"]["writes_performed"] is False, output))
+        errors.extend(expect("retained-policy-recovery-action", projection["next_action"] == "Inspect the invalid or drifted policy source; continue with the retained valid policy shown above", projection))
 
     invalid = base_fixture()
     invalid["policy_sources"] = {"project": {"validity": "invalid", "profile": "normal"}}

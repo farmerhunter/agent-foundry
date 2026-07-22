@@ -307,7 +307,10 @@ def conversation_projection(policy_resolution: dict[str, Any], task_class: str, 
     elif decision == "human_stop":
         next_action = "Provide the single Human decision or inspect the invalid policy source before continuing"
     elif source_attention:
-        next_action = "Inspect the invalid or drifted policy source; ordinary work may continue only with the labelled unsaved normal default"
+        if policy_resolution["source"] == "unsaved_normal_default":
+            next_action = "Inspect the invalid or drifted policy source; ordinary work may continue only with the labelled unsaved normal default"
+        else:
+            next_action = "Inspect the invalid or drifted policy source; continue with the retained valid policy shown above"
     elif decision == "no_dispatch":
         next_action = "Continue serial work; no dispatch action is requested"
     else:
