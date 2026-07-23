@@ -54,12 +54,12 @@ ownership and is outside AF11 activation scope.
 
 ## Portable Route Planning
 
-AF18 provides a read-only, portable route-planning surface at
+AF18 provides a read-only, portable lifecycle route-planning surface at
 `scripts/plan_collaboration_routes.py`. It consumes a JSON fixture containing
 PolicySet, WorkUnit, RoleContext, RuntimeCapabilities, an optional
 OverrideGrant, and prior EvaluationRecord evidence. It returns a bounded
 DispatchPlan with at most four candidates, a Pareto-style explanation, explicit
-confidence, reset, and Human-stop conditions.
+confidence, reset, and hold-for-decision conditions.
 
 The conversation-facing projection resolves policy deterministically: current
 work-unit Human grant, project record, personal record, then an explicitly
@@ -67,9 +67,20 @@ labelled unsaved `normal` default. It exposes the selected profile, source,
 validity, and fingerprint or `unsaved-normal-default`; invalid or drifted
 sources remain visible. It also projects task class, bounded one-work-unit
 corrections, material signals, a compact recommendation, requested-versus-
-observable runtime state, attention, and exactly one next action. Routine
-serial/no-dispatch work suppresses a separate marker unless attention or a
-material correction exists.
+observable runtime state, attention, and exactly one next action. The portable
+mode is one of `economy`, `normal`, `performance`, or temporary `low_limit`.
+The lifecycle section models three aligned levels: collaboration operating
+mode, execution-context lifecycle, and bounded work-unit lifecycle. It reports
+create/reuse/compact-rehydrate/callback/cooldown/archive eligibility as
+guidance only. Routine `serial_current_session` work suppresses a separate
+marker unless attention or a material correction exists.
+
+The planner recommends only these bounded routes:
+`serial_current_session`, `reuse_relevant_thread`, `fresh_bounded_thread`,
+`bounded_subagent`, `batch_checkpoint`, or `hold_for_decision`. Role
+specialization value, project continuity relevance, and independent-review
+value are explicit inputs; the planner must not infer them from role label or
+thread age alone.
 
 The planner is advisory only: it always reports `mutation_performed: false` and
 `dispatch_performed: false`. It does not create, fork, resume, or message a
@@ -85,9 +96,9 @@ Example:
 python3 scripts/plan_collaboration_routes.py --input-json route-fixture.json --json
 ```
 
-Treat a `human_stop` result as a decision boundary, not a failed dispatch. A
-later runtime adapter may map an accepted advisory plan to supported tool calls;
-that adapter is outside this workflow slice.
+Treat `hold_for_decision` as a decision boundary, not a failed dispatch. A later
+runtime adapter may map an accepted advisory plan to supported tool calls; that
+adapter is outside this workflow slice.
 
 This planner does not set up, write, read back, or retain personal/project
 policy records. It does not create telemetry, a monitoring history, dashboard,

@@ -11,7 +11,7 @@ from typing import Any
 
 CAPABILITY_TIERS = {"economy", "balanced", "frontier"}
 REASONING_TIERS = {"low", "medium", "high"}
-POLICY_PROFILES = {"economy", "normal", "high_performance"}
+POLICY_PROFILES = {"economy", "normal", "performance", "low_limit"}
 TASK_CLASSES = {"routine", "standard", "complex", "human_owned"}
 RUNTIME_STATUSES = {"supported", "unsupported", "unknown", "degraded", "not_available"}
 TOPOLOGY_MECHANISMS = {
@@ -22,6 +22,14 @@ TOPOLOGY_MECHANISMS = {
     "team": "team",
     "batch": "worktree_batch",
     "portable": "portable_prompt",
+}
+BOUNDED_ROUTES = {
+    "serial_current_session",
+    "reuse_relevant_thread",
+    "fresh_bounded_thread",
+    "bounded_subagent",
+    "batch_checkpoint",
+    "hold_for_decision",
 }
 FORBIDDEN_POLICY_KEYS = {"provider", "provider_slug", "model", "model_slug"}
 COST_RANK = {"low": 1, "medium": 2, "high": 3}
@@ -168,17 +176,19 @@ def profile_tier(policy: dict[str, Any], profile: str, task_class: str, signal_c
     if not isinstance(thresholds, dict):
         thresholds = {}
     economy_complex = thresholds.get("economy_complex", 2)
-    high_performance_complex = thresholds.get("high_performance_complex", 1)
-    reset = {"required": True, "persists": False, "after_work_unit": True}
+    performance_complex = thresholds.get("performance_complex", 1)
+    reset = {"required": True, "persists": False, "after_work_unit": True, "mode": profile}
     if task_class == "human_owned":
         return "balanced", "medium", reset, "Human-owned task class requires a Human decision"
+    if profile == "low_limit":
+        return "economy", "low", reset, None
     if task_class == "routine":
         return "economy", "low", reset, None
     if task_class == "standard":
         return ("economy", "low", reset, None) if profile == "economy" else ("balanced", "medium", reset, None)
     if profile == "economy":
         return ("balanced", "medium", reset, None) if signal_count >= economy_complex else ("economy", "low", reset, None)
-    if profile == "high_performance" and signal_count >= high_performance_complex:
+    if profile == "performance" and signal_count >= performance_complex:
         return "frontier", "high", reset, None
     attempt = root.get("attempt_state", {})
     if isinstance(attempt, dict) and attempt.get("outcome") == "escalation_candidate":
@@ -207,6 +217,7 @@ def mechanism(runtime: dict[str, Any], name: str) -> dict[str, Any]:
 
 def candidate(
     candidate_id: str,
+    route: str,
     topology: str,
     context_mode: str,
     reason: str,
@@ -218,8 +229,11 @@ def candidate(
     eligible: bool = True,
     failures: list[str] | None = None,
 ) -> dict[str, Any]:
+    if route not in BOUNDED_ROUTES:
+        fail(f"unsupported bounded route: {route}")
     return {
         "candidate_id": candidate_id,
+        "route": route,
         "topology": topology,
         "context_mode": context_mode,
         "reason": reason,
@@ -293,6 +307,67 @@ def validate_override(root: dict[str, Any], work: dict[str, Any]) -> tuple[dict[
     return normalized, None
 
 
+def next_action_for(decision: str, setup_requested: bool, source_attention: list[dict[str, Any]], policy_resolution: dict[str, Any]) -> str:
+    if setup_requested:
+        return "Set up collaboration policy requires the later lifecycle write/readback flow; this planner will not write a record"
+    if decision == "hold_for_decision":
+        return "Resolve the listed decision before creating, reusing, or dispatching any context"
+    if source_attention:
+        if policy_resolution["source"] == "unsaved_normal_default":
+            return "Inspect the invalid or drifted policy source; ordinary work may continue only with the labelled unsaved normal default"
+        return "Inspect the invalid or drifted policy source; continue with the retained valid policy shown above"
+    if decision == "serial_current_session":
+        return "Continue serial work in the current session; record a compact callback at the work-unit checkpoint"
+    if decision == "reuse_relevant_thread":
+        return "Send only compact rehydration and callback instructions to the relevant durable thread after the normal dispatch gate"
+    if decision == "fresh_bounded_thread":
+        return "Create a fresh bounded thread only through a later approved dispatch step with compact rehydration"
+    if decision == "bounded_subagent":
+        return "Use a bounded subagent only through a later approved dispatch step with artifact-scoped instructions"
+    if decision == "batch_checkpoint":
+        return "Batch related evidence into one checkpoint before any further role dispatch"
+    return "Hold for Architect review of the unsupported route"
+
+
+def lifecycle_projection(decision: str, selected: dict[str, Any] | None, policy_resolution: dict[str, Any], task_class: str, next_action: str) -> dict[str, Any]:
+    lifecycle_state = {
+        "serial_current_session": "current_session_active",
+        "reuse_relevant_thread": "reuse_candidate",
+        "fresh_bounded_thread": "create_candidate",
+        "bounded_subagent": "bounded_work_unit_candidate",
+        "batch_checkpoint": "checkpoint_candidate",
+        "hold_for_decision": "blocked_waiting_for_decision",
+    }[decision]
+    eligibility = {
+        "create": decision == "fresh_bounded_thread",
+        "reuse": decision == "reuse_relevant_thread",
+        "compact_rehydrate": decision in {"reuse_relevant_thread", "fresh_bounded_thread", "bounded_subagent"},
+        "callback": decision != "hold_for_decision",
+        "cooldown": decision in {"serial_current_session", "batch_checkpoint"},
+        "archive": decision == "batch_checkpoint",
+    }
+    return {
+        "collaboration_operating_mode": {
+            "effective_mode": policy_resolution["profile"],
+            "temporary": policy_resolution["profile"] == "low_limit",
+            "source": policy_resolution["source"],
+        },
+        "execution_context_lifecycle": {
+            "state": lifecycle_state,
+            "route": decision,
+            "context_mode": selected.get("context_mode") if selected else "not_available",
+            "eligible_actions": eligibility,
+        },
+        "bounded_work_unit_lifecycle": {
+            "task_class": task_class,
+            "state": "advisory_planned" if decision != "hold_for_decision" else "held",
+            "mutation_scope": "none",
+            "dispatch_scope": "none",
+        },
+        "next_action": next_action,
+    }
+
+
 def conversation_projection(policy_resolution: dict[str, Any], task_class: str, task_state: dict[str, Any], decision: str, selected: dict[str, Any] | None, candidates: list[dict[str, Any]], stops: list[str], tier: str, reasoning: str, setup_requested: bool) -> dict[str, Any]:
     source_attention = [check for check in policy_resolution["source_checks"] if check["validity"] in {"invalid", "drifted"}]
     observed_candidate = selected or next((item for item in candidates if item["topology"] != "serial"), None)
@@ -300,22 +375,10 @@ def conversation_projection(policy_resolution: dict[str, Any], task_class: str, 
     attention = list(stops)
     if source_attention:
         attention.append("One or more explicit policy sources are invalid or drifted; no persisted policy is assumed valid")
-    if decision != "no_dispatch" and (runtime_mapping.get("status") != "supported" or runtime_mapping.get("effective_configuration") != "observed"):
+    if decision not in {"serial_current_session", "hold_for_decision"} and (runtime_mapping.get("status") != "supported" or runtime_mapping.get("effective_configuration") != "observed"):
         attention.append("Runtime projection is requested versus observable evidence; retained settings are not assumed")
-    if setup_requested:
-        next_action = "Set up collaboration policy requires the later lifecycle write/readback flow; this planner will not write a record"
-    elif decision == "human_stop":
-        next_action = "Provide the single Human decision or inspect the invalid policy source before continuing"
-    elif source_attention:
-        if policy_resolution["source"] == "unsaved_normal_default":
-            next_action = "Inspect the invalid or drifted policy source; ordinary work may continue only with the labelled unsaved normal default"
-        else:
-            next_action = "Inspect the invalid or drifted policy source; continue with the retained valid policy shown above"
-    elif decision == "no_dispatch":
-        next_action = "Continue serial work; no dispatch action is requested"
-    else:
-        next_action = "Review the advisory route before any later runtime adapter action"
-    emit = not (task_class == "routine" and decision == "no_dispatch" and not attention and not task_state["applied"])
+    next_action = next_action_for(decision, setup_requested, source_attention, policy_resolution)
+    emit = not (task_class == "routine" and decision == "serial_current_session" and not attention and not task_state["applied"])
     return {
         "effective_policy": {
             "profile": policy_resolution["profile"],
@@ -326,11 +389,13 @@ def conversation_projection(policy_resolution: dict[str, Any], task_class: str, 
         "work_unit": {"task_class": task_class, "material_signals": task_state["material_signals"], "correction": task_state},
         "recommendation": {
             "route_decision": decision,
+            "route": selected.get("route") if selected else decision,
             "role": selected.get("topology") if selected else "not_available",
             "topology": selected.get("topology") if selected else "not_available",
             "context_mode": selected.get("context_mode") if selected else "not_available",
             "abstract_tier": {"capability": tier, "reasoning": reasoning},
         },
+        "lifecycle": lifecycle_projection(decision, selected, policy_resolution, task_class, next_action),
         "runtime_projection": {
             "requested": {"capability_tier": tier, "reasoning_tier": reasoning},
             "observable": {
@@ -360,7 +425,7 @@ def plan(root: dict[str, Any]) -> dict[str, Any]:
         fail("work_unit.human_owned_actions must be a list")
     if human_actions or work.get("requires_human_decision") is True or early_stop or override_stop or correction_stop:
         reason = early_stop or override_stop or correction_stop or "Human-owned action requires a Human decision"
-        return result(root, policy_resolution, task_class, task_state, [], "human_stop", None, [reason], reset, tier, reasoning, override)
+        return result(root, policy_resolution, task_class, task_state, [], "hold_for_decision", None, [reason], reset, tier, reasoning, override)
 
     required_independence = role.get("independence_requirement", "none")
     envelope_required = work.get("requires_explicit_envelope", False) is True
@@ -368,7 +433,7 @@ def plan(root: dict[str, Any]) -> dict[str, Any]:
     candidates: list[dict[str, Any]] = []
     serial_quality = 1 if required_independence != "none" else 2
     serial = candidate(
-        "serial-current-session", "serial", "compact", "No material dispatch benefit is assumed by default.", "low", serial_quality,
+        "serial-current-session", "serial_current_session", "serial", "compact", "No material dispatch benefit is assumed by default.", "low", serial_quality,
         tier, reasoning, {"mechanism": "current_session", "status": "supported", "effective_configuration": "unknown", "enforcement": "not_required"},
         eligible=serial_quality >= quality_floor,
         failures=[] if serial_quality >= quality_floor else ["required independent context/evidence cannot be provided by serial work"],
@@ -379,30 +444,33 @@ def plan(root: dict[str, Any]) -> dict[str, Any]:
     relevance = role.get("context_relevance", "low")
     if continuity in {"medium", "high"} and relevance in {"medium", "high"}:
         mapping, failures = route_runtime(runtime, "durable_thread", envelope_required)
-        candidates.append(candidate("durable-relevant-role-context", "durable_thread", "filtered_history", "Relevant durable continuity can reduce rehydration cost.", "low", 3, tier, reasoning, mapping, not failures, failures))
+        candidates.append(candidate("durable-relevant-role-context", "reuse_relevant_thread", "durable_thread", "filtered_history", "Relevant durable continuity can reduce rehydration cost.", "low", 3, tier, reasoning, mapping, not failures, failures))
 
     needs_fresh = role.get("specialization_available") is True or required_independence != "none" or relevance == "low"
     if needs_fresh:
         mapping, failures = route_runtime(runtime, "fresh_thread", envelope_required)
         quality = 3 if role.get("specialization_available") is True or required_independence != "none" else 2
-        candidates.append(candidate("fresh-specialized-or-independent", "fresh_thread", "fresh", "Fresh context avoids unrelated retained history and supports specialization or independence.", "medium", quality, tier, reasoning, mapping, not failures and quality >= quality_floor, failures + ([] if quality >= quality_floor else ["quality floor not met"])))
+        candidates.append(candidate("fresh-specialized-or-independent", "fresh_bounded_thread", "fresh_thread", "fresh", "Fresh context avoids unrelated retained history and supports specialization or independence.", "medium", quality, tier, reasoning, mapping, not failures and quality >= quality_floor, failures + ([] if quality >= quality_floor else ["quality floor not met"])))
 
     if work.get("safe_parallelism") is True:
         mapping, failures = route_runtime(runtime, "subagent", envelope_required)
-        candidates.append(candidate("bounded-subagent", "subagent", "artifact_reference", "Safe disjoint side work may reduce critical-path latency.", "medium", 2, tier, reasoning, mapping, not failures and 2 >= quality_floor, failures + ([] if 2 >= quality_floor else ["quality floor not met"])))
+        candidates.append(candidate("bounded-subagent", "bounded_subagent", "subagent", "artifact_reference", "Safe disjoint side work may reduce critical-path latency.", "medium", 2, tier, reasoning, mapping, not failures and 2 >= quality_floor, failures + ([] if 2 >= quality_floor else ["quality floor not met"])))
 
-    for topology, reason in (("fork", "Fork route is recorded as non-enforcing."), ("portable", "Portable fallback cannot enforce runtime settings.")):
-        mapping, failures = route_runtime(runtime, topology, envelope_required)
-        candidates.append(candidate(f"{topology}-negative-control", topology, "full_continuity" if topology == "fork" else "artifact_reference", reason, "medium", 1, tier, reasoning, mapping, False, failures or ["unsupported advisory fallback below quality floor"]))
+    if work.get("batch_checkpoint_safe") is True:
+        mapping, failures = route_runtime(runtime, "batch", False)
+        candidates.append(candidate("batch-checkpoint", "batch_checkpoint", "batch", "artifact_reference", "Related findings can be reviewed together without losing exact-head safety.", "low", 2, tier, reasoning, mapping, not failures and 2 >= quality_floor, failures + ([] if 2 >= quality_floor else ["quality floor not met"])))
 
     candidates = candidates[:4]
     eligible = [item for item in candidates if item["eligible"]]
     if not eligible:
-        return result(root, policy_resolution, task_class, task_state, candidates, "human_stop", None, ["No route meets the authority, evidence, and runtime quality floor."], reset, tier, reasoning, override)
-    material_benefit = any((role.get("specialization_available") is True, continuity in {"medium", "high"} and relevance in {"medium", "high"}, required_independence != "none", work.get("safe_parallelism") is True))
-    selected = sorted(eligible, key=lambda item: (COST_RANK[item["expected_cost_band"]], -{"low": 1, "medium": 2, "high": 3}[item["expected_quality_band"]], item["candidate_id"]))[0]
-    decision = "dispatch_advisory" if material_benefit and selected["topology"] != "serial" else "no_dispatch"
-    if decision == "no_dispatch":
+        return result(root, policy_resolution, task_class, task_state, candidates, "hold_for_decision", None, ["No route meets the authority, evidence, and runtime quality floor."], reset, tier, reasoning, override)
+    material_benefit = any((role.get("specialization_available") is True, continuity in {"medium", "high"} and relevance in {"medium", "high"}, required_independence != "none", work.get("safe_parallelism") is True, work.get("batch_checkpoint_safe") is True))
+    selection_pool = [item for item in eligible if item["route"] != "serial_current_session"] if material_benefit else eligible
+    if not selection_pool:
+        selection_pool = eligible
+    selected = sorted(selection_pool, key=lambda item: (COST_RANK[item["expected_cost_band"]], -{"low": 1, "medium": 2, "high": 3}[item["expected_quality_band"]], item["candidate_id"]))[0]
+    decision = selected["route"] if material_benefit and selected["route"] != "serial_current_session" else "serial_current_session"
+    if decision == "serial_current_session":
         selected = next(item for item in eligible if item["topology"] == "serial")
     return result(root, policy_resolution, task_class, task_state, candidates, decision, selected, [], reset, tier, reasoning, override)
 
@@ -448,12 +516,12 @@ def result(root: dict[str, Any], policy_resolution: dict[str, Any], task_class: 
 def pareto_explanation(candidates: list[dict[str, Any]], selected: dict[str, Any] | None, decision: str) -> list[str]:
     eligible = [item for item in candidates if item["eligible"]]
     explanation = [f"candidate_set={len(candidates)}; eligible={len(eligible)}; limit=4"]
-    if decision == "human_stop":
+    if decision == "hold_for_decision":
         explanation.append("No eligible advisory route clears the required authority/evidence/runtime floor.")
-    elif decision == "no_dispatch":
+    elif decision == "serial_current_session":
         explanation.append("Serial is selected because no material dispatch benefit clears its handoff and context cost.")
     elif selected:
-        explanation.append(f"Selected {selected['candidate_id']} as the least-cost eligible route that clears the quality floor.")
+        explanation.append(f"Selected {selected['route']} via {selected['candidate_id']} as the least-cost eligible route that clears the quality floor.")
     return explanation
 
 

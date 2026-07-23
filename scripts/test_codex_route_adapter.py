@@ -16,7 +16,7 @@ ADAPTER = ROOT / "scripts" / "plan_codex_route_adapter.py"
 
 
 def portable(topology: str = "fresh_thread", decision: str = "dispatch_advisory", explicit: bool = True) -> dict:
-    selected = None if decision != "dispatch_advisory" else {"topology": topology, "context_mode": "fresh"}
+    selected = None if decision in {"no_dispatch", "human_stop", "serial_current_session", "batch_checkpoint", "hold_for_decision"} else {"topology": topology, "context_mode": "fresh", "route": decision}
     return {
         "work_unit": {"work_unit_id": "AF18-421-fixture", "requires_explicit_envelope": explicit},
         "dispatch_plan": {"route_decision": decision, "selected_candidate": selected, "requested_capability_tier": "balanced", "requested_reasoning_tier": "medium"},
@@ -113,6 +113,14 @@ def main() -> int:
     no_dispatch = input_for(portable(decision="no_dispatch"))
     code, output = run(no_dispatch)
     expect("no-dispatch-remains-no-call", code == 0 and output["adapter_plan"]["adapter_decision"] == "no_adapter_dispatch" and output["adapter_plan"]["tool_call_proposed"] == "not_available", output, errors)
+
+    serial_route = input_for(portable(decision="serial_current_session"))
+    code, output = run(serial_route)
+    expect("serial-route-remains-no-call", code == 0 and output["adapter_plan"]["adapter_decision"] == "no_adapter_dispatch" and output["mutation_performed"] is False and output["dispatch_performed"] is False, output, errors)
+
+    bounded_subagent = input_for(portable("subagent", decision="bounded_subagent"))
+    code, output = run(bounded_subagent)
+    expect("bounded-subagent-new-route-fails-closed", code == 0 and provenance_recovery(output, "unknown"), output, errors)
 
     absent = input_for(portable("subagent"))
     absent.pop("schema_observation")
