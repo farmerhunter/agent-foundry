@@ -17,6 +17,19 @@ TOPOLOGY_TO_TOOL = {
     "subagent": ("spawn_agent", ("model", "reasoning_effort")),
     "fork": ("fork_thread", ()),
 }
+ROUTE_DECISION_TO_TOPOLOGY = {
+    "reuse_relevant_thread": "durable_thread",
+    "fresh_bounded_thread": "fresh_thread",
+    "bounded_subagent": "subagent",
+}
+NO_ADAPTER_ROUTES = {
+    "no_dispatch",
+    "human_stop",
+    "serial_current_session",
+    "batch_checkpoint",
+    "hold_for_decision",
+}
+DISPATCH_ADVISORY_ROUTES = {"dispatch_advisory"} | set(ROUTE_DECISION_TO_TOPOLOGY)
 VALID_STATUSES = {"supported", "unsupported", "unknown", "degraded", "not_available"}
 HOST_COLLECTION_MODE = "host_collected"
 
@@ -148,16 +161,16 @@ def project(root: dict[str, Any]) -> dict[str, Any]:
     require_object(portable, "conversation_projection")
     decision = dispatch_plan.get("route_decision")
     selected = dispatch_plan.get("selected_candidate")
-    if decision not in {"no_dispatch", "dispatch_advisory", "human_stop"}:
+    if decision not in NO_ADAPTER_ROUTES | DISPATCH_ADVISORY_ROUTES:
         fail("portable dispatch_plan.route_decision is invalid")
-    if decision != "dispatch_advisory":
+    if decision in NO_ADAPTER_ROUTES:
         return output(
             portable, None, None, "no_adapter_dispatch", [],
             "Continue the portable no-dispatch or Human-stop path; no Codex tool call is proposed.",
         )
     if not isinstance(selected, dict):
         fail("portable dispatch advisory requires selected_candidate")
-    topology = selected.get("topology")
+    topology = selected.get("topology") or ROUTE_DECISION_TO_TOPOLOGY.get(str(decision))
     if topology not in TOPOLOGY_TO_TOOL:
         return output(
             portable, topology, None, "unsupported", [f"Codex adapter has no supported mapping for topology {topology}"],
