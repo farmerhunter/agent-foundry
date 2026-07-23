@@ -133,6 +133,38 @@ def main() -> int:
     if code == 0:
         errors.extend(expect("policy-apply-needs-one-confirmation", output["policy_lifecycle"]["write_performed"] is False and output["conversation_projection"]["policy_setup_intent"]["confirmation_required"] is True and output["conversation_projection"]["next_action"] == "Confirm once before writing the selected policy record.", output))
 
+    invalid_lifecycle_profile = base_fixture()
+    invalid_lifecycle_profile["policy_sources"] = {
+        "personal": {
+            "validity": "valid",
+            "profile": "economy",
+            "fingerprint": "sha256:prior-personal",
+            "policy_set": invalid_lifecycle_profile["policy_set"],
+        }
+    }
+    invalid_lifecycle_profile["policy_lifecycle"] = {"action": "apply", "scope": "project", "profile": "turbo", "confirmed": True}
+    code, output, _ = run_fixture_with_tmp(invalid_lifecycle_profile)
+    if code == 0:
+        lifecycle = output["policy_lifecycle"]
+        projection = output["conversation_projection"]
+        errors.extend(
+            expect(
+                "policy-invalid-profile-preserves-prior",
+                lifecycle["write_performed"] is False
+                and lifecycle["failure"] == "invalid policy_lifecycle.profile"
+                and lifecycle["invalid_input"]["field"] == "policy_lifecycle.profile"
+                and lifecycle["diff"]["after"]["profile"] == "turbo"
+                and lifecycle["diff"]["after"]["validity"] == "invalid"
+                and lifecycle["readback"]["validity"] in {"missing", "valid", "invalid"}
+                and projection["effective_policy"]["source"] == "personal"
+                and projection["effective_policy"]["fingerprint_or_unsaved_default"] == "sha256:prior-personal"
+                and projection["next_action"] == lifecycle["recovery_action"],
+                output,
+            )
+        )
+    else:
+        errors.append(f"policy-invalid-profile-preserves-prior: {output}")
+
     with tempfile.TemporaryDirectory(prefix="af18-policy-write-fail-") as raw:
         root = Path(raw)
         blocked_path = root / "project" / ".agent-foundry" / "collaboration-routing-policy.yaml"

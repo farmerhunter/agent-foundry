@@ -371,7 +371,8 @@ def lifecycle_action(root: dict[str, Any], fallback_policy: dict[str, Any], prio
     selected_profile = lifecycle.get("profile", prior_resolution["profile"])
     path = policy_record_path(root, scope)
     existing = read_record(path, scope, fallback_policy)
-    desired = policy_record(selected_profile, scope, fallback_policy, root) if action in {"preview", "apply"} else None
+    invalid_profile = action in {"preview", "apply"} and selected_profile not in SETUP_PROFILES
+    desired = None if invalid_profile or action == "inspect" else policy_record(selected_profile, scope, fallback_policy, root)
     diff = {
         "before": {
             "profile": existing.get("profile", prior_resolution["profile"] if prior_resolution["source"] == scope else "not_available"),
@@ -380,8 +381,8 @@ def lifecycle_action(root: dict[str, Any], fallback_policy: dict[str, Any], prio
             "path": str(path),
         },
         "after": {
-            "profile": desired.get("profile") if desired else "not_changed",
-            "validity": "valid" if desired else existing.get("validity", "missing"),
+            "profile": selected_profile if invalid_profile else (desired.get("profile") if desired else "not_changed"),
+            "validity": "invalid" if invalid_profile else ("valid" if desired else existing.get("validity", "missing")),
             "fingerprint": desired.get("fingerprint") if desired else existing.get("fingerprint", "not_available"),
             "path": str(path),
         },
@@ -401,6 +402,15 @@ def lifecycle_action(root: dict[str, Any], fallback_policy: dict[str, Any], prio
         "effective_next_dispatch": resolve_project_dispatch_context(root),
         "recovery_action": "Keep the prior effective state and retry with a valid profile/scope after inspecting the shown path.",
     }
+    if invalid_profile:
+        common.update(
+            {
+                "failure": "invalid policy_lifecycle.profile",
+                "invalid_input": {"field": "policy_lifecycle.profile", "value": selected_profile, "allowed_values": sorted(SETUP_PROFILES)},
+                "next_action": common["recovery_action"],
+            }
+        )
+        return common
     if action != "apply":
         common["next_action"] = "Review the read-only policy inspection." if action == "inspect" else "Confirm once to write exactly the selected policy record."
         return common
