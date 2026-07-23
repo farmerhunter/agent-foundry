@@ -155,6 +155,37 @@ def lifecycle_evidence(portable: dict[str, Any], topology: str) -> dict[str, Any
     }
 
 
+def role_task_dispatch_evidence(portable: dict[str, Any], root: dict[str, Any]) -> dict[str, Any]:
+    projection = portable.get("conversation_projection", {})
+    policy = projection.get("role_task_dispatch_policy", {}) if isinstance(projection, dict) else {}
+    if not isinstance(policy, dict):
+        policy = {}
+    requested = portable.get("dispatch_plan", {})
+    adapter_context = root.get("adapter_context", {})
+    project_id = policy.get("project_id") or adapter_context.get("project_id") or "not_available"
+    project_root = policy.get("project_root") or adapter_context.get("project_root") or "not_available"
+    project_scoped = policy.get("project_scoped_creation", "unknown") != "unavailable" and project_id != "not_available"
+    fallback = policy.get("degraded_projectless_fallback", {})
+    if not isinstance(fallback, dict):
+        fallback = {}
+    return {
+        "mechanism": "dry_run_codex_adapter",
+        "project_scoped_vs_projectless": "project_scoped" if project_scoped else "projectless_degraded",
+        "model_thinking_envelope": {
+            "capability_tier": requested.get("requested_capability_tier", "not_available"),
+            "reasoning_tier": requested.get("requested_reasoning_tier", "not_available"),
+        },
+        "target_project": {"project_id": project_id, "project_root": project_root},
+        "existing_healthy_role_task_preferred": policy.get("existing_healthy_role_task_preferred", True),
+        "fallback": {
+            "used": not project_scoped,
+            "allowed": fallback.get("allowed", not project_scoped),
+            "bounded_to": fallback.get("bounded_to", "one_work_unit"),
+            "reason": "project-scoped task creation unavailable or unsafe" if not project_scoped else "not_used",
+        },
+    }
+
+
 def project(root: dict[str, Any]) -> dict[str, Any]:
     portable = require_object(root, "portable_plan")
     dispatch_plan = require_object(portable, "dispatch_plan")
@@ -166,7 +197,7 @@ def project(root: dict[str, Any]) -> dict[str, Any]:
     if decision in NO_ADAPTER_ROUTES:
         return output(
             portable, None, None, "no_adapter_dispatch", [],
-            "Continue the portable no-dispatch or Human-stop path; no Codex tool call is proposed.",
+            "Continue the portable no-dispatch or Human-stop path; no Codex tool call is proposed.", root=root,
         )
     if not isinstance(selected, dict):
         fail("portable dispatch advisory requires selected_candidate")
@@ -174,13 +205,13 @@ def project(root: dict[str, Any]) -> dict[str, Any]:
     if topology not in TOPOLOGY_TO_TOOL:
         return output(
             portable, topology, None, "unsupported", [f"Codex adapter has no supported mapping for topology {topology}"],
-            "Choose a supported fresh, durable, or subagent route, or stop for a Human decision.",
+            "Choose a supported fresh, durable, or subagent route, or stop for a Human decision.", root=root,
         )
     schema, provenance = validate_observation(root)
     if schema is None:
         return output(
             portable, topology, None, "unknown", [provenance["reason"]],
-            "Obtain a verified runtime-owned Codex schema capture before proposing any envelope.", provenance=provenance,
+            "Obtain a verified runtime-owned Codex schema capture before proposing any envelope.", provenance=provenance, root=root,
         )
     tool_name, required_fields = TOPOLOGY_TO_TOOL[topology]
     observed = tool_observation(schema, tool_name)
@@ -200,21 +231,22 @@ def project(root: dict[str, Any]) -> dict[str, Any]:
     if requires_explicit and attention:
         return output(
             portable, topology, observed, "unsupported", attention,
-            "Provide a currently supported explicit Codex envelope or keep the portable plan at no dispatch.", provenance=provenance,
+            "Provide a currently supported explicit Codex envelope or keep the portable plan at no dispatch.", provenance=provenance, root=root,
         )
     if attention:
         return output(
             portable, topology, observed, "human_stop", attention,
-            "Do not inherit unknown Codex settings; provide an explicit envelope or stop for a Human decision.", provenance=provenance,
+            "Do not inherit unknown Codex settings; provide an explicit envelope or stop for a Human decision.", provenance=provenance, root=root,
         )
     return output(
         portable, topology, observed, "dry_run_ready", [],
-        "Review this dry-run Codex envelope before any separately authorized dispatch.", envelope, provenance,
+        "Review this dry-run Codex envelope before any separately authorized dispatch.", envelope, provenance, root=root,
     )
 
 
-def output(portable: dict[str, Any], topology: str | None, observed: dict[str, Any] | None, decision: str, attention: list[str], next_action: str, envelope: dict[str, Any] | None = None, provenance: dict[str, Any] | None = None) -> dict[str, Any]:
+def output(portable: dict[str, Any], topology: str | None, observed: dict[str, Any] | None, decision: str, attention: list[str], next_action: str, envelope: dict[str, Any] | None = None, provenance: dict[str, Any] | None = None, root: dict[str, Any] | None = None) -> dict[str, Any]:
     dispatch_plan = portable["dispatch_plan"]
+    adapter_root = root or {}
     requested = {
         "capability_tier": dispatch_plan.get("requested_capability_tier", "not_available"),
         "reasoning_tier": dispatch_plan.get("requested_reasoning_tier", "not_available"),
@@ -237,6 +269,7 @@ def output(portable: dict[str, Any], topology: str | None, observed: dict[str, A
             "tool_call_proposed": observed.get("tool") if observed else "not_available",
             "explicit_envelope": envelope or {},
             "lifecycle_evidence": lifecycle_evidence(portable, topology or "not_available"),
+            "role_task_dispatch_evidence": role_task_dispatch_evidence(portable, adapter_root),
         },
         "conversation_projection": {
             "portable": portable["conversation_projection"],

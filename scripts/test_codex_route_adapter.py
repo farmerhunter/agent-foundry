@@ -20,7 +20,18 @@ def portable(topology: str = "fresh_thread", decision: str = "dispatch_advisory"
     return {
         "work_unit": {"work_unit_id": "AF18-421-fixture", "requires_explicit_envelope": explicit},
         "dispatch_plan": {"route_decision": decision, "selected_candidate": selected, "requested_capability_tier": "balanced", "requested_reasoning_tier": "medium"},
-        "conversation_projection": {"effective_policy": {"profile": "normal"}, "next_action": "Review portable plan"},
+        "conversation_projection": {
+            "effective_policy": {"profile": "normal"},
+            "next_action": "Review portable plan",
+            "role_task_dispatch_policy": {
+                "existing_healthy_role_task_preferred": True,
+                "new_role_task_preference": "project_scoped_codex_task",
+                "project_scoped_creation": "preferred",
+                "project_id": "local-eb6e22ec0d00ef785d687022be1b433d",
+                "project_root": "/Users/jinghuliu/Desktop/Code/Personal Projects/agent-foundry",
+                "degraded_projectless_fallback": {"allowed": False, "bounded_to": "one_work_unit", "default_policy": False},
+            },
+        },
     }
 
 
@@ -62,6 +73,8 @@ def adapter_context() -> dict:
         "runtime_id": "codex-desktop-current-session",
         "evaluated_at": "2026-07-22T00:05:00Z",
         "max_observation_age_seconds": 300,
+        "project_id": "local-eb6e22ec0d00ef785d687022be1b433d",
+        "project_root": "/Users/jinghuliu/Desktop/Code/Personal Projects/agent-foundry",
     }
 
 
@@ -109,6 +122,13 @@ def main() -> int:
     code, output = run(base)
     expect("runtime-capture-unavailable", code == 0 and provenance_recovery(output, "unknown") and output["schema_provenance"]["evidence_ref_status"] == "unverified", output, errors)
     expect("runtime-capture-no-write", code == 0 and output["mutation_performed"] is False and output["dispatch_performed"] is False and output["adapter_plan"]["lifecycle_evidence"]["close_archive_resume"] == "not_executed_dry_run_only", output, errors)
+    expect("project-scoped-dispatch-evidence", code == 0 and output["adapter_plan"]["role_task_dispatch_evidence"]["project_scoped_vs_projectless"] == "project_scoped" and output["adapter_plan"]["role_task_dispatch_evidence"]["target_project"]["project_id"] == "local-eb6e22ec0d00ef785d687022be1b433d", output, errors)
+
+    degraded = portable("fresh_thread")
+    degraded["conversation_projection"]["role_task_dispatch_policy"]["project_scoped_creation"] = "unavailable"
+    degraded["conversation_projection"]["role_task_dispatch_policy"]["degraded_projectless_fallback"]["allowed"] = True
+    code, output = run(input_for(degraded))
+    expect("projectless-fallback-degraded-bounded", code == 0 and output["adapter_plan"]["role_task_dispatch_evidence"]["project_scoped_vs_projectless"] == "projectless_degraded" and output["adapter_plan"]["role_task_dispatch_evidence"]["fallback"]["bounded_to"] == "one_work_unit", output, errors)
 
     no_dispatch = input_for(portable(decision="no_dispatch"))
     code, output = run(no_dispatch)
