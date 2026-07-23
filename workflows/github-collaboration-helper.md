@@ -63,12 +63,13 @@ confidence, reset, and hold-for-decision conditions.
 
 The conversation-facing projection resolves policy deterministically: current
 work-unit Human grant, project record, personal record, then an explicitly
-labelled unsaved `normal` default. It exposes the selected profile, source,
-validity, and fingerprint or `unsaved-normal-default`; invalid or drifted
-sources remain visible. It also projects task class, bounded one-work-unit
-corrections, material signals, a compact recommendation, requested-versus-
-observable runtime state, attention, and exactly one next action. The portable
-mode is one of `economy`, `normal`, `performance`, or temporary `low_limit`.
+labelled unsaved `normal` default. It exposes the selected profile, Chinese
+profile label, source, validity, and fingerprint or `unsaved-normal-default`;
+invalid or drifted sources remain visible. It also projects task class, bounded
+one-work-unit corrections, material signals, a compact recommendation,
+requested-versus-observable runtime state, attention, and exactly one next
+action. The portable mode is one of `economy`, `normal`, `performance`, or
+temporary `low_limit`.
 The lifecycle section models three aligned levels: collaboration operating
 mode, execution-context lifecycle, and bounded work-unit lifecycle. It reports
 create/reuse/compact-rehydrate/callback/cooldown/archive eligibility as
@@ -82,13 +83,27 @@ specialization value, project continuity relevance, and independent-review
 value are explicit inputs; the planner must not infer them from role label or
 thread age alone.
 
-The planner is advisory only: it always reports `mutation_performed: false` and
-`dispatch_performed: false`. It does not create, fork, resume, or message a
-thread; it does not start subagents or automation; and it does not change
-runtime settings. Portable policy uses named capability/reasoning tiers rather
-than provider or model identifiers. Missing effective retained settings remain
-`unknown`; fork and heartbeat are non-enforcing; hook and custom-agent
-enforcement remain unsupported until a later Human-gated adapter scope.
+The named conversation action `set up collaboration policy` is distinct from
+V2 guided onboarding. It supports read-only inspection, dry-run preview, and an
+explicit setup flow: read preflight, select one of `节俭`, `正常`, or `高性能`,
+select `personal` or `project` scope, show a compact before/after diff, require
+one confirmation, write exactly one selected policy record, validate/read it
+back in the same conversation, and make it effective for the next eligible
+dispatch. The personal record path is
+`~/.agent-foundry/collaboration-routing-policy.yaml`; the project record path
+is `<repo>/.agent-foundry/collaboration-routing-policy.yaml`. Records are
+versioned, policy-data only, and fingerprinted. Invalid input, failed write,
+failed validation/readback, or fingerprint mismatch preserves the prior
+effective state and returns one recovery action.
+
+Outside a confirmed policy lifecycle apply action, the planner remains
+advisory: it reports `dispatch_performed: false`, does not create, fork,
+resume, or message a thread, does not start subagents or automation, and does
+not change runtime settings. Portable policy uses named capability/reasoning
+tiers rather than provider or model identifiers. Missing effective retained
+settings remain `unknown`; fork and heartbeat are non-enforcing; hook and
+custom-agent enforcement remain unsupported until a later Human-gated adapter
+scope.
 
 Example:
 
@@ -100,11 +115,11 @@ Treat `hold_for_decision` as a decision boundary, not a failed dispatch. A later
 runtime adapter may map an accepted advisory plan to supported tool calls; that
 adapter is outside this workflow slice.
 
-This planner does not set up, write, read back, or retain personal/project
-policy records. It does not create telemetry, a monitoring history, dashboard,
-or report product. The JSON result is secondary technical evidence; a later
-conversation surface owns compact Human-facing wording and a later lifecycle
-slice owns any approved policy-record write/readback path.
+This planner does not create telemetry, a monitoring history, dashboard, or
+report product. It must not write the user's live personal or repository policy
+record unless the conversation explicitly confirms the setup action and the
+caller selected that scope. Tests must use isolated temp roots or controlled
+fixtures for policy-record writes.
 
 ### Optional Codex Adapter Pilot
 
@@ -127,6 +142,14 @@ unsupported for envelope enforcement. Omitted, stale, unknown, or unsupported
 configuration produces one recovery action and never silently inherits a
 retained setting. Its lifecycle evidence is bounded to one work unit and states
 that close/archive/resume was not executed in dry-run mode.
+
+For Agent Foundry role dispatches that create a new Codex task, the adapter
+projection must prefer a project-scoped task under Codex project
+`local-eb6e22ec0d00ef785d687022be1b433d` for
+`/Users/jinghuliu/Desktop/Code/Personal Projects/agent-foundry`. Existing
+healthy Agent Foundry role tasks remain preferred when resumable. A projectless
+chat or subagent fallback is degraded, bounded to one work unit, and must be
+evidenced; it is not the default policy.
 
 It proposes no real tool call: all adapter output reports
 `mutation_performed: false` and `dispatch_performed: false`. User config,

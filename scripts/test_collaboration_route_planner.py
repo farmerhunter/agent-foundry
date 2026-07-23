@@ -41,6 +41,30 @@ def run_fixture(data: dict) -> tuple[int, dict | str]:
         return 0, json.loads(result.stdout)
 
 
+def run_fixture_with_tmp(data: dict) -> tuple[int, dict | str, Path]:
+    with tempfile.TemporaryDirectory(prefix="af18-policy-lifecycle-") as raw:
+        root = Path(raw)
+        data = json.loads(json.dumps(data))
+        lifecycle = data.setdefault("policy_lifecycle", {})
+        paths = lifecycle.setdefault("paths", {})
+        paths.setdefault("personal", str(root / "home" / ".agent-foundry" / "collaboration-routing-policy.yaml"))
+        paths.setdefault("project_root", str(root / "project"))
+        paths.setdefault("project", str(root / "project" / ".agent-foundry" / "collaboration-routing-policy.yaml"))
+        path = root / "fixture.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(data), encoding="utf-8")
+        result = subprocess.run([sys.executable, str(PLANNER), "--input-json", str(path), "--json"], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if result.returncode:
+            return result.returncode, result.stderr, root
+        return 0, json.loads(result.stdout), root
+
+
+def run_fixture_path(data: dict, fixture_path: Path) -> tuple[int, dict | str]:
+    fixture_path.write_text(json.dumps(data), encoding="utf-8")
+    completed = subprocess.run([sys.executable, str(PLANNER), "--input-json", str(fixture_path), "--json"], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    return (completed.returncode, json.loads(completed.stdout)) if completed.returncode == 0 else (completed.returncode, completed.stderr)
+
+
 def expect(name: str, condition: bool, detail: object) -> list[str]:
     if condition:
         print(f"{name}: ok")
@@ -62,8 +86,9 @@ def main() -> int:
         errors.extend(expect("no-mutation", output["mutation_performed"] is False and output["dispatch_performed"] is False, output))
         errors.extend(expect("candidate-limit", len(output["route_candidates"]) <= 4, output))
         projection = output["conversation_projection"]
-        errors.extend(expect("unsaved-normal-default", projection["effective_policy"] == {"profile": "normal", "source": "unsaved_normal_default", "validity": "unsaved_default", "fingerprint_or_unsaved_default": "unsaved-normal-default"}, projection))
-        errors.extend(expect("three-level-lifecycle", set(projection["lifecycle"]) == {"collaboration_operating_mode", "execution_context_lifecycle", "bounded_work_unit_lifecycle", "next_action"}, projection))
+        errors.extend(expect("unsaved-normal-default", projection["effective_policy"]["profile"] == "normal" and projection["effective_policy"]["label"] == "正常" and projection["effective_policy"]["source"] == "unsaved_normal_default" and projection["effective_policy"]["fingerprint_or_unsaved_default"] == "unsaved-normal-default", projection))
+        errors.extend(expect("fixed-profile-catalog", [item["label"] for item in projection["profile_catalog"]] == ["节俭", "正常", "高性能"], projection))
+        errors.extend(expect("lifecycle-levels", {"collaboration_operating_mode", "execution_context_lifecycle", "bounded_work_unit_lifecycle", "policy_record_lifecycle", "next_action"}.issubset(set(projection["lifecycle"])), projection))
         errors.extend(expect("single-next-action", isinstance(projection["next_action"], str) and projection["next_action"] == projection["lifecycle"]["next_action"], projection))
 
     routine = base_fixture()
@@ -77,7 +102,87 @@ def main() -> int:
     code, output = run_fixture(setup_intent)
     if code == 0:
         intent = output["conversation_projection"]["policy_setup_intent"]
-        errors.extend(expect("setup-intent-no-write", intent == {"requested": True, "apply_supported_now": False, "write_performed": False} and output["conversation_projection"]["next_action"].startswith("Set up collaboration policy"), output))
+        errors.extend(expect("setup-intent-no-write", intent["requested"] is True and intent["apply_supported_now"] is False and intent["write_performed"] is False and output["conversation_projection"]["next_action"].startswith("Set up collaboration policy"), output))
+
+    inspect_policy = base_fixture()
+    inspect_policy["policy_lifecycle"] = {"action": "inspect", "scope": "project"}
+    code, output, _ = run_fixture_with_tmp(inspect_policy)
+    if code == 0:
+        record = output["conversation_projection"]["policy_record"]
+        errors.extend(expect("policy-inspect-read-only", output["mutation_performed"] is False and output["policy_lifecycle"]["write_performed"] is False and record["readback"]["validity"] == "missing", output))
+
+    preview_policy = base_fixture()
+    preview_policy["policy_lifecycle"] = {"action": "preview", "scope": "project", "profile": "performance"}
+    code, output, _ = run_fixture_with_tmp(preview_policy)
+    if code == 0:
+        intent = output["conversation_projection"]["policy_setup_intent"]
+        errors.extend(expect("policy-preview-no-write", intent["requested"] is True and intent["write_performed"] is False and output["policy_lifecycle"]["diff"]["after"]["profile"] == "performance", output))
+
+    apply_policy = base_fixture()
+    apply_policy["policy_lifecycle"] = {"action": "apply", "scope": "project", "profile": "economy", "confirmed": True}
+    code, output, _ = run_fixture_with_tmp(apply_policy)
+    if code == 0:
+        lifecycle = output["policy_lifecycle"]
+        projection = output["conversation_projection"]
+        errors.extend(expect("policy-apply-one-write-readback", lifecycle["write_performed"] is True and lifecycle["readback"]["validity"] == "valid" and projection["effective_policy"]["source"] == "project" and projection["effective_policy"]["profile"] == "economy", output))
+        errors.extend(expect("policy-effective-next-dispatch-project-scoped", projection["role_task_dispatch_policy"]["new_role_task_preference"] == "project_scoped_codex_task" and projection["role_task_dispatch_policy"]["project_id"] == "local-eb6e22ec0d00ef785d687022be1b433d", projection))
+
+    unconfirmed_policy = base_fixture()
+    unconfirmed_policy["policy_lifecycle"] = {"action": "apply", "scope": "personal", "profile": "normal", "confirmed": False}
+    code, output, _ = run_fixture_with_tmp(unconfirmed_policy)
+    if code == 0:
+        errors.extend(expect("policy-apply-needs-one-confirmation", output["policy_lifecycle"]["write_performed"] is False and output["conversation_projection"]["policy_setup_intent"]["confirmation_required"] is True and output["conversation_projection"]["next_action"] == "Confirm once before writing the selected policy record.", output))
+
+    invalid_lifecycle_profile = base_fixture()
+    invalid_lifecycle_profile["policy_sources"] = {
+        "personal": {
+            "validity": "valid",
+            "profile": "economy",
+            "fingerprint": "sha256:prior-personal",
+            "policy_set": invalid_lifecycle_profile["policy_set"],
+        }
+    }
+    invalid_lifecycle_profile["policy_lifecycle"] = {"action": "apply", "scope": "project", "profile": "turbo", "confirmed": True}
+    code, output, _ = run_fixture_with_tmp(invalid_lifecycle_profile)
+    if code == 0:
+        lifecycle = output["policy_lifecycle"]
+        projection = output["conversation_projection"]
+        errors.extend(
+            expect(
+                "policy-invalid-profile-preserves-prior",
+                lifecycle["write_performed"] is False
+                and lifecycle["failure"] == "invalid policy_lifecycle.profile"
+                and lifecycle["invalid_input"]["field"] == "policy_lifecycle.profile"
+                and lifecycle["diff"]["after"]["profile"] == "turbo"
+                and lifecycle["diff"]["after"]["validity"] == "invalid"
+                and lifecycle["readback"]["validity"] in {"missing", "valid", "invalid"}
+                and projection["effective_policy"]["source"] == "personal"
+                and projection["effective_policy"]["fingerprint_or_unsaved_default"] == "sha256:prior-personal"
+                and projection["next_action"] == lifecycle["recovery_action"],
+                output,
+            )
+        )
+    else:
+        errors.append(f"policy-invalid-profile-preserves-prior: {output}")
+
+    with tempfile.TemporaryDirectory(prefix="af18-policy-write-fail-") as raw:
+        root = Path(raw)
+        blocked_path = root / "project" / ".agent-foundry" / "collaboration-routing-policy.yaml"
+        blocked_path.mkdir(parents=True)
+        failed_write = base_fixture()
+        failed_write["policy_lifecycle"] = {
+            "action": "apply",
+            "scope": "project",
+            "profile": "performance",
+            "confirmed": True,
+            "paths": {"project": str(blocked_path), "project_root": str(root / "project")},
+        }
+        code, output = run_fixture_path(failed_write, root / "fixture.json")
+        if code == 0:
+            projection = output["conversation_projection"]
+            errors.extend(expect("policy-write-failure-preserves-prior", output["policy_lifecycle"]["write_performed"] is False and projection["effective_policy"]["source"] == "unsaved_normal_default" and "retry" in output["policy_lifecycle"]["next_action"], output))
+        else:
+            errors.append(f"policy-write-failure-preserves-prior: {output}")
 
     material = base_fixture()
     material["work_unit"].update({"task_class": "complex", "material_signals": ["cross_boundary", "contradictory_evidence"], "task_class_correction": {"task_class": "complex", "scope": "AF18-fixture", "expires_after_work_unit": True}})

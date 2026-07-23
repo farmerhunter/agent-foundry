@@ -48,9 +48,19 @@ objects:
       - "primary fields are compact conversation guidance; JSON stays secondary technical evidence"
       - "routine serial_current_session paths emit no separate marker unless attention or a material correction exists"
       - "runtime projection distinguishes requested abstract tier from observable, unknown, or unsupported runtime configuration"
-      - "explicit set up collaboration policy intent is a no-write handoff to the later lifecycle slice"
+      - "explicit set up collaboration policy intent is distinct from guided-onboarding and follows preflight, preview, one confirmation, one selected policy-record write, and same-conversation readback"
       - "lifecycle models collaboration operating mode, execution-context lifecycle, and bounded work-unit lifecycle"
       - "create, reuse, compact-rehydrate, callback, cooldown, and archive eligibility are reported only as next-action guidance"
+      - "fixed setup profiles are 节俭, 正常, and 高性能"
+  PolicyRecordLifecycle:
+    required: [action, scope, path, diff, confirmation_required, write_performed, readback]
+    rules:
+      - "personal path is ~/.agent-foundry/collaboration-routing-policy.yaml"
+      - "project path is <repo>/.agent-foundry/collaboration-routing-policy.yaml"
+      - "policy record is versioned and contains policy data only"
+      - "invalid input, failed write, failed validation/readback, or fingerprint mismatch preserves the prior effective state and shows one recovery action"
+      - "read-only inspection and dry-run preview perform no writes"
+      - "new Agent Foundry role task creation prefers project-scoped Codex tasks under local-eb6e22ec0d00ef785d687022be1b433d when creating a new role task"
   OverrideGrant:
     required: [active, scope, expires_after_work_unit, reset_required]
     rules:
@@ -73,9 +83,12 @@ allowed_values:
   policy_profile: [economy, normal, performance, low_limit]
   policy_validity: [valid, invalid, drifted, missing, unsaved_default]
   task_class: [routine, standard, complex, human_owned]
+  policy_lifecycle_action: [inspect, preview, apply]
+  policy_lifecycle_scope: [personal, project]
 
 forbidden:
   - "provider, provider_slug, model, or model_slug fields in PolicySet"
-  - "dispatch, thread, subagent, automation, runtime, config, hook, custom-agent, Vault, generated, or Project mutation"
+  - "dispatch, thread, subagent, automation, runtime, config, hook, custom-agent, Vault, generated, GitHub Project, or telemetry mutation"
   - "claims that omitted runtime envelope fields reveal effective retained settings"
-  - "policy record writes, readback writes, telemetry persistence, monitoring, dashboards, or report products in this advisory planner"
+  - "live personal or live repository policy writes outside an explicit confirmed setup action or isolated test root"
+  - "telemetry persistence, monitoring, dashboards, or report products"
