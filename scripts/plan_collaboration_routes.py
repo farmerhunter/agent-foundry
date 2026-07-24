@@ -102,11 +102,13 @@ def valid_escalation_approval(approval: Any) -> bool:
     return all(approval.get(field) not in (None, "", [], {}) for field in required)
 
 
-def valid_threshold_exception(exception: Any, now: dt.datetime) -> bool:
+def valid_threshold_exception(exception: Any, now: dt.datetime, issue: Any, role: Any) -> bool:
     if not isinstance(exception, dict):
         return False
     required = ("issue", "role", "temporary_cap", "reason", "expiry")
     if not all(exception.get(field) not in (None, "", [], {}) for field in required):
+        return False
+    if exception.get("issue") != issue or exception.get("role") != role:
         return False
     if not isinstance(exception.get("temporary_cap"), int) or exception["temporary_cap"] > GLOBAL_HARD_CONTEXT_CEILING:
         return False
@@ -117,7 +119,7 @@ def valid_threshold_exception(exception: Any, now: dt.datetime) -> bool:
     return expiry > now
 
 
-def resolve_threshold(context: dict[str, Any], now: dt.datetime, stops: list[str]) -> dict[str, Any]:
+def resolve_threshold(context: dict[str, Any], now: dt.datetime, stops: list[str], issue: Any, role: Any) -> dict[str, Any]:
     band = context.get("threshold_band")
     if not isinstance(band, str) or not band.strip():
         stops.append("missing_threshold_band")
@@ -145,7 +147,7 @@ def resolve_threshold(context: dict[str, Any], now: dt.datetime, stops: list[str
     if override_requested:
         exception = context.get("threshold_exception")
         if (
-            not valid_threshold_exception(exception, now)
+            not valid_threshold_exception(exception, now, issue, role)
             or age_override_requested
             or (max_override_requested and requested_max != exception.get("temporary_cap"))
         ):
@@ -191,7 +193,7 @@ def validate(packet: dict[str, Any], now: dt.datetime) -> dict[str, Any]:
     except (TypeError, ValueError):
         stops.append("missing_or_invalid_source_timestamp")
         source_ts = None
-    threshold = resolve_threshold(context, now, stops)
+    threshold = resolve_threshold(context, now, stops, issue, role)
     if source_ts is not None and now - source_ts > dt.timedelta(hours=threshold["max_age_hours"]):
         stops.append("stale_context")
 

@@ -187,7 +187,7 @@ def main() -> int:
                 **packet()["context"],
                 "max_age_hours": 48,
                 "threshold_exception": {
-                    "issue": 442,
+                    "issue": 440,
                     "role": "Implementer",
                     "temporary_cap": 8000,
                     "reason": "age overrides are not authorized",
@@ -204,7 +204,7 @@ def main() -> int:
                 **packet()["context"],
                 "max_context_tokens": 9000,
                 "threshold_exception": {
-                    "issue": 442,
+                    "issue": 440,
                     "role": "Implementer",
                     "temporary_cap": 8500,
                     "reason": "mismatched cap",
@@ -215,13 +215,47 @@ def main() -> int:
     )
     expect("mismatched-cap-exception-holds", "malformed_threshold_override" in mismatched_cap_exception["stop_conditions"], mismatched_cap_exception)
 
-    valid_exception = validate(
+    mismatched_issue_exception = validate(
         packet(
             context={
                 **packet()["context"],
                 "max_context_tokens": 9000,
                 "threshold_exception": {
                     "issue": 442,
+                    "role": "Implementer",
+                    "temporary_cap": 9000,
+                    "reason": "wrong issue",
+                    "expiry": "2026-07-25T00:00:00Z",
+                },
+            }
+        )
+    )
+    expect("mismatched-issue-exception-holds", "malformed_threshold_override" in mismatched_issue_exception["stop_conditions"], mismatched_issue_exception)
+
+    mismatched_role_exception = validate(
+        packet(
+            context={
+                **packet()["context"],
+                "max_context_tokens": 9000,
+                "threshold_exception": {
+                    "issue": 440,
+                    "role": "Reviewer",
+                    "temporary_cap": 9000,
+                    "reason": "wrong role",
+                    "expiry": "2026-07-25T00:00:00Z",
+                },
+            }
+        )
+    )
+    expect("mismatched-role-exception-holds", "malformed_threshold_override" in mismatched_role_exception["stop_conditions"], mismatched_role_exception)
+
+    valid_exception = validate(
+        packet(
+            context={
+                **packet()["context"],
+                "max_context_tokens": 9000,
+                "threshold_exception": {
+                    "issue": 440,
                     "role": "Implementer",
                     "temporary_cap": 9000,
                     "reason": "bounded temporary exception",
