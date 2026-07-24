@@ -29,9 +29,8 @@ def packet(**overrides):
         },
         "context": {
             "source_timestamp": "2026-07-24T01:33:07Z",
-            "max_age_hours": 24,
+            "threshold_band": "implementer_small_scoped_implementation",
             "estimated_context_tokens": 1000,
-            "max_context_tokens": 4000,
         },
         "readback": {
             "mode": "cursor_only_compact",
@@ -74,6 +73,8 @@ def main() -> int:
     ok = validate(packet())
     expect("valid-packet-routes", ok["route_decision"] == "fresh_bounded_thread", ok)
     expect("valid-packet-does-not-mutate", ok["mutation_performed"] is False and ok["dispatch_performed"] is False, ok)
+    expect("valid-band-max", ok["effective_threshold"]["max_context_tokens"] == 8000, ok)
+    expect("valid-band-age", ok["effective_threshold"]["max_age_hours"] == 24, ok)
 
     missing_budget = validate(packet(token_budget={}))
     expect("missing-budget-holds", missing_budget["route_decision"] == "hold_for_decision", missing_budget)
@@ -146,13 +147,125 @@ def main() -> int:
     expect("complete-approval-does-not-hold", complete_approval_result["route_decision"] == "fresh_bounded_thread", complete_approval_result)
 
     oversized = packet()
-    oversized["context"] = {**oversized["context"], "estimated_context_tokens": 5000, "max_context_tokens": 4000}
+    oversized["context"] = {**oversized["context"], "estimated_context_tokens": 9000}
     oversized_result = validate(oversized)
     expect("oversized-context-holds", "oversized_context" in oversized_result["stop_conditions"], oversized_result)
 
     missing_anchor = packet(dispatch_id="", durable_anchor="")
     missing_anchor_result = validate(missing_anchor)
     expect("missing-anchor-holds", "missing_duplicate_dispatch_anchor" in missing_anchor_result["stop_conditions"], missing_anchor_result)
+
+    generic = validate(packet(context={**packet()["context"], "threshold_band": "generic_default"}))
+    expect("generic-band-max", generic["effective_threshold"]["max_context_tokens"] == 6000, generic)
+    expect("generic-band-age", generic["effective_threshold"]["max_age_hours"] == 24, generic)
+
+    coordinator = validate(packet(context={**packet()["context"], "threshold_band": "coordinator_routing_status_readback"}))
+    expect("coordinator-band-max", coordinator["effective_threshold"]["max_context_tokens"] == 4000, coordinator)
+    expect("coordinator-band-age", coordinator["effective_threshold"]["max_age_hours"] == 12, coordinator)
+
+    reviewer = validate(packet(context={**packet()["context"], "threshold_band": "reviewer_exact_pr_review"}))
+    expect("reviewer-band-max", reviewer["effective_threshold"]["max_context_tokens"] == 10000, reviewer)
+    expect("reviewer-band-age", reviewer["effective_threshold"]["max_age_hours"] == 12, reviewer)
+
+    missing_threshold = packet()
+    missing_threshold["context"] = {key: value for key, value in missing_threshold["context"].items() if key != "threshold_band"}
+    missing_threshold_result = validate(missing_threshold)
+    expect("missing-threshold-holds", "missing_threshold_band" in missing_threshold_result["stop_conditions"], missing_threshold_result)
+
+    unknown_threshold = validate(packet(context={**packet()["context"], "threshold_band": "wide_open"}))
+    expect("unknown-threshold-holds", "unknown_threshold_band" in unknown_threshold["stop_conditions"], unknown_threshold)
+
+    global_breach = validate(packet(context={**packet()["context"], "max_context_tokens": 12001}))
+    expect("global-ceiling-holds", "context_exceeds_global_hard_ceiling" in global_breach["stop_conditions"], global_breach)
+
+    malformed_override = validate(packet(context={**packet()["context"], "max_context_tokens": 9000}))
+    expect("malformed-override-holds", "malformed_threshold_override" in malformed_override["stop_conditions"], malformed_override)
+
+    malformed_age_override = validate(
+        packet(
+            context={
+                **packet()["context"],
+                "max_age_hours": 48,
+                "threshold_exception": {
+                    "issue": 440,
+                    "role": "Implementer",
+                    "temporary_cap": 8000,
+                    "reason": "age overrides are not authorized",
+                    "expiry": "2026-07-25T00:00:00Z",
+                },
+            }
+        )
+    )
+    expect("malformed-age-override-holds", "malformed_threshold_override" in malformed_age_override["stop_conditions"], malformed_age_override)
+
+    mismatched_cap_exception = validate(
+        packet(
+            context={
+                **packet()["context"],
+                "max_context_tokens": 9000,
+                "threshold_exception": {
+                    "issue": 440,
+                    "role": "Implementer",
+                    "temporary_cap": 8500,
+                    "reason": "mismatched cap",
+                    "expiry": "2026-07-25T00:00:00Z",
+                },
+            }
+        )
+    )
+    expect("mismatched-cap-exception-holds", "malformed_threshold_override" in mismatched_cap_exception["stop_conditions"], mismatched_cap_exception)
+
+    mismatched_issue_exception = validate(
+        packet(
+            context={
+                **packet()["context"],
+                "max_context_tokens": 9000,
+                "threshold_exception": {
+                    "issue": 442,
+                    "role": "Implementer",
+                    "temporary_cap": 9000,
+                    "reason": "wrong issue",
+                    "expiry": "2026-07-25T00:00:00Z",
+                },
+            }
+        )
+    )
+    expect("mismatched-issue-exception-holds", "malformed_threshold_override" in mismatched_issue_exception["stop_conditions"], mismatched_issue_exception)
+
+    mismatched_role_exception = validate(
+        packet(
+            context={
+                **packet()["context"],
+                "max_context_tokens": 9000,
+                "threshold_exception": {
+                    "issue": 440,
+                    "role": "Reviewer",
+                    "temporary_cap": 9000,
+                    "reason": "wrong role",
+                    "expiry": "2026-07-25T00:00:00Z",
+                },
+            }
+        )
+    )
+    expect("mismatched-role-exception-holds", "malformed_threshold_override" in mismatched_role_exception["stop_conditions"], mismatched_role_exception)
+
+    valid_exception = validate(
+        packet(
+            context={
+                **packet()["context"],
+                "max_context_tokens": 9000,
+                "threshold_exception": {
+                    "issue": 440,
+                    "role": "Implementer",
+                    "temporary_cap": 9000,
+                    "reason": "bounded temporary exception",
+                    "expiry": "2026-07-25T00:00:00Z",
+                },
+            }
+        )
+    )
+    expect("valid-threshold-exception-routes", valid_exception["route_decision"] == "fresh_bounded_thread", valid_exception)
+    expect("valid-threshold-exception-visible", valid_exception["effective_threshold"]["exception_applied"] is True, valid_exception)
 
     print("collaboration route planner tests passed")
     return 0

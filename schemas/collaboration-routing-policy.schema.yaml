@@ -53,11 +53,20 @@ properties:
     additionalProperties: false
     required:
       - source_timestamp
-      - max_age_hours
+      - threshold_band
     properties:
       source_timestamp:
         type: string
         format: date-time
+      threshold_band:
+        type: string
+        enum:
+          - generic_default
+          - coordinator_routing_status_readback
+          - architect_design_gate
+          - implementer_small_scoped_implementation
+          - reviewer_exact_pr_review
+          - tester_focused_validation
       max_age_hours:
         type: integer
         minimum: 1
@@ -67,6 +76,33 @@ properties:
       max_context_tokens:
         type: integer
         minimum: 1
+        maximum: 12000
+      threshold_exception:
+        type: object
+        additionalProperties: false
+        required:
+          - issue
+          - role
+          - temporary_cap
+          - reason
+          - expiry
+        properties:
+          issue:
+            type: integer
+            minimum: 1
+          role:
+            type: string
+            minLength: 1
+          temporary_cap:
+            type: integer
+            minimum: 1
+            maximum: 12000
+          reason:
+            type: string
+            minLength: 1
+          expiry:
+            type: string
+            format: date-time
   readback:
     type: object
     additionalProperties: false
