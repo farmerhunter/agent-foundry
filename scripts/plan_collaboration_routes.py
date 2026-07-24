@@ -86,6 +86,13 @@ def add_missing(stops: list[str], packet: dict[str, Any], field: str) -> Any:
     return value
 
 
+def valid_escalation_approval(approval: Any) -> bool:
+    if not isinstance(approval, dict):
+        return False
+    required = ("issue", "role", "model", "reasoning", "purpose", "budget")
+    return all(approval.get(field) not in (None, "", [], {}) for field in required)
+
+
 def validate(packet: dict[str, Any], now: dt.datetime) -> dict[str, Any]:
     stops: list[str] = []
     warnings: list[str] = []
@@ -140,6 +147,10 @@ def validate(packet: dict[str, Any], now: dt.datetime) -> dict[str, Any]:
     if not isinstance(duplicate, dict):
         stops.append("missing_duplicate_dispatch")
         duplicate = {}
+    if "duplicate_owner_detected" not in duplicate:
+        stops.append("missing_duplicate_owner_detected")
+    if "same_issue_role_boundary_seen" not in duplicate:
+        stops.append("missing_same_issue_role_boundary_seen")
     if duplicate.get("duplicate_owner_detected") is True:
         stops.append("duplicate_owner")
     if duplicate.get("same_issue_role_boundary_seen") is True:
@@ -174,11 +185,12 @@ def validate(packet: dict[str, Any], now: dt.datetime) -> dict[str, Any]:
         stops.append("missing_or_unknown_model")
     if reasoning_rank(requested_reasoning) is None:
         stops.append("missing_or_unknown_reasoning")
+    approval = model.get("human_escalation_approval")
     if model_rank(requested_model) is not None and model_rank(requested_model) > model_rank(DEFAULT_CEILING_MODEL):
-        if not model.get("human_escalation_approval"):
+        if not valid_escalation_approval(approval):
             stops.append("model_escalation_requires_human_approval")
     if reasoning_rank(requested_reasoning) is not None and reasoning_rank(requested_reasoning) > reasoning_rank(DEFAULT_CEILING_REASONING):
-        if not model.get("human_escalation_approval"):
+        if not valid_escalation_approval(approval):
             stops.append("reasoning_escalation_requires_human_approval")
 
     context_size = context.get("estimated_context_tokens")

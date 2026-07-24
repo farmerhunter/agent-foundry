@@ -91,11 +91,59 @@ def main() -> int:
     duplicate = packet(duplicate_dispatch={"duplicate_owner_detected": True})
     duplicate_result = validate(duplicate)
     expect("duplicate-owner-holds", "duplicate_owner" in duplicate_result["stop_conditions"], duplicate_result)
+    expect(
+        "duplicate-boundary-subfield-required",
+        "missing_same_issue_role_boundary_seen" in duplicate_result["stop_conditions"],
+        duplicate_result,
+    )
+
+    missing_duplicate_subfield = packet(duplicate_dispatch={"duplicate_owner_detected": False})
+    missing_duplicate_subfield_result = validate(missing_duplicate_subfield)
+    expect(
+        "missing-duplicate-subfield-holds",
+        missing_duplicate_subfield_result["route_decision"] == "hold_for_decision",
+        missing_duplicate_subfield_result,
+    )
+    expect(
+        "missing-duplicate-subfield-visible",
+        "missing_same_issue_role_boundary_seen" in missing_duplicate_subfield_result["stop_conditions"],
+        missing_duplicate_subfield_result,
+    )
 
     escalation = packet(model={"name": "gpt-5.6", "reasoning": "high"})
     escalation_result = validate(escalation)
     expect("model-escalation-holds", "model_escalation_requires_human_approval" in escalation_result["stop_conditions"], escalation_result)
     expect("reasoning-escalation-holds", "reasoning_escalation_requires_human_approval" in escalation_result["stop_conditions"], escalation_result)
+
+    incomplete_approval = packet(model={"name": "gpt-5.6", "reasoning": "high", "human_escalation_approval": {"purpose": "x"}})
+    incomplete_approval_result = validate(incomplete_approval)
+    expect(
+        "incomplete-approval-model-holds",
+        "model_escalation_requires_human_approval" in incomplete_approval_result["stop_conditions"],
+        incomplete_approval_result,
+    )
+    expect(
+        "incomplete-approval-reasoning-holds",
+        "reasoning_escalation_requires_human_approval" in incomplete_approval_result["stop_conditions"],
+        incomplete_approval_result,
+    )
+
+    complete_approval = packet(
+        model={
+            "name": "gpt-5.6",
+            "reasoning": "high",
+            "human_escalation_approval": {
+                "issue": 440,
+                "role": "Implementer",
+                "model": "gpt-5.6",
+                "reasoning": "high",
+                "purpose": "bounded review fix",
+                "budget": "25000 tokens",
+            },
+        }
+    )
+    complete_approval_result = validate(complete_approval)
+    expect("complete-approval-does-not-hold", complete_approval_result["route_decision"] == "fresh_bounded_thread", complete_approval_result)
 
     oversized = packet()
     oversized["context"] = {**oversized["context"], "estimated_context_tokens": 5000, "max_context_tokens": 4000}
