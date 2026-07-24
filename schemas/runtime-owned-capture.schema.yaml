@@ -1,0 +1,168 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://agent-foundry.local/schemas/runtime-owned-capture.schema.yaml"
+title: Runtime-Owned Capability Capture Evidence
+type: object
+additionalProperties: false
+required:
+  - schema_version
+  - record_id
+  - captured_at
+  - producer
+  - runtime_attestation
+  - route
+  - evidence_metadata
+  - privacy
+  - stop_conditions
+properties:
+  schema_version:
+    const: 1
+  record_id:
+    type: string
+    minLength: 1
+  captured_at:
+    type: string
+    format: date-time
+  producer:
+    type: object
+    additionalProperties: false
+    required:
+      - producer_type
+      - producer_id
+      - runtime_id
+      - capture_session_id
+      - runtime_owned
+      - caller_supplied
+    properties:
+      producer_type:
+        enum:
+          - runtime_control_surface
+          - adapter_control_surface
+      producer_id:
+        type: string
+        minLength: 1
+      runtime_id:
+        type: string
+        minLength: 1
+      capture_session_id:
+        type: string
+        minLength: 1
+      runtime_owned:
+        const: true
+      caller_supplied:
+        const: false
+  runtime_attestation:
+    type: object
+    additionalProperties: false
+    required:
+      - producer_bound
+      - capture_nonce
+    properties:
+      producer_bound:
+        const: true
+      capture_nonce:
+        type: string
+        minLength: 1
+  route:
+    type: object
+    additionalProperties: false
+    required:
+      - category
+      - support_status
+      - requested_envelope
+      - effective_envelope
+    properties:
+      category:
+        enum:
+          - create
+          - send
+          - spawn
+          - fork
+          - automation
+          - future
+      support_status:
+        enum:
+          - supported
+          - degraded
+          - unsupported
+      requested_envelope:
+        type: object
+        additionalProperties: false
+        required:
+          - model
+          - reasoning
+        properties:
+          model:
+            type: string
+            minLength: 1
+          reasoning:
+            type: string
+            minLength: 1
+      effective_envelope:
+        type: object
+        additionalProperties: false
+        required:
+          - status
+        properties:
+          status:
+            enum:
+              - accepted
+              - downgraded
+              - unknown
+          model:
+            type: string
+            minLength: 1
+          reasoning:
+            type: string
+            minLength: 1
+      missing_observations:
+        type: array
+        items:
+          type: string
+          minLength: 1
+      unsupported_reason:
+        type: string
+        minLength: 1
+  evidence_metadata:
+    type: object
+    additionalProperties: false
+    properties:
+      route_id:
+        type: string
+      target_id:
+        type: string
+      cursor:
+        type: string
+      budget_anchor:
+        type: string
+      external_cost_possible:
+        type: boolean
+      duplicate_owner_detected:
+        type: boolean
+      evidence_ref:
+        type: string
+  privacy:
+    type: object
+    additionalProperties: false
+    required:
+      - contains_prompt_body
+      - redaction
+    properties:
+      contains_prompt_body:
+        const: false
+      redaction:
+        const: metadata_only
+  stop_conditions:
+    type: array
+    uniqueItems: true
+    items:
+      enum:
+        - missing_producer
+        - stale_evidence
+        - forged_evidence
+        - caller_only_evidence
+        - privacy_exposure
+        - duplicate_owner
+        - budget_breach
+        - external_cost_ambiguity
+        - missing_runtime_capture
+        - unsupported_runtime_capture
