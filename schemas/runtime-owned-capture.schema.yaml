@@ -122,6 +122,73 @@ properties:
       unsupported_reason:
         type: string
         minLength: 1
+      category_evidence:
+        type: object
+        additionalProperties: false
+        properties:
+          new_thread_id:
+            type: string
+            minLength: 1
+          capability_source:
+            type: string
+            minLength: 1
+          capture_timestamp:
+            type: string
+            format: date-time
+          target_id:
+            type: string
+            minLength: 1
+          cursor_behavior:
+            type: string
+            minLength: 1
+          delivery_status:
+            type: string
+            minLength: 1
+          result_status:
+            type: string
+            minLength: 1
+          child_owner:
+            type: string
+            minLength: 1
+          isolation_boundary:
+            type: string
+            minLength: 1
+          inherited_context_policy:
+            type: string
+            minLength: 1
+          budget_anchor:
+            type: string
+            minLength: 1
+          source_id:
+            type: string
+            minLength: 1
+          fork_boundary:
+            type: string
+            minLength: 1
+          inherited_packet_ref:
+            type: string
+            minLength: 1
+          materialized_packet_ref:
+            type: string
+            minLength: 1
+          rollback_delete_constraints:
+            type: string
+            minLength: 1
+          schedule_id:
+            type: string
+            minLength: 1
+          trigger:
+            type: string
+            minLength: 1
+          dispatch_target:
+            type: string
+            minLength: 1
+          stop_expiry:
+            type: string
+            format: date-time
+          user_approval_scope:
+            type: string
+            minLength: 1
   evidence_metadata:
     type: object
     additionalProperties: false

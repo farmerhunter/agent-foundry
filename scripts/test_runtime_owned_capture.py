@@ -41,6 +41,11 @@ def record(**overrides):
             "support_status": "supported",
             "requested_envelope": {"model": "gpt-5.5", "reasoning": "medium"},
             "effective_envelope": {"status": "accepted", "model": "gpt-5.5", "reasoning": "medium"},
+            "category_evidence": {
+                "new_thread_id": "thread-446",
+                "capability_source": "codex-control-surface",
+                "capture_timestamp": "2026-07-24T03:55:00Z",
+            },
         },
         "evidence_metadata": {
             "route_id": "route-446",
@@ -103,6 +108,70 @@ def main() -> int:
     unsupported_result = validate(unsupported)
     expect("unsupported-runtime-owned-record-valid", unsupported_result["valid"] is True, unsupported_result)
     expect("unsupported-status-visible", unsupported_result["support_status"] == "unsupported", unsupported_result)
+
+    supported_routes = {
+        "create": {
+            "new_thread_id": "thread-446",
+            "capability_source": "codex-control-surface",
+            "capture_timestamp": "2026-07-24T03:55:00Z",
+        },
+        "send": {
+            "target_id": "thread-446",
+            "cursor_behavior": "after_cursor",
+            "delivery_status": "delivered",
+            "result_status": "accepted",
+        },
+        "spawn": {
+            "child_owner": "Implementer",
+            "isolation_boundary": "bounded_child_session",
+            "inherited_context_policy": "compact_issue_packet",
+            "budget_anchor": "issue-446",
+        },
+        "fork": {
+            "source_id": "thread-446",
+            "fork_boundary": "fresh_task_branch",
+            "materialized_packet_ref": "issue-446-packet",
+            "rollback_delete_constraints": "no_delete_without_human_approval",
+        },
+        "automation": {
+            "schedule_id": "schedule-446",
+            "trigger": "manual_human_approved",
+            "dispatch_target": "reviewer",
+            "stop_expiry": "2026-07-25T00:00:00Z",
+            "user_approval_scope": "issue-446-only",
+        },
+    }
+    for category, category_evidence in supported_routes.items():
+        supported_category = validate(
+            record(
+                route={
+                    "category": category,
+                    "support_status": "supported",
+                    "requested_envelope": {"model": "gpt-5.5", "reasoning": "medium"},
+                    "effective_envelope": {"status": "accepted", "model": "gpt-5.5", "reasoning": "medium"},
+                    "category_evidence": category_evidence,
+                }
+            )
+        )
+        expect(f"supported-{category}-category-valid", supported_category["valid"] is True, supported_category)
+
+        missing_category = validate(
+            record(
+                route={
+                    "category": category,
+                    "support_status": "supported",
+                    "requested_envelope": {"model": "gpt-5.5", "reasoning": "medium"},
+                    "effective_envelope": {"status": "accepted", "model": "gpt-5.5", "reasoning": "medium"},
+                    "category_evidence": {},
+                }
+            )
+        )
+        expect(f"supported-{category}-missing-category-evidence-invalid", missing_category["valid"] is False, missing_category)
+        expect(
+            f"supported-{category}-missing-category-evidence-error",
+            "missing_route_category_evidence" in missing_category["errors"],
+            missing_category,
+        )
 
     caller_supplied = record(producer={**record()["producer"], "runtime_owned": False, "caller_supplied": True})
     caller_result = validate(caller_supplied)

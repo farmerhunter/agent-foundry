@@ -14,6 +14,13 @@ from typing import Any
 ROUTE_CATEGORIES = {"create", "send", "spawn", "fork", "automation", "future"}
 SUPPORT_STATUSES = {"supported", "degraded", "unsupported"}
 PRODUCER_TYPES = {"runtime_control_surface", "adapter_control_surface"}
+ROUTE_CATEGORY_REQUIRED_EVIDENCE = {
+    "create": ("new_thread_id", "capability_source", "capture_timestamp"),
+    "send": ("target_id", "cursor_behavior", "delivery_status", "result_status"),
+    "spawn": ("child_owner", "isolation_boundary", "inherited_context_policy", "budget_anchor"),
+    "fork": ("source_id", "fork_boundary", "rollback_delete_constraints"),
+    "automation": ("schedule_id", "trigger", "dispatch_target", "stop_expiry", "user_approval_scope"),
+}
 FORBIDDEN_CONTENT_KEYS = {
     "prompt",
     "body",
@@ -103,6 +110,21 @@ def find_forbidden_content(value: Any, path: str = "$") -> list[str]:
     return found
 
 
+def missing_route_category_evidence(category: Any, evidence: Any) -> list[str]:
+    if category not in ROUTE_CATEGORY_REQUIRED_EVIDENCE:
+        return []
+    if not isinstance(evidence, dict):
+        return ["route_category_evidence"]
+    missing_fields = [
+        field
+        for field in ROUTE_CATEGORY_REQUIRED_EVIDENCE[category]
+        if missing(evidence.get(field))
+    ]
+    if category == "fork" and missing(evidence.get("inherited_packet_ref")) and missing(evidence.get("materialized_packet_ref")):
+        missing_fields.append("inherited_or_materialized_packet_ref")
+    return missing_fields
+
+
 def validate(record: dict[str, Any], now: dt.datetime, max_age_hours: int = 24) -> dict[str, Any]:
     errors: list[str] = []
     warnings: list[str] = []
@@ -150,6 +172,10 @@ def validate(record: dict[str, Any], now: dt.datetime, max_age_hours: int = 24) 
     if support_status == "supported":
         if effective.get("status") != "accepted" or missing(effective.get("model")) or missing(effective.get("reasoning")):
             errors.append("missing_effective_envelope")
+        missing_category_fields = missing_route_category_evidence(category, route.get("category_evidence"))
+        if missing_category_fields:
+            errors.append("missing_route_category_evidence")
+            warnings.append("missing_route_category_fields:" + ",".join(missing_category_fields))
     elif support_status == "degraded":
         if not isinstance(route.get("missing_observations"), list) or not route.get("missing_observations"):
             errors.append("missing_degraded_observations")
