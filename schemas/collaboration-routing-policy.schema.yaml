@@ -1,0 +1,168 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://agent-foundry.local/schemas/collaboration-routing-policy.schema.yaml"
+title: Collaboration Routing Policy
+type: object
+additionalProperties: false
+required:
+  - issue
+  - role
+  - token_budget
+  - context
+  - readback
+  - duplicate_dispatch
+  - hold_conditions
+  - model
+properties:
+  issue:
+    type: integer
+    minimum: 1
+  role:
+    type: string
+    minLength: 1
+  dispatch_id:
+    type: string
+    minLength: 1
+  durable_anchor:
+    type: string
+    minLength: 1
+  requested_route:
+    type: string
+    enum:
+      - serial_current_session
+      - fresh_bounded_thread
+      - bounded_subagent
+      - no_dispatch
+      - hold_for_decision
+  token_budget:
+    type: object
+    additionalProperties: false
+    required:
+      - first_active_turn_words
+      - total_role_thread_tokens
+    properties:
+      first_active_turn_words:
+        type: integer
+        minimum: 1
+        maximum: 1500
+      total_role_thread_tokens:
+        type: integer
+        minimum: 1
+        maximum: 25000
+  context:
+    type: object
+    additionalProperties: false
+    required:
+      - source_timestamp
+      - max_age_hours
+    properties:
+      source_timestamp:
+        type: string
+        format: date-time
+      max_age_hours:
+        type: integer
+        minimum: 1
+      estimated_context_tokens:
+        type: integer
+        minimum: 0
+      max_context_tokens:
+        type: integer
+        minimum: 1
+  readback:
+    type: object
+    additionalProperties: false
+    required:
+      - mode
+      - compact_readback_available
+    properties:
+      mode:
+        const: cursor_only_compact
+      compact_readback_available:
+        const: true
+  duplicate_dispatch:
+    type: object
+    additionalProperties: false
+    required:
+      - duplicate_owner_detected
+      - same_issue_role_boundary_seen
+    properties:
+      duplicate_owner_detected:
+        const: false
+      same_issue_role_boundary_seen:
+        const: false
+  hold_conditions:
+    type: array
+    uniqueItems: true
+    contains:
+      const: missing_required_fields
+    allOf:
+      - contains:
+          const: missing_budget
+      - contains:
+          const: budget_breach
+      - contains:
+          const: stale_context
+      - contains:
+          const: oversized_context
+      - contains:
+          const: duplicate_owner
+      - contains:
+          const: compact_readback_unavailable
+      - contains:
+          const: escalation_need
+    items:
+      type: string
+      enum:
+        - missing_budget
+        - budget_breach
+        - stale_context
+        - oversized_context
+        - duplicate_owner
+        - compact_readback_unavailable
+        - escalation_need
+        - missing_required_fields
+  model:
+    type: object
+    additionalProperties: false
+    required:
+      - name
+      - reasoning
+    properties:
+      name:
+        type: string
+      reasoning:
+        type: string
+        enum:
+          - minimal
+          - low
+          - medium
+          - high
+      human_escalation_approval:
+        type: object
+        additionalProperties: false
+        required:
+          - issue
+          - role
+          - model
+          - reasoning
+          - purpose
+          - budget
+        properties:
+          issue:
+            type: integer
+          role:
+            type: string
+          model:
+            type: string
+          reasoning:
+            type: string
+          purpose:
+            type: string
+            minLength: 1
+          budget:
+            type: string
+            minLength: 1
+anyOf:
+  - required:
+      - dispatch_id
+  - required:
+      - durable_anchor
