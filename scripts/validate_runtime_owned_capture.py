@@ -45,6 +45,7 @@ STOP_CONDITIONS = {
     "external_cost_ambiguity",
     "missing_runtime_capture",
     "unsupported_runtime_capture",
+    "unsupported_future_route",
 }
 
 
@@ -170,6 +171,8 @@ def validate(record: dict[str, Any], now: dt.datetime, max_age_hours: int = 24) 
     if missing(requested.get("model")) or missing(requested.get("reasoning")):
         errors.append("missing_requested_envelope")
     if support_status == "supported":
+        if category == "future":
+            errors.append("unsupported_future_route")
         if effective.get("status") != "accepted" or missing(effective.get("model")) or missing(effective.get("reasoning")):
             errors.append("missing_effective_envelope")
         missing_category_fields = missing_route_category_evidence(category, route.get("category_evidence"))

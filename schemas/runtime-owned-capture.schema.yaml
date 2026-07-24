@@ -233,3 +233,4 @@ properties:
         - external_cost_ambiguity
         - missing_runtime_capture
         - unsupported_runtime_capture
+        - unsupported_future_route

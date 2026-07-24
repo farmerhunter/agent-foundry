@@ -109,6 +109,19 @@ def main() -> int:
     expect("unsupported-runtime-owned-record-valid", unsupported_result["valid"] is True, unsupported_result)
     expect("unsupported-status-visible", unsupported_result["support_status"] == "unsupported", unsupported_result)
 
+    future_supported = validate(
+        record(
+            route={
+                "category": "future",
+                "support_status": "supported",
+                "requested_envelope": {"model": "gpt-5.5", "reasoning": "medium"},
+                "effective_envelope": {"status": "accepted", "model": "gpt-5.5", "reasoning": "medium"},
+            }
+        )
+    )
+    expect("future-supported-invalid", future_supported["valid"] is False, future_supported)
+    expect("future-supported-error", "unsupported_future_route" in future_supported["errors"], future_supported)
+
     supported_routes = {
         "create": {
             "new_thread_id": "thread-446",
