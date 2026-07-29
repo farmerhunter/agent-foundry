@@ -17,11 +17,13 @@ POLICY_SOURCE = "scripts/plan_collaboration_routes.py"
 POLICY_VERSION = "af18-cost-policy-440-442"
 CONTROL_VERSION = "af18-mvp1-control-plane-v1"
 ROUTE_PERMISSIONS = {
-    "bounded_subagent": "allow",
-    "visible_interactive": "successor_required",
-    "external_provider": "hold_required",
-    "privileged_runtime": "hold_required",
+    "isolated_execution": "allow",
+    "interactive_execution": "successor_required",
+    "serial_execution": "allow",
+    "external_execution": "hold_required",
+    "privileged_execution": "hold_required",
 }
+RESOURCE_PROVENANCE = {"observed", "estimated", "unavailable"}
 FORBIDDEN_PACKET_KEYS = {
     "prompt",
     "body",
@@ -112,8 +114,16 @@ def active_policy_readout() -> dict[str, Any]:
             "model_ceiling_breach",
             "duplicate_dispatch_claim",
             "duplicate_active_run",
+            "missing_resource_observation",
+            "missing_context_token_measurement",
+            "resource_measurement_unavailable",
             "privacy_exposure",
         ],
+        "resource_observation_policy": {
+            "accepted_provenance": sorted(RESOURCE_PROVENANCE),
+            "missing_or_unavailable": "hold_required_or_explicit_lower_capability_policy",
+            "missing_counts_as_zero": False,
+        },
         "mutation_performed": False,
         "dispatch_performed": False,
     }
@@ -124,6 +134,8 @@ def effective_snapshot(packet: dict[str, Any], now: dt.datetime, stops: list[str
     run = packet.get("execution_run") if isinstance(packet.get("execution_run"), dict) else {}
     context = run.get("context") if isinstance(run.get("context"), dict) else {}
     model = run.get("model") if isinstance(run.get("model"), dict) else {}
+    observations = context.get("resource_observations") if isinstance(context.get("resource_observations"), dict) else {}
+    context_tokens = observations.get("context_tokens") if isinstance(observations.get("context_tokens"), dict) else {}
     issue = work.get("issue")
     role = work.get("role")
     threshold = cost_policy.resolve_threshold(context, now, stops, issue, role)
@@ -136,6 +148,14 @@ def effective_snapshot(packet: dict[str, Any], now: dt.datetime, stops: list[str
         "reasoning_ceiling": cost_policy.DEFAULT_CEILING_REASONING,
         "requested_model": model.get("name"),
         "requested_reasoning": model.get("reasoning"),
+        "resource_observation": {
+            "context_tokens": {
+                "provenance": context_tokens.get("provenance"),
+                "tokens": context_tokens.get("tokens") if isinstance(context_tokens.get("tokens"), int) else None,
+                "source": context_tokens.get("source"),
+                "lower_capability_policy": context_tokens.get("lower_capability_policy"),
+            }
+        },
         "route_permissions": ROUTE_PERMISSIONS,
     }
 
@@ -147,7 +167,7 @@ def validate_required(work: dict[str, Any], run: dict[str, Any], claim: dict[str
     for field in ("run_id", "work_id", "role", "state", "context", "model"):
         if missing(run.get(field)):
             stops.append(f"missing_execution_run_{field}")
-    for field in ("idempotency_key", "work_id", "role", "decision_boundary", "durable_anchor"):
+    for field in ("idempotency_key", "work_id", "role", "decision_boundary", "transition_semantics", "durable_anchor"):
         if missing(claim.get(field)):
             stops.append(f"missing_dispatch_claim_{field}")
 
@@ -164,6 +184,32 @@ def validate_required(work: dict[str, Any], run: dict[str, Any], claim: dict[str
         stops.append("claim_work_role_mismatch")
 
 
+def context_token_count(context: dict[str, Any], stops: list[str]) -> int | None:
+    observations = context.get("resource_observations")
+    if not isinstance(observations, dict):
+        stops.append("missing_resource_observation")
+        return None
+    context_tokens = observations.get("context_tokens")
+    if not isinstance(context_tokens, dict):
+        stops.append("missing_resource_observation")
+        return None
+    provenance = context_tokens.get("provenance")
+    if provenance not in RESOURCE_PROVENANCE:
+        stops.append("unknown_resource_observation_provenance")
+        return None
+    if provenance == "unavailable":
+        if context_tokens.get("lower_capability_policy") == "serial_execution_only":
+            stops.append("resource_measurement_lower_capability_required")
+        else:
+            stops.append("resource_measurement_unavailable")
+        return None
+    tokens = context_tokens.get("tokens")
+    if not isinstance(tokens, int) or tokens < 0:
+        stops.append("missing_context_token_measurement")
+        return None
+    return tokens
+
+
 def validate_context(run: dict[str, Any], snapshot: dict[str, Any], now: dt.datetime, stops: list[str]) -> None:
     context = run.get("context") if isinstance(run.get("context"), dict) else {}
     try:
@@ -173,10 +219,8 @@ def validate_context(run: dict[str, Any], snapshot: dict[str, Any], now: dt.date
         source_ts = None
     if source_ts is not None and now - source_ts > dt.timedelta(hours=snapshot["threshold"]["max_age_hours"]):
         stops.append("stale_context")
-    context_size = context.get("estimated_context_tokens")
-    if not isinstance(context_size, int):
-        stops.append("missing_estimated_context_tokens")
-    elif context_size > snapshot["threshold"]["max_context_tokens"]:
+    context_size = context_token_count(context, stops)
+    if isinstance(context_size, int) and context_size > snapshot["threshold"]["max_context_tokens"]:
         stops.append("oversized_context")
 
 
@@ -199,9 +243,12 @@ def validate_model(run: dict[str, Any], stops: list[str]) -> None:
 def duplicate_claim_seen(claim: dict[str, Any], existing: Any) -> bool:
     if not isinstance(existing, list):
         return False
-    keys = ("idempotency_key", "work_id", "role", "decision_boundary")
     for item in existing:
-        if isinstance(item, dict) and all(item.get(key) == claim.get(key) for key in keys):
+        if not isinstance(item, dict):
+            continue
+        same_boundary = all(item.get(key) == claim.get(key) for key in ("work_id", "role", "decision_boundary"))
+        same_transition = item.get("transition_semantics") in (None, claim.get("transition_semantics"))
+        if same_boundary and same_transition:
             return True
     return False
 

@@ -83,7 +83,7 @@ properties:
         required:
           - source_timestamp
           - threshold_band
-          - estimated_context_tokens
+          - resource_observations
         properties:
           source_timestamp:
             type: string
@@ -96,9 +96,43 @@ properties:
               - implementer_small_scoped_implementation
               - reviewer_exact_pr_review
               - tester_focused_validation
-          estimated_context_tokens:
-            type: integer
-            minimum: 0
+          resource_observations:
+            type: object
+            additionalProperties: false
+            required:
+              - context_tokens
+            properties:
+              context_tokens:
+                type: object
+                additionalProperties: false
+                required:
+                  - provenance
+                  - source
+                properties:
+                  provenance:
+                    enum:
+                      - observed
+                      - estimated
+                      - unavailable
+                  tokens:
+                    type: integer
+                    minimum: 0
+                  source:
+                    type: string
+                    minLength: 1
+                  lower_capability_policy:
+                    enum:
+                      - serial_execution_only
+                allOf:
+                  - if:
+                      properties:
+                        provenance:
+                          enum:
+                            - observed
+                            - estimated
+                    then:
+                      required:
+                        - tokens
           max_context_tokens:
             type: integer
             minimum: 1
@@ -185,6 +219,7 @@ properties:
       - work_id
       - role
       - decision_boundary
+      - transition_semantics
       - durable_anchor
     properties:
       idempotency_key:
@@ -199,15 +234,25 @@ properties:
       decision_boundary:
         type: string
         minLength: 1
+      transition_semantics:
+        type: string
+        minLength: 1
       durable_anchor:
         type: string
         minLength: 1
+      adapter_metadata:
+        type: object
+        additionalProperties: true
   requested_route:
     enum:
-      - bounded_subagent
-      - visible_interactive
-      - external_provider
-      - privileged_runtime
+      - isolated_execution
+      - interactive_execution
+      - serial_execution
+      - external_execution
+      - privileged_execution
+  adapter_metadata:
+    type: object
+    additionalProperties: true
   existing_dispatch_claims:
     type: array
     items:
