@@ -1,0 +1,392 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://agent-foundry.local/schemas/af18-control-plane.schema.yaml"
+title: AF18 MVP-1 Control-Plane Packet
+type: object
+additionalProperties: false
+required:
+  - work
+  - execution_run
+  - dispatch_claim
+  - requested_route
+properties:
+  work:
+    type: object
+    additionalProperties: false
+    required:
+      - work_id
+      - issue
+      - issue_anchor
+      - role
+      - objective
+      - stage
+      - phase
+      - root_budget_tokens
+      - remaining_budget_tokens
+      - durable_anchors
+      - stop_conditions
+    properties:
+      work_id:
+        type: string
+        minLength: 1
+      issue:
+        type: integer
+        minimum: 1
+      issue_anchor:
+        type: object
+        additionalProperties: false
+        required:
+          - issue
+          - durable_anchor
+          - scope
+          - risk
+          - acceptance
+          - human_gates
+        properties:
+          issue:
+            type: integer
+            minimum: 1
+          durable_anchor:
+            type: string
+            minLength: 1
+          scope:
+            type: string
+            minLength: 1
+          risk:
+            type: string
+            minLength: 1
+          acceptance:
+            type: string
+            minLength: 1
+          human_gates:
+            type: array
+            items:
+              type: string
+              minLength: 1
+      role:
+        type: string
+        minLength: 1
+      objective:
+        type: string
+        minLength: 1
+      stage:
+        type: string
+        minLength: 1
+      phase:
+        type: string
+        minLength: 1
+      current_owner:
+        type: string
+        minLength: 1
+      root_budget_tokens:
+        type: integer
+        minimum: 1
+      remaining_budget_tokens:
+        type: integer
+        minimum: 0
+      durable_anchors:
+        type: array
+        minItems: 1
+        items:
+          type: string
+          minLength: 1
+      stop_conditions:
+        type: array
+        items:
+          type: string
+          minLength: 1
+      material_decisions:
+        type: array
+        items:
+          type: string
+          minLength: 1
+      accepted_evidence_refs:
+        type: array
+        items:
+          type: string
+          minLength: 1
+      material_risk_or_blocker:
+        type:
+          - string
+          - "null"
+      next_action:
+        type: string
+        minLength: 1
+      cross_issue_work:
+        type: boolean
+      multiple_issue_work:
+        type: boolean
+      additional_issue_anchors:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required:
+            - issue
+            - durable_anchor
+            - scope
+            - risk
+            - acceptance
+            - human_gates
+          properties:
+            issue:
+              type: integer
+              minimum: 1
+            durable_anchor:
+              type: string
+              minLength: 1
+            scope:
+              type: string
+              minLength: 1
+            risk:
+              type: string
+              minLength: 1
+            acceptance:
+              type: string
+              minLength: 1
+            human_gates:
+              type: array
+              items:
+                type: string
+                minLength: 1
+  execution_run:
+    type: object
+    additionalProperties: false
+    required:
+      - run_id
+      - work_id
+      - role
+      - state
+      - context
+      - model
+    properties:
+      run_id:
+        type: string
+        minLength: 1
+      work_id:
+        type: string
+        minLength: 1
+      role:
+        type: string
+        minLength: 1
+      state:
+        enum:
+          - active
+          - successor_required
+          - hold_required
+          - completed
+      context:
+        type: object
+        additionalProperties: false
+        required:
+          - source_timestamp
+          - threshold_band
+          - resource_observations
+        properties:
+          source_timestamp:
+            type: string
+            format: date-time
+          threshold_band:
+            enum:
+              - generic_default
+              - coordinator_routing_status_readback
+              - architect_design_gate
+              - implementer_small_scoped_implementation
+              - reviewer_exact_pr_review
+              - tester_focused_validation
+          resource_observations:
+            type: object
+            additionalProperties: false
+            required:
+              - context_tokens
+            properties:
+              context_tokens:
+                type: object
+                additionalProperties: false
+                required:
+                  - provenance
+                  - source
+                properties:
+                  provenance:
+                    enum:
+                      - observed
+                      - estimated
+                      - unavailable
+                  tokens:
+                    type: integer
+                    minimum: 0
+                  source:
+                    type: string
+                    minLength: 1
+                  lower_capability_policy:
+                    enum:
+                      - serial_execution_only
+                allOf:
+                  - if:
+                      properties:
+                        provenance:
+                          enum:
+                            - observed
+                            - estimated
+                    then:
+                      required:
+                        - tokens
+          max_context_tokens:
+            type: integer
+            minimum: 1
+            maximum: 12000
+          max_age_hours:
+            type: integer
+            minimum: 1
+          threshold_exception:
+            type: object
+            additionalProperties: false
+            required:
+              - issue
+              - role
+              - temporary_cap
+              - reason
+              - expiry
+            properties:
+              issue:
+                type: integer
+                minimum: 1
+              role:
+                type: string
+                minLength: 1
+              temporary_cap:
+                type: integer
+                minimum: 1
+                maximum: 12000
+              reason:
+                type: string
+                minLength: 1
+              expiry:
+                type: string
+                format: date-time
+      model:
+        type: object
+        additionalProperties: false
+        required:
+          - name
+          - reasoning
+        properties:
+          name:
+            type: string
+            minLength: 1
+          reasoning:
+            enum:
+              - minimal
+              - low
+              - medium
+              - high
+          human_escalation_approval:
+            type: object
+            additionalProperties: false
+            required:
+              - issue
+              - role
+              - model
+              - reasoning
+              - purpose
+              - budget
+            properties:
+              issue:
+                type: integer
+                minimum: 1
+              role:
+                type: string
+                minLength: 1
+              model:
+                type: string
+                minLength: 1
+              reasoning:
+                type: string
+                minLength: 1
+              purpose:
+                type: string
+                minLength: 1
+              budget:
+                type: string
+                minLength: 1
+  dispatch_claim:
+    type: object
+    additionalProperties: false
+    required:
+      - idempotency_key
+      - work_id
+      - role
+      - decision_boundary
+      - transition_semantics
+      - durable_anchor
+    properties:
+      idempotency_key:
+        type: string
+        minLength: 1
+      work_id:
+        type: string
+        minLength: 1
+      role:
+        type: string
+        minLength: 1
+      decision_boundary:
+        type: string
+        minLength: 1
+      transition_semantics:
+        type: string
+        minLength: 1
+      durable_anchor:
+        type: string
+        minLength: 1
+      adapter_metadata:
+        type: object
+        additionalProperties: true
+  requested_route:
+    enum:
+      - isolated_execution
+      - interactive_execution
+      - serial_execution
+      - external_execution
+      - privileged_execution
+  adapter_metadata:
+    type: object
+    additionalProperties: true
+  attention_events:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      required:
+        - category
+      properties:
+        category:
+          enum:
+            - hdc_approval
+            - risk_change
+            - privacy_boundary
+            - external_side_effect
+            - model_escalation
+            - context_budget_strategy_change
+            - retry_claim_anomaly
+            - acceptance_evidence_conflict
+            - phase_completion
+            - stale_no_owner_work
+            - execution_run
+            - dispatch_claim
+            - transition_receipt
+            - resource_observation
+            - successor_retry_mechanic
+            - ordinary_receipt
+        reason:
+          type: string
+          minLength: 1
+        evidence_ref:
+          type: string
+          minLength: 1
+  existing_dispatch_claims:
+    type: array
+    items:
+      type: object
+  active_runs:
+    type: array
+    items:
+      type: object

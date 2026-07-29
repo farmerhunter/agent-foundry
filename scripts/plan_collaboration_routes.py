@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import hashlib
 import json
 import os
@@ -38,6 +39,27 @@ BOUNDED_ROUTES = {
 }
 FORBIDDEN_POLICY_KEYS = {"provider", "provider_slug", "model", "model_slug"}
 COST_RANK = {"low": 1, "medium": 2, "high": 3}
+MODEL_ORDER = {
+    "gpt-5": 50,
+    "gpt-5.1": 51,
+    "gpt-5.2": 52,
+    "gpt-5.3": 53,
+    "gpt-5.4": 54,
+    "gpt-5.5": 55,
+    "gpt-5.6": 56,
+}
+REASONING_ORDER = {"minimal": 0, "low": 1, "medium": 2, "high": 3}
+DEFAULT_CEILING_MODEL = "gpt-5.5"
+DEFAULT_CEILING_REASONING = "medium"
+GLOBAL_HARD_CONTEXT_CEILING = 12000
+THRESHOLD_BANDS = {
+    "generic_default": {"max_context_tokens": 6000, "max_age_hours": 24},
+    "coordinator_routing_status_readback": {"max_context_tokens": 4000, "max_age_hours": 12},
+    "architect_design_gate": {"max_context_tokens": 6000, "max_age_hours": 24},
+    "implementer_small_scoped_implementation": {"max_context_tokens": 8000, "max_age_hours": 24},
+    "reviewer_exact_pr_review": {"max_context_tokens": 10000, "max_age_hours": 12},
+    "tester_focused_validation": {"max_context_tokens": 8000, "max_age_hours": 12},
+}
 DEFAULT_PROJECT_ID = "local-eb6e22ec0d00ef785d687022be1b433d"
 PERSONAL_POLICY_RELATIVE = Path(".agent-foundry") / "collaboration-routing-policy.yaml"
 PROJECT_POLICY_RELATIVE = Path(".agent-foundry") / "collaboration-routing-policy.yaml"
@@ -197,6 +219,91 @@ def parse_simple_yaml(text: str) -> dict[str, Any]:
             parent[key] = child
             stack.append((indent, child))
     return root
+
+
+def parse_timestamp(raw: Any, field: str) -> dt.datetime:
+    if not isinstance(raw, str) or not raw.strip():
+        raise ValueError(f"{field} missing")
+    value = raw.strip().replace("Z", "+00:00")
+    parsed = dt.datetime.fromisoformat(value)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=dt.timezone.utc)
+    return parsed.astimezone(dt.timezone.utc)
+
+
+def model_rank(model: Any) -> int | None:
+    if not isinstance(model, str):
+        return None
+    return MODEL_ORDER.get(model)
+
+
+def reasoning_rank(reasoning: Any) -> int | None:
+    if not isinstance(reasoning, str):
+        return None
+    return REASONING_ORDER.get(reasoning)
+
+
+def valid_escalation_approval(approval: Any) -> bool:
+    if not isinstance(approval, dict):
+        return False
+    required = ("issue", "role", "model", "reasoning", "purpose", "budget")
+    return all(approval.get(field) not in (None, "", [], {}) for field in required)
+
+
+def valid_threshold_exception(exception: Any, now: dt.datetime, issue: Any, role: Any) -> bool:
+    if not isinstance(exception, dict):
+        return False
+    required = ("issue", "role", "temporary_cap", "reason", "expiry")
+    if not all(exception.get(field) not in (None, "", [], {}) for field in required):
+        return False
+    if exception.get("issue") != issue or exception.get("role") != role:
+        return False
+    if not isinstance(exception.get("temporary_cap"), int) or exception["temporary_cap"] > GLOBAL_HARD_CONTEXT_CEILING:
+        return False
+    try:
+        expiry = parse_timestamp(exception.get("expiry"), "threshold_exception.expiry")
+    except (TypeError, ValueError):
+        return False
+    return expiry > now
+
+
+def resolve_threshold(context: dict[str, Any], now: dt.datetime, stops: list[str], issue: Any, role: Any) -> dict[str, Any]:
+    band = context.get("threshold_band")
+    if not isinstance(band, str) or not band.strip():
+        stops.append("missing_threshold_band")
+        band = "unknown"
+    policy = THRESHOLD_BANDS.get(band)
+    if policy is None:
+        stops.append("unknown_threshold_band")
+        policy = THRESHOLD_BANDS["generic_default"]
+
+    effective = {
+        "band": band,
+        "max_context_tokens": policy["max_context_tokens"],
+        "max_age_hours": policy["max_age_hours"],
+        "global_hard_ceiling": GLOBAL_HARD_CONTEXT_CEILING,
+        "exception_applied": False,
+    }
+
+    requested_max = context.get("max_context_tokens")
+    requested_age = context.get("max_age_hours")
+    max_override_requested = requested_max not in (None, policy["max_context_tokens"])
+    age_override_requested = requested_age not in (None, policy["max_age_hours"])
+    override_requested = max_override_requested or age_override_requested or "threshold_exception" in context
+    if isinstance(requested_max, int) and requested_max > GLOBAL_HARD_CONTEXT_CEILING:
+        stops.append("context_exceeds_global_hard_ceiling")
+    if override_requested:
+        exception = context.get("threshold_exception")
+        if (
+            not valid_threshold_exception(exception, now, issue, role)
+            or age_override_requested
+            or (max_override_requested and requested_max != exception.get("temporary_cap"))
+        ):
+            stops.append("malformed_threshold_override")
+        else:
+            effective["max_context_tokens"] = exception["temporary_cap"]
+            effective["exception_applied"] = True
+    return effective
 
 
 def policy_record_path(root: dict[str, Any], scope: str) -> Path:
