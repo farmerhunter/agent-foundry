@@ -149,8 +149,8 @@ Current canonical path:
 | MVP-2 observation bridge | #451 / PR #455 | Completed low-limit experiment | Proves bounded runtime-owned observation/lifecycle bridge; it does not establish normal operating thresholds or activation readiness. |
 | MVP-3 dogfood | #452 | Accepted and closed | Supplies bounded dogfood evidence; it does not freeze normal policy or authorize activation. |
 | Post-MVP operational readiness | #454 | Accepted and closed | Decomposes calibration, policy freeze, RoleConversation/adaptor successor transition, recovery/rollback, LearningSignal harvest input, limited rollout, and final readiness. |
-| Calibration evidence | #457 | Ready | Collect normal-collaboration evidence before threshold freeze; keep #442 values labeled as low-limit containment only. |
-| Policy freeze HDC | #458 | Blocked behind #457 | Decide normal operating policy and rollback conditions only after calibration evidence is accepted. |
+| Calibration evidence | #457 | In progress | Design and run a bounded, repeatable normal-collaboration calibration protocol. Existing MVP evidence is input only; it does not establish a normal-policy baseline. |
+| Policy freeze HDC | #458 | Blocked behind #457 | Decide normal operating policy and rollback conditions only after comparable calibration evidence is accepted. |
 | RoleConversation/adaptor successor | #459 | Blocked behind calibration/policy direction | Prepare Human-facing role lifecycle onboarding and adapter successor transition without treating native task ids as Core domain objects. |
 | Recovery/rollback readiness | #460 | Blocked behind calibration/policy direction | Define fail-closed recovery and incident handling before broader activation. |
 | LearningSignal harvest contract | #461 | Blocked behind policy/Human release | Define terminal LearningSignal handoff and HarvestCandidateIndex projection before #426 harvest/publication work resumes. |
@@ -159,13 +159,14 @@ Current canonical path:
 
 ### AF18 Next Gated Work
 
-The next ready work is #457 calibration evidence. It must use accepted #450,
-#451, #452, and #454 evidence to distinguish emergency low-limit containment
-from candidate normal operating policy. #457 does not authorize policy freeze,
-activation, or #426/#427 release.
+The active work is #457 calibration evidence. It must first define and implement
+a bounded, repeatable calibration protocol, then use it to collect comparable
+normal-collaboration samples. Existing MVP and dogfood evidence is calibration
+input, not a substitute for that collection.
 
-After #457 is accepted, #458 prepares the Human Decision Contract for normal
-policy freeze and rollback. The remaining post-MVP issues stay blocked until
+#458 must remain blocked until #457 accepts the evidence needed for a Human
+decision, without collapsing low-limit containment into normal operating
+defaults. The remaining post-MVP issues stay blocked until
 their prerequisite evidence or Human release is explicit:
 
 - #459 defines RoleConversation onboarding and adapter successor transition.
