@@ -1,0 +1,150 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://agent-foundry.dev/schemas/af18-calibration-protocol.schema.yaml
+title: AF18 normal-collaboration calibration protocol
+type: object
+additionalProperties: false
+required: [schema_version, protocol_version, collection_mode, samples]
+properties:
+  schema_version:
+    const: 1
+  protocol_version:
+    type: string
+    minLength: 1
+  collection_mode:
+    enum: [fixture, manual_adapter_export]
+  samples:
+    type: array
+    minItems: 1
+    items:
+      $ref: '#/$defs/sample'
+$defs:
+  sample:
+    type: object
+    additionalProperties: false
+    required:
+      - sample_id
+      - protocol_version
+      - task_class
+      - variant
+      - variant_declaration
+      - scenario
+      - work_id
+      - execution_id
+      - anchors
+      - root_budget
+      - remaining_budget
+      - policy_version
+      - provenance
+      - terminal_state
+      - quality
+      - attention
+      - resources
+    properties:
+      sample_id: {type: string, minLength: 1}
+      protocol_version: {type: string, minLength: 1}
+      task_class:
+        enum:
+          - single_session_baseline
+          - compact_cross_role
+          - independent_review_or_test_handoff
+          - bounded_successor_hold_recovery
+          - attention_materiality
+      variant: {enum: [A, B, C]}
+      variant_declaration:
+        type: object
+        additionalProperties: false
+        required: [route_kind]
+        properties:
+          route_kind: {enum: [observed_normal_route, counterfactual]}
+      scenario:
+        type: object
+        additionalProperties: false
+        required: [scenario_id, complexity, risk, role_route, model_class, quality_rubric_version, root_budget_unit, anchor_type]
+        properties:
+          scenario_id: {type: string, minLength: 1}
+          complexity: {type: string, minLength: 1}
+          risk: {type: string, minLength: 1}
+          role_route: {type: string, minLength: 1}
+          model_class: {type: string, minLength: 1}
+          quality_rubric_version: {type: string, minLength: 1}
+          root_budget_unit: {const: tokens}
+          anchor_type: {type: string, minLength: 1}
+      work_id: {type: string, minLength: 1}
+      execution_id: {type: string, minLength: 1}
+      anchors:
+        type: object
+        additionalProperties: false
+        required: [work, execution, context]
+        properties:
+          work: {type: string, pattern: '^https://github\\.com/'}
+          execution: {type: string, pattern: '^https://github\\.com/'}
+          context: {type: string, pattern: '^https://github\\.com/'}
+          predecessor: {type: string, pattern: '^https://github\\.com/'}
+          successor: {type: string, pattern: '^https://github\\.com/'}
+      root_budget:
+        type: object
+        additionalProperties: false
+        required: [value, unit]
+        properties:
+          value: {type: integer, minimum: 1}
+          unit: {const: tokens}
+      remaining_budget:
+        type: object
+        additionalProperties: false
+        required: [value, unit]
+        properties:
+          value: {type: integer, minimum: 0}
+          unit: {const: tokens}
+      policy_version: {type: string, minLength: 1}
+      provenance:
+        type: object
+        additionalProperties: false
+        required: [source, collection_method, captured_at, evidence_anchor, observation_kind]
+        properties:
+          source: {type: string, minLength: 1}
+          collection_method: {enum: [fixture, manual_adapter_export]}
+          captured_at: {type: string, format: date-time}
+          evidence_anchor: {type: string, pattern: '^https://github\\.com/'}
+          observation_kind: {enum: [observed, counterfactual]}
+      terminal_state: {enum: [completed, failed, held, recovered]}
+      quality:
+        type: object
+        additionalProperties: false
+        required: [passed, reason]
+        properties:
+          passed: {type: boolean}
+          reason: {type: string}
+      attention:
+        type: object
+        additionalProperties: false
+        required: [outcome]
+        properties:
+          outcome: {enum: [suppressed, not_required, required]}
+          category: {type: [string, 'null']}
+      resources:
+        type: object
+        required: [total_context_tokens, context_age_hours, cumulative_resource_tokens, packet_bytes, callback_count, compact_rehydration_count, full_rehydration_count, retry_count, recovery_count, elapsed_seconds]
+        additionalProperties:
+          $ref: '#/$defs/measurement'
+      successor_continuity:
+        type: object
+        additionalProperties: false
+        required: [predecessor_work_id, successor_work_id, predecessor_root_budget, successor_root_budget, predecessor_remaining_budget, successor_remaining_budget]
+        properties:
+          predecessor_work_id: {type: string, minLength: 1}
+          successor_work_id: {type: string, minLength: 1}
+          predecessor_root_budget: {type: integer, minimum: 1}
+          successor_root_budget: {type: integer, minimum: 1}
+          predecessor_remaining_budget: {type: integer, minimum: 0}
+          successor_remaining_budget: {type: integer, minimum: 0}
+  measurement:
+    type: object
+    additionalProperties: false
+    required: [availability, value, unit, source, observed_at]
+    properties:
+      availability: {enum: [observed, estimated, unavailable]}
+      value: {type: [integer, 'null'], minimum: 0}
+      unit: {type: string, minLength: 1}
+      source: {type: string, minLength: 1}
+      observed_at: {type: [string, 'null'], format: date-time}
+      reason: {type: [string, 'null']}
