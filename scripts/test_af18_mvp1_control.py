@@ -115,6 +115,14 @@ def main() -> int:
     cross_issue_result = plan(cross_issue_without_anchor)
     expect("cross-issue-requires-anchor", "missing_cross_issue_durable_anchors" in cross_issue_result["stop_conditions"], cross_issue_result)
 
+    cross_issue_malformed_anchor = packet(work={**packet()["work"], "cross_issue_work": True, "additional_issue_anchors": [{}]})
+    cross_issue_malformed_result = plan(cross_issue_malformed_anchor)
+    expect(
+        "cross-issue-malformed-anchor-holds",
+        "malformed_additional_issue_anchor" in cross_issue_malformed_result["stop_conditions"],
+        cross_issue_malformed_result,
+    )
+
     missing_budget = packet(work={**packet()["work"], "root_budget_tokens": None})
     missing_budget_result = plan(missing_budget)
     expect("missing-budget-holds", missing_budget_result["decision"] == "hold_required", missing_budget_result)
@@ -368,6 +376,12 @@ def main() -> int:
     invalid_summary = planner.work_summary_projection(packet(work={**packet()["work"], "objective": ""}), NOW)
     expect("invalid-summary-fails-closed", invalid_summary["valid"] is False, invalid_summary)
     expect("invalid-summary-stop", "missing_work_summary_objective" in invalid_summary["stop_conditions"], invalid_summary)
+    expect(
+        "invalid-summary-corrective-reason",
+        invalid_summary["human_attention_reason"] != "No policy-material attention event."
+        and invalid_summary["human_attention_reason"].startswith("Invalid summary input:"),
+        invalid_summary,
+    )
 
     print("af18 mvp1 control-plane tests passed")
     return 0

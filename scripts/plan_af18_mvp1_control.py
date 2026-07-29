@@ -234,13 +234,25 @@ def validate_issue_work_anchor(work: dict[str, Any], stops: list[str]) -> None:
         return
     if issue_anchor.get("issue") != work.get("issue"):
         stops.append("work_issue_anchor_mismatch")
-    for field in ("durable_anchor", "scope", "risk", "acceptance", "human_gates"):
-        if missing(issue_anchor.get(field)):
-            stops.append(f"missing_issue_anchor_{field}")
+    validate_durable_issue_anchor(issue_anchor, "issue_anchor", stops)
     if work.get("cross_issue_work") is True or work.get("multiple_issue_work") is True:
         anchors = work.get("additional_issue_anchors")
         if not isinstance(anchors, list) or not anchors:
             stops.append("missing_cross_issue_durable_anchors")
+        else:
+            for index, anchor in enumerate(anchors):
+                if not isinstance(anchor, dict) or not anchor:
+                    stops.append("malformed_additional_issue_anchor")
+                    continue
+                validate_durable_issue_anchor(anchor, f"additional_issue_anchor_{index}", stops)
+
+
+def validate_durable_issue_anchor(anchor: dict[str, Any], prefix: str, stops: list[str]) -> None:
+    if not isinstance(anchor.get("issue"), int) or anchor.get("issue", 0) <= 0:
+        stops.append(f"missing_{prefix}_issue")
+    for field in ("durable_anchor", "scope", "risk", "acceptance", "human_gates"):
+        if missing(anchor.get(field)):
+            stops.append(f"missing_{prefix}_{field}")
 
 
 def context_token_count(context: dict[str, Any], stops: list[str]) -> int | None:
@@ -350,6 +362,12 @@ def compact_reason(raw: Any, fallback: str) -> str:
     return fallback
 
 
+def corrective_reason(stops: list[str]) -> str:
+    if not stops:
+        return "No policy-material attention event."
+    return f"Invalid summary input: {sorted(set(stops))[0]}. Provide compact corrected evidence."
+
+
 def attention_summary_projection(packet: dict[str, Any], now: dt.datetime) -> dict[str, Any]:
     del now
     stops: list[str] = []
@@ -440,7 +458,7 @@ def work_summary_projection(packet: dict[str, Any], now: dt.datetime) -> dict[st
         "material_risk_or_blocker": work.get("material_risk_or_blocker"),
         "next_action": work.get("next_action"),
         "human_attention_required": attention["human_attention_required"] or bool(stops),
-        "human_attention_reason": attention["reason"] if attention["human_attention_required"] else "No policy-material attention event.",
+        "human_attention_reason": attention["reason"] if attention["human_attention_required"] else corrective_reason(stops),
         "default_human_ux_excludes": [
             "ExecutionRun",
             "DispatchClaim",

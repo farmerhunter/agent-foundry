@@ -119,6 +119,35 @@ properties:
         type: array
         items:
           type: object
+          additionalProperties: false
+          required:
+            - issue
+            - durable_anchor
+            - scope
+            - risk
+            - acceptance
+            - human_gates
+          properties:
+            issue:
+              type: integer
+              minimum: 1
+            durable_anchor:
+              type: string
+              minLength: 1
+            scope:
+              type: string
+              minLength: 1
+            risk:
+              type: string
+              minLength: 1
+            acceptance:
+              type: string
+              minLength: 1
+            human_gates:
+              type: array
+              items:
+                type: string
+                minLength: 1
   execution_run:
     type: object
     additionalProperties: false
