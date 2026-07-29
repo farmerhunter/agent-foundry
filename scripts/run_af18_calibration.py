@@ -25,9 +25,11 @@ VARIANTS = {"A", "B", "C"}
 AVAILABILITY = {"observed", "estimated", "unavailable"}
 TERMINAL_STATES = {"completed", "failed", "held", "recovered"}
 REQUIRED_RESOURCES = {
+    "input_tokens", "cached_input_tokens", "output_tokens", "reasoning_tokens", "tool_output_bytes",
     "total_context_tokens", "context_age_hours", "cumulative_resource_tokens", "packet_bytes",
     "callback_count", "compact_rehydration_count", "full_rehydration_count", "retry_count", "recovery_count", "elapsed_seconds",
 }
+DERIVED_TOTALS = {"cumulative_resource_tokens", "total_context_tokens"}
 FORBIDDEN_KEYS = {
     "prompt", "raw_prompt", "prompt_body", "body", "transcript", "raw_transcript",
     "tool_content", "tool_output", "tool_history", "conversation", "messages",
@@ -99,21 +101,31 @@ def bootstrap_p80_interval(values: list[float]) -> list[float | None]:
 
 def cohort_key(sample: dict[str, Any]) -> tuple[str, ...]:
     scenario = sample.get("scenario", {})
-    return tuple(str(scenario.get(key, "")) for key in (
-        "complexity", "risk", "role_route", "model_class", "quality_rubric_version", "root_budget_unit", "anchor_type",
-    ))
+    return (
+        str(sample.get("protocol_version", "")), str(sample.get("task_class", "")),
+        str(scenario.get("scenario_id", "")), str(scenario.get("scenario_variant", "")),
+        str(scenario.get("objective_or_acceptance_fixture_id", "")), str(scenario.get("complexity", "")),
+        str(scenario.get("risk", "")), str(scenario.get("role_route", "")),
+        str(scenario.get("model_class", "")), str(scenario.get("quality_rubric_version", "")),
+        str(sample.get("policy_version", "")), json.dumps(sorted(scenario.get("canonical_allowed_tools", []))),
+        str(scenario.get("measurement_window", {}).get("definition", "")),
+        str(scenario.get("root_budget_unit", "")), str(scenario.get("anchor_type", "")),
+    )
 
 
 def validate_measurement(name: str, item: Any, errors: list[str]) -> dict[str, Any]:
     if not isinstance(item, dict):
         errors.append(f"missing_measurement:{name}")
-        return {"availability": "unavailable", "value": None, "unit": None, "source": None, "observed_at": None}
+        return {"observation_id": None, "availability": "unavailable", "value": None, "unit": None, "source": None, "observed_at": None}
+    reject_unknown(item, {"observation_id", "availability", "value", "unit", "source", "observed_at", "reason", "derived_total_component_ids"}, f"measurement_{name}", errors)
     availability = item.get("availability")
     value = item.get("value")
+    if not isinstance(item.get("observation_id"), str) or not item["observation_id"]:
+        errors.append(f"missing_measurement_observation_id:{name}")
     if availability not in AVAILABILITY:
         errors.append(f"invalid_measurement_availability:{name}")
     if availability == "unavailable":
-        if value is not None or not item.get("reason"):
+        if value is not None or item.get("reason") not in {"not_exposed", "redacted", "not_collected", "invalid"}:
             errors.append(f"unavailable_measurement_must_be_null_with_reason:{name}")
     elif not isinstance(value, (int, float)) or isinstance(value, bool) or value < 0:
         errors.append(f"invalid_measurement_value:{name}")
@@ -123,7 +135,10 @@ def validate_measurement(name: str, item: Any, errors: list[str]) -> dict[str, A
         errors.append(f"missing_measurement_source:{name}")
     if availability != "unavailable" and not isinstance(item.get("observed_at"), str):
         errors.append(f"missing_measurement_timestamp:{name}")
-    return {key: item.get(key) for key in ("availability", "value", "unit", "source", "observed_at", "reason")}
+    component_ids = item.get("derived_total_component_ids")
+    if component_ids is not None and (not isinstance(component_ids, list) or not component_ids or any(not isinstance(value, str) or not value for value in component_ids) or len(component_ids) != len(set(component_ids))):
+        errors.append(f"invalid_derived_total_component_ids:{name}")
+    return {key: item.get(key) for key in ("observation_id", "availability", "value", "unit", "source", "observed_at", "reason", "derived_total_component_ids")}
 
 
 def reject_unknown(value: Any, allowed: set[str], label: str, errors: list[str]) -> None:
@@ -155,11 +170,12 @@ def validate_sample(sample: Any, packet: dict[str, Any], now: dt.datetime, max_a
     if "low_limit" in str(sample.get("policy_version", "")).lower() or "low_limit" in json.dumps(sample).lower():
         errors.append("low_limit_not_normal_policy_sample")
     scenario = sample.get("scenario")
-    fields = ("scenario_id", "complexity", "risk", "role_route", "model_class", "quality_rubric_version", "root_budget_unit", "anchor_type")
-    if not isinstance(scenario, dict) or any(not scenario.get(field) for field in fields):
+    fields = ("scenario_id", "scenario_variant", "objective_or_acceptance_fixture_id", "complexity", "risk", "role_route", "model_class", "quality_rubric_version", "root_budget_unit", "anchor_type")
+    if not isinstance(scenario, dict) or any(not scenario.get(field) for field in fields) or not isinstance(scenario.get("canonical_allowed_tools"), list) or not scenario["canonical_allowed_tools"] or any(not isinstance(tool, str) or not tool for tool in scenario["canonical_allowed_tools"]) or not isinstance(scenario.get("measurement_window"), dict) or not isinstance(scenario["measurement_window"].get("definition"), str) or not scenario["measurement_window"]["definition"]:
         errors.append("invalid_scenario_comparability")
     else:
-        reject_unknown(scenario, set(fields), "scenario", errors)
+        reject_unknown(scenario, set(fields) | {"canonical_allowed_tools", "measurement_window"}, "scenario", errors)
+        reject_unknown(scenario["measurement_window"], {"definition"}, "measurement_window", errors)
     declaration = sample.get("variant_declaration")
     expected_route = "counterfactual" if sample.get("variant") == "B" else "observed_normal_route"
     if not isinstance(declaration, dict) or declaration.get("route_kind") != expected_route:
@@ -203,18 +219,45 @@ def validate_sample(sample: Any, packet: dict[str, Any], now: dt.datetime, max_a
     attention = sample.get("attention")
     if not isinstance(attention, dict) or attention.get("outcome") not in {"suppressed", "not_required", "required"}:
         errors.append("invalid_attention")
-    elif attention["outcome"] == "required" and not attention.get("category"):
-        errors.append("material_attention_missing_category")
+    else:
+        reject_unknown(attention, {"outcome", "category", "acknowledgement", "pairing"}, "attention", errors)
+        acknowledgement = attention.get("acknowledgement")
+        pairing = attention.get("pairing")
+        if not isinstance(acknowledgement, dict) or acknowledgement.get("availability") not in {"observed", "unavailable"} or (acknowledgement.get("availability") == "observed" and not isinstance(acknowledgement.get("value"), bool)) or (acknowledgement.get("availability") == "unavailable" and acknowledgement.get("value") is not None):
+            errors.append("invalid_attention_acknowledgement")
+        if not isinstance(pairing, dict) or pairing.get("pair_id") is not None and (not isinstance(pairing.get("pair_id"), str) or not pairing["pair_id"]) or pairing.get("evidence_anchor") is not None and not is_anchor(pairing.get("evidence_anchor")):
+            errors.append("invalid_attention_pairing")
+        if attention["outcome"] == "required" and (not attention.get("category") or not isinstance(pairing, dict) or not pairing.get("pair_id") or not is_anchor(pairing.get("evidence_anchor"))):
+            errors.append("material_attention_missing_category_or_pairing")
     resources = sample.get("resources")
     normalized_resources: dict[str, Any] = {}
     if not isinstance(resources, dict) or not resources:
         errors.append("missing_resources")
     else:
+        reject_unknown(resources, REQUIRED_RESOURCES, "resources", errors)
         for name, item in sorted(resources.items()):
             normalized_resources[name] = validate_measurement(name, item, errors)
         missing_resources = REQUIRED_RESOURCES - set(resources)
         if missing_resources:
             errors.append("missing_required_resources:" + ",".join(sorted(missing_resources)))
+        observation_ids = [item["observation_id"] for item in normalized_resources.values() if item["observation_id"]]
+        if len(observation_ids) != len(set(observation_ids)):
+            errors.append("duplicate_resource_observation_id")
+        known_ids = set(observation_ids)
+        for name in DERIVED_TOTALS:
+            item = normalized_resources.get(name, {})
+            component_ids = item.get("derived_total_component_ids")
+            if name == "cumulative_resource_tokens" and not component_ids:
+                errors.append("missing_derived_total_component_ids:cumulative_resource_tokens")
+            if component_ids:
+                if item.get("observation_id") in component_ids or not set(component_ids).issubset(known_ids):
+                    errors.append(f"unknown_derived_total_component_ids:{name}")
+                unavailable_component = any(
+                    resource.get("observation_id") in component_ids and resource.get("availability") == "unavailable"
+                    for resource in normalized_resources.values()
+                )
+                if unavailable_component and item.get("availability") != "observed":
+                    errors.append(f"derived_total_unavailable_component:{name}")
         if sample.get("variant") == "B":
             observed = sorted(name for name, item in normalized_resources.items() if item["availability"] == "observed")
             if observed:
@@ -232,7 +275,7 @@ def validate_sample(sample: Any, packet: dict[str, Any], now: dt.datetime, max_a
         "sample_id": sample["sample_id"], "task_class": sample["task_class"], "variant": sample["variant"],
         "cohort_key": cohort_key(sample), "scenario_id": scenario["scenario_id"], "terminal_state": sample["terminal_state"],
         "quality": {"passed": quality["passed"], "reason": quality["reason"]}, "attention": dict(attention),
-        "resources": normalized_resources, "anchors": dict(anchors), "root_budget": dict(budget), "remaining_budget": dict(remaining),
+        "resource_observations": normalized_resources, "resources": normalized_resources, "anchors": dict(anchors), "root_budget": dict(budget), "remaining_budget": dict(remaining),
         "provenance": {key: provenance[key] for key in ("source", "collection_method", "captured_at", "evidence_anchor", "observation_kind")},
     }
     return normalized, []
@@ -245,6 +288,37 @@ def metric_summary(samples: list[dict[str, Any]], metric: str) -> dict[str, Any]
     return {"n_observed": len(values), "n_estimated": counts["estimated"], "n_unavailable": counts["unavailable"], "median": percentile(values, .5), "p80": percentile(values, .8), "range": [min(values), max(values)] if values else [None, None], "p80_bootstrap_interval": bootstrap_p80_interval(values)}
 
 
+def attention_pairing_conflicts(variants: dict[str, list[dict[str, Any]]]) -> tuple[list[str], int, int]:
+    suppressed = [row for row in variants["A"] if row["attention"]["outcome"] == "suppressed"]
+    material = [row for row in variants["C"] if row["attention"]["outcome"] == "required"]
+    suppressed_by_pair = {row["attention"]["pairing"]["pair_id"]: row for row in suppressed}
+    material_by_pair = {row["attention"]["pairing"]["pair_id"]: row for row in material}
+    conflicts: list[str] = []
+    if len(suppressed_by_pair) != len(suppressed) or len(material_by_pair) != len(material):
+        conflicts.append("attention_pairing_duplicate_pair_id")
+    pair_ids = set(suppressed_by_pair) | set(material_by_pair)
+    complete_pair_count = 0
+    for pair_id in pair_ids:
+        suppressed_row = suppressed_by_pair.get(pair_id)
+        material_row = material_by_pair.get(pair_id)
+        if not pair_id or not suppressed_row or not material_row:
+            conflicts.append("attention_pairing_missing_required_pair")
+            continue
+        suppressed_attention = suppressed_row["attention"]
+        material_attention = material_row["attention"]
+        if suppressed_attention["pairing"]["evidence_anchor"] != material_attention["pairing"]["evidence_anchor"]:
+            conflicts.append("attention_pairing_anchor_conflict")
+        if suppressed_attention.get("category") != material_attention.get("category"):
+            conflicts.append("attention_category_conflict")
+        acknowledgement = material_attention["acknowledgement"]
+        if acknowledgement["availability"] != "observed" or acknowledgement["value"] is not True:
+            conflicts.append("attention_acknowledgement_conflict")
+        complete_pair_count += 1
+    if not suppressed or not material:
+        conflicts.append("attention_pairing_missing_required_pair")
+    return sorted(set(conflicts)), complete_pair_count, len(material)
+
+
 def analyze(valid: list[dict[str, Any]], invalid: list[dict[str, Any]]) -> list[dict[str, Any]]:
     groups: dict[tuple[str, tuple[str, ...]], list[dict[str, Any]]] = defaultdict(list)
     for sample in valid:
@@ -254,33 +328,28 @@ def analyze(valid: list[dict[str, Any]], invalid: list[dict[str, Any]]) -> list[
         variants = {variant: [row for row in rows if row["variant"] == variant] for variant in sorted(VARIANTS)}
         metrics = sorted({name for row in rows for name in row["resources"]})
         summaries = {variant: {metric: metric_summary(variants[variant], metric) for metric in metrics} for variant in sorted(VARIANTS)}
-        candidate_metrics = ("total_context_tokens", "context_age_hours", "cumulative_resource_tokens")
         holds: list[str] = []
         if any(len(variants[variant]) < 5 for variant in ("A", "B", "C")):
             holds.append("requires_at_least_five_valid_A_B_C_rows")
-        for metric in candidate_metrics:
-            for variant in ("A", "C"):
-                if summaries[variant].get(metric, {}).get("n_observed", 0) < 5:
-                    holds.append(f"requires_five_observed_{variant}_{metric}")
         attention_required = sum(row["attention"]["outcome"] == "required" for row in variants["C"])
+        attention_conflicts, attention_pair_count, attention_material_count = attention_pairing_conflicts(variants) if task_class == "attention_materiality" else ([], 0, 0)
         failed_or_held = sum(row["terminal_state"] in {"failed", "held"} for row in variants["C"])
         if any(not row["quality"]["passed"] for row in variants["C"]):
             holds.append("quality_guardrail_failed_C")
-        if attention_required:
-            holds.append("material_attention_guardrail_failed_C")
+        if attention_conflicts:
+            holds.extend(attention_conflicts)
         if failed_or_held:
             holds.append("failed_or_held_guardrail_failed_C")
-        if any(row["resources"]["recovery_count"]["value"] not in (0, None) for row in variants["C"]):
-            holds.append("recovery_guardrail_failed_C")
         if holds:
-            candidate = {"status": "candidate_hold", "candidate_hold_reasons": sorted(set(holds)), "confidence": "not_eligible"}
+            candidate = {"candidate_status": "candidate_hold", "candidate_hold_reasons": sorted(set(holds)), "candidate_confidence": "not_eligible", "candidate_assumptions": ["offline evidence only; no policy is written or activated"]}
         else:
             def recommendation(metric: str) -> dict[str, Any]:
                 summary = summaries["C"][metric]
                 return {"value": summary["p80_bootstrap_interval"][1], "unit": next(row["resources"][metric]["unit"] for row in variants["C"]), "distribution": "C_observed_p80_with_bootstrap_upper", "uncertainty": summary["p80_bootstrap_interval"], "provenance": "explicit_adapter_evidence"}
-            roots = [float(row["root_budget"]["value"]) for row in variants["C"]]
-            candidate = {"status": "candidate", "max_context_tokens": recommendation("total_context_tokens"), "max_age_hours": recommendation("context_age_hours"), "root_budget_band": {"min": min(roots), "max": bootstrap_p80_interval(roots)[1], "unit": "tokens", "uncertainty": bootstrap_p80_interval(roots), "provenance": "explicit_adapter_evidence"}, "confidence": "small_n_bootstrap", "assumptions": ["A and C observed rows only; B is explicit estimated counterfactual", "quality, attention, failure, hold, and recovery guardrails passed", "#442 low_limit containment neither seeds nor caps this value"]}
-        cohorts.append({"task_class": task_class, "comparability_key": list(key), "sample_counts": {variant: len(variants[variant]) for variant in sorted(VARIANTS)}, "metrics": summaries, "quality_pass_rate_C": sum(row["quality"]["passed"] for row in variants["C"]) / len(variants["C"]) if variants["C"] else None, "attention_required_rate_C": attention_required / len(variants["C"]) if variants["C"] else None, "terminal_state_counts_C": dict(sorted(Counter(row["terminal_state"] for row in variants["C"]).items())), "failed_or_held_C": failed_or_held, "outliers": [row["sample_id"] for row in rows if row["terminal_state"] in {"failed", "held"}], "candidate_recommendation": candidate})
+            cumulative_values = [float(row["resources"]["cumulative_resource_tokens"]["value"]) for row in variants["C"]]
+            cumulative_interval = bootstrap_p80_interval(cumulative_values)
+            candidate = {"candidate_status": "candidate", "candidate_max_context_tokens": recommendation("total_context_tokens"), "candidate_max_age_hours": recommendation("context_age_hours"), "candidate_root_budget_band": {"min": cumulative_interval[0], "max": cumulative_interval[1], "unit": "tokens", "distribution": "C_observed_p80_with_bootstrap_interval", "uncertainty": cumulative_interval, "provenance": "explicit_adapter_evidence"}, "candidate_confidence": "small_n_bootstrap", "candidate_assumptions": ["A and C observed rows only; B is explicit estimated counterfactual", "quality and failure/hold guardrails passed; recovery count is reported without a normal-policy threshold; attention rate is reported for Human HDC review", "#442 low_limit containment neither seeds nor caps this value"]}
+        cohorts.append({"task_class": task_class, "comparability_key": list(key), "sample_counts": {variant: len(variants[variant]) for variant in sorted(VARIANTS)}, "metrics": summaries, "quality_pass_rate_C": sum(row["quality"]["passed"] for row in variants["C"]) / len(variants["C"]) if variants["C"] else None, "attention_required_rate_C": attention_required / len(variants["C"]) if variants["C"] else None, "attention_pair_count": attention_pair_count, "attention_material_pair_count": attention_material_count, "terminal_state_counts_C": dict(sorted(Counter(row["terminal_state"] for row in variants["C"]).items())), "failed_or_held_C": failed_or_held, "outliers": [row["sample_id"] for row in rows if row["terminal_state"] in {"failed", "held"}], "candidate_recommendation": candidate})
     return cohorts
 
 

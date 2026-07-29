@@ -27,30 +27,27 @@ def expect(name, condition, detail):
         raise AssertionError(f"{name} failed: {detail}")
 
 
+def measurement(name, value, unit, variant, index, components=None):
+    item = {"observation_id": f"{variant}-{index}-{name}", "availability": "estimated" if variant == "B" else "observed", "value": value + index, "unit": unit, "source": "counterfactual_model" if variant == "B" else "adapter_counter", "observed_at": "2026-07-29T09:00:00Z"}
+    if components:
+        item["derived_total_component_ids"] = [f"{variant}-{index}-{component}" for component in components]
+    return item
+
+
 def sample(task_class, variant, index=0, **overrides):
-    route = {
-        "single_session_baseline": "Implementer",
-        "compact_cross_role": "Coordinator>Reviewer",
-        "independent_review_or_test_handoff": "Implementer>Tester",
-        "bounded_successor_hold_recovery": "Coordinator>Successor",
-        "attention_materiality": "Coordinator>Human",
-    }[task_class]
-    base = {
-        "sample_id": f"{task_class}-{variant}-{index}", "protocol_version": calibration.PROTOCOL_VERSION,
-        "task_class": task_class, "variant": variant,
-        "scenario": {"scenario_id": task_class, "complexity": "small", "risk": "low", "role_route": route, "model_class": "standard", "quality_rubric_version": "v1", "root_budget_unit": "tokens", "anchor_type": "issue"},
-        "work_id": f"work-{task_class}-{index}", "execution_id": f"run-{task_class}-{variant}-{index}",
-        "anchors": {"work": "https://github.com/farmerhunter/agent-foundry/issues/457", "execution": f"https://github.com/farmerhunter/agent-foundry/issues/457#{task_class}-{variant}-{index}", "context": "https://github.com/farmerhunter/agent-foundry/issues/457#context", **({"predecessor":"https://github.com/farmerhunter/agent-foundry/issues/457#predecessor", "successor":"https://github.com/farmerhunter/agent-foundry/issues/457#successor"} if task_class == "bounded_successor_hold_recovery" else {})},
-        "variant_declaration": {"route_kind": "counterfactual" if variant == "B" else "observed_normal_route"},
-        "root_budget": {"value": 1000, "unit": "tokens"}, "remaining_budget": {"value": 800, "unit": "tokens"}, "policy_version": "normal-observation-v1",
-        "provenance": {"source": "test-export", "collection_method": "manual_adapter_export", "captured_at": "2026-07-29T09:00:00Z", "evidence_anchor": "https://github.com/farmerhunter/agent-foundry/issues/457#evidence", "observation_kind": "counterfactual" if variant == "B" else "observed"},
-        "terminal_state": "completed", "quality": {"passed": True, "reason": "test"},
-        "attention": {"outcome": "suppressed" if task_class == "attention_materiality" and index % 2 == 0 else "not_required", "category": None},
-        "resources": {name: {"availability": "estimated" if variant == "B" else "observed", "value": value + index, "unit": unit, "source": "adapter_counter" if variant != "B" else "counterfactual_model", "observed_at": "2026-07-29T09:00:00Z"} for name, value, unit in (("total_context_tokens", 100, "tokens"), ("context_age_hours", 1, "hours"), ("cumulative_resource_tokens", 300, "tokens"), ("packet_bytes", 200, "bytes"), ("callback_count", 1, "count"), ("compact_rehydration_count", 1, "count"), ("full_rehydration_count", 0, "count"), ("retry_count", 0, "count"), ("recovery_count", 0, "count"), ("elapsed_seconds", 10, "seconds"))},
-    }
+    route = {"single_session_baseline": "Implementer", "compact_cross_role": "Coordinator>Reviewer", "independent_review_or_test_handoff": "Implementer>Tester", "bounded_successor_hold_recovery": "Coordinator>Successor", "attention_materiality": "Coordinator>Human"}[task_class]
+    pair_id = f"attention-{index}" if task_class == "attention_materiality" and variant in {"A", "C"} else None
+    attention = {"outcome": "not_required", "category": None, "acknowledgement": {"availability": "unavailable", "value": None}, "pairing": {"pair_id": None, "evidence_anchor": None}}
+    if task_class == "attention_materiality" and variant == "A":
+        attention = {"outcome": "suppressed", "category": "attention-summary", "acknowledgement": {"availability": "unavailable", "value": None}, "pairing": {"pair_id": pair_id, "evidence_anchor": f"https://github.com/farmerhunter/agent-foundry/issues/457#pair-{index}"}}
+    if task_class == "attention_materiality" and variant == "C":
+        attention = {"outcome": "required", "category": "attention-summary", "acknowledgement": {"availability": "observed", "value": True}, "pairing": {"pair_id": pair_id, "evidence_anchor": f"https://github.com/farmerhunter/agent-foundry/issues/457#pair-{index}"}}
+    resources = {name: measurement(name, value, unit, variant, index) for name, value, unit in (("input_tokens", 100, "tokens"), ("cached_input_tokens", 20, "tokens"), ("output_tokens", 40, "tokens"), ("reasoning_tokens", 30, "tokens"), ("tool_output_bytes", 80, "bytes"), ("context_age_hours", 1, "hours"), ("packet_bytes", 200, "bytes"), ("callback_count", 1, "count"), ("compact_rehydration_count", 1, "count"), ("full_rehydration_count", 0, "count"), ("retry_count", 0, "count"), ("recovery_count", 0, "count"), ("elapsed_seconds", 10, "seconds"))}
+    resources["total_context_tokens"] = measurement("total_context_tokens", 120, "tokens", variant, index, ("input_tokens", "cached_input_tokens"))
+    resources["cumulative_resource_tokens"] = measurement("cumulative_resource_tokens", 300, "tokens", variant, index, ("input_tokens", "cached_input_tokens", "output_tokens", "reasoning_tokens"))
+    base = {"sample_id": f"{task_class}-{variant}-{index}", "protocol_version": calibration.PROTOCOL_VERSION, "task_class": task_class, "variant": variant, "variant_declaration": {"route_kind": "counterfactual" if variant == "B" else "observed_normal_route"}, "scenario": {"scenario_id": task_class, "scenario_variant": "default", "objective_or_acceptance_fixture_id": f"fixture-{task_class}", "complexity": "small", "risk": "low", "role_route": route, "model_class": "standard", "quality_rubric_version": "v1", "canonical_allowed_tools": ["gh", "python3"], "measurement_window": {"definition": "execution-to-terminal"}, "root_budget_unit": "tokens", "anchor_type": "issue"}, "work_id": f"work-{task_class}-{index}", "execution_id": f"run-{task_class}-{variant}-{index}", "anchors": {"work": "https://github.com/farmerhunter/agent-foundry/issues/457", "execution": f"https://github.com/farmerhunter/agent-foundry/issues/457#{task_class}-{variant}-{index}", "context": "https://github.com/farmerhunter/agent-foundry/issues/457#context", **({"predecessor": "https://github.com/farmerhunter/agent-foundry/issues/457#predecessor", "successor": "https://github.com/farmerhunter/agent-foundry/issues/457#successor"} if task_class == "bounded_successor_hold_recovery" else {})}, "root_budget": {"value": 1000, "unit": "tokens"}, "remaining_budget": {"value": 800, "unit": "tokens"}, "policy_version": "normal-observation-v1", "provenance": {"source": "test-export", "collection_method": "manual_adapter_export", "captured_at": "2026-07-29T09:00:00Z", "evidence_anchor": "https://github.com/farmerhunter/agent-foundry/issues/457#evidence", "observation_kind": "counterfactual" if variant == "B" else "observed"}, "terminal_state": "completed", "quality": {"passed": True, "reason": "test"}, "attention": attention, "resources": resources}
     if task_class == "bounded_successor_hold_recovery":
         base["successor_continuity"] = {"predecessor_work_id": base["work_id"], "successor_work_id": base["work_id"], "predecessor_root_budget": 1000, "successor_root_budget": 1000, "predecessor_remaining_budget": 900, "successor_remaining_budget": 800}
-    base["resources"]["recovery_count"]["value"] = 0
     base.update(overrides)
     return base
 
@@ -59,72 +56,87 @@ def packet(rows):
     return {"schema_version": 1, "protocol_version": calibration.PROTOCOL_VERSION, "collection_mode": "manual_adapter_export", "samples": rows}
 
 
+def cohort(result, task_class):
+    return next(item for item in result["cohorts"] if item["task_class"] == task_class)
+
+
 def main():
     rows = [sample(task, variant, index) for task in sorted(calibration.CLASSES) for variant in "ABC" for index in range(5)]
     result = calibration.run(packet(rows), NOW, 168)
     expect("all-five-classes", len(result["cohorts"]) == 5, result)
-    expect("valid-A-B-C", all(c["sample_counts"] == {"A":5,"B":5,"C":5} for c in result["cohorts"]), result)
-    expect("candidate-with-all-required-bands", all(c["candidate_recommendation"]["status"] == "candidate" and c["candidate_recommendation"]["max_age_hours"] and c["candidate_recommendation"]["root_budget_band"] for c in result["cohorts"]), result)
+    expect("candidate-names-only", all(item["candidate_recommendation"]["candidate_status"] == "candidate" and item["candidate_recommendation"]["candidate_root_budget_band"] for item in result["cohorts"]), result)
     expect("no-side-effects", result["mutation_performed"] is False and result["policy_write_performed"] is False and result["runtime_config_hook_mutation_performed"] is False, result)
-    repeat = calibration.run(packet(rows), NOW, 168)
-    expect("deterministic-output", json.dumps(result, sort_keys=True) == json.dumps(repeat, sort_keys=True), result)
+    attention = cohort(result, "attention_materiality")
+    expect("paired-suppressed-material-rate", attention["attention_required_rate_C"] == 1 and attention["attention_pair_count"] == 5 and attention["attention_material_pair_count"] == 5, attention)
+    expect("material-does-not-hold", attention["candidate_recommendation"]["candidate_status"] == "candidate", attention)
+    recovery = cohort(result, "bounded_successor_hold_recovery")
+    expect("recovery-count-reported-no-hold", recovery["metrics"]["C"]["recovery_count"]["n_observed"] == 5 and recovery["candidate_recommendation"]["candidate_status"] == "candidate", recovery)
+    expect("deterministic-output", json.dumps(result, sort_keys=True) == json.dumps(calibration.run(packet(rows), NOW, 168), sort_keys=True), result)
 
-    guarded = copy.deepcopy(rows)
-    for row in guarded:
-        if row["task_class"] == "attention_materiality" and row["variant"] == "C" and row["sample_id"].endswith("-1"):
-            row["attention"] = {"outcome":"required", "category":"acceptance_evidence_conflict"}
-        if row["task_class"] == "bounded_successor_hold_recovery" and row["variant"] == "C" and row["sample_id"].endswith("-4"):
-            row["terminal_state"] = "held"; row["quality"] = {"passed":False,"reason":"declared outlier retained"}
-    guarded_result = calibration.run(packet(guarded), NOW, 168)
-    attention = next(c for c in guarded_result["cohorts"] if c["task_class"] == "attention_materiality")
-    expect("attention-materiality", attention["attention_required_rate_C"] == .2, attention)
-    expect("material-attention-holds-candidate", attention["candidate_recommendation"]["status"] == "candidate_hold", attention)
-    recovery = next(c for c in guarded_result["cohorts"] if c["task_class"] == "bounded_successor_hold_recovery")
-    expect("held-and-outlier-accounted", recovery["terminal_state_counts_C"]["held"] == 1 and recovery["outliers"], recovery)
-    expect("failed-held-holds-candidate", recovery["candidate_recommendation"]["status"] == "candidate_hold", recovery)
+    declared_roots = copy.deepcopy(rows)
+    for index, row in enumerate(item for item in declared_roots if item["task_class"] == "single_session_baseline" and item["variant"] == "C"):
+        row["root_budget"]["value"] = 21000 + index * 1000
+    root_candidate = cohort(calibration.run(packet(declared_roots), NOW, 168), "single_session_baseline")["candidate_recommendation"]["candidate_root_budget_band"]
+    expect("candidate-root-budget-from-C-cumulative", root_candidate["max"] == 304 and root_candidate["max"] != 25000, root_candidate)
 
-    unavailable = copy.deepcopy(rows); unavailable[0]["resources"]["total_context_tokens"] = {"availability":"unavailable","value":None,"unit":"tokens","source":"adapter","observed_at":None,"reason":"not_exposed"}
+    unavailable = copy.deepcopy(rows)
+    unavailable[0]["resources"]["tool_output_bytes"] = {"observation_id": "unavailable-tool", "availability": "unavailable", "value": None, "unit": "bytes", "source": "adapter", "observed_at": None, "reason": "not_exposed"}
     unavailable_result = calibration.run(packet(unavailable), NOW, 168)
-    expect("unavailable-not-zero", unavailable_result["normalized_samples"][0]["resources"]["total_context_tokens"]["value"] is None, unavailable_result)
-    expect("unavailable-accounted", next(c for c in unavailable_result["cohorts"] if c["task_class"] == rows[0]["task_class"])["metrics"]["A"]["total_context_tokens"]["n_unavailable"] == 1, unavailable_result)
+    expect("unavailable-not-zero-counted", cohort(unavailable_result, rows[0]["task_class"])["metrics"]["A"]["tool_output_bytes"]["n_unavailable"] == 1, unavailable_result)
 
     for name, mutate, error in [
-        ("privacy", lambda x: x.update({"prompt":"secret"}), "privacy_forbidden_raw_content"),
-        ("malformed-provenance", lambda x: x["provenance"].update({"evidence_anchor":"not-a-link"}), "malformed_provenance"),
-        ("stale", lambda x: x["provenance"].update({"captured_at":"2026-07-01T00:00:00Z"}), "stale_provenance"),
-        ("unbound-anchor", lambda x: x["anchors"].update({"work":"missing"}), "missing_or_unbound_durable_anchor"),
-        ("root-budget", lambda x: x["root_budget"].update({"value":0}), "invalid_root_budget"),
-        ("low-limit", lambda x: x.update({"policy_version":"low_limit_experiment"}), "low_limit_not_normal_policy_sample"),
-        ("remaining-budget", lambda x: x["remaining_budget"].update({"value":1001}), "remaining_budget_exceeds_root_budget"),
+        ("absent-resource-key", lambda x: x["resources"].pop("input_tokens"), "missing_required_resources:input_tokens"),
+        ("malformed-resource-key", lambda x: x["resources"].update({"unexpected_tokens": {}}), "unknown_resources_field:unexpected_tokens"),
+        ("absent-derived-components", lambda x: x["resources"]["cumulative_resource_tokens"].pop("derived_total_component_ids"), "missing_derived_total_component_ids:cumulative_resource_tokens"),
+        ("unknown-derived-component", lambda x: x["resources"]["cumulative_resource_tokens"].update({"derived_total_component_ids": ["not-an-observation"]}), "unknown_derived_total_component_ids:cumulative_resource_tokens"),
+        ("derived-unavailable", lambda x: (x["resources"]["input_tokens"].update({"availability": "unavailable", "value": None, "observed_at": None, "reason": "not_exposed"}), x["resources"]["cumulative_resource_tokens"].update({"availability": "estimated"})), "derived_total_unavailable_component:cumulative_resource_tokens"),
+        ("privacy", lambda x: x.update({"prompt": "secret"}), "privacy_forbidden_raw_content"),
+        ("low-limit", lambda x: x.update({"policy_version": "low_limit_experiment"}), "low_limit_not_normal_policy_sample"),
     ]:
         bad = copy.deepcopy(rows); mutate(bad[0]); output = calibration.run(packet(bad), NOW, 168)
         expect(name, error in output["invalid_evidence"][0]["errors"], output)
 
-    continuity = [sample("bounded_successor_hold_recovery", "C", 0)]
-    continuity[0]["successor_continuity"]["successor_remaining_budget"] = 901
-    continuity_result = calibration.run(packet(continuity), NOW, 168)
-    expect("successor-continuity", "invalid_successor_budget_continuity" in continuity_result["invalid_evidence"][0]["errors"], continuity_result)
-    counterfactual = [sample("single_session_baseline", "B", 0)]
-    counterfactual[0]["resources"]["total_context_tokens"]["availability"] = "observed"
-    counterfactual_result = calibration.run(packet(counterfactual), NOW, 168)
-    expect("counterfactual-observed", "counterfactual_resources_must_not_be_observed:total_context_tokens" in counterfactual_result["invalid_evidence"][0]["errors"], counterfactual_result)
+    for name, mutate, reason in [
+        ("missing-pair", lambda x: x["attention"]["pairing"].update({"pair_id": "missing"}), "attention_pairing_missing_required_pair"),
+        ("mismatched-pair", lambda x: x["attention"]["pairing"].update({"evidence_anchor": "https://github.com/farmerhunter/agent-foundry/issues/457#different"}), "attention_pairing_anchor_conflict"),
+        ("category-conflict", lambda x: x["attention"].update({"category": "different-summary"}), "attention_category_conflict"),
+        ("acknowledgement-conflict", lambda x: x["attention"].update({"acknowledgement": {"availability": "unavailable", "value": None}}), "attention_acknowledgement_conflict"),
+    ]:
+        conflicted = copy.deepcopy(rows)
+        target = next(row for row in conflicted if row["task_class"] == "attention_materiality" and row["variant"] == ("A" if name == "category-conflict" else "C"))
+        mutate(target)
+        candidate = cohort(calibration.run(packet(conflicted), NOW, 168), "attention_materiality")["candidate_recommendation"]
+        expect(name, candidate["candidate_status"] == "candidate_hold" and reason in candidate["candidate_hold_reasons"], candidate)
 
-    incompatible = copy.deepcopy(rows); incompatible[1]["scenario"]["model_class"] = "different"
-    incompatible_result = calibration.run(packet(incompatible), NOW, 168)
-    expect("nonpooling", any(c["sample_counts"]["A"] < 5 for c in incompatible_result["cohorts"]), incompatible_result)
-    insufficient = calibration.run(packet(rows[:3]), NOW, 168)
-    expect("insufficient-n", insufficient["cohorts"][0]["candidate_recommendation"]["status"] == "candidate_hold", insufficient)
+    protocol_mismatch = copy.deepcopy(rows)
+    protocol_mismatch[0]["protocol_version"] = "other-protocol"
+    protocol_result = calibration.run(packet(protocol_mismatch), NOW, 168)
+    expect("comparability-protocol-mismatch-rejected", "protocol_version_mismatch" in protocol_result["invalid_evidence"][0]["errors"], protocol_result)
 
-    absent_required = copy.deepcopy(rows); del absent_required[0]["resources"]["context_age_hours"]
-    absent_result = calibration.run(packet(absent_required), NOW, 168)
-    expect("missing-resource-fails-closed", "missing_required_resources:context_age_hours" in absent_result["invalid_evidence"][0]["errors"], absent_result)
-    unknown = copy.deepcopy(rows); unknown[0]["unknown"] = True
-    unknown_result = calibration.run(packet(unknown), NOW, 168)
-    expect("schema-equivalent-unknown-rejected", "unknown_sample_field:unknown" in unknown_result["invalid_evidence"][0]["errors"], unknown_result)
+    root_unit_mismatch = copy.deepcopy(rows)
+    root_unit_mismatch[0]["scenario"]["root_budget_unit"] = "bytes"
+    root_unit_result = calibration.run(packet(root_unit_mismatch), NOW, 168)
+    expect("comparability-root-budget-unit-mismatch-rejected", "root_budget_unit_mismatch" in root_unit_result["invalid_evidence"][0]["errors"], root_unit_result)
+
+    for dimension in ("scenario_id", "scenario_variant", "objective_or_acceptance_fixture_id", "complexity", "risk", "role_route", "model_class", "quality_rubric_version", "policy_version", "canonical_allowed_tools", "measurement_window", "anchor_type"):
+        split = copy.deepcopy(rows)
+        target = next(row for row in split if row["task_class"] == "single_session_baseline" and row["variant"] == "A")
+        if dimension == "policy_version":
+            target[dimension] = "normal-observation-v2"
+        elif dimension == "canonical_allowed_tools":
+            target["scenario"][dimension] = ["gh"]
+        elif dimension == "measurement_window":
+            target["scenario"][dimension]["definition"] = "other-window"
+        else:
+            target["scenario"][dimension] = "different"
+        split_result = calibration.run(packet(split), NOW, 168)
+        expect(f"comparability-splits-{dimension}", len([item for item in split_result["cohorts"] if item["task_class"] == "single_session_baseline"]) == 2, split_result)
 
     fixture = json.loads(FIXTURE.read_text())
     fixture_result = calibration.run(fixture, NOW, 168)
     expect("fixture-evidence-only", "fixture evidence only" in fixture_result["human_summary"], fixture_result)
+    fixture_candidate = fixture_result["cohorts"][0]["candidate_recommendation"]
+    expect("fixture-hold-only-insufficient-sample", fixture_candidate["candidate_status"] == "candidate_hold" and fixture_candidate["candidate_hold_reasons"] == ["requires_at_least_five_valid_A_B_C_rows"], fixture_candidate)
     with tempfile.TemporaryDirectory() as directory:
         output_path = Path(directory) / "packet.json"
         completed = subprocess.run([sys.executable, str(SCRIPT), "--input", str(FIXTURE), "--output", str(output_path), "--now", "2026-07-29T10:00:00Z"], text=True, capture_output=True, check=False)
