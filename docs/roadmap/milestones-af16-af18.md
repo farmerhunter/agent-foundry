@@ -126,6 +126,7 @@ Current canonical path:
 | MVP-1 control plane | #450 / PR #453 | Completed | Static/read-only portable control-plane and Human summary proof. |
 | MVP-2 observation bridge | #451 | Current Human gate | Release only with literal `EffectiveControlSnapshot`; Option A is low_limit experiment, not normal policy. |
 | MVP-3 dogfood | #452 | Held | Starts only after #451 is accepted. |
+| Post-MVP operational readiness | #454 | Dependency-held | Starts only after #450/#451/#452 have independent acceptance evidence; reconciles calibration, policy freeze, adapter enablement, Human UX, recovery/rollback, limited rollout, and final readiness. |
 | Parent Epic/readiness | #418 / #426 / #427 | Held | Final publish/runtime activation/readiness remain later gates. |
 
 ### AF18 Current Active Gate
@@ -138,9 +139,16 @@ Current active decision is #451:
 Until #451 is resolved:
 
 - Do not release #452.
+- Do not release #454.
 - Do not resume #435's old pre-reset implementation route.
 - Do not treat #442 values as normal Coordinator/session policy.
 - Do not activate runtime/config/hooks, generated publish, external execution, final AF18 readiness, or policy freeze.
+
+After #450, #451, and #452 have independent acceptance evidence, #454 becomes
+the Architect reconciliation gate for post-MVP operational readiness. #454 must
+keep #418 as the sole AF18 Epic/roadmap authority, treat #449 as the MVP
+decision record rather than a replacement roadmap, and reconcile #426/#427
+without releasing, closing, or rewriting them by implication.
 
 ### AF18 Cleanup Rules
 
@@ -148,7 +156,7 @@ Older AF18 issues may be closed or superseded only after compact evidence commen
 
 - #435 is stale as an active implementation route and should not keep `needs:implementer`.
 - #444/#445/#433/#436/#432 need narrow closure/supersession packets before closing.
-- #426/#427/#451/#452/#418 remain open gates.
+- #426/#427/#451/#452/#454/#418 remain open gates.
 
 ### AF18 Acceptance Criteria
 
@@ -156,6 +164,7 @@ AF18 is not complete until:
 
 - the integration branch contains all accepted AF18 code and docs;
 - MVP-1, MVP-2, and MVP-3 are accepted in order;
+- post-MVP operational readiness is reconciled through #454;
 - runtime-owned observation proves availability/provenance/fail-closed behavior;
 - dogfood produces calibration evidence without self-tuning policy;
 - Human reviews and freezes any normal operating policy;

@@ -179,7 +179,7 @@ Agent Foundry `v1.0.0` is published. The active planning area is now V2.0 local-
 | Agent Foundry `v1.0.0` release | #267 | First downloadable public Core release for external users. | Completed; GitHub Release and tag published |
 | AF-14 Tester Role And Test Planning Workflow | #302 Epic; #303 through #308; PR #311 | Users need test planning and evidence that answer what was tested, why it is enough, which risks remain, and when human trial is still needed. | Completed; integrated into `main` as V1.x maintenance |
 | AF-15 Collaboration Readiness And Action Workflow | #314 Epic; #315 through #321 plus #328 through #331 | Users need a clear audit and action plan for new/existing repo collaboration readiness before any live repair/apply behavior. | Completed; integrated into `main` as V1.x maintenance |
-| AF-16 Through AF-18 Collaboration Control Path | [roadmap/milestones-af16-af18.md](roadmap/milestones-af16-af18.md) | Users need branch-aware, context-aware, and semantically loaded collaboration before long-running multi-agent work is safe to scale. | AF16/AF17 completed as maintenance; AF18 active bounded lane; #450 accepted; #451/#452 gated |
+| AF-16 Through AF-18 Collaboration Control Path | [roadmap/milestones-af16-af18.md](roadmap/milestones-af16-af18.md) | Users need branch-aware, context-aware, and semantically loaded collaboration before long-running multi-agent work is safe to scale. | AF16/AF17 completed as maintenance; AF18 active bounded lane; #418 is the sole Epic authority; #450 accepted; #451/#452 gated; #454 dependency-held for post-MVP readiness reconciliation |
 | V2.0 Local-First Orchestration And Foundry Board | #292 Epic; #293 through #299; #359 through #362; #266 telemetry window | Users need a local source of truth for multi-agent orchestration that can still sync to GitHub Project, plus migration from the current GitHub-first workflow. | Design gates partially accepted; implementation gates held; #299 readiness held |
 
 AF18's single high-level goal is to make Agent Foundry's multi-agent
@@ -197,6 +197,13 @@ The portable Core owns `Work`, `ExecutionRun`, `DispatchClaim`,
 budget inheritance, semantic execution modes, and policy readout/explain.
 Native Codex task/thread/subagent ids are adapter metadata, not Core domain
 objects.
+
+#418 remains the sole AF18 Epic and human-facing roadmap authority. #449 is the
+current MVP decision record, not a replacement roadmap. #454 is the
+dependency-held post-MVP operational readiness review that reconciles calibration,
+policy freeze, adapter enablement, Human operating UX, recovery/rollback, limited
+rollout, #426 canonical delivery/activation, and #427 final readiness after
+#450/#451/#452 evidence is accepted.
 
 AF18 documentation is intentionally centralized as follows:
 
