@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import copy
 import datetime as dt
 import importlib.util
 from pathlib import Path
@@ -181,6 +182,32 @@ def main() -> int:
     expect("attention-summary-emitted", allowed["attention_summary"]["projection_type"] == "AttentionSummary", allowed)
     expect("native-id-adapter-metadata", allowed["lifecycle_evaluator"]["effective_control_snapshot"]["threshold"]["band"] == "coordinator_routing_status_readback", allowed)
     expect("within-limit-continues", allowed["decision"] == "allow", allowed)
+
+    missing_model_packet = copy.deepcopy(packet())
+    del missing_model_packet["execution_run"]["model"]
+    missing_model = decide(missing_model_packet)
+    expect("missing-run-model-fails-closed", missing_model["decision"] == "hold_required", missing_model)
+    expect("missing-run-model-stop", "missing_execution_run_model" in missing_model["stop_conditions"], missing_model)
+    expect("unknown-model-stop", "missing_or_unknown_model" in missing_model["stop_conditions"], missing_model)
+
+    mismatched_work_id_packet = copy.deepcopy(packet())
+    mismatched_work_id_packet["execution_run"]["work_id"] = "af18-451-other"
+    mismatched_work_id = decide(mismatched_work_id_packet)
+    expect("mismatched-run-work-id-fails-closed", mismatched_work_id["decision"] == "hold_required", mismatched_work_id)
+    expect("mismatched-run-work-id-stop", "run_work_role_mismatch" in mismatched_work_id["stop_conditions"], mismatched_work_id)
+
+    mismatched_role_packet = copy.deepcopy(packet())
+    mismatched_role_packet["execution_run"]["role"] = "Reviewer"
+    mismatched_role = decide(mismatched_role_packet)
+    expect("mismatched-run-role-fails-closed", mismatched_role["decision"] == "hold_required", mismatched_role)
+    expect("mismatched-run-role-stop", "run_work_role_mismatch" in mismatched_role["stop_conditions"], mismatched_role)
+
+    missing_work_role_packet = copy.deepcopy(packet())
+    del missing_work_role_packet["work"]["role"]
+    missing_work_role = decide(missing_work_role_packet)
+    expect("missing-work-role-fails-closed", missing_work_role["decision"] == "hold_required", missing_work_role)
+    expect("missing-work-role-stop", "missing_work_role" in missing_work_role["stop_conditions"], missing_work_role)
+    expect("missing-work-role-mismatch-stop", "run_work_role_mismatch" in missing_work_role["stop_conditions"], missing_work_role)
 
     breached = decide(packet(runtime_telemetry=telemetry(total=4100)))
     expect("threshold-breach-successor", breached["decision"] == "successor_required", breached)

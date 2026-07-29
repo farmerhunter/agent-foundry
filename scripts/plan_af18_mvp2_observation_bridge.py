@@ -185,11 +185,7 @@ def control_plane_packet(packet: dict[str, Any], snapshot: dict[str, Any], telem
     work = dict(packet.get("work") if isinstance(packet.get("work"), dict) else {})
     run = dict(packet.get("execution_run") if isinstance(packet.get("execution_run"), dict) else {})
     context = dict(run.get("context") if isinstance(run.get("context"), dict) else {})
-    model = dict(run.get("model") if isinstance(run.get("model"), dict) else {})
-    work.setdefault("role", "Coordinator")
     work.setdefault("phase", "mvp2-observation-bridge")
-    run["work_id"] = work.get("work_id")
-    run["role"] = work.get("role")
     total_context_value = telemetry["total_context_tokens"]["value"]
     context_tokens_value = total_context_value
     if threshold_breached(snapshot, telemetry):
@@ -209,7 +205,6 @@ def control_plane_packet(packet: dict[str, Any], snapshot: dict[str, Any], telem
     if "source_timestamp" not in context:
         context["source_timestamp"] = packet.get("observed_at")
     run["context"] = context
-    run["model"] = model or {"name": "gpt-5.5", "reasoning": "medium"}
     return {
         "work": work,
         "execution_run": run,
