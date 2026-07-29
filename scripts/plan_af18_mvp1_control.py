@@ -24,6 +24,26 @@ ROUTE_PERMISSIONS = {
     "privileged_execution": "hold_required",
 }
 RESOURCE_PROVENANCE = {"observed", "estimated", "unavailable"}
+ATTENTION_CATEGORIES = {
+    "hdc_approval": "Human decision or approval is required.",
+    "risk_change": "Material risk changed or needs explicit owner attention.",
+    "privacy_boundary": "Privacy boundary is affected or needs review.",
+    "external_side_effect": "External side effect is possible or requested.",
+    "model_escalation": "Model or reasoning escalation needs Human approval.",
+    "context_budget_strategy_change": "Context or budget strategy changed materially.",
+    "retry_claim_anomaly": "Retry or claim anomaly is beyond policy.",
+    "acceptance_evidence_conflict": "Acceptance and evidence conflict.",
+    "phase_completion": "Phase completed and needs next-owner acknowledgement.",
+    "stale_no_owner_work": "Work is stale or lacks a current owner.",
+}
+SUPPRESSED_EVENT_CATEGORIES = {
+    "execution_run",
+    "dispatch_claim",
+    "transition_receipt",
+    "resource_observation",
+    "successor_retry_mechanic",
+    "ordinary_receipt",
+}
 FORBIDDEN_PACKET_KEYS = {
     "prompt",
     "body",
@@ -44,7 +64,11 @@ FORBIDDEN_PACKET_KEYS = {
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Plan AF18 MVP-1 lifecycle control-plane readouts and preflights.")
     parser.add_argument("--input", help="Control-plane packet JSON path. Defaults to stdin when provided.")
-    parser.add_argument("--mode", choices=("preflight", "readout", "explain"), default="preflight")
+    parser.add_argument(
+        "--mode",
+        choices=("preflight", "readout", "explain", "work-summary", "attention-summary"),
+        default="preflight",
+    )
     parser.add_argument("--now", help="Current UTC timestamp for deterministic tests.")
     return parser.parse_args()
 
@@ -101,6 +125,12 @@ def active_policy_readout() -> dict[str, Any]:
         "model_ceiling": cost_policy.DEFAULT_CEILING_MODEL,
         "reasoning_ceiling": cost_policy.DEFAULT_CEILING_REASONING,
         "route_permissions": ROUTE_PERMISSIONS,
+        "human_facing_views": ["active_policy", "work_explain", "work_summary", "attention_summary"],
+        "human_attention_policy": {
+            "attention_categories": ATTENTION_CATEGORIES,
+            "suppressed_default_event_categories": sorted(SUPPRESSED_EVENT_CATEGORIES),
+            "ordinary_control_plane_receipts_default_human_attention": False,
+        },
         "override_requirements": {
             "threshold_exception": ["issue", "role", "temporary_cap", "reason", "expiry"],
             "model_escalation": ["issue", "role", "model", "reasoning", "purpose", "budget"],
@@ -161,7 +191,19 @@ def effective_snapshot(packet: dict[str, Any], now: dt.datetime, stops: list[str
 
 
 def validate_required(work: dict[str, Any], run: dict[str, Any], claim: dict[str, Any], stops: list[str]) -> None:
-    for field in ("work_id", "issue", "role", "phase", "root_budget_tokens", "remaining_budget_tokens", "durable_anchors", "stop_conditions"):
+    for field in (
+        "work_id",
+        "issue",
+        "issue_anchor",
+        "role",
+        "objective",
+        "stage",
+        "phase",
+        "root_budget_tokens",
+        "remaining_budget_tokens",
+        "durable_anchors",
+        "stop_conditions",
+    ):
         if missing(work.get(field)):
             stops.append(f"missing_work_{field}")
     for field in ("run_id", "work_id", "role", "state", "context", "model"):
@@ -182,6 +224,23 @@ def validate_required(work: dict[str, Any], run: dict[str, Any], claim: dict[str
         stops.append("run_work_role_mismatch")
     if claim.get("work_id") not in (None, work.get("work_id")) or claim.get("role") not in (None, work.get("role")):
         stops.append("claim_work_role_mismatch")
+    validate_issue_work_anchor(work, stops)
+
+
+def validate_issue_work_anchor(work: dict[str, Any], stops: list[str]) -> None:
+    issue_anchor = work.get("issue_anchor") if isinstance(work.get("issue_anchor"), dict) else {}
+    if not issue_anchor:
+        stops.append("missing_issue_anchor")
+        return
+    if issue_anchor.get("issue") != work.get("issue"):
+        stops.append("work_issue_anchor_mismatch")
+    for field in ("durable_anchor", "scope", "risk", "acceptance", "human_gates"):
+        if missing(issue_anchor.get(field)):
+            stops.append(f"missing_issue_anchor_{field}")
+    if work.get("cross_issue_work") is True or work.get("multiple_issue_work") is True:
+        anchors = work.get("additional_issue_anchors")
+        if not isinstance(anchors, list) or not anchors:
+            stops.append("missing_cross_issue_durable_anchors")
 
 
 def context_token_count(context: dict[str, Any], stops: list[str]) -> int | None:
@@ -270,6 +329,7 @@ def successor_packet(work: dict[str, Any], run: dict[str, Any], route: str, now:
         "packet_type": "SuccessorPacket",
         "created_at": now.isoformat().replace("+00:00", "Z"),
         "work_id": work.get("work_id"),
+        "issue_anchor": work.get("issue_anchor"),
         "role": work.get("role"),
         "phase": work.get("phase"),
         "root_budget_tokens": work.get("root_budget_tokens"),
@@ -280,6 +340,119 @@ def successor_packet(work: dict[str, Any], run: dict[str, Any], route: str, now:
         "requested_route": route,
         "context_policy": "cursor_only_compact_no_prompt_body_no_full_history",
         "exclusions": sorted(FORBIDDEN_PACKET_KEYS),
+    }
+
+
+def compact_reason(raw: Any, fallback: str) -> str:
+    if isinstance(raw, str) and raw.strip():
+        words = raw.strip().split()
+        return " ".join(words[:16])
+    return fallback
+
+
+def attention_summary_projection(packet: dict[str, Any], now: dt.datetime) -> dict[str, Any]:
+    del now
+    stops: list[str] = []
+    warnings: list[str] = []
+    events = packet.get("attention_events")
+    if events is None:
+        events = []
+    if not isinstance(events, list):
+        stops.append("invalid_attention_events")
+        events = []
+    items: list[dict[str, Any]] = []
+    suppressed: list[str] = []
+    for index, event in enumerate(events):
+        if not isinstance(event, dict):
+            stops.append("invalid_attention_event")
+            continue
+        category = event.get("category")
+        if category in SUPPRESSED_EVENT_CATEGORIES:
+            suppressed.append(str(category))
+            continue
+        if category not in ATTENTION_CATEGORIES:
+            stops.append("unknown_attention_category")
+            continue
+        reason = compact_reason(event.get("reason"), ATTENTION_CATEGORIES[category])
+        items.append(
+            {
+                "category": category,
+                "reason": reason,
+                "evidence_ref": event.get("evidence_ref"),
+                "requires_human": True,
+                "index": index,
+            }
+        )
+    forbidden = find_forbidden(packet.get("attention_events", []))
+    if forbidden:
+        stops.append("privacy_exposure")
+        warnings.append("forbidden_attention_paths:" + ",".join(forbidden))
+    if stops:
+        items.append(
+            {
+                "category": "invalid_attention_input",
+                "reason": "Attention input is invalid; hold for compact corrected evidence.",
+                "requires_human": True,
+            }
+        )
+    return {
+        "projection_type": "AttentionSummary",
+        "control_version": CONTROL_VERSION,
+        "valid": not stops,
+        "human_attention_required": bool(items),
+        "reason": compact_reason(items[0]["reason"], "Human attention is required.") if items else "No policy-material attention event.",
+        "items": items,
+        "suppressed_event_categories": sorted(set(suppressed)),
+        "stop_conditions": sorted(set(stops)),
+        "warnings": warnings,
+        "read_only": True,
+        "mutation_performed": False,
+        "dispatch_performed": False,
+    }
+
+
+def work_summary_projection(packet: dict[str, Any], now: dt.datetime) -> dict[str, Any]:
+    work = packet.get("work") if isinstance(packet.get("work"), dict) else {}
+    stops: list[str] = []
+    validate_issue_work_anchor(work, stops)
+    for field in ("work_id", "objective", "stage", "role"):
+        if missing(work.get(field)):
+            stops.append(f"missing_work_summary_{field}")
+    attention = attention_summary_projection(packet, now)
+    if not attention["valid"]:
+        stops.append("invalid_attention_summary")
+    forbidden = find_forbidden(work)
+    warnings: list[str] = []
+    if forbidden:
+        stops.append("privacy_exposure")
+        warnings.append("forbidden_work_summary_paths:" + ",".join(forbidden))
+    return {
+        "projection_type": "WorkSummary",
+        "control_version": CONTROL_VERSION,
+        "valid": not stops,
+        "issue_anchor": work.get("issue_anchor"),
+        "work_id": work.get("work_id"),
+        "objective": work.get("objective"),
+        "stage": work.get("stage"),
+        "current_owner": work.get("current_owner", work.get("role")),
+        "material_decisions": work.get("material_decisions", []),
+        "accepted_evidence_refs": work.get("accepted_evidence_refs", []),
+        "material_risk_or_blocker": work.get("material_risk_or_blocker"),
+        "next_action": work.get("next_action"),
+        "human_attention_required": attention["human_attention_required"] or bool(stops),
+        "human_attention_reason": attention["reason"] if attention["human_attention_required"] else "No policy-material attention event.",
+        "default_human_ux_excludes": [
+            "ExecutionRun",
+            "DispatchClaim",
+            "TransitionReceipt",
+            "raw_token_context_observations",
+            "successor_retry_mechanics",
+        ],
+        "stop_conditions": sorted(set(stops)),
+        "warnings": warnings,
+        "read_only": True,
+        "mutation_performed": False,
+        "dispatch_performed": False,
     }
 
 
@@ -333,6 +506,8 @@ def plan_preflight(packet: dict[str, Any], now: dt.datetime) -> dict[str, Any]:
         "warnings": warnings,
         "reason": "preflight passed" if decision == "allow" else "successor context required" if decision == "successor_required" else "fail-closed hold required",
         "one_recovery_action": None if decision != "hold_required" else "ask Coordinator for a compact issue-specific packet or Human approval",
+        "human_attention_required": decision == "hold_required",
+        "human_attention_reason": "Hold requires Human or Coordinator attention." if decision == "hold_required" else "No policy-material attention event.",
         "mutation_performed": False,
         "dispatch_performed": False,
     }
@@ -354,6 +529,7 @@ def plan_preflight(packet: dict[str, Any], now: dt.datetime) -> dict[str, Any]:
 
 def explain_work_policy(packet: dict[str, Any], now: dt.datetime) -> dict[str, Any]:
     preflight = plan_preflight(packet, now)
+    attention = attention_summary_projection(packet, now)
     return {
         "control_version": CONTROL_VERSION,
         "classification": preflight["classification"],
@@ -369,6 +545,10 @@ def explain_work_policy(packet: dict[str, Any], now: dt.datetime) -> dict[str, A
         "reason": preflight["reason"],
         "stop_conditions": preflight["stop_conditions"],
         "one_recovery_action": preflight["one_recovery_action"],
+        "human_attention_required": preflight["human_attention_required"] or attention["human_attention_required"],
+        "human_attention_reason": preflight["human_attention_reason"]
+        if preflight["human_attention_required"]
+        else attention["reason"],
         "read_only": True,
         "mutation_performed": False,
         "dispatch_performed": False,
@@ -383,6 +563,10 @@ def main() -> int:
         result = active_policy_readout()
     elif args.mode == "explain":
         result = explain_work_policy(packet, now)
+    elif args.mode == "work-summary":
+        result = work_summary_projection(packet, now)
+    elif args.mode == "attention-summary":
+        result = attention_summary_projection(packet, now)
     else:
         result = plan_preflight(packet, now)
     print(json.dumps(result, indent=2, sort_keys=True))

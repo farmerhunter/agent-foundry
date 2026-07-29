@@ -15,7 +15,10 @@ properties:
     required:
       - work_id
       - issue
+      - issue_anchor
       - role
+      - objective
+      - stage
       - phase
       - root_budget_tokens
       - remaining_budget_tokens
@@ -28,10 +31,50 @@ properties:
       issue:
         type: integer
         minimum: 1
+      issue_anchor:
+        type: object
+        additionalProperties: false
+        required:
+          - issue
+          - durable_anchor
+          - scope
+          - risk
+          - acceptance
+          - human_gates
+        properties:
+          issue:
+            type: integer
+            minimum: 1
+          durable_anchor:
+            type: string
+            minLength: 1
+          scope:
+            type: string
+            minLength: 1
+          risk:
+            type: string
+            minLength: 1
+          acceptance:
+            type: string
+            minLength: 1
+          human_gates:
+            type: array
+            items:
+              type: string
+              minLength: 1
       role:
         type: string
         minLength: 1
+      objective:
+        type: string
+        minLength: 1
+      stage:
+        type: string
+        minLength: 1
       phase:
+        type: string
+        minLength: 1
+      current_owner:
         type: string
         minLength: 1
       root_budget_tokens:
@@ -51,6 +94,31 @@ properties:
         items:
           type: string
           minLength: 1
+      material_decisions:
+        type: array
+        items:
+          type: string
+          minLength: 1
+      accepted_evidence_refs:
+        type: array
+        items:
+          type: string
+          minLength: 1
+      material_risk_or_blocker:
+        type:
+          - string
+          - "null"
+      next_action:
+        type: string
+        minLength: 1
+      cross_issue_work:
+        type: boolean
+      multiple_issue_work:
+        type: boolean
+      additional_issue_anchors:
+        type: array
+        items:
+          type: object
   execution_run:
     type: object
     additionalProperties: false
@@ -253,6 +321,38 @@ properties:
   adapter_metadata:
     type: object
     additionalProperties: true
+  attention_events:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      required:
+        - category
+      properties:
+        category:
+          enum:
+            - hdc_approval
+            - risk_change
+            - privacy_boundary
+            - external_side_effect
+            - model_escalation
+            - context_budget_strategy_change
+            - retry_claim_anomaly
+            - acceptance_evidence_conflict
+            - phase_completion
+            - stale_no_owner_work
+            - execution_run
+            - dispatch_claim
+            - transition_receipt
+            - resource_observation
+            - successor_retry_mechanic
+            - ordinary_receipt
+        reason:
+          type: string
+          minLength: 1
+        evidence_ref:
+          type: string
+          minLength: 1
   existing_dispatch_claims:
     type: array
     items:

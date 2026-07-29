@@ -23,12 +23,27 @@ def packet(**overrides):
         "work": {
             "work_id": "af18-450",
             "issue": 450,
+            "issue_anchor": {
+                "issue": 450,
+                "durable_anchor": "https://github.com/farmerhunter/agent-foundry/issues/450",
+                "scope": "mvp1-control-plane",
+                "risk": "high",
+                "acceptance": "portable read-only control-plane proof",
+                "human_gates": ["model_escalation", "external_side_effect"],
+            },
             "role": "Implementer",
+            "objective": "Implement AF18 MVP-1 control-plane contract",
+            "stage": "needs:reviewer",
             "phase": "mvp1-control-plane",
+            "current_owner": "Implementer",
             "root_budget_tokens": 7000,
             "remaining_budget_tokens": 6200,
             "durable_anchors": ["https://github.com/farmerhunter/agent-foundry/issues/450"],
             "stop_conditions": ["hold_on_missing_budget", "hold_on_stale_context", "hold_on_duplicate_dispatch"],
+            "material_decisions": ["Option A approved for bounded MVP"],
+            "accepted_evidence_refs": ["https://github.com/farmerhunter/agent-foundry/pull/453"],
+            "material_risk_or_blocker": None,
+            "next_action": "review PR #453",
         },
         "execution_run": {
             "run_id": "run-450-a",
@@ -59,6 +74,7 @@ def packet(**overrides):
         },
         "existing_dispatch_claims": [],
         "active_runs": [],
+        "attention_events": [],
         "requested_route": "isolated_execution",
         "adapter_metadata": {"runtime_binding": "codex"},
     }
@@ -89,6 +105,15 @@ def main() -> int:
         allowed,
     )
     expect("allow-no-mutation", allowed["mutation_performed"] is False and allowed["dispatch_performed"] is False, allowed)
+    expect("allow-no-human-attention", allowed["human_attention_required"] is False, allowed)
+
+    issue_anchor_mismatch = packet(work={**packet()["work"], "issue_anchor": {**packet()["work"]["issue_anchor"], "issue": 449}})
+    issue_anchor_mismatch_result = plan(issue_anchor_mismatch)
+    expect("issue-anchor-mismatch-holds", "work_issue_anchor_mismatch" in issue_anchor_mismatch_result["stop_conditions"], issue_anchor_mismatch_result)
+
+    cross_issue_without_anchor = packet(work={**packet()["work"], "cross_issue_work": True})
+    cross_issue_result = plan(cross_issue_without_anchor)
+    expect("cross-issue-requires-anchor", "missing_cross_issue_durable_anchors" in cross_issue_result["stop_conditions"], cross_issue_result)
 
     missing_budget = packet(work={**packet()["work"], "root_budget_tokens": None})
     missing_budget_result = plan(missing_budget)
@@ -240,6 +265,7 @@ def main() -> int:
     interactive = plan(packet(requested_route="interactive_execution"))
     expect("interactive-successor-required", interactive["decision"] == "successor_required", interactive)
     expect("successor-keeps-work-id", interactive["successor_packet"]["work_id"] == "af18-450", interactive)
+    expect("successor-keeps-issue-anchor", interactive["successor_packet"]["issue_anchor"]["issue"] == 450, interactive)
     expect("successor-keeps-root-budget", interactive["successor_packet"]["root_budget_tokens"] == 7000, interactive)
     expect("successor-keeps-remaining-budget", interactive["successor_packet"]["remaining_budget_tokens"] == 6200, interactive)
     expect("successor-privacy-safe", forbidden_paths(interactive["successor_packet"]) == [], interactive)
@@ -260,11 +286,18 @@ def main() -> int:
     expect("readout-effective-rule-visible", "effective_context_ceiling_rule" in readout, readout)
     expect("readout-band-visible", readout["threshold_bands"]["implementer_small_scoped_implementation"]["max_context_tokens"] == 8000, readout)
     expect("readout-no-dispatch", readout["mutation_performed"] is False and readout["dispatch_performed"] is False, readout)
+    expect("readout-human-views-visible", "attention_summary" in readout["human_facing_views"], readout)
+    expect(
+        "ordinary-receipts-not-default-attention",
+        readout["human_attention_policy"]["ordinary_control_plane_receipts_default_human_attention"] is False,
+        readout,
+    )
     expect("readout-privacy-safe", forbidden_paths(readout) == [], readout)
 
     explanation = planner.explain_work_policy(packet(), NOW)
     expect("explain-allow", explanation["decision"] == "allow", explanation)
     expect("explain-budget-visible", explanation["root_budget_tokens"] == 7000 and explanation["remaining_budget_tokens"] == 6200, explanation)
+    expect("explain-attention-reason", explanation["human_attention_reason"] == "No policy-material attention event.", explanation)
 
     interactive_explanation = planner.explain_work_policy(packet(requested_route="interactive_execution"), NOW)
     expect("explain-interactive-successor", interactive_explanation["decision"] == "successor_required", interactive_explanation)
@@ -281,6 +314,60 @@ def main() -> int:
     prompt_body = packet(prompt="private prompt body")
     prompt_body_result = plan(prompt_body)
     expect("prompt-body-holds", "privacy_exposure" in prompt_body_result["stop_conditions"], prompt_body_result)
+
+    ordinary_receipt = planner.attention_summary_projection(
+        packet(attention_events=[{"category": "transition_receipt", "reason": "ordinary run receipt"}]),
+        NOW,
+    )
+    expect("ordinary-receipt-suppressed", ordinary_receipt["human_attention_required"] is False, ordinary_receipt)
+    expect("ordinary-receipt-category-suppressed", "transition_receipt" in ordinary_receipt["suppressed_event_categories"], ordinary_receipt)
+
+    attention_categories = {
+        "hdc_approval": "Human approval needed",
+        "risk_change": "Risk changed",
+        "privacy_boundary": "Privacy boundary",
+        "external_side_effect": "External side effect",
+        "model_escalation": "Model escalation",
+        "context_budget_strategy_change": "Budget strategy changed",
+        "retry_claim_anomaly": "Claim anomaly",
+        "acceptance_evidence_conflict": "Evidence conflict",
+        "phase_completion": "Phase complete",
+        "stale_no_owner_work": "No owner",
+    }
+    for category, reason in attention_categories.items():
+        attention = planner.attention_summary_projection(
+            packet(attention_events=[{"category": category, "reason": reason, "evidence_ref": "issue-450"}]),
+            NOW,
+        )
+        expect(f"attention-{category}-required", attention["human_attention_required"] is True, attention)
+        expect(f"attention-{category}-reason", attention["items"][0]["reason"] == reason, attention)
+
+    work_summary = planner.work_summary_projection(packet(), NOW)
+    expect("work-summary-valid", work_summary["valid"] is True, work_summary)
+    expect("work-summary-fields", work_summary["objective"] == "Implement AF18 MVP-1 control-plane contract", work_summary)
+    expect("work-summary-no-attention", work_summary["human_attention_required"] is False, work_summary)
+    expect("work-summary-default-excludes-runs", "ExecutionRun" in work_summary["default_human_ux_excludes"], work_summary)
+
+    work_summary_attention = planner.work_summary_projection(
+        packet(attention_events=[{"category": "phase_completion", "reason": "Phase complete"}]),
+        NOW,
+    )
+    expect("work-summary-attention-required", work_summary_attention["human_attention_required"] is True, work_summary_attention)
+    expect("work-summary-attention-reason", work_summary_attention["human_attention_reason"] == "Phase complete", work_summary_attention)
+
+    private_work_summary = planner.work_summary_projection(
+        packet(work={**packet()["work"], "prompt": "private prompt body"}),
+        NOW,
+    )
+    expect("work-summary-privacy-fail-closed", "privacy_exposure" in private_work_summary["stop_conditions"], private_work_summary)
+
+    invalid_attention = planner.attention_summary_projection(packet(attention_events=[{"category": "unknown_policy_event"}]), NOW)
+    expect("unknown-attention-fails-closed", invalid_attention["valid"] is False, invalid_attention)
+    expect("unknown-attention-stop", "unknown_attention_category" in invalid_attention["stop_conditions"], invalid_attention)
+
+    invalid_summary = planner.work_summary_projection(packet(work={**packet()["work"], "objective": ""}), NOW)
+    expect("invalid-summary-fails-closed", invalid_summary["valid"] is False, invalid_summary)
+    expect("invalid-summary-stop", "missing_work_summary_objective" in invalid_summary["stop_conditions"], invalid_summary)
 
     print("af18 mvp1 control-plane tests passed")
     return 0
