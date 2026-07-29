@@ -85,12 +85,22 @@ AF18 Core owns these portable concepts:
 - `WorkSummary`: compact Human-facing projection of current objective, owner, decisions, evidence, risk, and next action.
 - `AttentionSummary`: Human-facing projection only for material attention events.
 - Resource observations with `observed`, `estimated`, or `unavailable` provenance; unavailable is never zero.
+- `RoleConversation`: a stable Human-facing relationship to one role.
+- `ContextWindow`: a bounded context within a `RoleConversation`, joined to its
+  successor by a privacy-safe capsule rather than by full chat history.
+- `RoleHub`: one optional project-level projection and entry directory for all
+  roles. It is not a role-specific thread, policy authority, telemetry store,
+  or execution controller.
 
-Coordinator internals are modeled separately:
+Every role uses the same Human-continuity model:
 
 ```text
-CoordinatorSession -> CoordinationWindow -> coordination operation
+RoleConversation -> ContextWindow -> role operation
 ```
+
+For Coordinator, the role operation is a coordination operation; the
+`CoordinatorSession` / `CoordinationWindow` names describe that specialization,
+not a second competing lifecycle. A RoleConversation may span many Issues.
 
 Project work remains:
 
@@ -98,14 +108,26 @@ Project work remains:
 Issue -> Work -> ExecutionRun
 ```
 
-Do not force every Coordinator operation to become one Human-visible Work.
+Do not force every role operation to become one Human-visible Work. A Work is
+created or bound only when an Issue contract requires bounded execution,
+evidence, acceptance, or routing.
+
+The Core defines the continuity semantics, capsule exclusions, successor
+relationship, and state invariants. An adapter measures context and maps a
+ContextWindow to a native mechanism. For Codex, a context refresh may require
+creating a successor thread, passing the capsule plus durable anchors,
+confirming it is usable, marking the predecessor `superseded`, and repointing
+the RoleHub entry. The predecessor is not deleted or blindly archived. If an
+adapter cannot perform that transition, it must expose one recovery path rather
+than pretend the old thread has lost its history.
 
 ### AF18 Policy Layers
 
 Do not collapse policy layers:
 
 - Current `low_limit` is emergency containment and readback protection.
-- Future resource profiles such as economy/normal/performance require dogfood calibration and Human policy freeze.
+- No named normal operating modes or default thresholds are approved yet.
+  Dogfood calibration and a Human policy-freeze decision must determine them.
 - `EffectiveControlSnapshot` records the exact source/version/band, window/root-budget constraints, measurement rules, and stop conditions used by a released literal contract.
 - Runtime receipts record facts; they do not self-tune policy.
 
@@ -124,21 +146,20 @@ Current canonical path:
 | Runtime-owned capture | #436 / #446 / #447 | Superseded input to MVP path | Runtime-owned observation evidence informed #449/#451. |
 | Integrated MVP scope | #449 | Accepted and closed | Defines bounded MVP path, portability, Human attention, and roadmap to calibration/freeze. |
 | MVP-1 control plane | #450 / PR #453 | Completed | Static/read-only portable control-plane and Human summary proof. |
-| MVP-2 observation bridge | #451 | Current Human gate | Release only with literal `EffectiveControlSnapshot`; Option A is low_limit experiment, not normal policy. |
-| MVP-3 dogfood | #452 | Held | Starts only after #451 is accepted. |
-| Post-MVP operational readiness | #454 | Dependency-held | Starts only after #450/#451/#452 have independent acceptance evidence; reconciles calibration, policy freeze, adapter enablement, Human UX, recovery/rollback, limited rollout, and final readiness. |
+| MVP-2 observation bridge | #451 / PR #455 | Completed low-limit experiment | Proves bounded runtime-owned observation/lifecycle bridge; it does not establish normal operating thresholds or activation readiness. |
+| MVP-3 dogfood | #452 | Held pending literal release | May start only under its bounded contract after #451 acceptance; it supplies evidence, not automatic policy freeze or activation. |
+| Post-MVP operational readiness | #454 | Dependency-held | Starts only after #450/#451/#452 have independent acceptance evidence; reconciles calibration, policy freeze, adapter enablement, RoleConversation/RoleHub UX, recovery/rollback, limited rollout, and final readiness. |
 | Parent Epic/readiness | #418 / #426 / #427 | Held | Final publish/runtime activation/readiness remain later gates. |
 
-### AF18 Current Active Gate
+### AF18 Next Gated Work
 
-Current active decision is #451:
+The next dependency-held work is #452. Its release must name the exact bounded
+route, `EffectiveControlSnapshot`, root budget, run cap, measurements, stop
+conditions, and independent acceptance evidence. #451's low-limit experiment
+does not authorize a normal operating policy or final activation.
 
-- Option A: release #451 as a bounded `low_limit_experiment` with literal `EffectiveControlSnapshot`.
-- Option B: hold #451 until a normal operating policy exists after dogfood calibration and Human freeze.
+Until #452 is explicitly released and accepted:
 
-Until #451 is resolved:
-
-- Do not release #452.
 - Do not release #454.
 - Do not resume #435's old pre-reset implementation route.
 - Do not treat #442 values as normal Coordinator/session policy.
@@ -156,7 +177,7 @@ Older AF18 issues may be closed or superseded only after compact evidence commen
 
 - #435 is stale as an active implementation route and should not keep `needs:implementer`.
 - #444/#445/#433/#436/#432 need narrow closure/supersession packets before closing.
-- #426/#427/#451/#452/#454/#418 remain open gates.
+- #426/#427/#452/#454/#418 remain open gates; #451 is complete evidence input.
 
 ### AF18 Acceptance Criteria
 

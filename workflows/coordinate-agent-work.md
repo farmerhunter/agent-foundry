@@ -40,6 +40,10 @@ The portable Core owns:
 - `SuccessorPacket`: compact cursor-only continuation packet for a successor
   context;
 - `TransitionReceipt`: privacy-safe control-plane evidence for a transition;
+- `RoleConversation`: stable Human-facing relationship to a role;
+- `ContextWindow`: bounded context inside that relationship, with a compact
+  successor capsule instead of full-history transfer;
+- `RoleHub`: optional project-level projection and role-entry directory;
 - resource observations with `observed`, `estimated`, or `unavailable`
   provenance;
 - budget inheritance, fail-closed measurement policy, duplicate prevention, and
@@ -54,9 +58,9 @@ Do not collapse AF18 policy layers:
 
 - Current `low_limit` is emergency containment and readback protection. It is
   not the normal Coordinator/session operating policy.
-- Future versioned operating policy, including resource profiles such as
-  economy/normal/performance, is only proposed after dogfood calibration and a
-  Human policy-freeze decision.
+- No named normal operating modes or default thresholds are approved yet.
+  A future versioned operating policy is proposed only after dogfood calibration
+  and a Human policy-freeze decision.
 - `EffectiveControlSnapshot` records the exact approved source/version/band,
   window/root-budget constraints, measurement rules, and stop conditions used
   by a released literal contract.
@@ -66,13 +70,18 @@ Do not collapse AF18 policy layers:
 If an AF18 experiment uses #442 values, evidence must label that band as
 `low_limit_experiment`, not normal operation.
 
-## AF18 Coordinator Lifecycle
+## AF18 Role Conversation And Coordinator Lifecycle
 
-Coordinator internals have their own lifecycle:
+Every role has a stable Human-facing conversation relationship:
 
 ```text
-CoordinatorSession -> CoordinationWindow -> coordination operation
+RoleConversation -> ContextWindow -> role operation
 ```
+
+Coordinator is the specialization whose role operation is a coordination
+operation; `CoordinatorSession` and `CoordinationWindow` are names for that
+specialization, not a separate lifecycle model. The logical role remains
+stable while an adapter may replace its physical context window.
 
 This is separate from the project object hierarchy:
 
@@ -80,13 +89,19 @@ This is separate from the project object hierarchy:
 Issue -> Work -> ExecutionRun
 ```
 
-A Coordinator window may safely span multiple issues without becoming one
-Human-visible Work per coordination operation. Coordinator lifecycle evaluation
+A role conversation may safely span multiple issues without becoming one
+Human-visible Work per role operation. A Coordinator lifecycle evaluation
 should happen only at bounded meaningful events: before new Issue/Work routing,
 after compact durable readback, after materially increased input/tool output,
 before or after dispatch/callback, before Human/HDC output, and on policy,
 evidence, budget, or measurement anomalies. Continuous Coordinator polling is
 not part of AF18 MVP.
+
+The Core owns the capsule, successor, privacy, and state semantics. The adapter
+owns measurement and native thread/session behavior. In Codex, a real refresh
+may require a successor thread, capsule transfer, readiness confirmation, and a
+`superseded` predecessor. Do not delete or automatically archive the old thread.
+If a successor cannot be created or linked, hold with one recovery path.
 
 ## AF18 Human Attention
 
@@ -96,6 +111,11 @@ observation feeds. Attention is reserved for material HDC, risk, privacy,
 external side effect, model/reasoning escalation, context/budget policy action,
 retry/claim anomaly, evidence conflict, phase completion, and stale/no-owner
 events.
+
+RoleHub is one project-level optional projection: it links each role to its
+current RoleConversation and summarizes current Work and material attention. It
+does not replace direct Human-to-role conversation, create a RoleHub per role,
+or make raw receipts the default feed.
 
 ## Non-Scope
 
