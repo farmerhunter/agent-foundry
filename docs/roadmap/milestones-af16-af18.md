@@ -147,29 +147,38 @@ Current canonical path:
 | Integrated MVP scope | #449 | Accepted and closed | Defines bounded MVP path, portability, Human attention, and roadmap to calibration/freeze. |
 | MVP-1 control plane | #450 / PR #453 | Completed | Static/read-only portable control-plane and Human summary proof. |
 | MVP-2 observation bridge | #451 / PR #455 | Completed low-limit experiment | Proves bounded runtime-owned observation/lifecycle bridge; it does not establish normal operating thresholds or activation readiness. |
-| MVP-3 dogfood | #452 | Held pending literal release | May start only under its bounded contract after #451 acceptance; it supplies evidence, not automatic policy freeze or activation. |
-| Post-MVP operational readiness | #454 | Dependency-held | Starts only after #450/#451/#452 have independent acceptance evidence; reconciles calibration, policy freeze, adapter enablement, RoleConversation/RoleHub UX, recovery/rollback, limited rollout, and final readiness. |
+| MVP-3 dogfood | #452 | Accepted and closed | Supplies bounded dogfood evidence; it does not freeze normal policy or authorize activation. |
+| Post-MVP operational readiness | #454 | Accepted and closed | Decomposes calibration, policy freeze, RoleConversation/adaptor successor transition, recovery/rollback, LearningSignal harvest input, limited rollout, and final readiness. |
+| Calibration evidence | #457 | Ready | Collect normal-collaboration evidence before threshold freeze; keep #442 values labeled as low-limit containment only. |
+| Policy freeze HDC | #458 | Blocked behind #457 | Decide normal operating policy and rollback conditions only after calibration evidence is accepted. |
+| RoleConversation/adaptor successor | #459 | Blocked behind calibration/policy direction | Prepare Human-facing role lifecycle onboarding and adapter successor transition without treating native task ids as Core domain objects. |
+| Recovery/rollback readiness | #460 | Blocked behind calibration/policy direction | Define fail-closed recovery and incident handling before broader activation. |
+| LearningSignal harvest contract | #461 | Blocked behind policy/Human release | Define terminal LearningSignal handoff and HarvestCandidateIndex projection before #426 harvest/publication work resumes. |
+| Limited real-mode rollout | #462 | Blocked behind post-MVP readiness gates | Run bounded real-mode evidence only after the prerequisite gates are accepted and Human release is explicit. |
 | Parent Epic/readiness | #418 / #426 / #427 | Held | Final publish/runtime activation/readiness remain later gates. |
 
 ### AF18 Next Gated Work
 
-The next dependency-held work is #452. Its release must name the exact bounded
-route, `EffectiveControlSnapshot`, root budget, run cap, measurements, stop
-conditions, and independent acceptance evidence. #451's low-limit experiment
-does not authorize a normal operating policy or final activation.
+The next ready work is #457 calibration evidence. It must use accepted #450,
+#451, #452, and #454 evidence to distinguish emergency low-limit containment
+from candidate normal operating policy. #457 does not authorize policy freeze,
+activation, or #426/#427 release.
 
-Until #452 is explicitly released and accepted:
+After #457 is accepted, #458 prepares the Human Decision Contract for normal
+policy freeze and rollback. The remaining post-MVP issues stay blocked until
+their prerequisite evidence or Human release is explicit:
 
-- Do not release #454.
+- #459 defines RoleConversation onboarding and adapter successor transition.
+- #460 defines recovery, rollback, and incident handling readiness.
+- #461 defines LearningSignal terminal handoff and HarvestCandidateIndex contract.
+- #462 runs limited real-mode rollout evidence.
+
+Until these gates are explicitly accepted:
+
 - Do not resume #435's old pre-reset implementation route.
 - Do not treat #442 values as normal Coordinator/session policy.
+- Do not release #426/#427.
 - Do not activate runtime/config/hooks, generated publish, external execution, final AF18 readiness, or policy freeze.
-
-After #450, #451, and #452 have independent acceptance evidence, #454 becomes
-the Architect reconciliation gate for post-MVP operational readiness. #454 must
-keep #418 as the sole AF18 Epic/roadmap authority, treat #449 as the MVP
-decision record rather than a replacement roadmap, and reconcile #426/#427
-without releasing, closing, or rewriting them by implication.
 
 ### AF18 Cleanup Rules
 
@@ -177,7 +186,8 @@ Older AF18 issues may be closed or superseded only after compact evidence commen
 
 - #435 is stale as an active implementation route and should not keep `needs:implementer`.
 - #444/#445/#433/#436/#432 need narrow closure/supersession packets before closing.
-- #426/#427/#452/#454/#418 remain open gates; #451 is complete evidence input.
+- #452 and #454 are complete evidence/design inputs.
+- #426/#427/#418 remain open gates.
 
 ### AF18 Acceptance Criteria
 
@@ -185,7 +195,7 @@ AF18 is not complete until:
 
 - the integration branch contains all accepted AF18 code and docs;
 - MVP-1, MVP-2, and MVP-3 are accepted in order;
-- post-MVP operational readiness is reconciled through #454;
+- post-MVP operational readiness is reconciled through #454 and decomposed into #457 through #462;
 - runtime-owned observation proves availability/provenance/fail-closed behavior;
 - dogfood produces calibration evidence without self-tuning policy;
 - Human reviews and freezes any normal operating policy;
