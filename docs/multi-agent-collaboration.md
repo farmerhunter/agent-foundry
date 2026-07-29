@@ -79,6 +79,42 @@ branches.
 Implementer 做 scoped change，Tester 提供测试证据，Reviewer 做独立审查，Human 做真实
 产品/风险决策，Harvester 把经验整理成候选资产。
 
+## Human-Facing Role Conversations
+
+Human collaboration needs a stable way to return to Architect, Coordinator,
+Reviewer, or another role for questions, design discussion, interruption, and
+decision making. That need is distinct from a bounded implementation or review
+run.
+
+Use this model:
+
+```text
+RoleConversation -> ContextWindow -> role operation
+Issue -> Work -> ExecutionRun
+```
+
+`RoleConversation` is the stable Human-facing role relationship. A `Work` is a
+bounded delivery unit linked to an Issue. A conversation can discuss several
+Issues without silently becoming a Work; when a request needs execution,
+evidence, acceptance, or routing, it binds or creates the appropriate Work.
+
+The active `ContextWindow` may be replaced to avoid unbounded context growth.
+The successor receives a compact capsule and durable anchors, not full chat or
+tool history. The Human continues to address the same role. A refresh normally
+does not require approval, but a continuity notice is required when the active
+window changes; missing anchors, evidence conflict, escalation, or unavailable
+measurement must hold instead.
+
+`RoleHub` is one optional project-level directory of current role conversations,
+Work summaries, and material attention. It is not a replacement for role
+conversation, a per-role hub, an execution controller, or a source of truth.
+GitHub issue/PR/comment state remains durable authority.
+
+**中文要点：** Human 需要持续与 Architect、Coordinator 等角色对话；这不等同于让
+同一个物理 thread 无限增长。`RoleConversation` 保持角色身份，`ContextWindow` 可以
+自动 successor。RoleHub 只有一个项目级入口，负责投影和跳转，不取代角色对话或 GitHub
+权威状态。
+
 ## Standard Flow
 
 | Step | Owner | What happens | Exit signal |
