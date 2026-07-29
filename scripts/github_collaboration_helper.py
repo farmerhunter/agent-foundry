@@ -88,6 +88,8 @@ READINESS_NEEDS_LABELS = [
 READINESS_PROJECT_FIELDS = ["Status", "Roadmap Status", "Stage", "Owner Role", "Risk"]
 READINESS_PROJECT_OPTIONS = ["Architect", "Implementer", "Tester", "Reviewer", "Human", "Harvester"]
 V2_INTEGRATION_BRANCH = "codex/v2-local-first-orchestration"
+AF18_INTEGRATION_BRANCH = "codex/af18-collaboration-cost-policy-integration"
+AF18_RELEASE_LINE = "af18-collaboration-cost-control"
 BRANCH_STRATEGIES = [
     "mainline-maintenance",
     "integration-branch",
@@ -3568,6 +3570,8 @@ def branch_family(branch: str | None) -> str:
         return "unknown"
     if branch == "main":
         return "v1.x-maintenance"
+    if branch == AF18_INTEGRATION_BRANCH or branch.startswith(f"{AF18_INTEGRATION_BRANCH}/"):
+        return AF18_RELEASE_LINE
     if branch == V2_INTEGRATION_BRANCH or branch.startswith(f"{V2_INTEGRATION_BRANCH}/"):
         return "v2-integration"
     if branch.startswith("codex/v2-"):
@@ -3579,6 +3583,8 @@ def infer_branch_strategy(release_line: str | None, target_branch: str | None, p
     if release_line == "v1.x-maintenance":
         return "mainline-maintenance", "inferred_from_release_line"
     if release_line == "v2-integration":
+        return "integration-branch", "inferred_from_release_line"
+    if release_line == AF18_RELEASE_LINE:
         return "integration-branch", "inferred_from_release_line"
     if target_branch == "main":
         return "mainline-maintenance", "inferred_from_target_branch"
@@ -3720,6 +3726,18 @@ def evaluate_branch_contract(item: dict[str, Any], item_type: str, local_git: di
                 actual={"Target branch": target_branch},
             )
         )
+    if release_line == AF18_RELEASE_LINE and target_branch != AF18_INTEGRATION_BRANCH:
+        status = "branch_mismatch"
+        findings.append(
+            finding(
+                "af18_work_targets_wrong_branch",
+                number,
+                "error",
+                "AF18 collaboration cost-control work must target the AF18 integration branch.",
+                expected={"Target branch": AF18_INTEGRATION_BRANCH},
+                actual={"Target branch": target_branch},
+            )
+        )
     if release_line == "v1.x-maintenance" and target_branch == V2_INTEGRATION_BRANCH:
         status = "branch_mismatch"
         findings.append(
@@ -3728,6 +3746,18 @@ def evaluate_branch_contract(item: dict[str, Any], item_type: str, local_git: di
                 number,
                 "error",
                 "V1.x maintenance work must not target the V2 integration branch unless Architect accepts cross-line scope.",
+                expected={"Target branch": "main"},
+                actual={"Target branch": target_branch},
+            )
+        )
+    if release_line == "v1.x-maintenance" and target_branch == AF18_INTEGRATION_BRANCH:
+        status = "branch_mismatch"
+        findings.append(
+            finding(
+                "v1_work_targets_af18",
+                number,
+                "error",
+                "V1.x maintenance work must not target the AF18 integration branch unless Architect accepts cross-line scope.",
                 expected={"Target branch": "main"},
                 actual={"Target branch": target_branch},
             )
@@ -3756,6 +3786,18 @@ def evaluate_branch_contract(item: dict[str, Any], item_type: str, local_git: di
                 "error",
                 "V2 PR targets main; final V2-to-main integration remains a later readiness and Human gate.",
                 expected={"PR base": V2_INTEGRATION_BRANCH},
+                actual={"PR base": actual_pr_base},
+            )
+        )
+    if item_type == "pr" and release_line == AF18_RELEASE_LINE and actual_pr_base != AF18_INTEGRATION_BRANCH:
+        status = "branch_mismatch"
+        findings.append(
+            finding(
+                "af18_pr_targets_wrong_branch",
+                number,
+                "error",
+                "AF18 PR target does not match the AF18 integration branch.",
+                expected={"PR base": AF18_INTEGRATION_BRANCH},
                 actual={"PR base": actual_pr_base},
             )
         )
@@ -4895,6 +4937,8 @@ def recovery_classifications_for_item(item: dict[str, Any], project_status: dict
         or str(item.get("branch_readiness") or "") not in {"", "branch_ready", "not_evaluated_from_ledger_board"}
         or (target_branch == "main" and stage.startswith("v2"))
         or (target_branch == V2_INTEGRATION_BRANCH and stage in {"af-13", "af-14", "af-15", "v1.1"})
+        or (target_branch != AF18_INTEGRATION_BRANCH and stage in {"af-18", "af18"})
+        or (target_branch == AF18_INTEGRATION_BRANCH and stage not in {"af-18", "af18"})
         or "branch line" in text
         or "branch-line" in text
     ):
@@ -5533,9 +5577,14 @@ def build_project_sync_plan(
             human_gates.append(sync_human_gate("privacy_security_sensitive_sync", item, "Privacy/security-sensitive values require Human review before any future write."))
         target_branch = item.get("target_branch")
         if target_branch:
-            release_line = "v2" if target_branch == V2_INTEGRATION_BRANCH else "v1" if target_branch == "main" else "custom"
+            release_line = "af18" if target_branch == AF18_INTEGRATION_BRANCH else "v2" if target_branch == V2_INTEGRATION_BRANCH else "v1" if target_branch == "main" else "custom"
             stage = str(item.get("stage") or "").lower()
-            if (stage.startswith("v2") and release_line == "v1") or (stage in {"af-13", "af-14", "af-15", "v1.1"} and release_line == "v2"):
+            if (
+                (stage.startswith("v2") and release_line == "v1")
+                or (stage in {"af-13", "af-14", "af-15", "v1.1"} and release_line in {"v2", "af18"})
+                or (stage in {"af-18", "af18"} and release_line != "af18")
+                or (release_line == "af18" and stage not in {"af-18", "af18"})
+            ):
                 conflicts.append(sync_conflict("branch_line_mismatch", item, "Target branch does not match the item's stage/release line.", details={"target_branch": target_branch, "stage": item.get("stage")}))
         for field in SYNC_PLAN_FIELDS:
             desired = field_value_for_sync_item(item, field)
@@ -6192,13 +6241,14 @@ def cmd_collaboration_readiness(args: argparse.Namespace) -> None:
             },
             "branch_contract_values": {
                 "Branch strategy": BRANCH_STRATEGIES,
-                "Release line": ["v1.x-maintenance", "v2-integration", "cross-line"],
-                "Target branch": ["main", V2_INTEGRATION_BRANCH, "<integration-branch>"],
+                "Release line": ["v1.x-maintenance", AF18_RELEASE_LINE, "v2-integration", "cross-line"],
+                "Target branch": ["main", AF18_INTEGRATION_BRANCH, V2_INTEGRATION_BRANCH, "<integration-branch>"],
                 "Affected branches": ["optional comma-separated branch list for multi-branch work"],
                 "Verification branches": ["optional comma-separated branch list for ordered verification"],
                 "legacy_input_mapping": {"Branch target": "Target branch"},
                 "agent_foundry_presets": {
                     "v1.x-maintenance": {"Branch strategy": "mainline-maintenance", "Target branch": "main"},
+                    AF18_RELEASE_LINE: {"Branch strategy": "integration-branch", "Target branch": AF18_INTEGRATION_BRANCH},
                     "v2-integration": {"Branch strategy": "integration-branch", "Target branch": V2_INTEGRATION_BRANCH},
                 },
             },

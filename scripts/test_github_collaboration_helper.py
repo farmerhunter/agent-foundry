@@ -619,6 +619,24 @@ def main() -> int:
                             + "\nBranch strategy: mainline-maintenance\nRelease line: v1.x-maintenance\nBranch target: main\nPR target: main\n",
                         },
                         {
+                            "number": 358,
+                            "title": "AF18 correct integration branch",
+                            "state": "OPEN",
+                            "labels": [{"name": "needs:implementer"}],
+                            "body": "## Execution Contract\n\n"
+                            + branch_contract_base
+                            + "\nBranch strategy: integration-branch\nRelease line: af18-collaboration-cost-control\nTarget branch: codex/af18-collaboration-cost-policy-integration\nPR target: codex/af18-collaboration-cost-policy-integration\n",
+                        },
+                        {
+                            "number": 359,
+                            "title": "AF18 targeting main",
+                            "state": "OPEN",
+                            "labels": [{"name": "needs:implementer"}],
+                            "body": "## Execution Contract\n\n"
+                            + branch_contract_base
+                            + "\nBranch strategy: integration-branch\nRelease line: af18-collaboration-cost-control\nTarget branch: main\nPR target: main\n",
+                        },
+                        {
                             "number": 355,
                             "title": "Generic integration branch",
                             "state": "OPEN",
@@ -689,6 +707,18 @@ def main() -> int:
                             "body": "## Execution Contract\n\n"
                             + branch_contract_base
                             + "\nBranch strategy: stacked-pr\nTarget branch: main\nPR target: codex/parent-feature\n",
+                        },
+                        {
+                            "number": 504,
+                            "title": "Wrong AF18 PR base",
+                            "state": "OPEN",
+                            "labels": [{"name": "needs:reviewer"}],
+                            "baseRefName": "main",
+                            "headRefName": "codex/af18-docs",
+                            "headRefOid": "abc504",
+                            "body": "## Execution Contract\n\n"
+                            + branch_contract_base
+                            + "\nBranch strategy: integration-branch\nRelease line: af18-collaboration-cost-control\nTarget branch: codex/af18-collaboration-cost-policy-integration\nPR target: codex/af18-collaboration-cost-policy-integration\n",
                         },
                     ]
                 }
@@ -2006,6 +2036,10 @@ def main() -> int:
             ("branch-readiness-missing-contract", '"code": "branch_contract_missing"'),
             ("branch-readiness-v2-main", '"code": "v2_work_targets_main"'),
             ("branch-readiness-v1-v2", '"code": "v1_work_targets_v2"'),
+            ("branch-readiness-af18-preset", '"af18-collaboration-cost-control"'),
+            ("branch-readiness-af18-target", '"target_branch": "codex/af18-collaboration-cost-policy-integration"'),
+            ("branch-readiness-af18-main", '"code": "af18_work_targets_wrong_branch"'),
+            ("branch-readiness-af18-pr-base", '"code": "af18_pr_targets_wrong_branch"'),
             ("branch-readiness-wrong-pr-base", '"code": "wrong_pr_base"'),
             ("branch-readiness-v2-pr-main", '"code": "v2_pr_targets_main"'),
             ("branch-readiness-dirty-worktree", '"code": "local_worktree_dirty"'),

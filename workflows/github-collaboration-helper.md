@@ -243,6 +243,8 @@ Agent Foundry presets:
 
 - V1.x maintenance uses `Branch strategy: mainline-maintenance` and
   `Target branch: main`.
+- AF18 collaboration cost-control uses `Branch strategy: integration-branch`
+  and `Target branch: codex/af18-collaboration-cost-policy-integration`.
 - V2 integration uses `Branch strategy: integration-branch` and
   `Target branch: codex/v2-local-first-orchestration`.
 - V2 merge-back to `main` remains a later readiness and Human-gated decision.

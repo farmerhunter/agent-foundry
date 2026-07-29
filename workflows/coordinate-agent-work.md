@@ -1,11 +1,13 @@
 # Coordinate Agent Work
 
-Status: AF10-B optimization model
-Scope: Coordinator workflow telemetry, Epic ledger, role handoff measurement, collaboration overhead reporting, and token-cost optimization guidance.
+Status: AF10-B optimization model plus AF18 collaboration control-plane design
+Scope: Coordinator workflow telemetry, role handoff measurement, collaboration overhead reporting, token-cost optimization guidance, and AF18 bounded control-plane policy.
 
 ## Purpose
 
-This workflow defines the minimum telemetry that Coordinator-led role orchestration should record before AF11 pilot work begins.
+This workflow defines the minimum telemetry that Coordinator-led role
+orchestration should record and the AF18 control-plane model that makes that
+coordination bounded enough to keep using.
 
 The goal is not billing-grade token accounting. The goal is to make coordination overhead visible enough to decide when multi-thread role orchestration is worth its cost, when a compact handoff is enough, and when a single-thread or batch checkpoint is safer and cheaper.
 
@@ -17,6 +19,84 @@ AF10-B telemetry should support three-way comparison:
 
 Use this comparison as decision support for workflow routing. It should help answer whether collaboration was worth its coordination cost, whether optimization reduced avoidable overhead, and when a future task should stay single-agent.
 
+## AF18 Design Anchor
+
+AF18 has one high-level goal: make Agent Foundry's multi-agent collaboration
+cost-aware, bounded, portable, and human-controllable before it becomes an
+assumed runtime substrate. It is not a memory system, RoleHub implementation,
+local ledger migration, or final automation activation.
+
+AF18 uses a `Codex-first, portable-core` design. GitHub issues, PRs, comments,
+labels, and exact SHAs are the current durable authority binding. Codex is the
+only MVP runtime/dogfood binding. Core concepts must remain portable and use
+semantic execution modes and capability contracts rather than Codex task,
+visible-thread, or subagent names as canonical values.
+
+The portable Core owns:
+
+- `Work`: one bounded objective/root budget normally anchored to one Issue;
+- `ExecutionRun`: one execution context within a Work;
+- `DispatchClaim`: idempotent claim for a semantic transition boundary;
+- `SuccessorPacket`: compact cursor-only continuation packet for a successor
+  context;
+- `TransitionReceipt`: privacy-safe control-plane evidence for a transition;
+- resource observations with `observed`, `estimated`, or `unavailable`
+  provenance;
+- budget inheritance, fail-closed measurement policy, duplicate prevention, and
+  policy readout/explain.
+
+Native runtime ids, such as Codex task/thread/subagent ids, are adapter
+metadata. They are useful evidence but not Core domain objects.
+
+## AF18 Policy Layers
+
+Do not collapse AF18 policy layers:
+
+- Current `low_limit` is emergency containment and readback protection. It is
+  not the normal Coordinator/session operating policy.
+- Future versioned operating policy, including resource profiles such as
+  economy/normal/performance, is only proposed after dogfood calibration and a
+  Human policy-freeze decision.
+- `EffectiveControlSnapshot` records the exact approved source/version/band,
+  window/root-budget constraints, measurement rules, and stop conditions used
+  by a released literal contract.
+- Runtime receipts record observed, estimated, or unavailable facts. They do
+  not self-tune policy and missing measurement is never counted as zero.
+
+If an AF18 experiment uses #442 values, evidence must label that band as
+`low_limit_experiment`, not normal operation.
+
+## AF18 Coordinator Lifecycle
+
+Coordinator internals have their own lifecycle:
+
+```text
+CoordinatorSession -> CoordinationWindow -> coordination operation
+```
+
+This is separate from the project object hierarchy:
+
+```text
+Issue -> Work -> ExecutionRun
+```
+
+A Coordinator window may safely span multiple issues without becoming one
+Human-visible Work per coordination operation. Coordinator lifecycle evaluation
+should happen only at bounded meaningful events: before new Issue/Work routing,
+after compact durable readback, after materially increased input/tool output,
+before or after dispatch/callback, before Human/HDC output, and on policy,
+evidence, budget, or measurement anomalies. Continuous Coordinator polling is
+not part of AF18 MVP.
+
+## AF18 Human Attention
+
+AF18 default Human UX is `WorkSummary` and `AttentionSummary`, not raw
+`ExecutionRun`, `DispatchClaim`, `TransitionReceipt`, retry, or token
+observation feeds. Attention is reserved for material HDC, risk, privacy,
+external side effect, model/reasoning escalation, context/budget policy action,
+retry/claim anomaly, evidence conflict, phase completion, and stale/no-owner
+events.
+
 ## Non-Scope
 
 - No memory-system implementation.
@@ -25,6 +105,7 @@ Use this comparison as decision support for workflow routing. It should help ans
 - No live Vault or private-state mutation.
 - No generated adapter publish.
 - No new `needs:coordinator` label.
+- No AF18 final activation or policy freeze without a separate Human gate.
 
 ## Telemetry Principles
 
@@ -161,7 +242,7 @@ compact_rehydration_packet:
     issue: 195
     pull_request: null
     parent_issue: 192
-    stage: AF-10
+    stage: AF-18
   current_owner: Architect
   next_owner: Reviewer
   routing_state:
