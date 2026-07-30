@@ -1,0 +1,613 @@
+{
+  "schema_version": 1,
+  "protocol_version": "af18-calibration-protocol-v1",
+  "collection_mode": "fixture",
+  "samples": [
+    {
+      "sample_id": "fixture-baseline-A",
+      "protocol_version": "af18-calibration-protocol-v1",
+      "task_class": "single_session_baseline",
+      "variant": "A",
+      "variant_declaration": {
+        "route_kind": "observed_normal_route"
+      },
+      "scenario": {
+        "scenario_id": "single_session_baseline",
+        "scenario_variant": "default",
+        "objective_or_acceptance_fixture_id": "fixture-single_session_baseline",
+        "complexity": "small",
+        "risk": "low",
+        "role_route": "Implementer",
+        "model_class": "standard",
+        "quality_rubric_version": "v1",
+        "canonical_allowed_tools": [
+          "gh",
+          "python3"
+        ],
+        "measurement_window": {
+          "definition": "execution-to-terminal"
+        },
+        "root_budget_unit": "tokens",
+        "anchor_type": "issue"
+      },
+      "work_id": "fixture-work",
+      "execution_id": "fixture-run-A",
+      "anchors": {
+        "work": "https://github.com/farmerhunter/agent-foundry/issues/457",
+        "execution": "https://github.com/farmerhunter/agent-foundry/issues/457#fixture-A",
+        "context": "https://github.com/farmerhunter/agent-foundry/issues/457#context"
+      },
+      "root_budget": {
+        "value": 1000,
+        "unit": "tokens"
+      },
+      "remaining_budget": {
+        "value": 800,
+        "unit": "tokens"
+      },
+      "policy_version": "normal-observation-v1",
+      "provenance": {
+        "source": "fixture",
+        "collection_method": "fixture",
+        "captured_at": "2026-07-29T08:00:00Z",
+        "evidence_anchor": "https://github.com/farmerhunter/agent-foundry/issues/457#fixture",
+        "observation_kind": "observed"
+      },
+      "terminal_state": "completed",
+      "quality": {
+        "passed": true,
+        "reason": "test"
+      },
+      "attention": {
+        "outcome": "not_required",
+        "category": null,
+        "acknowledgement": {
+          "availability": "unavailable",
+          "value": null
+        },
+        "pairing": {
+          "pair_id": null,
+          "evidence_anchor": null
+        }
+      },
+      "resources": {
+        "input_tokens": {
+          "observation_id": "A-0-input_tokens",
+          "availability": "observed",
+          "value": 100,
+          "unit": "tokens",
+          "source": "fixture",
+          "observed_at": "2026-07-29T08:00:00Z"
+        },
+        "cached_input_tokens": {
+          "observation_id": "A-0-cached_input_tokens",
+          "availability": "observed",
+          "value": 20,
+          "unit": "tokens",
+          "source": "fixture",
+          "observed_at": "2026-07-29T08:00:00Z"
+        },
+        "output_tokens": {
+          "observation_id": "A-0-output_tokens",
+          "availability": "observed",
+          "value": 40,
+          "unit": "tokens",
+          "source": "fixture",
+          "observed_at": "2026-07-29T08:00:00Z"
+        },
+        "reasoning_tokens": {
+          "observation_id": "A-0-reasoning_tokens",
+          "availability": "observed",
+          "value": 30,
+          "unit": "tokens",
+          "source": "fixture",
+          "observed_at": "2026-07-29T08:00:00Z"
+        },
+        "tool_output_bytes": {
+          "observation_id": "A-0-tool_output_bytes",
+          "availability": "observed",
+          "value": 80,
+          "unit": "bytes",
+          "source": "fixture",
+          "observed_at": "2026-07-29T08:00:00Z"
+        },
+        "context_age_hours": {
+          "observation_id": "A-0-context_age_hours",
+          "availability": "observed",
+          "value": 1,
+          "unit": "hours",
+          "source": "fixture",
+          "observed_at": "2026-07-29T08:00:00Z"
+        },
+        "packet_bytes": {
+          "observation_id": "A-0-packet_bytes",
+          "availability": "observed",
+          "value": 200,
+          "unit": "bytes",
+          "source": "fixture",
+          "observed_at": "2026-07-29T08:00:00Z"
+        },
+        "callback_count": {
+          "observation_id": "A-0-callback_count",
+          "availability": "observed",
+          "value": 1,
+          "unit": "count",
+          "source": "fixture",
+          "observed_at": "2026-07-29T08:00:00Z"
+        },
+        "compact_rehydration_count": {
+          "observation_id": "A-0-compact_rehydration_count",
+          "availability": "observed",
+          "value": 1,
+          "unit": "count",
+          "source": "fixture",
+          "observed_at": "2026-07-29T08:00:00Z"
+        },
+        "full_rehydration_count": {
+          "observation_id": "A-0-full_rehydration_count",
+          "availability": "observed",
+          "value": 0,
+          "unit": "count",
+          "source": "fixture",
+          "observed_at": "2026-07-29T08:00:00Z"
+        },
+        "retry_count": {
+          "observation_id": "A-0-retry_count",
+          "availability": "observed",
+          "value": 0,
+          "unit": "count",
+          "source": "fixture",
+          "observed_at": "2026-07-29T08:00:00Z"
+        },
+        "recovery_count": {
+          "observation_id": "A-0-recovery_count",
+          "availability": "observed",
+          "value": 0,
+          "unit": "count",
+          "source": "fixture",
+          "observed_at": "2026-07-29T08:00:00Z"
+        },
+        "elapsed_seconds": {
+          "observation_id": "A-0-elapsed_seconds",
+          "availability": "observed",
+          "value": 10,
+          "unit": "seconds",
+          "source": "fixture",
+          "observed_at": "2026-07-29T08:00:00Z"
+        },
+        "total_context_tokens": {
+          "observation_id": "A-0-total_context_tokens",
+          "availability": "observed",
+          "value": 120,
+          "unit": "tokens",
+          "source": "fixture",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "observation_basis": "derived",
+          "derived_total_component_ids": [
+            "A-0-input_tokens",
+            "A-0-cached_input_tokens"
+          ]
+        },
+        "cumulative_resource_tokens": {
+          "observation_id": "A-0-cumulative_resource_tokens",
+          "availability": "observed",
+          "value": 300,
+          "unit": "tokens",
+          "source": "fixture",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "observation_basis": "derived",
+          "derived_total_component_ids": [
+            "A-0-input_tokens",
+            "A-0-cached_input_tokens",
+            "A-0-output_tokens",
+            "A-0-reasoning_tokens"
+          ]
+        }
+      }
+    },
+    {
+      "sample_id": "fixture-baseline-B",
+      "protocol_version": "af18-calibration-protocol-v1",
+      "task_class": "single_session_baseline",
+      "variant": "B",
+      "variant_declaration": {
+        "route_kind": "counterfactual"
+      },
+      "scenario": {
+        "scenario_id": "single_session_baseline",
+        "scenario_variant": "default",
+        "objective_or_acceptance_fixture_id": "fixture-single_session_baseline",
+        "complexity": "small",
+        "risk": "low",
+        "role_route": "Implementer",
+        "model_class": "standard",
+        "quality_rubric_version": "v1",
+        "canonical_allowed_tools": [
+          "gh",
+          "python3"
+        ],
+        "measurement_window": {
+          "definition": "execution-to-terminal"
+        },
+        "root_budget_unit": "tokens",
+        "anchor_type": "issue"
+      },
+      "work_id": "fixture-work",
+      "execution_id": "fixture-run-B",
+      "anchors": {
+        "work": "https://github.com/farmerhunter/agent-foundry/issues/457",
+        "execution": "https://github.com/farmerhunter/agent-foundry/issues/457#fixture-B",
+        "context": "https://github.com/farmerhunter/agent-foundry/issues/457#context"
+      },
+      "root_budget": {
+        "value": 1000,
+        "unit": "tokens"
+      },
+      "remaining_budget": {
+        "value": 800,
+        "unit": "tokens"
+      },
+      "policy_version": "normal-observation-v1",
+      "provenance": {
+        "source": "fixture-counterfactual",
+        "collection_method": "fixture",
+        "captured_at": "2026-07-29T08:00:00Z",
+        "evidence_anchor": "https://github.com/farmerhunter/agent-foundry/issues/457#fixture",
+        "observation_kind": "counterfactual"
+      },
+      "terminal_state": "completed",
+      "quality": {
+        "passed": true,
+        "reason": "test"
+      },
+      "attention": {
+        "outcome": "not_required",
+        "category": null,
+        "acknowledgement": {
+          "availability": "unavailable",
+          "value": null
+        },
+        "pairing": {
+          "pair_id": null,
+          "evidence_anchor": null
+        }
+      },
+      "resources": {
+        "input_tokens": {
+          "observation_id": "B-0-input_tokens",
+          "availability": "estimated",
+          "value": 100,
+          "unit": "tokens",
+          "source": "fixture-counterfactual",
+          "observed_at": "2026-07-29T08:00:00Z"
+        },
+        "cached_input_tokens": {
+          "observation_id": "B-0-cached_input_tokens",
+          "availability": "estimated",
+          "value": 20,
+          "unit": "tokens",
+          "source": "fixture-counterfactual",
+          "observed_at": "2026-07-29T08:00:00Z"
+        },
+        "output_tokens": {
+          "observation_id": "B-0-output_tokens",
+          "availability": "estimated",
+          "value": 40,
+          "unit": "tokens",
+          "source": "fixture-counterfactual",
+          "observed_at": "2026-07-29T08:00:00Z"
+        },
+        "reasoning_tokens": {
+          "observation_id": "B-0-reasoning_tokens",
+          "availability": "estimated",
+          "value": 30,
+          "unit": "tokens",
+          "source": "fixture-counterfactual",
+          "observed_at": "2026-07-29T08:00:00Z"
+        },
+        "tool_output_bytes": {
+          "observation_id": "B-0-tool_output_bytes",
+          "availability": "estimated",
+          "value": 80,
+          "unit": "bytes",
+          "source": "fixture-counterfactual",
+          "observed_at": "2026-07-29T08:00:00Z"
+        },
+        "context_age_hours": {
+          "observation_id": "B-0-context_age_hours",
+          "availability": "estimated",
+          "value": 1,
+          "unit": "hours",
+          "source": "fixture-counterfactual",
+          "observed_at": "2026-07-29T08:00:00Z"
+        },
+        "packet_bytes": {
+          "observation_id": "B-0-packet_bytes",
+          "availability": "estimated",
+          "value": 200,
+          "unit": "bytes",
+          "source": "fixture-counterfactual",
+          "observed_at": "2026-07-29T08:00:00Z"
+        },
+        "callback_count": {
+          "observation_id": "B-0-callback_count",
+          "availability": "estimated",
+          "value": 1,
+          "unit": "count",
+          "source": "fixture-counterfactual",
+          "observed_at": "2026-07-29T08:00:00Z"
+        },
+        "compact_rehydration_count": {
+          "observation_id": "B-0-compact_rehydration_count",
+          "availability": "estimated",
+          "value": 1,
+          "unit": "count",
+          "source": "fixture-counterfactual",
+          "observed_at": "2026-07-29T08:00:00Z"
+        },
+        "full_rehydration_count": {
+          "observation_id": "B-0-full_rehydration_count",
+          "availability": "estimated",
+          "value": 0,
+          "unit": "count",
+          "source": "fixture-counterfactual",
+          "observed_at": "2026-07-29T08:00:00Z"
+        },
+        "retry_count": {
+          "observation_id": "B-0-retry_count",
+          "availability": "estimated",
+          "value": 0,
+          "unit": "count",
+          "source": "fixture-counterfactual",
+          "observed_at": "2026-07-29T08:00:00Z"
+        },
+        "recovery_count": {
+          "observation_id": "B-0-recovery_count",
+          "availability": "estimated",
+          "value": 0,
+          "unit": "count",
+          "source": "fixture-counterfactual",
+          "observed_at": "2026-07-29T08:00:00Z"
+        },
+        "elapsed_seconds": {
+          "observation_id": "B-0-elapsed_seconds",
+          "availability": "estimated",
+          "value": 10,
+          "unit": "seconds",
+          "source": "fixture-counterfactual",
+          "observed_at": "2026-07-29T08:00:00Z"
+        },
+        "total_context_tokens": {
+          "observation_id": "B-0-total_context_tokens",
+          "availability": "estimated",
+          "value": 120,
+          "unit": "tokens",
+          "source": "fixture-counterfactual",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "observation_basis": "derived",
+          "derived_total_component_ids": [
+            "B-0-input_tokens",
+            "B-0-cached_input_tokens"
+          ]
+        },
+        "cumulative_resource_tokens": {
+          "observation_id": "B-0-cumulative_resource_tokens",
+          "availability": "estimated",
+          "value": 300,
+          "unit": "tokens",
+          "source": "fixture-counterfactual",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "observation_basis": "derived",
+          "derived_total_component_ids": [
+            "B-0-input_tokens",
+            "B-0-cached_input_tokens",
+            "B-0-output_tokens",
+            "B-0-reasoning_tokens"
+          ]
+        }
+      }
+    },
+    {
+      "sample_id": "fixture-baseline-C",
+      "protocol_version": "af18-calibration-protocol-v1",
+      "task_class": "single_session_baseline",
+      "variant": "C",
+      "variant_declaration": {
+        "route_kind": "observed_normal_route"
+      },
+      "scenario": {
+        "scenario_id": "single_session_baseline",
+        "scenario_variant": "default",
+        "objective_or_acceptance_fixture_id": "fixture-single_session_baseline",
+        "complexity": "small",
+        "risk": "low",
+        "role_route": "Implementer",
+        "model_class": "standard",
+        "quality_rubric_version": "v1",
+        "canonical_allowed_tools": [
+          "gh",
+          "python3"
+        ],
+        "measurement_window": {
+          "definition": "execution-to-terminal"
+        },
+        "root_budget_unit": "tokens",
+        "anchor_type": "issue"
+      },
+      "work_id": "fixture-work",
+      "execution_id": "fixture-run-C",
+      "anchors": {
+        "work": "https://github.com/farmerhunter/agent-foundry/issues/457",
+        "execution": "https://github.com/farmerhunter/agent-foundry/issues/457#fixture-C",
+        "context": "https://github.com/farmerhunter/agent-foundry/issues/457#context"
+      },
+      "root_budget": {
+        "value": 1000,
+        "unit": "tokens"
+      },
+      "remaining_budget": {
+        "value": 800,
+        "unit": "tokens"
+      },
+      "policy_version": "normal-observation-v1",
+      "provenance": {
+        "source": "fixture",
+        "collection_method": "fixture",
+        "captured_at": "2026-07-29T08:00:00Z",
+        "evidence_anchor": "https://github.com/farmerhunter/agent-foundry/issues/457#fixture",
+        "observation_kind": "observed"
+      },
+      "terminal_state": "completed",
+      "quality": {
+        "passed": true,
+        "reason": "test"
+      },
+      "attention": {
+        "outcome": "not_required",
+        "category": null,
+        "acknowledgement": {
+          "availability": "unavailable",
+          "value": null
+        },
+        "pairing": {
+          "pair_id": null,
+          "evidence_anchor": null
+        }
+      },
+      "resources": {
+        "input_tokens": {
+          "observation_id": "C-0-input_tokens",
+          "availability": "observed",
+          "value": 100,
+          "unit": "tokens",
+          "source": "fixture",
+          "observed_at": "2026-07-29T08:00:00Z"
+        },
+        "cached_input_tokens": {
+          "observation_id": "C-0-cached_input_tokens",
+          "availability": "observed",
+          "value": 20,
+          "unit": "tokens",
+          "source": "fixture",
+          "observed_at": "2026-07-29T08:00:00Z"
+        },
+        "output_tokens": {
+          "observation_id": "C-0-output_tokens",
+          "availability": "observed",
+          "value": 40,
+          "unit": "tokens",
+          "source": "fixture",
+          "observed_at": "2026-07-29T08:00:00Z"
+        },
+        "reasoning_tokens": {
+          "observation_id": "C-0-reasoning_tokens",
+          "availability": "observed",
+          "value": 30,
+          "unit": "tokens",
+          "source": "fixture",
+          "observed_at": "2026-07-29T08:00:00Z"
+        },
+        "tool_output_bytes": {
+          "observation_id": "C-0-tool_output_bytes",
+          "availability": "observed",
+          "value": 80,
+          "unit": "bytes",
+          "source": "fixture",
+          "observed_at": "2026-07-29T08:00:00Z"
+        },
+        "context_age_hours": {
+          "observation_id": "C-0-context_age_hours",
+          "availability": "observed",
+          "value": 1,
+          "unit": "hours",
+          "source": "fixture",
+          "observed_at": "2026-07-29T08:00:00Z"
+        },
+        "packet_bytes": {
+          "observation_id": "C-0-packet_bytes",
+          "availability": "observed",
+          "value": 200,
+          "unit": "bytes",
+          "source": "fixture",
+          "observed_at": "2026-07-29T08:00:00Z"
+        },
+        "callback_count": {
+          "observation_id": "C-0-callback_count",
+          "availability": "observed",
+          "value": 1,
+          "unit": "count",
+          "source": "fixture",
+          "observed_at": "2026-07-29T08:00:00Z"
+        },
+        "compact_rehydration_count": {
+          "observation_id": "C-0-compact_rehydration_count",
+          "availability": "observed",
+          "value": 1,
+          "unit": "count",
+          "source": "fixture",
+          "observed_at": "2026-07-29T08:00:00Z"
+        },
+        "full_rehydration_count": {
+          "observation_id": "C-0-full_rehydration_count",
+          "availability": "observed",
+          "value": 0,
+          "unit": "count",
+          "source": "fixture",
+          "observed_at": "2026-07-29T08:00:00Z"
+        },
+        "retry_count": {
+          "observation_id": "C-0-retry_count",
+          "availability": "observed",
+          "value": 0,
+          "unit": "count",
+          "source": "fixture",
+          "observed_at": "2026-07-29T08:00:00Z"
+        },
+        "recovery_count": {
+          "observation_id": "C-0-recovery_count",
+          "availability": "observed",
+          "value": 2,
+          "unit": "count",
+          "source": "fixture",
+          "observed_at": "2026-07-29T08:00:00Z"
+        },
+        "elapsed_seconds": {
+          "observation_id": "C-0-elapsed_seconds",
+          "availability": "observed",
+          "value": 10,
+          "unit": "seconds",
+          "source": "fixture",
+          "observed_at": "2026-07-29T08:00:00Z"
+        },
+        "total_context_tokens": {
+          "observation_id": "C-0-total_context_tokens",
+          "availability": "observed",
+          "value": 120,
+          "unit": "tokens",
+          "source": "fixture",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "observation_basis": "derived",
+          "derived_total_component_ids": [
+            "C-0-input_tokens",
+            "C-0-cached_input_tokens"
+          ]
+        },
+        "cumulative_resource_tokens": {
+          "observation_id": "C-0-cumulative_resource_tokens",
+          "availability": "observed",
+          "value": 300,
+          "unit": "tokens",
+          "source": "fixture",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "observation_basis": "derived",
+          "derived_total_component_ids": [
+            "C-0-input_tokens",
+            "C-0-cached_input_tokens",
+            "C-0-output_tokens",
+            "C-0-reasoning_tokens"
+          ]
+        }
+      }
+    }
+  ]
+}

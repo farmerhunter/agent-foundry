@@ -1,0 +1,233 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://agent-foundry.dev/schemas/af18-calibration-protocol.schema.yaml
+title: AF18 normal-collaboration calibration protocol
+type: object
+additionalProperties: false
+required: [schema_version, protocol_version, collection_mode, samples]
+properties:
+  schema_version:
+    const: 1
+  protocol_version:
+    type: string
+    minLength: 1
+  collection_mode:
+    enum: [fixture, manual_adapter_export]
+  samples:
+    type: array
+    minItems: 1
+    items:
+      $ref: '#/$defs/sample'
+$defs:
+  sample:
+    type: object
+    additionalProperties: false
+    required:
+      - sample_id
+      - protocol_version
+      - task_class
+      - variant
+      - variant_declaration
+      - scenario
+      - work_id
+      - execution_id
+      - anchors
+      - root_budget
+      - remaining_budget
+      - policy_version
+      - provenance
+      - terminal_state
+      - quality
+      - attention
+      - resources
+    properties:
+      sample_id: {type: string, minLength: 1}
+      protocol_version: {type: string, minLength: 1}
+      task_class:
+        enum:
+          - single_session_baseline
+          - compact_cross_role
+          - independent_review_or_test_handoff
+          - bounded_successor_hold_recovery
+          - attention_materiality
+      variant: {enum: [A, B, C]}
+      variant_declaration:
+        type: object
+        additionalProperties: false
+        required: [route_kind]
+        properties:
+          route_kind: {enum: [observed_normal_route, counterfactual]}
+      scenario:
+        type: object
+        additionalProperties: false
+        required: [scenario_id, scenario_variant, objective_or_acceptance_fixture_id, complexity, risk, role_route, model_class, quality_rubric_version, canonical_allowed_tools, measurement_window, root_budget_unit, anchor_type]
+        properties:
+          scenario_id: {type: string, minLength: 1}
+          scenario_variant: {type: string, minLength: 1}
+          objective_or_acceptance_fixture_id: {type: string, minLength: 1}
+          complexity: {type: string, minLength: 1}
+          risk: {type: string, minLength: 1}
+          role_route: {type: string, minLength: 1}
+          model_class: {type: string, minLength: 1}
+          quality_rubric_version: {type: string, minLength: 1}
+          canonical_allowed_tools:
+            type: array
+            minItems: 1
+            uniqueItems: true
+            items: {type: string, minLength: 1}
+          measurement_window:
+            type: object
+            additionalProperties: false
+            required: [definition]
+            properties:
+              definition: {type: string, minLength: 1}
+          root_budget_unit: {const: tokens}
+          anchor_type: {type: string, minLength: 1}
+      work_id: {type: string, minLength: 1}
+      execution_id: {type: string, minLength: 1}
+      anchors:
+        type: object
+        additionalProperties: false
+        required: [work, execution, context]
+        properties:
+          work: {type: string, pattern: '^https://github\\.com/'}
+          execution: {type: string, pattern: '^https://github\\.com/'}
+          context: {type: string, pattern: '^https://github\\.com/'}
+          predecessor: {type: string, pattern: '^https://github\\.com/'}
+          successor: {type: string, pattern: '^https://github\\.com/'}
+      root_budget:
+        type: object
+        additionalProperties: false
+        required: [value, unit]
+        properties:
+          value: {type: integer, minimum: 1}
+          unit: {const: tokens}
+      remaining_budget:
+        type: object
+        additionalProperties: false
+        required: [value, unit]
+        properties:
+          value: {type: integer, minimum: 0}
+          unit: {const: tokens}
+      policy_version: {type: string, minLength: 1}
+      provenance:
+        type: object
+        additionalProperties: false
+        required: [source, collection_method, captured_at, evidence_anchor, observation_kind]
+        properties:
+          source: {type: string, minLength: 1}
+          collection_method: {enum: [fixture, manual_adapter_export]}
+          captured_at: {type: string, format: date-time}
+          evidence_anchor: {type: string, pattern: '^https://github\\.com/'}
+          observation_kind: {enum: [observed, counterfactual]}
+      terminal_state: {enum: [completed, failed, held, recovered]}
+      quality:
+        type: object
+        additionalProperties: false
+        required: [passed, reason]
+        properties:
+          passed: {type: boolean}
+          reason: {type: string}
+      attention:
+        type: object
+        additionalProperties: false
+        required: [outcome, category, acknowledgement, pairing]
+        properties:
+          outcome: {enum: [suppressed, not_required, required]}
+          category: {type: [string, 'null']}
+          acknowledgement:
+            type: object
+            additionalProperties: false
+            required: [availability, value]
+            properties:
+              availability: {enum: [observed, unavailable]}
+              value: {type: [boolean, 'null']}
+          pairing:
+            type: object
+            additionalProperties: false
+            required: [pair_id, evidence_anchor]
+            properties:
+              pair_id: {type: [string, 'null']}
+              evidence_anchor: {type: [string, 'null'], pattern: '^https://github\\.com/'}
+      resources:
+        type: object
+        additionalProperties: false
+        required: [input_tokens, cached_input_tokens, output_tokens, reasoning_tokens, tool_output_bytes, total_context_tokens, context_age_hours, cumulative_resource_tokens, packet_bytes, callback_count, compact_rehydration_count, full_rehydration_count, retry_count, recovery_count, elapsed_seconds]
+        properties:
+          input_tokens: {$ref: '#/$defs/measurement'}
+          cached_input_tokens: {$ref: '#/$defs/measurement'}
+          output_tokens: {$ref: '#/$defs/measurement'}
+          reasoning_tokens: {$ref: '#/$defs/measurement'}
+          tool_output_bytes: {$ref: '#/$defs/measurement'}
+          total_context_tokens: {$ref: '#/$defs/derived_total_measurement'}
+          context_age_hours: {$ref: '#/$defs/measurement'}
+          cumulative_resource_tokens: {$ref: '#/$defs/derived_total_measurement'}
+          packet_bytes: {$ref: '#/$defs/measurement'}
+          callback_count: {$ref: '#/$defs/measurement'}
+          compact_rehydration_count: {$ref: '#/$defs/measurement'}
+          full_rehydration_count: {$ref: '#/$defs/measurement'}
+          retry_count: {$ref: '#/$defs/measurement'}
+          recovery_count: {$ref: '#/$defs/measurement'}
+          elapsed_seconds: {$ref: '#/$defs/measurement'}
+      successor_continuity:
+        type: object
+        additionalProperties: false
+        required: [predecessor_work_id, successor_work_id, predecessor_root_budget, successor_root_budget, predecessor_remaining_budget, successor_remaining_budget]
+        properties:
+          predecessor_work_id: {type: string, minLength: 1}
+          successor_work_id: {type: string, minLength: 1}
+          predecessor_root_budget: {type: integer, minimum: 1}
+          successor_root_budget: {type: integer, minimum: 1}
+          predecessor_remaining_budget: {type: integer, minimum: 0}
+          successor_remaining_budget: {type: integer, minimum: 0}
+  measurement:
+    type: object
+    additionalProperties: false
+    required: [observation_id, availability, value, unit, source, observed_at]
+    properties:
+      observation_id: {type: string, minLength: 1}
+      availability: {enum: [observed, estimated, unavailable]}
+      value: {type: [integer, 'null'], minimum: 0}
+      unit: {type: string, minLength: 1}
+      source: {type: string, minLength: 1}
+      observed_at: {type: [string, 'null'], format: date-time}
+      reason: {enum: [not_exposed, redacted, not_collected, invalid, null]}
+      observation_basis: {enum: [derived, independent_observed]}
+      derived_total_component_ids:
+        type: array
+        minItems: 1
+        uniqueItems: true
+        items: {type: string, minLength: 1}
+    allOf:
+      - if:
+          properties: {availability: {const: unavailable}}
+        then:
+          required: [reason]
+          properties:
+            value: {type: 'null'}
+            reason: {enum: [not_exposed, redacted, not_collected, invalid]}
+      - if:
+          properties: {availability: {enum: [observed, estimated]}}
+        then:
+          properties:
+            value: {type: integer, minimum: 0}
+      - if:
+          required: [derived_total_component_ids]
+        then:
+          required: [observation_basis]
+          properties:
+            observation_basis: {const: derived}
+      - if:
+          properties: {observation_basis: {const: independent_observed}}
+        then:
+          not: {required: [derived_total_component_ids]}
+  derived_total_measurement:
+    allOf:
+      - $ref: '#/$defs/measurement'
+      - oneOf:
+          - required: [derived_total_component_ids, observation_basis]
+            properties:
+              observation_basis: {const: derived}
+          - required: [observation_basis]
+            properties:
+              observation_basis: {const: independent_observed}
+            not: {required: [derived_total_component_ids]}
