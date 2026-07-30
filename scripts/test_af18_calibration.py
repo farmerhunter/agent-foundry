@@ -13,6 +13,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "run_af18_calibration.py"
+SCHEMA = ROOT / "schemas" / "af18-calibration-protocol.schema.yaml"
 FIXTURE = ROOT / "scripts" / "fixtures" / "af18_calibration" / "representative-fixture.json"
 spec = importlib.util.spec_from_file_location("calibration", SCRIPT)
 calibration = importlib.util.module_from_spec(spec)
@@ -30,6 +31,7 @@ def expect(name, condition, detail):
 def measurement(name, value, unit, variant, index, components=None):
     item = {"observation_id": f"{variant}-{index}-{name}", "availability": "estimated" if variant == "B" else "observed", "value": value + index, "unit": unit, "source": "counterfactual_model" if variant == "B" else "adapter_counter", "observed_at": "2026-07-29T09:00:00Z"}
     if components:
+        item["observation_basis"] = "derived"
         item["derived_total_component_ids"] = [f"{variant}-{index}-{component}" for component in components]
     return item
 
@@ -84,12 +86,23 @@ def main():
     unavailable_result = calibration.run(packet(unavailable), NOW, 168)
     expect("unavailable-not-zero-counted", cohort(unavailable_result, rows[0]["task_class"])["metrics"]["A"]["tool_output_bytes"]["n_unavailable"] == 1, unavailable_result)
 
+    unavailable_cumulative = copy.deepcopy(rows)
+    cumulative_target = next(row for row in unavailable_cumulative if row["task_class"] == rows[0]["task_class"] and row["variant"] == "C")
+    cumulative_target["resources"]["cumulative_resource_tokens"].update({"availability": "unavailable", "value": None, "observed_at": None, "reason": "not_exposed"})
+    unavailable_cumulative_result = calibration.run(packet(unavailable_cumulative), NOW, 168)
+    unavailable_cumulative_cohort = cohort(unavailable_cumulative_result, rows[0]["task_class"])
+    expect("unavailable-cumulative-counted", unavailable_cumulative_cohort["metrics"]["C"]["cumulative_resource_tokens"]["n_unavailable"] == 1 and unavailable_cumulative_cohort["metrics"]["C"]["cumulative_resource_tokens"]["n_observed"] == 4, unavailable_cumulative_result)
+    expect("unavailable-cumulative-holds-explicitly", unavailable_cumulative_cohort["candidate_recommendation"]["candidate_status"] == "candidate_hold" and "insufficient_observed_C_cumulative_resource_tokens" in unavailable_cumulative_cohort["candidate_recommendation"]["candidate_hold_reasons"], unavailable_cumulative_result)
+
     for name, mutate, error in [
         ("absent-resource-key", lambda x: x["resources"].pop("input_tokens"), "missing_required_resources:input_tokens"),
         ("malformed-resource-key", lambda x: x["resources"].update({"unexpected_tokens": {}}), "unknown_resources_field:unexpected_tokens"),
         ("absent-derived-components", lambda x: x["resources"]["cumulative_resource_tokens"].pop("derived_total_component_ids"), "missing_derived_total_component_ids:cumulative_resource_tokens"),
         ("unknown-derived-component", lambda x: x["resources"]["cumulative_resource_tokens"].update({"derived_total_component_ids": ["not-an-observation"]}), "unknown_derived_total_component_ids:cumulative_resource_tokens"),
-        ("derived-unavailable", lambda x: (x["resources"]["input_tokens"].update({"availability": "unavailable", "value": None, "observed_at": None, "reason": "not_exposed"}), x["resources"]["cumulative_resource_tokens"].update({"availability": "estimated"})), "derived_total_unavailable_component:cumulative_resource_tokens"),
+        ("unavailable-with-zero", lambda x: x["resources"]["input_tokens"].update({"availability": "unavailable", "value": 0, "observed_at": None, "reason": "not_exposed"}), "unavailable_measurement_must_be_null_with_reason:input_tokens"),
+        ("unavailable-without-reason", lambda x: x["resources"]["input_tokens"].update({"availability": "unavailable", "value": None, "observed_at": None, "reason": None}), "unavailable_measurement_must_be_null_with_reason:input_tokens"),
+        ("derived-unavailable", lambda x: (x["resources"]["input_tokens"].update({"availability": "unavailable", "value": None, "observed_at": None, "reason": "not_exposed"}), x["resources"]["cumulative_resource_tokens"].update({"availability": "estimated"})), "derived_total_must_be_unavailable_with_unavailable_component:cumulative_resource_tokens"),
+        ("independent-with-components", lambda x: x["resources"]["cumulative_resource_tokens"].update({"observation_basis": "independent_observed"}), "derived_components_require_derived_basis:cumulative_resource_tokens"),
         ("privacy", lambda x: x.update({"prompt": "secret"}), "privacy_forbidden_raw_content"),
         ("low-limit", lambda x: x.update({"policy_version": "low_limit_experiment"}), "low_limit_not_normal_policy_sample"),
     ]:
@@ -112,11 +125,32 @@ def main():
     protocol_mismatch[0]["protocol_version"] = "other-protocol"
     protocol_result = calibration.run(packet(protocol_mismatch), NOW, 168)
     expect("comparability-protocol-mismatch-rejected", "protocol_version_mismatch" in protocol_result["invalid_evidence"][0]["errors"], protocol_result)
+    expect("comparability-protocol-not-split", len(protocol_result["cohorts"]) == 5, protocol_result)
+
+    task_class_mismatch = copy.deepcopy(rows)
+    task_class_mismatch[0]["task_class"] = "not-a-declared-class"
+    task_class_result = calibration.run(packet(task_class_mismatch), NOW, 168)
+    expect("comparability-task-class-rejected", "unknown_task_class" in task_class_result["invalid_evidence"][0]["errors"], task_class_result)
+    expect("comparability-task-class-not-split", len(task_class_result["cohorts"]) == 5, task_class_result)
 
     root_unit_mismatch = copy.deepcopy(rows)
     root_unit_mismatch[0]["scenario"]["root_budget_unit"] = "bytes"
     root_unit_result = calibration.run(packet(root_unit_mismatch), NOW, 168)
     expect("comparability-root-budget-unit-mismatch-rejected", "root_budget_unit_mismatch" in root_unit_result["invalid_evidence"][0]["errors"], root_unit_result)
+    expect("comparability-root-budget-unit-not-split", len(root_unit_result["cohorts"]) == 5, root_unit_result)
+
+    expect("comparability-boundary-encoded", set(calibration.PACKET_GLOBAL_OR_VALIDITY_CONSTRAINED) == {"task_class", "protocol_version", "root_budget_unit"}, calibration.PACKET_GLOBAL_OR_VALIDITY_CONSTRAINED)
+
+    independent_total = copy.deepcopy(rows)
+    independent_total[0]["resources"]["total_context_tokens"].pop("derived_total_component_ids")
+    independent_total[0]["resources"]["total_context_tokens"]["observation_basis"] = "independent_observed"
+    independent_result = calibration.run(packet(independent_total), NOW, 168)
+    expect("independent-total-valid", not independent_result["invalid_evidence"], independent_result)
+
+    schema_text = SCHEMA.read_text(encoding="utf-8")
+    expect("schema-unavailable-null-reason", "value: {type: 'null'}" in schema_text and "reason: {enum: [not_exposed, redacted, not_collected, invalid]}" in schema_text, schema_text)
+    expect("schema-derived-total-reference", "total_context_tokens: {$ref: '#/$defs/derived_total_measurement'}" in schema_text and "cumulative_resource_tokens: {$ref: '#/$defs/derived_total_measurement'}" in schema_text, schema_text)
+    expect("schema-independent-total-excludes-components", "observation_basis: {enum: [derived, independent_observed]}" in schema_text and "not: {required: [derived_total_component_ids]}" in schema_text, schema_text)
 
     for dimension in ("scenario_id", "scenario_variant", "objective_or_acceptance_fixture_id", "complexity", "risk", "role_route", "model_class", "quality_rubric_version", "policy_version", "canonical_allowed_tools", "measurement_window", "anchor_type"):
         split = copy.deepcopy(rows)
@@ -136,7 +170,7 @@ def main():
     fixture_result = calibration.run(fixture, NOW, 168)
     expect("fixture-evidence-only", "fixture evidence only" in fixture_result["human_summary"], fixture_result)
     fixture_candidate = fixture_result["cohorts"][0]["candidate_recommendation"]
-    expect("fixture-hold-only-insufficient-sample", fixture_candidate["candidate_status"] == "candidate_hold" and fixture_candidate["candidate_hold_reasons"] == ["requires_at_least_five_valid_A_B_C_rows"], fixture_candidate)
+    expect("fixture-hold-only-insufficient-sample", fixture_candidate["candidate_status"] == "candidate_hold" and fixture_candidate["candidate_hold_reasons"] == ["insufficient_observed_C_cumulative_resource_tokens", "requires_at_least_five_valid_A_B_C_rows"], fixture_candidate)
     with tempfile.TemporaryDirectory() as directory:
         output_path = Path(directory) / "packet.json"
         completed = subprocess.run([sys.executable, str(SCRIPT), "--input", str(FIXTURE), "--output", str(output_path), "--now", "2026-07-29T10:00:00Z"], text=True, capture_output=True, check=False)

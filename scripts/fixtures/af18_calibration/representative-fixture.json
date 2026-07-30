@@ -182,6 +182,7 @@
           "unit": "tokens",
           "source": "fixture",
           "observed_at": "2026-07-29T08:00:00Z",
+          "observation_basis": "derived",
           "derived_total_component_ids": [
             "A-0-input_tokens",
             "A-0-cached_input_tokens"
@@ -194,6 +195,7 @@
           "unit": "tokens",
           "source": "fixture",
           "observed_at": "2026-07-29T08:00:00Z",
+          "observation_basis": "derived",
           "derived_total_component_ids": [
             "A-0-input_tokens",
             "A-0-cached_input_tokens",
@@ -382,6 +384,7 @@
           "unit": "tokens",
           "source": "fixture-counterfactual",
           "observed_at": "2026-07-29T08:00:00Z",
+          "observation_basis": "derived",
           "derived_total_component_ids": [
             "B-0-input_tokens",
             "B-0-cached_input_tokens"
@@ -394,6 +397,7 @@
           "unit": "tokens",
           "source": "fixture-counterfactual",
           "observed_at": "2026-07-29T08:00:00Z",
+          "observation_basis": "derived",
           "derived_total_component_ids": [
             "B-0-input_tokens",
             "B-0-cached_input_tokens",
@@ -582,6 +586,7 @@
           "unit": "tokens",
           "source": "fixture",
           "observed_at": "2026-07-29T08:00:00Z",
+          "observation_basis": "derived",
           "derived_total_component_ids": [
             "C-0-input_tokens",
             "C-0-cached_input_tokens"
@@ -594,6 +599,7 @@
           "unit": "tokens",
           "source": "fixture",
           "observed_at": "2026-07-29T08:00:00Z",
+          "observation_basis": "derived",
           "derived_total_component_ids": [
             "C-0-input_tokens",
             "C-0-cached_input_tokens",

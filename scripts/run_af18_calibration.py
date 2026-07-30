@@ -30,6 +30,11 @@ REQUIRED_RESOURCES = {
     "callback_count", "compact_rehydration_count", "full_rehydration_count", "retry_count", "recovery_count", "elapsed_seconds",
 }
 DERIVED_TOTALS = {"cumulative_resource_tokens", "total_context_tokens"}
+PACKET_GLOBAL_OR_VALIDITY_CONSTRAINED = {
+    "task_class": "declared class enum; invalid values are evidence rejects, not cohort splits",
+    "protocol_version": "packet and sample protocol must match; mismatches are evidence rejects, not cohort splits",
+    "root_budget_unit": "tokens is schema-constrained and must match the budget; mismatches are evidence rejects, not cohort splits",
+}
 FORBIDDEN_KEYS = {
     "prompt", "raw_prompt", "prompt_body", "body", "transcript", "raw_transcript",
     "tool_content", "tool_output", "tool_history", "conversation", "messages",
@@ -117,7 +122,7 @@ def validate_measurement(name: str, item: Any, errors: list[str]) -> dict[str, A
     if not isinstance(item, dict):
         errors.append(f"missing_measurement:{name}")
         return {"observation_id": None, "availability": "unavailable", "value": None, "unit": None, "source": None, "observed_at": None}
-    reject_unknown(item, {"observation_id", "availability", "value", "unit", "source", "observed_at", "reason", "derived_total_component_ids"}, f"measurement_{name}", errors)
+    reject_unknown(item, {"observation_id", "availability", "value", "unit", "source", "observed_at", "reason", "observation_basis", "derived_total_component_ids"}, f"measurement_{name}", errors)
     availability = item.get("availability")
     value = item.get("value")
     if not isinstance(item.get("observation_id"), str) or not item["observation_id"]:
@@ -138,7 +143,14 @@ def validate_measurement(name: str, item: Any, errors: list[str]) -> dict[str, A
     component_ids = item.get("derived_total_component_ids")
     if component_ids is not None and (not isinstance(component_ids, list) or not component_ids or any(not isinstance(value, str) or not value for value in component_ids) or len(component_ids) != len(set(component_ids))):
         errors.append(f"invalid_derived_total_component_ids:{name}")
-    return {key: item.get(key) for key in ("observation_id", "availability", "value", "unit", "source", "observed_at", "reason", "derived_total_component_ids")}
+    basis = item.get("observation_basis")
+    if basis not in {None, "derived", "independent_observed"}:
+        errors.append(f"invalid_observation_basis:{name}")
+    if component_ids and basis != "derived":
+        errors.append(f"derived_components_require_derived_basis:{name}")
+    if basis == "independent_observed" and component_ids is not None:
+        errors.append(f"independent_observation_must_not_have_components:{name}")
+    return {key: item.get(key) for key in ("observation_id", "availability", "value", "unit", "source", "observed_at", "reason", "observation_basis", "derived_total_component_ids")}
 
 
 def reject_unknown(value: Any, allowed: set[str], label: str, errors: list[str]) -> None:
@@ -247,8 +259,8 @@ def validate_sample(sample: Any, packet: dict[str, Any], now: dt.datetime, max_a
         for name in DERIVED_TOTALS:
             item = normalized_resources.get(name, {})
             component_ids = item.get("derived_total_component_ids")
-            if name == "cumulative_resource_tokens" and not component_ids:
-                errors.append("missing_derived_total_component_ids:cumulative_resource_tokens")
+            if not component_ids and item.get("observation_basis") != "independent_observed":
+                errors.append(f"missing_derived_total_component_ids:{name}")
             if component_ids:
                 if item.get("observation_id") in component_ids or not set(component_ids).issubset(known_ids):
                     errors.append(f"unknown_derived_total_component_ids:{name}")
@@ -256,8 +268,8 @@ def validate_sample(sample: Any, packet: dict[str, Any], now: dt.datetime, max_a
                     resource.get("observation_id") in component_ids and resource.get("availability") == "unavailable"
                     for resource in normalized_resources.values()
                 )
-                if unavailable_component and item.get("availability") != "observed":
-                    errors.append(f"derived_total_unavailable_component:{name}")
+                if unavailable_component and item.get("availability") != "unavailable":
+                    errors.append(f"derived_total_must_be_unavailable_with_unavailable_component:{name}")
         if sample.get("variant") == "B":
             observed = sorted(name for name, item in normalized_resources.items() if item["availability"] == "observed")
             if observed:
@@ -331,6 +343,8 @@ def analyze(valid: list[dict[str, Any]], invalid: list[dict[str, Any]]) -> list[
         holds: list[str] = []
         if any(len(variants[variant]) < 5 for variant in ("A", "B", "C")):
             holds.append("requires_at_least_five_valid_A_B_C_rows")
+        if summaries["C"].get("cumulative_resource_tokens", {}).get("n_observed", 0) < 5:
+            holds.append("insufficient_observed_C_cumulative_resource_tokens")
         attention_required = sum(row["attention"]["outcome"] == "required" for row in variants["C"])
         attention_conflicts, attention_pair_count, attention_material_count = attention_pairing_conflicts(variants) if task_class == "attention_materiality" else ([], 0, 0)
         failed_or_held = sum(row["terminal_state"] in {"failed", "held"} for row in variants["C"])
@@ -346,7 +360,12 @@ def analyze(valid: list[dict[str, Any]], invalid: list[dict[str, Any]]) -> list[
             def recommendation(metric: str) -> dict[str, Any]:
                 summary = summaries["C"][metric]
                 return {"value": summary["p80_bootstrap_interval"][1], "unit": next(row["resources"][metric]["unit"] for row in variants["C"]), "distribution": "C_observed_p80_with_bootstrap_upper", "uncertainty": summary["p80_bootstrap_interval"], "provenance": "explicit_adapter_evidence"}
-            cumulative_values = [float(row["resources"]["cumulative_resource_tokens"]["value"]) for row in variants["C"]]
+            cumulative_values = [
+                float(row["resources"]["cumulative_resource_tokens"]["value"])
+                for row in variants["C"]
+                if row["resources"]["cumulative_resource_tokens"]["availability"] == "observed"
+                and row["resources"]["cumulative_resource_tokens"]["value"] is not None
+            ]
             cumulative_interval = bootstrap_p80_interval(cumulative_values)
             candidate = {"candidate_status": "candidate", "candidate_max_context_tokens": recommendation("total_context_tokens"), "candidate_max_age_hours": recommendation("context_age_hours"), "candidate_root_budget_band": {"min": cumulative_interval[0], "max": cumulative_interval[1], "unit": "tokens", "distribution": "C_observed_p80_with_bootstrap_interval", "uncertainty": cumulative_interval, "provenance": "explicit_adapter_evidence"}, "candidate_confidence": "small_n_bootstrap", "candidate_assumptions": ["A and C observed rows only; B is explicit estimated counterfactual", "quality and failure/hold guardrails passed; recovery count is reported without a normal-policy threshold; attention rate is reported for Human HDC review", "#442 low_limit containment neither seeds nor caps this value"]}
         cohorts.append({"task_class": task_class, "comparability_key": list(key), "sample_counts": {variant: len(variants[variant]) for variant in sorted(VARIANTS)}, "metrics": summaries, "quality_pass_rate_C": sum(row["quality"]["passed"] for row in variants["C"]) / len(variants["C"]) if variants["C"] else None, "attention_required_rate_C": attention_required / len(variants["C"]) if variants["C"] else None, "attention_pair_count": attention_pair_count, "attention_material_pair_count": attention_material_count, "terminal_state_counts_C": dict(sorted(Counter(row["terminal_state"] for row in variants["C"]).items())), "failed_or_held_C": failed_or_held, "outliers": [row["sample_id"] for row in rows if row["terminal_state"] in {"failed", "held"}], "candidate_recommendation": candidate})
