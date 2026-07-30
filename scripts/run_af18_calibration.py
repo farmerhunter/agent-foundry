@@ -259,6 +259,18 @@ def validate_sample(sample: Any, packet: dict[str, Any], now: dt.datetime, max_a
         if len(observation_ids) != len(set(observation_ids)):
             errors.append("duplicate_resource_observation_id")
         known_ids = set(observation_ids)
+        input_item = normalized_resources.get("input_tokens", {})
+        cached_item = normalized_resources.get("cached_input_tokens", {})
+        output_item = normalized_resources.get("output_tokens", {})
+        reasoning_item = normalized_resources.get("reasoning_tokens", {})
+        if (input_item.get("availability") != "unavailable" and cached_item.get("availability") != "unavailable"
+                and isinstance(input_item.get("value"), (int, float)) and isinstance(cached_item.get("value"), (int, float))
+                and cached_item["value"] > input_item["value"]):
+            errors.append("cached_input_tokens_exceeds_input_tokens")
+        if (output_item.get("availability") != "unavailable" and reasoning_item.get("availability") != "unavailable"
+                and isinstance(output_item.get("value"), (int, float)) and isinstance(reasoning_item.get("value"), (int, float))
+                and reasoning_item["value"] > output_item["value"]):
+            errors.append("reasoning_tokens_exceeds_output_tokens")
         for name in DERIVED_TOTALS:
             item = normalized_resources.get(name, {})
             component_ids = item.get("derived_total_component_ids")

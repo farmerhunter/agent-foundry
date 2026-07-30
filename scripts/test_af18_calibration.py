@@ -113,6 +113,8 @@ def main():
         ("derived-unavailable", lambda x: (x["resources"]["input_tokens"].update({"availability": "unavailable", "value": None, "observed_at": None, "reason": "not_exposed"}), x["resources"]["cumulative_resource_tokens"].update({"availability": "estimated"})), "derived_total_must_be_unavailable_with_unavailable_component:cumulative_resource_tokens"),
         ("independent-with-components", lambda x: x["resources"]["cumulative_resource_tokens"].update({"observation_basis": "independent_observed"}), "derived_components_require_derived_basis:cumulative_resource_tokens"),
         ("cached-reasoning-double-count", lambda x: x["resources"]["cumulative_resource_tokens"].update({"value": 190, "derived_total_component_ids": [x["resources"]["input_tokens"]["observation_id"], x["resources"]["cached_input_tokens"]["observation_id"], x["resources"]["output_tokens"]["observation_id"], x["resources"]["reasoning_tokens"]["observation_id"]]}), "cumulative_resource_tokens_must_derive_input_plus_output_only"),
+        ("cached-input-breakdown", lambda x: x["resources"]["cached_input_tokens"].update({"value": x["resources"]["input_tokens"]["value"] + 1}), "cached_input_tokens_exceeds_input_tokens"),
+        ("reasoning-output-breakdown", lambda x: x["resources"]["reasoning_tokens"].update({"value": x["resources"]["output_tokens"]["value"] + 1}), "reasoning_tokens_exceeds_output_tokens"),
         ("invalid-derived-total", lambda x: x["resources"]["cumulative_resource_tokens"].update({"value": 141}), "invalid_cumulative_resource_tokens_derivation"),
         ("duplicate-invocation", lambda x: x["resources"]["cumulative_resource_tokens"].update({"invocation_ids": ["duplicate", "duplicate"]}), "invalid_invocation_ids:cumulative_resource_tokens"),
         ("missing-durable-anchor", lambda x: x["anchors"].pop("context"), "missing_or_unbound_durable_anchor"),
@@ -172,10 +174,10 @@ def main():
     collector_sample = sample("single_session_baseline", "C")
     collector_sample.pop("resources")
     collector_sample.pop("provenance")
-    metadata = {"schema_version": 1, "protocol_version": calibration.PROTOCOL_VERSION, "sample": collector_sample, "captured_at": "2026-07-29T09:00:00Z", "evidence_anchor": "https://github.com/farmerhunter/agent-foundry/issues/457#telemetry", "invocation_ids": ["invocation-1", "invocation-2"]}
+    metadata = {"schema_version": 1, "protocol_version": calibration.PROTOCOL_VERSION, "sample": collector_sample, "captured_at": "2026-07-29T09:00:00Z", "evidence_anchor": collector_sample["anchors"]["execution"], "invocation_ids": ["invocation-1", "invocation-2"], "execution_id": collector_sample["execution_id"], "execution_window": {"started_at": "2026-07-29T08:59:00Z", "ended_at": "2026-07-29T09:02:00Z"}}
     events = [
-        {"type": "codex.completed", "invocation_id": "invocation-1", "completed_at": "2026-07-29T09:00:00Z", "usage": {"input_tokens": 100, "cached_input_tokens": 20, "output_tokens": 40, "reasoning_tokens": 30}},
-        {"type": "codex.completed", "invocation_id": "invocation-2", "completed_at": "2026-07-29T09:01:00Z", "usage": {"input_tokens": 50, "output_tokens": 10}},
+        {"type": "codex.completed", "invocation_id": "invocation-1", "execution_id": collector_sample["execution_id"], "completed_at": "2026-07-29T09:00:00Z", "usage": {"input_tokens": 100, "cached_input_tokens": 20, "output_tokens": 40, "reasoning_tokens": 30}},
+        {"type": "codex.completed", "invocation_id": "invocation-2", "execution_id": collector_sample["execution_id"], "completed_at": "2026-07-29T09:01:00Z", "usage": {"input_tokens": 50, "output_tokens": 10}},
     ]
     collected = collector.collect(metadata, events)
     collected_resources = collected["samples"][0]["resources"]
@@ -185,10 +187,18 @@ def main():
     with tempfile.TemporaryDirectory() as directory:
         jsonl = Path(directory) / "completed.jsonl"
         jsonl.write_text("\n".join(json.dumps(event) for event in events) + "\n", encoding="utf-8")
-        expect("collector-jsonl-dedup", len(collector.read_events(str(jsonl), ["invocation-1", "invocation-2"])) == 2, jsonl.read_text())
+        expect("collector-jsonl-dedup", len(collector.read_events(str(jsonl), ["invocation-1", "invocation-2"], collector_sample["execution_id"], metadata["execution_window"])) == 2, jsonl.read_text())
+        outside_window = {**events[0], "completed_at": "2020-01-01T00:00:00Z"}
+        jsonl.write_text(json.dumps(outside_window) + "\n", encoding="utf-8")
+        try:
+            collector.read_events(str(jsonl), ["invocation-1"], collector_sample["execution_id"], metadata["execution_window"])
+        except ValueError as exc:
+            expect("collector-window-boundary", "completed_event_outside_execution_window" in str(exc), str(exc))
+        else:
+            raise AssertionError("collector must reject events outside fixed execution window")
         jsonl.write_text(json.dumps({**events[0], "messages": ["raw"]}) + "\n", encoding="utf-8")
         try:
-            collector.read_events(str(jsonl), ["invocation-1"])
+            collector.read_events(str(jsonl), ["invocation-1"], collector_sample["execution_id"], metadata["execution_window"])
         except ValueError as exc:
             expect("collector-raw-content-rejected", "invalid_completed_event_fields" in str(exc), str(exc))
         else:

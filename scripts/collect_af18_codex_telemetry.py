@@ -18,9 +18,9 @@ assert spec.loader is not None
 sys.modules[spec.name] = calibration
 spec.loader.exec_module(calibration)
 
-EVENT_KEYS = {"type", "invocation_id", "completed_at", "usage"}
+EVENT_KEYS = {"type", "invocation_id", "execution_id", "completed_at", "usage"}
 USAGE_KEYS = {"input_tokens", "cached_input_tokens", "output_tokens", "reasoning_tokens"}
-METADATA_KEYS = {"schema_version", "protocol_version", "sample", "captured_at", "evidence_anchor", "invocation_ids"}
+METADATA_KEYS = {"schema_version", "protocol_version", "sample", "captured_at", "evidence_anchor", "invocation_ids", "execution_id", "execution_window"}
 RAW_KEYS = calibration.FORBIDDEN_KEYS | {"response", "request", "event", "error", "model", "instructions"}
 
 
@@ -54,15 +54,22 @@ def observed(name: str, value: int, captured_at: str) -> dict[str, Any]:
     return {"observation_id": f"codex-jsonl-{name}", "availability": "observed", "value": value, "unit": "tokens", "source": "codex_jsonl_completed_export", "observed_at": captured_at}
 
 
-def read_events(path: str, invocation_ids: list[str]) -> list[dict[str, Any]]:
+def read_events(path: str, invocation_ids: list[str], execution_id: str, execution_window: dict[str, str]) -> list[dict[str, Any]]:
+    window_start = calibration.utc(execution_window["started_at"])
+    window_end = calibration.utc(execution_window["ended_at"])
+    if window_end < window_start:
+        raise ValueError("invalid_execution_window")
     events: dict[str, dict[str, Any]] = {}
     for line_number, line in enumerate(Path(path).read_text(encoding="utf-8").splitlines(), 1):
         if not line.strip():
             continue
         value = json.loads(line)
         reject_unknown(value, EVENT_KEYS, "completed_event")
-        if value.get("type") != "codex.completed" or not isinstance(value.get("invocation_id"), str) or not value["invocation_id"] or not isinstance(value.get("completed_at"), str):
+        if value.get("type") != "codex.completed" or not isinstance(value.get("invocation_id"), str) or not value["invocation_id"] or value.get("execution_id") != execution_id or not isinstance(value.get("completed_at"), str):
             raise ValueError(f"invalid_completed_event:{line_number}")
+        completed_at = calibration.utc(value["completed_at"])
+        if not window_start <= completed_at <= window_end:
+            raise ValueError(f"completed_event_outside_execution_window:{line_number}")
         usage = value.get("usage")
         reject_unknown(usage, USAGE_KEYS, "usage")
         if any(not isinstance(usage.get(key), int) or isinstance(usage.get(key), bool) or usage[key] < 0 for key in ("input_tokens", "output_tokens")):
@@ -89,6 +96,16 @@ def collect(metadata: dict[str, Any], events: list[dict[str, Any]]) -> dict[str,
         raise ValueError("invalid_observed_sample_metadata")
     if calibration.forbidden_paths(sample):
         raise ValueError("raw_content_or_unknown_field_rejected")
+    execution_id = metadata.get("execution_id")
+    execution_window = metadata.get("execution_window")
+    if not isinstance(execution_id, str) or not execution_id:
+        raise ValueError("invalid_execution_id")
+    if not isinstance(execution_window, dict) or set(execution_window) != {"started_at", "ended_at"}:
+        raise ValueError("invalid_execution_window")
+    if sample.get("execution_id") != execution_id or sample.get("anchors", {}).get("execution") != metadata.get("evidence_anchor"):
+        raise ValueError("execution_anchor_binding_mismatch")
+    if sample.get("scenario", {}).get("measurement_window", {}).get("fixed_execution_window") is not True:
+        raise ValueError("fixed_execution_window_required")
     captured_at = metadata.get("captured_at")
     if not isinstance(captured_at, str) or not calibration.is_anchor(metadata.get("evidence_anchor")):
         raise ValueError("invalid_metadata_provenance")
@@ -115,7 +132,7 @@ def main() -> int:
     try:
         metadata = read_json(args.metadata)
         invocation_ids = metadata.get("invocation_ids")
-        events = read_events(args.input, invocation_ids if isinstance(invocation_ids, list) else [])
+        events = read_events(args.input, invocation_ids if isinstance(invocation_ids, list) else [], metadata.get("execution_id", ""), metadata.get("execution_window", {}))
         output = json.dumps(collect(metadata, events), indent=2, sort_keys=True) + "\n"
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         print(json.dumps({"error": str(exc), "mutation_performed": False}, sort_keys=True), file=sys.stderr)
