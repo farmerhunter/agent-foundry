@@ -25,7 +25,8 @@
           "python3"
         ],
         "measurement_window": {
-          "definition": "execution-to-terminal"
+          "definition": "execution-to-terminal",
+          "fixed_execution_window": true
         },
         "root_budget_unit": "tokens",
         "anchor_type": "issue"
@@ -182,26 +183,21 @@
           "unit": "tokens",
           "source": "fixture",
           "observed_at": "2026-07-29T08:00:00Z",
-          "observation_basis": "derived",
-          "derived_total_component_ids": [
-            "A-0-input_tokens",
-            "A-0-cached_input_tokens"
-          ]
+          "observation_basis": "independent_observed"
         },
         "cumulative_resource_tokens": {
           "observation_id": "A-0-cumulative_resource_tokens",
           "availability": "observed",
-          "value": 300,
+          "value": 140,
           "unit": "tokens",
           "source": "fixture",
           "observed_at": "2026-07-29T08:00:00Z",
           "observation_basis": "derived",
           "derived_total_component_ids": [
             "A-0-input_tokens",
-            "A-0-cached_input_tokens",
-            "A-0-output_tokens",
-            "A-0-reasoning_tokens"
-          ]
+            "A-0-output_tokens"
+          ],
+          "invocation_ids": ["fixture-invocation-A"]
         }
       }
     },
@@ -227,7 +223,8 @@
           "python3"
         ],
         "measurement_window": {
-          "definition": "execution-to-terminal"
+          "definition": "execution-to-terminal",
+          "fixed_execution_window": true
         },
         "root_budget_unit": "tokens",
         "anchor_type": "issue"
@@ -384,26 +381,21 @@
           "unit": "tokens",
           "source": "fixture-counterfactual",
           "observed_at": "2026-07-29T08:00:00Z",
-          "observation_basis": "derived",
-          "derived_total_component_ids": [
-            "B-0-input_tokens",
-            "B-0-cached_input_tokens"
-          ]
+          "observation_basis": "independent_observed"
         },
         "cumulative_resource_tokens": {
           "observation_id": "B-0-cumulative_resource_tokens",
           "availability": "estimated",
-          "value": 300,
+          "value": 140,
           "unit": "tokens",
           "source": "fixture-counterfactual",
           "observed_at": "2026-07-29T08:00:00Z",
           "observation_basis": "derived",
           "derived_total_component_ids": [
             "B-0-input_tokens",
-            "B-0-cached_input_tokens",
-            "B-0-output_tokens",
-            "B-0-reasoning_tokens"
-          ]
+            "B-0-output_tokens"
+          ],
+          "invocation_ids": ["fixture-invocation-B"]
         }
       }
     },
@@ -429,7 +421,8 @@
           "python3"
         ],
         "measurement_window": {
-          "definition": "execution-to-terminal"
+          "definition": "execution-to-terminal",
+          "fixed_execution_window": true
         },
         "root_budget_unit": "tokens",
         "anchor_type": "issue"
@@ -586,26 +579,21 @@
           "unit": "tokens",
           "source": "fixture",
           "observed_at": "2026-07-29T08:00:00Z",
-          "observation_basis": "derived",
-          "derived_total_component_ids": [
-            "C-0-input_tokens",
-            "C-0-cached_input_tokens"
-          ]
+          "observation_basis": "independent_observed"
         },
         "cumulative_resource_tokens": {
           "observation_id": "C-0-cumulative_resource_tokens",
           "availability": "observed",
-          "value": 300,
+          "value": 140,
           "unit": "tokens",
           "source": "fixture",
           "observed_at": "2026-07-29T08:00:00Z",
           "observation_basis": "derived",
           "derived_total_component_ids": [
             "C-0-input_tokens",
-            "C-0-cached_input_tokens",
-            "C-0-output_tokens",
-            "C-0-reasoning_tokens"
-          ]
+            "C-0-output_tokens"
+          ],
+          "invocation_ids": ["fixture-invocation-C"]
         }
       }
     }
