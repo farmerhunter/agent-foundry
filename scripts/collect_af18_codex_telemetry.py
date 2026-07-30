@@ -21,6 +21,8 @@ spec.loader.exec_module(calibration)
 EVENT_KEYS = {"type", "invocation_id", "execution_id", "completed_at", "usage"}
 USAGE_KEYS = {"input_tokens", "cached_input_tokens", "output_tokens", "reasoning_tokens"}
 METADATA_KEYS = {"schema_version", "protocol_version", "sample", "captured_at", "evidence_anchor", "invocation_ids", "execution_id", "execution_window"}
+CONTEXT_OBSERVATION_KEYS = {"type", "execution_id", "work_id", "execution_anchor", "context_anchor", "execution_window", "observed_at", "context_window_started_at", "total_context_tokens", "producer"}
+CONTEXT_PRODUCER_KEYS = {"runtime_id", "adapter", "runtime_owned"}
 RAW_KEYS = calibration.FORBIDDEN_KEYS | {"response", "request", "event", "error", "model", "instructions"}
 
 
@@ -28,6 +30,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", required=True, help="Completed-event JSONL input.")
     parser.add_argument("--metadata", required=True, help="Explicit allowlisted metadata JSON.")
+    parser.add_argument("--context-observations", help="Optional runtime-owned context-observation JSONL input.")
     parser.add_argument("--output", help="Output JSON path; stdout is used otherwise.")
     return parser.parse_args()
 
@@ -52,6 +55,53 @@ def unavailable(name: str) -> dict[str, Any]:
 
 def observed(name: str, value: int, captured_at: str) -> dict[str, Any]:
     return {"observation_id": f"codex-jsonl-{name}", "availability": "observed", "value": value, "unit": "tokens", "source": "codex_jsonl_completed_export", "observed_at": captured_at}
+
+
+def validate_context_observation(metadata: dict[str, Any], value: Any, line_number: int) -> dict[str, Any]:
+    reject_unknown(value, CONTEXT_OBSERVATION_KEYS, "context_observation")
+    if value.get("type") != "codex.context_observation":
+        raise ValueError(f"invalid_context_observation:{line_number}")
+    sample = metadata.get("sample")
+    execution_window = metadata.get("execution_window")
+    if not isinstance(sample, dict) or not isinstance(execution_window, dict):
+        raise ValueError("invalid_context_observation_metadata")
+    if value.get("execution_id") != metadata.get("execution_id") or value.get("work_id") != sample.get("work_id"):
+        raise ValueError(f"context_observation_execution_or_work_mismatch:{line_number}")
+    anchors = sample.get("anchors", {})
+    if value.get("execution_anchor") != metadata.get("evidence_anchor") or value.get("context_anchor") != anchors.get("context"):
+        raise ValueError(f"context_observation_anchor_mismatch:{line_number}")
+    if value.get("execution_window") != execution_window:
+        raise ValueError(f"context_observation_window_mismatch:{line_number}")
+    producer = value.get("producer")
+    reject_unknown(producer, CONTEXT_PRODUCER_KEYS, "context_observation_producer")
+    if producer.get("runtime_id") != "codex" or producer.get("adapter") != "codex" or producer.get("runtime_owned") is not True:
+        raise ValueError(f"context_observation_not_runtime_owned:{line_number}")
+    if not isinstance(value.get("total_context_tokens"), int) or isinstance(value["total_context_tokens"], bool) or value["total_context_tokens"] < 0:
+        raise ValueError(f"invalid_total_context_tokens:{line_number}")
+    try:
+        observed_at = calibration.utc(value.get("observed_at"))
+        window_started_at = calibration.utc(value.get("context_window_started_at"))
+        execution_started_at = calibration.utc(execution_window["started_at"])
+        execution_ended_at = calibration.utc(execution_window["ended_at"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError(f"invalid_context_observation_timestamp:{line_number}") from exc
+    if not execution_started_at <= observed_at <= execution_ended_at:
+        raise ValueError(f"context_observation_outside_execution_window:{line_number}")
+    if window_started_at > observed_at:
+        raise ValueError(f"invalid_context_window_timestamp:{line_number}")
+    return value
+
+
+def context_observation(metadata: dict[str, Any], path: str | None) -> dict[str, Any] | None:
+    if path is None:
+        return None
+    matches: list[dict[str, Any]] = []
+    for line_number, line in enumerate(Path(path).read_text(encoding="utf-8").splitlines(), 1):
+        if line.strip():
+            matches.append(validate_context_observation(metadata, json.loads(line), line_number))
+    if len(matches) > 1:
+        raise ValueError("duplicate_context_observation")
+    return matches[0] if matches else None
 
 
 def read_events(path: str, invocation_ids: list[str], execution_id: str, execution_window: dict[str, str]) -> list[dict[str, Any]]:
@@ -86,7 +136,7 @@ def read_events(path: str, invocation_ids: list[str], execution_id: str, executi
     return [events[item] for item in invocation_ids]
 
 
-def collect(metadata: dict[str, Any], events: list[dict[str, Any]]) -> dict[str, Any]:
+def collect(metadata: dict[str, Any], events: list[dict[str, Any]], context: dict[str, Any] | None = None) -> dict[str, Any]:
     reject_unknown(metadata, METADATA_KEYS, "metadata")
     invocation_ids = metadata.get("invocation_ids")
     if not isinstance(invocation_ids, list) or not invocation_ids or any(not isinstance(item, str) or not item for item in invocation_ids) or len(invocation_ids) != len(set(invocation_ids)):
@@ -109,6 +159,8 @@ def collect(metadata: dict[str, Any], events: list[dict[str, Any]]) -> dict[str,
     captured_at = metadata.get("captured_at")
     if not isinstance(captured_at, str) or not calibration.is_anchor(metadata.get("evidence_anchor")):
         raise ValueError("invalid_metadata_provenance")
+    if context is not None:
+        context = validate_context_observation(metadata, context, 0)
     totals = {key: sum(event["usage"].get(key, 0) for event in events) for key in USAGE_KEYS}
     resources = {name: unavailable(name) for name in calibration.REQUIRED_RESOURCES}
     for name in ("input_tokens", "output_tokens"):
@@ -116,6 +168,11 @@ def collect(metadata: dict[str, Any], events: list[dict[str, Any]]) -> dict[str,
     for name in ("cached_input_tokens", "reasoning_tokens"):
         if all(name in event["usage"] for event in events):
             resources[name] = observed(name, totals[name], captured_at)
+    if context is not None:
+        context_age_hours = int((calibration.utc(context["observed_at"]) - calibration.utc(context["context_window_started_at"])).total_seconds() // 3600)
+        source = "codex_runtime_context_observation"
+        resources["context_age_hours"] = {"observation_id": "codex-runtime-context_age_hours", "availability": "observed", "value": context_age_hours, "unit": "hours", "source": source, "observed_at": context["observed_at"]}
+        resources["total_context_tokens"] = {"observation_id": "codex-runtime-total_context_tokens", "availability": "observed", "value": context["total_context_tokens"], "unit": "tokens", "source": source, "observed_at": context["observed_at"], "observation_basis": "independent_observed"}
     resources["cumulative_resource_tokens"] = {"observation_id": "codex-jsonl-cumulative_resource_tokens", "availability": "observed", "value": totals["input_tokens"] + totals["output_tokens"], "unit": "tokens", "source": "codex_jsonl_completed_export", "observed_at": captured_at, "observation_basis": "derived", "derived_total_component_ids": [resources["input_tokens"]["observation_id"], resources["output_tokens"]["observation_id"]], "invocation_ids": invocation_ids}
     output_sample = dict(sample)
     output_sample["provenance"] = {"source": "codex_jsonl_completed_export", "collection_method": "codex_jsonl_export", "captured_at": captured_at, "evidence_anchor": metadata["evidence_anchor"], "observation_kind": "observed"}
@@ -133,7 +190,8 @@ def main() -> int:
         metadata = read_json(args.metadata)
         invocation_ids = metadata.get("invocation_ids")
         events = read_events(args.input, invocation_ids if isinstance(invocation_ids, list) else [], metadata.get("execution_id", ""), metadata.get("execution_window", {}))
-        output = json.dumps(collect(metadata, events), indent=2, sort_keys=True) + "\n"
+        context = context_observation(metadata, args.context_observations)
+        output = json.dumps(collect(metadata, events, context), indent=2, sort_keys=True) + "\n"
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         print(json.dumps({"error": str(exc), "mutation_performed": False}, sort_keys=True), file=sys.stderr)
         return 2

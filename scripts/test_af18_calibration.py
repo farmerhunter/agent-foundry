@@ -185,6 +185,11 @@ def main():
     expect("collector-input-output-only-total", collected_resources["cumulative_resource_tokens"]["value"] == 200 and collected_resources["cumulative_resource_tokens"]["derived_total_component_ids"] == ["codex-jsonl-input_tokens", "codex-jsonl-output_tokens"], collected)
     expect("collector-unavailable-host-metrics", collected_resources["tool_output_bytes"]["availability"] == "unavailable" and collected_resources["tool_output_bytes"]["value"] is None and collected_resources["tool_output_bytes"]["reason"] == "not_exposed", collected)
     expect("collector-missing-breakdown-unavailable", collected_resources["cached_input_tokens"]["availability"] == "unavailable", collected)
+    context = {"type": "codex.context_observation", "execution_id": collector_sample["execution_id"], "work_id": collector_sample["work_id"], "execution_anchor": metadata["evidence_anchor"], "context_anchor": collector_sample["anchors"]["context"], "execution_window": metadata["execution_window"], "observed_at": "2026-07-29T09:01:00Z", "context_window_started_at": "2026-07-29T08:00:00Z", "total_context_tokens": 321, "producer": {"runtime_id": "codex", "adapter": "codex", "runtime_owned": True}}
+    observed_context = collector.collect(metadata, events, context)
+    observed_resources = observed_context["samples"][0]["resources"]
+    expect("collector-runtime-context-observed", observed_resources["context_age_hours"] == {"observation_id": "codex-runtime-context_age_hours", "availability": "observed", "value": 1, "unit": "hours", "source": "codex_runtime_context_observation", "observed_at": context["observed_at"]}, observed_context)
+    expect("collector-runtime-total-independent", observed_resources["total_context_tokens"]["availability"] == "observed" and observed_resources["total_context_tokens"]["value"] == 321 and observed_resources["total_context_tokens"]["observation_basis"] == "independent_observed" and "derived_total_component_ids" not in observed_resources["total_context_tokens"], observed_context)
     with tempfile.TemporaryDirectory() as directory:
         jsonl = Path(directory) / "completed.jsonl"
         jsonl.write_text("\n".join(json.dumps(event) for event in events) + "\n", encoding="utf-8")
@@ -204,6 +209,26 @@ def main():
             expect("collector-raw-content-rejected", "invalid_completed_event_fields" in str(exc), str(exc))
         else:
             raise AssertionError("collector raw content must fail")
+        context_jsonl = Path(directory) / "context.jsonl"
+        context_jsonl.write_text(json.dumps(context) + "\n", encoding="utf-8")
+        loaded_context = collector.context_observation(metadata, str(context_jsonl))
+        expect("collector-context-observation-read", loaded_context == context, loaded_context)
+        for name, mutate, error in [
+            ("context-duplicate", lambda x: [x, x], "duplicate_context_observation"),
+            ("context-malformed", lambda x: [{**x, "total_context_tokens": -1}], "invalid_total_context_tokens"),
+            ("context-execution-mismatch", lambda x: [{**x, "execution_id": "other"}], "context_observation_execution_or_work_mismatch"),
+            ("context-anchor-mismatch", lambda x: [{**x, "context_anchor": "https://github.com/farmerhunter/agent-foundry/issues/457#other"}], "context_observation_anchor_mismatch"),
+            ("context-window-mismatch", lambda x: [{**x, "execution_window": {"started_at": "2026-07-29T08:58:00Z", "ended_at": "2026-07-29T09:02:00Z"}}], "context_observation_window_mismatch"),
+            ("context-caller-supplied", lambda x: [{**x, "producer": {**x["producer"], "runtime_owned": False}}], "context_observation_not_runtime_owned"),
+            ("context-raw-content", lambda x: [{**x, "messages": ["raw"]}], "invalid_context_observation_fields"),
+        ]:
+            context_jsonl.write_text("\n".join(json.dumps(item) for item in mutate(copy.deepcopy(context))) + "\n", encoding="utf-8")
+            try:
+                collector.context_observation(metadata, str(context_jsonl))
+            except ValueError as exc:
+                expect(name, error in str(exc), str(exc))
+            else:
+                raise AssertionError(f"{name} must fail closed")
 
     expect("route-variants-merge-by-family", len([item for item in result["cohorts"] if item["task_class"] == "compact_cross_role"]) == 1, result)
     route_variants = copy.deepcopy(rows)
