@@ -236,7 +236,7 @@ def main():
     expect("fixture-evidence-only", "fixture evidence only" in fixture_result["human_summary"], fixture_result)
     fixture_candidate = fixture_result["cohorts"][0]["candidate_recommendation"]
     expect("fixture-hold-only-insufficient-sample", fixture_candidate["candidate_status"] == "candidate_hold" and fixture_candidate["candidate_hold_reasons"] == ["insufficient_observed_C_context_age_hours", "insufficient_observed_C_cumulative_resource_tokens", "insufficient_observed_C_total_context_tokens", "requires_at_least_five_valid_A_B_C_rows"], fixture_candidate)
-    for real_name in ("single_session_baseline", "compact_cross_role"):
+    for real_name in ("single_session_baseline", "compact_cross_role", "independent_review_or_test_handoff", "bounded_successor_hold_recovery", "attention_materiality"):
         real_packet = json.loads((REAL_FIXTURES / f"{real_name}.json").read_text())
         real_result = calibration.run(real_packet, NOW, 24 * 365 * 10)
         expect(f"real-reclassified-{real_name}-valid", len(real_result["invalid_evidence"]) == 0 and len(real_result["cohorts"]) == 1, real_result)

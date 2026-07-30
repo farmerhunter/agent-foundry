@@ -1,0 +1,3092 @@
+{
+  "collection_mode": "codex_jsonl_export",
+  "protocol_version": "af18-calibration-protocol-v1",
+  "samples": [
+    {
+      "anchors": {
+        "context": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "execution": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "work": "https://github.com/farmerhunter/agent-foundry/issues/457"
+      },
+      "attention": {
+        "acknowledgement": {
+          "availability": "unavailable",
+          "value": null
+        },
+        "category": null,
+        "outcome": "not_required",
+        "pairing": {
+          "evidence_anchor": null,
+          "pair_id": null
+        }
+      },
+      "execution_id": "run-independent_review_or_test_handoff-A-000",
+      "policy_version": "normal-observation-v1",
+      "protocol_version": "af18-calibration-protocol-v1",
+      "provenance": {
+        "captured_at": "2026-07-30T02:51:59Z",
+        "collection_method": "codex_jsonl_export",
+        "evidence_anchor": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "observation_kind": "observed",
+        "source": "codex_jsonl_export"
+      },
+      "quality": {
+        "passed": true,
+        "reason": "pilot route completed"
+      },
+      "remaining_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "resources": {
+        "cached_input_tokens": {
+          "availability": "observed",
+          "observation_id": "cached_input_tokens-run-independent_review_or_test_handoff-A-000",
+          "observed_at": "2026-07-30T02:51:59Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 9600
+        },
+        "callback_count": {
+          "availability": "observed",
+          "observation_id": "callback-run-independent_review_or_test_handoff-A-000",
+          "observed_at": "2026-07-30T02:51:59Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 0
+        },
+        "compact_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "compact_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "context_age_hours": {
+          "availability": "unavailable",
+          "observation_id": "context_age_hours-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "hours",
+          "value": null
+        },
+        "cumulative_resource_tokens": {
+          "availability": "observed",
+          "derived_total_component_ids": [
+            "input_tokens-run-independent_review_or_test_handoff-A-000",
+            "output_tokens-run-independent_review_or_test_handoff-A-000"
+          ],
+          "invocation_ids": [
+            "run-independent_review_or_test_handoff-A-000-turn-1"
+          ],
+          "observation_basis": "derived",
+          "observation_id": "cumulative-run-independent_review_or_test_handoff-A-000",
+          "observed_at": "2026-07-30T02:51:59Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 17736
+        },
+        "elapsed_seconds": {
+          "availability": "observed",
+          "observation_id": "elapsed-run-independent_review_or_test_handoff-A-000",
+          "observed_at": "2026-07-30T02:51:59Z",
+          "source": "host_collection",
+          "unit": "seconds",
+          "value": 25.515
+        },
+        "full_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "full_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "input_tokens": {
+          "availability": "observed",
+          "observation_id": "input_tokens-run-independent_review_or_test_handoff-A-000",
+          "observed_at": "2026-07-30T02:51:59Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 17638
+        },
+        "output_tokens": {
+          "availability": "observed",
+          "observation_id": "output_tokens-run-independent_review_or_test_handoff-A-000",
+          "observed_at": "2026-07-30T02:51:59Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 98
+        },
+        "packet_bytes": {
+          "availability": "unavailable",
+          "observation_id": "packet_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "reasoning_tokens": {
+          "availability": "observed",
+          "observation_id": "reasoning_tokens-run-independent_review_or_test_handoff-A-000",
+          "observed_at": "2026-07-30T02:51:59Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 20
+        },
+        "recovery_count": {
+          "availability": "observed",
+          "observation_id": "recovery-run-independent_review_or_test_handoff-A-000",
+          "observed_at": "2026-07-30T02:51:59Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 0
+        },
+        "retry_count": {
+          "availability": "observed",
+          "observation_id": "retry-run-independent_review_or_test_handoff-A-000",
+          "observed_at": "2026-07-30T02:51:59Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 0
+        },
+        "tool_output_bytes": {
+          "availability": "unavailable",
+          "observation_id": "tool_output_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "total_context_tokens": {
+          "availability": "unavailable",
+          "observation_id": "total_context_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        }
+      },
+      "root_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "sample_id": "independent_review_or_test_handoff-A-000",
+      "scenario": {
+        "actual_role_route": "Implementer",
+        "anchor_type": "issue-comment",
+        "canonical_allowed_tools": [
+          "codex"
+        ],
+        "complexity": "small",
+        "measurement_window": {
+          "definition": "execution-to-terminal",
+          "fixed_execution_window": true
+        },
+        "model_class": "gpt-5.5-medium",
+        "objective_or_acceptance_fixture_id": "real-independent_review_or_test_handoff-v1",
+        "quality_rubric_version": "v1",
+        "risk": "low",
+        "root_budget_unit": "tokens",
+        "route_family": "real-route-family-v1",
+        "scenario_id": "independent_review_or_test_handoff",
+        "scenario_variant": "real-pilot-v1"
+      },
+      "task_class": "independent_review_or_test_handoff",
+      "terminal_state": "completed",
+      "variant": "A",
+      "variant_declaration": {
+        "route_kind": "observed_normal_route"
+      },
+      "work_id": "work-independent_review_or_test_handoff-A-000"
+    },
+    {
+      "anchors": {
+        "context": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "execution": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "work": "https://github.com/farmerhunter/agent-foundry/issues/457"
+      },
+      "attention": {
+        "acknowledgement": {
+          "availability": "unavailable",
+          "value": null
+        },
+        "category": null,
+        "outcome": "not_required",
+        "pairing": {
+          "evidence_anchor": null,
+          "pair_id": null
+        }
+      },
+      "execution_id": "run-independent_review_or_test_handoff-B-000",
+      "policy_version": "normal-observation-v1",
+      "protocol_version": "af18-calibration-protocol-v1",
+      "provenance": {
+        "captured_at": "2026-07-30T02:51:59Z",
+        "collection_method": "codex_jsonl_export",
+        "evidence_anchor": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "observation_kind": "counterfactual",
+        "source": "declared-counterfactual"
+      },
+      "quality": {
+        "passed": true,
+        "reason": "pilot route completed"
+      },
+      "remaining_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "resources": {
+        "cached_input_tokens": {
+          "availability": "unavailable",
+          "observation_id": "cached_input_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        },
+        "callback_count": {
+          "availability": "unavailable",
+          "observation_id": "callback_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "compact_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "compact_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "context_age_hours": {
+          "availability": "unavailable",
+          "observation_id": "context_age_hours-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "hours",
+          "value": null
+        },
+        "cumulative_resource_tokens": {
+          "availability": "unavailable",
+          "observation_id": "cumulative_resource_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        },
+        "elapsed_seconds": {
+          "availability": "unavailable",
+          "observation_id": "elapsed_seconds-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "seconds",
+          "value": null
+        },
+        "full_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "full_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "input_tokens": {
+          "availability": "unavailable",
+          "observation_id": "input_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        },
+        "output_tokens": {
+          "availability": "unavailable",
+          "observation_id": "output_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        },
+        "packet_bytes": {
+          "availability": "unavailable",
+          "observation_id": "packet_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "reasoning_tokens": {
+          "availability": "unavailable",
+          "observation_id": "reasoning_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        },
+        "recovery_count": {
+          "availability": "unavailable",
+          "observation_id": "recovery_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "retry_count": {
+          "availability": "unavailable",
+          "observation_id": "retry_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "tool_output_bytes": {
+          "availability": "unavailable",
+          "observation_id": "tool_output_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "total_context_tokens": {
+          "availability": "unavailable",
+          "observation_id": "total_context_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        }
+      },
+      "root_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "sample_id": "independent_review_or_test_handoff-B-000",
+      "scenario": {
+        "actual_role_route": "Implementer",
+        "anchor_type": "issue-comment",
+        "canonical_allowed_tools": [
+          "codex"
+        ],
+        "complexity": "small",
+        "measurement_window": {
+          "definition": "execution-to-terminal",
+          "fixed_execution_window": true
+        },
+        "model_class": "gpt-5.5-medium",
+        "objective_or_acceptance_fixture_id": "real-independent_review_or_test_handoff-v1",
+        "quality_rubric_version": "v1",
+        "risk": "low",
+        "root_budget_unit": "tokens",
+        "route_family": "real-route-family-v1",
+        "scenario_id": "independent_review_or_test_handoff",
+        "scenario_variant": "real-pilot-v1"
+      },
+      "task_class": "independent_review_or_test_handoff",
+      "terminal_state": "completed",
+      "variant": "B",
+      "variant_declaration": {
+        "route_kind": "counterfactual"
+      },
+      "work_id": "work-independent_review_or_test_handoff-B-000"
+    },
+    {
+      "anchors": {
+        "context": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "execution": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "work": "https://github.com/farmerhunter/agent-foundry/issues/457"
+      },
+      "attention": {
+        "acknowledgement": {
+          "availability": "unavailable",
+          "value": null
+        },
+        "category": null,
+        "outcome": "not_required",
+        "pairing": {
+          "evidence_anchor": null,
+          "pair_id": null
+        }
+      },
+      "execution_id": "run-independent_review_or_test_handoff-C-000",
+      "policy_version": "normal-observation-v1",
+      "protocol_version": "af18-calibration-protocol-v1",
+      "provenance": {
+        "captured_at": "2026-07-30T02:52:39Z",
+        "collection_method": "codex_jsonl_export",
+        "evidence_anchor": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "observation_kind": "observed",
+        "source": "codex_jsonl_export"
+      },
+      "quality": {
+        "passed": true,
+        "reason": "pilot route completed"
+      },
+      "remaining_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "resources": {
+        "cached_input_tokens": {
+          "availability": "observed",
+          "observation_id": "cached_input_tokens-run-independent_review_or_test_handoff-C-000",
+          "observed_at": "2026-07-30T02:52:39Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 31488
+        },
+        "callback_count": {
+          "availability": "observed",
+          "observation_id": "callback-run-independent_review_or_test_handoff-C-000",
+          "observed_at": "2026-07-30T02:52:39Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 1
+        },
+        "compact_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "compact_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "context_age_hours": {
+          "availability": "unavailable",
+          "observation_id": "context_age_hours-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "hours",
+          "value": null
+        },
+        "cumulative_resource_tokens": {
+          "availability": "observed",
+          "derived_total_component_ids": [
+            "input_tokens-run-independent_review_or_test_handoff-C-000",
+            "output_tokens-run-independent_review_or_test_handoff-C-000"
+          ],
+          "invocation_ids": [
+            "run-independent_review_or_test_handoff-C-000-turn-1",
+            "run-independent_review_or_test_handoff-C-000-turn-2"
+          ],
+          "observation_basis": "derived",
+          "observation_id": "cumulative-run-independent_review_or_test_handoff-C-000",
+          "observed_at": "2026-07-30T02:52:39Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 35607
+        },
+        "elapsed_seconds": {
+          "availability": "observed",
+          "observation_id": "elapsed-run-independent_review_or_test_handoff-C-000",
+          "observed_at": "2026-07-30T02:52:39Z",
+          "source": "host_collection",
+          "unit": "seconds",
+          "value": 39.724999999999994
+        },
+        "full_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "full_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "input_tokens": {
+          "availability": "observed",
+          "observation_id": "input_tokens-run-independent_review_or_test_handoff-C-000",
+          "observed_at": "2026-07-30T02:52:39Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 35356
+        },
+        "output_tokens": {
+          "availability": "observed",
+          "observation_id": "output_tokens-run-independent_review_or_test_handoff-C-000",
+          "observed_at": "2026-07-30T02:52:39Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 251
+        },
+        "packet_bytes": {
+          "availability": "unavailable",
+          "observation_id": "packet_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "reasoning_tokens": {
+          "availability": "observed",
+          "observation_id": "reasoning_tokens-run-independent_review_or_test_handoff-C-000",
+          "observed_at": "2026-07-30T02:52:39Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 65
+        },
+        "recovery_count": {
+          "availability": "observed",
+          "observation_id": "recovery-run-independent_review_or_test_handoff-C-000",
+          "observed_at": "2026-07-30T02:52:39Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 0
+        },
+        "retry_count": {
+          "availability": "observed",
+          "observation_id": "retry-run-independent_review_or_test_handoff-C-000",
+          "observed_at": "2026-07-30T02:52:39Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 0
+        },
+        "tool_output_bytes": {
+          "availability": "unavailable",
+          "observation_id": "tool_output_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "total_context_tokens": {
+          "availability": "unavailable",
+          "observation_id": "total_context_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        }
+      },
+      "root_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "sample_id": "independent_review_or_test_handoff-C-000",
+      "scenario": {
+        "actual_role_route": "Implementer>Tester",
+        "anchor_type": "issue-comment",
+        "canonical_allowed_tools": [
+          "codex"
+        ],
+        "complexity": "small",
+        "measurement_window": {
+          "definition": "execution-to-terminal",
+          "fixed_execution_window": true
+        },
+        "model_class": "gpt-5.5-medium",
+        "objective_or_acceptance_fixture_id": "real-independent_review_or_test_handoff-v1",
+        "quality_rubric_version": "v1",
+        "risk": "low",
+        "root_budget_unit": "tokens",
+        "route_family": "real-route-family-v1",
+        "scenario_id": "independent_review_or_test_handoff",
+        "scenario_variant": "real-pilot-v1"
+      },
+      "task_class": "independent_review_or_test_handoff",
+      "terminal_state": "completed",
+      "variant": "C",
+      "variant_declaration": {
+        "route_kind": "observed_normal_route"
+      },
+      "work_id": "work-independent_review_or_test_handoff-C-000"
+    },
+    {
+      "anchors": {
+        "context": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "execution": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "work": "https://github.com/farmerhunter/agent-foundry/issues/457"
+      },
+      "attention": {
+        "acknowledgement": {
+          "availability": "unavailable",
+          "value": null
+        },
+        "category": null,
+        "outcome": "not_required",
+        "pairing": {
+          "evidence_anchor": null,
+          "pair_id": null
+        }
+      },
+      "execution_id": "run-independent_review_or_test_handoff-A-001",
+      "policy_version": "normal-observation-v1",
+      "protocol_version": "af18-calibration-protocol-v1",
+      "provenance": {
+        "captured_at": "2026-07-30T02:52:54Z",
+        "collection_method": "codex_jsonl_export",
+        "evidence_anchor": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "observation_kind": "observed",
+        "source": "codex_jsonl_export"
+      },
+      "quality": {
+        "passed": true,
+        "reason": "pilot route completed"
+      },
+      "remaining_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "resources": {
+        "cached_input_tokens": {
+          "availability": "observed",
+          "observation_id": "cached_input_tokens-run-independent_review_or_test_handoff-A-001",
+          "observed_at": "2026-07-30T02:52:54Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 16768
+        },
+        "callback_count": {
+          "availability": "observed",
+          "observation_id": "callback-run-independent_review_or_test_handoff-A-001",
+          "observed_at": "2026-07-30T02:52:54Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 0
+        },
+        "compact_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "compact_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "context_age_hours": {
+          "availability": "unavailable",
+          "observation_id": "context_age_hours-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "hours",
+          "value": null
+        },
+        "cumulative_resource_tokens": {
+          "availability": "observed",
+          "derived_total_component_ids": [
+            "input_tokens-run-independent_review_or_test_handoff-A-001",
+            "output_tokens-run-independent_review_or_test_handoff-A-001"
+          ],
+          "invocation_ids": [
+            "run-independent_review_or_test_handoff-A-001-turn-1"
+          ],
+          "observation_basis": "derived",
+          "observation_id": "cumulative-run-independent_review_or_test_handoff-A-001",
+          "observed_at": "2026-07-30T02:52:54Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 17750
+        },
+        "elapsed_seconds": {
+          "availability": "observed",
+          "observation_id": "elapsed-run-independent_review_or_test_handoff-A-001",
+          "observed_at": "2026-07-30T02:52:54Z",
+          "source": "host_collection",
+          "unit": "seconds",
+          "value": 15.34
+        },
+        "full_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "full_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "input_tokens": {
+          "availability": "observed",
+          "observation_id": "input_tokens-run-independent_review_or_test_handoff-A-001",
+          "observed_at": "2026-07-30T02:52:54Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 17638
+        },
+        "output_tokens": {
+          "availability": "observed",
+          "observation_id": "output_tokens-run-independent_review_or_test_handoff-A-001",
+          "observed_at": "2026-07-30T02:52:54Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 112
+        },
+        "packet_bytes": {
+          "availability": "unavailable",
+          "observation_id": "packet_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "reasoning_tokens": {
+          "availability": "observed",
+          "observation_id": "reasoning_tokens-run-independent_review_or_test_handoff-A-001",
+          "observed_at": "2026-07-30T02:52:54Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 28
+        },
+        "recovery_count": {
+          "availability": "observed",
+          "observation_id": "recovery-run-independent_review_or_test_handoff-A-001",
+          "observed_at": "2026-07-30T02:52:54Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 0
+        },
+        "retry_count": {
+          "availability": "observed",
+          "observation_id": "retry-run-independent_review_or_test_handoff-A-001",
+          "observed_at": "2026-07-30T02:52:54Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 0
+        },
+        "tool_output_bytes": {
+          "availability": "unavailable",
+          "observation_id": "tool_output_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "total_context_tokens": {
+          "availability": "unavailable",
+          "observation_id": "total_context_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        }
+      },
+      "root_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "sample_id": "independent_review_or_test_handoff-A-001",
+      "scenario": {
+        "actual_role_route": "Implementer",
+        "anchor_type": "issue-comment",
+        "canonical_allowed_tools": [
+          "codex"
+        ],
+        "complexity": "small",
+        "measurement_window": {
+          "definition": "execution-to-terminal",
+          "fixed_execution_window": true
+        },
+        "model_class": "gpt-5.5-medium",
+        "objective_or_acceptance_fixture_id": "real-independent_review_or_test_handoff-v1",
+        "quality_rubric_version": "v1",
+        "risk": "low",
+        "root_budget_unit": "tokens",
+        "route_family": "real-route-family-v1",
+        "scenario_id": "independent_review_or_test_handoff",
+        "scenario_variant": "real-pilot-v1"
+      },
+      "task_class": "independent_review_or_test_handoff",
+      "terminal_state": "completed",
+      "variant": "A",
+      "variant_declaration": {
+        "route_kind": "observed_normal_route"
+      },
+      "work_id": "work-independent_review_or_test_handoff-A-001"
+    },
+    {
+      "anchors": {
+        "context": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "execution": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "work": "https://github.com/farmerhunter/agent-foundry/issues/457"
+      },
+      "attention": {
+        "acknowledgement": {
+          "availability": "unavailable",
+          "value": null
+        },
+        "category": null,
+        "outcome": "not_required",
+        "pairing": {
+          "evidence_anchor": null,
+          "pair_id": null
+        }
+      },
+      "execution_id": "run-independent_review_or_test_handoff-B-001",
+      "policy_version": "normal-observation-v1",
+      "protocol_version": "af18-calibration-protocol-v1",
+      "provenance": {
+        "captured_at": "2026-07-30T02:52:54Z",
+        "collection_method": "codex_jsonl_export",
+        "evidence_anchor": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "observation_kind": "counterfactual",
+        "source": "declared-counterfactual"
+      },
+      "quality": {
+        "passed": true,
+        "reason": "pilot route completed"
+      },
+      "remaining_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "resources": {
+        "cached_input_tokens": {
+          "availability": "unavailable",
+          "observation_id": "cached_input_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        },
+        "callback_count": {
+          "availability": "unavailable",
+          "observation_id": "callback_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "compact_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "compact_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "context_age_hours": {
+          "availability": "unavailable",
+          "observation_id": "context_age_hours-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "hours",
+          "value": null
+        },
+        "cumulative_resource_tokens": {
+          "availability": "unavailable",
+          "observation_id": "cumulative_resource_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        },
+        "elapsed_seconds": {
+          "availability": "unavailable",
+          "observation_id": "elapsed_seconds-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "seconds",
+          "value": null
+        },
+        "full_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "full_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "input_tokens": {
+          "availability": "unavailable",
+          "observation_id": "input_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        },
+        "output_tokens": {
+          "availability": "unavailable",
+          "observation_id": "output_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        },
+        "packet_bytes": {
+          "availability": "unavailable",
+          "observation_id": "packet_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "reasoning_tokens": {
+          "availability": "unavailable",
+          "observation_id": "reasoning_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        },
+        "recovery_count": {
+          "availability": "unavailable",
+          "observation_id": "recovery_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "retry_count": {
+          "availability": "unavailable",
+          "observation_id": "retry_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "tool_output_bytes": {
+          "availability": "unavailable",
+          "observation_id": "tool_output_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "total_context_tokens": {
+          "availability": "unavailable",
+          "observation_id": "total_context_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        }
+      },
+      "root_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "sample_id": "independent_review_or_test_handoff-B-001",
+      "scenario": {
+        "actual_role_route": "Implementer",
+        "anchor_type": "issue-comment",
+        "canonical_allowed_tools": [
+          "codex"
+        ],
+        "complexity": "small",
+        "measurement_window": {
+          "definition": "execution-to-terminal",
+          "fixed_execution_window": true
+        },
+        "model_class": "gpt-5.5-medium",
+        "objective_or_acceptance_fixture_id": "real-independent_review_or_test_handoff-v1",
+        "quality_rubric_version": "v1",
+        "risk": "low",
+        "root_budget_unit": "tokens",
+        "route_family": "real-route-family-v1",
+        "scenario_id": "independent_review_or_test_handoff",
+        "scenario_variant": "real-pilot-v1"
+      },
+      "task_class": "independent_review_or_test_handoff",
+      "terminal_state": "completed",
+      "variant": "B",
+      "variant_declaration": {
+        "route_kind": "counterfactual"
+      },
+      "work_id": "work-independent_review_or_test_handoff-B-001"
+    },
+    {
+      "anchors": {
+        "context": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "execution": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "work": "https://github.com/farmerhunter/agent-foundry/issues/457"
+      },
+      "attention": {
+        "acknowledgement": {
+          "availability": "unavailable",
+          "value": null
+        },
+        "category": null,
+        "outcome": "not_required",
+        "pairing": {
+          "evidence_anchor": null,
+          "pair_id": null
+        }
+      },
+      "execution_id": "run-independent_review_or_test_handoff-C-001",
+      "policy_version": "normal-observation-v1",
+      "protocol_version": "af18-calibration-protocol-v1",
+      "provenance": {
+        "captured_at": "2026-07-30T02:53:30Z",
+        "collection_method": "codex_jsonl_export",
+        "evidence_anchor": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "observation_kind": "observed",
+        "source": "codex_jsonl_export"
+      },
+      "quality": {
+        "passed": true,
+        "reason": "pilot route completed"
+      },
+      "remaining_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "resources": {
+        "cached_input_tokens": {
+          "availability": "observed",
+          "observation_id": "cached_input_tokens-run-independent_review_or_test_handoff-C-001",
+          "observed_at": "2026-07-30T02:53:30Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 31488
+        },
+        "callback_count": {
+          "availability": "observed",
+          "observation_id": "callback-run-independent_review_or_test_handoff-C-001",
+          "observed_at": "2026-07-30T02:53:30Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 1
+        },
+        "compact_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "compact_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "context_age_hours": {
+          "availability": "unavailable",
+          "observation_id": "context_age_hours-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "hours",
+          "value": null
+        },
+        "cumulative_resource_tokens": {
+          "availability": "observed",
+          "derived_total_component_ids": [
+            "input_tokens-run-independent_review_or_test_handoff-C-001",
+            "output_tokens-run-independent_review_or_test_handoff-C-001"
+          ],
+          "invocation_ids": [
+            "run-independent_review_or_test_handoff-C-001-turn-1",
+            "run-independent_review_or_test_handoff-C-001-turn-2"
+          ],
+          "observation_basis": "derived",
+          "observation_id": "cumulative-run-independent_review_or_test_handoff-C-001",
+          "observed_at": "2026-07-30T02:53:30Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 35624
+        },
+        "elapsed_seconds": {
+          "availability": "observed",
+          "observation_id": "elapsed-run-independent_review_or_test_handoff-C-001",
+          "observed_at": "2026-07-30T02:53:30Z",
+          "source": "host_collection",
+          "unit": "seconds",
+          "value": 36.105000000000004
+        },
+        "full_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "full_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "input_tokens": {
+          "availability": "observed",
+          "observation_id": "input_tokens-run-independent_review_or_test_handoff-C-001",
+          "observed_at": "2026-07-30T02:53:30Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 35360
+        },
+        "output_tokens": {
+          "availability": "observed",
+          "observation_id": "output_tokens-run-independent_review_or_test_handoff-C-001",
+          "observed_at": "2026-07-30T02:53:30Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 264
+        },
+        "packet_bytes": {
+          "availability": "unavailable",
+          "observation_id": "packet_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "reasoning_tokens": {
+          "availability": "observed",
+          "observation_id": "reasoning_tokens-run-independent_review_or_test_handoff-C-001",
+          "observed_at": "2026-07-30T02:53:30Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 78
+        },
+        "recovery_count": {
+          "availability": "observed",
+          "observation_id": "recovery-run-independent_review_or_test_handoff-C-001",
+          "observed_at": "2026-07-30T02:53:30Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 0
+        },
+        "retry_count": {
+          "availability": "observed",
+          "observation_id": "retry-run-independent_review_or_test_handoff-C-001",
+          "observed_at": "2026-07-30T02:53:30Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 0
+        },
+        "tool_output_bytes": {
+          "availability": "unavailable",
+          "observation_id": "tool_output_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "total_context_tokens": {
+          "availability": "unavailable",
+          "observation_id": "total_context_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        }
+      },
+      "root_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "sample_id": "independent_review_or_test_handoff-C-001",
+      "scenario": {
+        "actual_role_route": "Implementer>Tester",
+        "anchor_type": "issue-comment",
+        "canonical_allowed_tools": [
+          "codex"
+        ],
+        "complexity": "small",
+        "measurement_window": {
+          "definition": "execution-to-terminal",
+          "fixed_execution_window": true
+        },
+        "model_class": "gpt-5.5-medium",
+        "objective_or_acceptance_fixture_id": "real-independent_review_or_test_handoff-v1",
+        "quality_rubric_version": "v1",
+        "risk": "low",
+        "root_budget_unit": "tokens",
+        "route_family": "real-route-family-v1",
+        "scenario_id": "independent_review_or_test_handoff",
+        "scenario_variant": "real-pilot-v1"
+      },
+      "task_class": "independent_review_or_test_handoff",
+      "terminal_state": "completed",
+      "variant": "C",
+      "variant_declaration": {
+        "route_kind": "observed_normal_route"
+      },
+      "work_id": "work-independent_review_or_test_handoff-C-001"
+    },
+    {
+      "anchors": {
+        "context": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "execution": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "work": "https://github.com/farmerhunter/agent-foundry/issues/457"
+      },
+      "attention": {
+        "acknowledgement": {
+          "availability": "unavailable",
+          "value": null
+        },
+        "category": null,
+        "outcome": "not_required",
+        "pairing": {
+          "evidence_anchor": null,
+          "pair_id": null
+        }
+      },
+      "execution_id": "run-independent_review_or_test_handoff-A-002",
+      "policy_version": "normal-observation-v1",
+      "protocol_version": "af18-calibration-protocol-v1",
+      "provenance": {
+        "captured_at": "2026-07-30T02:53:48Z",
+        "collection_method": "codex_jsonl_export",
+        "evidence_anchor": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "observation_kind": "observed",
+        "source": "codex_jsonl_export"
+      },
+      "quality": {
+        "passed": true,
+        "reason": "pilot route completed"
+      },
+      "remaining_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "resources": {
+        "cached_input_tokens": {
+          "availability": "observed",
+          "observation_id": "cached_input_tokens-run-independent_review_or_test_handoff-A-002",
+          "observed_at": "2026-07-30T02:53:48Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 16768
+        },
+        "callback_count": {
+          "availability": "observed",
+          "observation_id": "callback-run-independent_review_or_test_handoff-A-002",
+          "observed_at": "2026-07-30T02:53:48Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 0
+        },
+        "compact_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "compact_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "context_age_hours": {
+          "availability": "unavailable",
+          "observation_id": "context_age_hours-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "hours",
+          "value": null
+        },
+        "cumulative_resource_tokens": {
+          "availability": "observed",
+          "derived_total_component_ids": [
+            "input_tokens-run-independent_review_or_test_handoff-A-002",
+            "output_tokens-run-independent_review_or_test_handoff-A-002"
+          ],
+          "invocation_ids": [
+            "run-independent_review_or_test_handoff-A-002-turn-1"
+          ],
+          "observation_basis": "derived",
+          "observation_id": "cumulative-run-independent_review_or_test_handoff-A-002",
+          "observed_at": "2026-07-30T02:53:48Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 17788
+        },
+        "elapsed_seconds": {
+          "availability": "observed",
+          "observation_id": "elapsed-run-independent_review_or_test_handoff-A-002",
+          "observed_at": "2026-07-30T02:53:48Z",
+          "source": "host_collection",
+          "unit": "seconds",
+          "value": 17.966
+        },
+        "full_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "full_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "input_tokens": {
+          "availability": "observed",
+          "observation_id": "input_tokens-run-independent_review_or_test_handoff-A-002",
+          "observed_at": "2026-07-30T02:53:48Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 17638
+        },
+        "output_tokens": {
+          "availability": "observed",
+          "observation_id": "output_tokens-run-independent_review_or_test_handoff-A-002",
+          "observed_at": "2026-07-30T02:53:48Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 150
+        },
+        "packet_bytes": {
+          "availability": "unavailable",
+          "observation_id": "packet_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "reasoning_tokens": {
+          "availability": "observed",
+          "observation_id": "reasoning_tokens-run-independent_review_or_test_handoff-A-002",
+          "observed_at": "2026-07-30T02:53:48Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 25
+        },
+        "recovery_count": {
+          "availability": "observed",
+          "observation_id": "recovery-run-independent_review_or_test_handoff-A-002",
+          "observed_at": "2026-07-30T02:53:48Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 0
+        },
+        "retry_count": {
+          "availability": "observed",
+          "observation_id": "retry-run-independent_review_or_test_handoff-A-002",
+          "observed_at": "2026-07-30T02:53:48Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 0
+        },
+        "tool_output_bytes": {
+          "availability": "unavailable",
+          "observation_id": "tool_output_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "total_context_tokens": {
+          "availability": "unavailable",
+          "observation_id": "total_context_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        }
+      },
+      "root_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "sample_id": "independent_review_or_test_handoff-A-002",
+      "scenario": {
+        "actual_role_route": "Implementer",
+        "anchor_type": "issue-comment",
+        "canonical_allowed_tools": [
+          "codex"
+        ],
+        "complexity": "small",
+        "measurement_window": {
+          "definition": "execution-to-terminal",
+          "fixed_execution_window": true
+        },
+        "model_class": "gpt-5.5-medium",
+        "objective_or_acceptance_fixture_id": "real-independent_review_or_test_handoff-v1",
+        "quality_rubric_version": "v1",
+        "risk": "low",
+        "root_budget_unit": "tokens",
+        "route_family": "real-route-family-v1",
+        "scenario_id": "independent_review_or_test_handoff",
+        "scenario_variant": "real-pilot-v1"
+      },
+      "task_class": "independent_review_or_test_handoff",
+      "terminal_state": "completed",
+      "variant": "A",
+      "variant_declaration": {
+        "route_kind": "observed_normal_route"
+      },
+      "work_id": "work-independent_review_or_test_handoff-A-002"
+    },
+    {
+      "anchors": {
+        "context": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "execution": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "work": "https://github.com/farmerhunter/agent-foundry/issues/457"
+      },
+      "attention": {
+        "acknowledgement": {
+          "availability": "unavailable",
+          "value": null
+        },
+        "category": null,
+        "outcome": "not_required",
+        "pairing": {
+          "evidence_anchor": null,
+          "pair_id": null
+        }
+      },
+      "execution_id": "run-independent_review_or_test_handoff-B-002",
+      "policy_version": "normal-observation-v1",
+      "protocol_version": "af18-calibration-protocol-v1",
+      "provenance": {
+        "captured_at": "2026-07-30T02:53:48Z",
+        "collection_method": "codex_jsonl_export",
+        "evidence_anchor": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "observation_kind": "counterfactual",
+        "source": "declared-counterfactual"
+      },
+      "quality": {
+        "passed": true,
+        "reason": "pilot route completed"
+      },
+      "remaining_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "resources": {
+        "cached_input_tokens": {
+          "availability": "unavailable",
+          "observation_id": "cached_input_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        },
+        "callback_count": {
+          "availability": "unavailable",
+          "observation_id": "callback_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "compact_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "compact_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "context_age_hours": {
+          "availability": "unavailable",
+          "observation_id": "context_age_hours-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "hours",
+          "value": null
+        },
+        "cumulative_resource_tokens": {
+          "availability": "unavailable",
+          "observation_id": "cumulative_resource_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        },
+        "elapsed_seconds": {
+          "availability": "unavailable",
+          "observation_id": "elapsed_seconds-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "seconds",
+          "value": null
+        },
+        "full_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "full_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "input_tokens": {
+          "availability": "unavailable",
+          "observation_id": "input_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        },
+        "output_tokens": {
+          "availability": "unavailable",
+          "observation_id": "output_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        },
+        "packet_bytes": {
+          "availability": "unavailable",
+          "observation_id": "packet_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "reasoning_tokens": {
+          "availability": "unavailable",
+          "observation_id": "reasoning_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        },
+        "recovery_count": {
+          "availability": "unavailable",
+          "observation_id": "recovery_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "retry_count": {
+          "availability": "unavailable",
+          "observation_id": "retry_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "tool_output_bytes": {
+          "availability": "unavailable",
+          "observation_id": "tool_output_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "total_context_tokens": {
+          "availability": "unavailable",
+          "observation_id": "total_context_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        }
+      },
+      "root_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "sample_id": "independent_review_or_test_handoff-B-002",
+      "scenario": {
+        "actual_role_route": "Implementer",
+        "anchor_type": "issue-comment",
+        "canonical_allowed_tools": [
+          "codex"
+        ],
+        "complexity": "small",
+        "measurement_window": {
+          "definition": "execution-to-terminal",
+          "fixed_execution_window": true
+        },
+        "model_class": "gpt-5.5-medium",
+        "objective_or_acceptance_fixture_id": "real-independent_review_or_test_handoff-v1",
+        "quality_rubric_version": "v1",
+        "risk": "low",
+        "root_budget_unit": "tokens",
+        "route_family": "real-route-family-v1",
+        "scenario_id": "independent_review_or_test_handoff",
+        "scenario_variant": "real-pilot-v1"
+      },
+      "task_class": "independent_review_or_test_handoff",
+      "terminal_state": "completed",
+      "variant": "B",
+      "variant_declaration": {
+        "route_kind": "counterfactual"
+      },
+      "work_id": "work-independent_review_or_test_handoff-B-002"
+    },
+    {
+      "anchors": {
+        "context": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "execution": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "work": "https://github.com/farmerhunter/agent-foundry/issues/457"
+      },
+      "attention": {
+        "acknowledgement": {
+          "availability": "unavailable",
+          "value": null
+        },
+        "category": null,
+        "outcome": "not_required",
+        "pairing": {
+          "evidence_anchor": null,
+          "pair_id": null
+        }
+      },
+      "execution_id": "run-independent_review_or_test_handoff-C-002",
+      "policy_version": "normal-observation-v1",
+      "protocol_version": "af18-calibration-protocol-v1",
+      "provenance": {
+        "captured_at": "2026-07-30T02:54:23Z",
+        "collection_method": "codex_jsonl_export",
+        "evidence_anchor": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "observation_kind": "observed",
+        "source": "codex_jsonl_export"
+      },
+      "quality": {
+        "passed": true,
+        "reason": "pilot route completed"
+      },
+      "remaining_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "resources": {
+        "cached_input_tokens": {
+          "availability": "observed",
+          "observation_id": "cached_input_tokens-run-independent_review_or_test_handoff-C-002",
+          "observed_at": "2026-07-30T02:54:23Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 33536
+        },
+        "callback_count": {
+          "availability": "observed",
+          "observation_id": "callback-run-independent_review_or_test_handoff-C-002",
+          "observed_at": "2026-07-30T02:54:23Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 1
+        },
+        "compact_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "compact_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "context_age_hours": {
+          "availability": "unavailable",
+          "observation_id": "context_age_hours-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "hours",
+          "value": null
+        },
+        "cumulative_resource_tokens": {
+          "availability": "observed",
+          "derived_total_component_ids": [
+            "input_tokens-run-independent_review_or_test_handoff-C-002",
+            "output_tokens-run-independent_review_or_test_handoff-C-002"
+          ],
+          "invocation_ids": [
+            "run-independent_review_or_test_handoff-C-002-turn-1",
+            "run-independent_review_or_test_handoff-C-002-turn-2"
+          ],
+          "observation_basis": "derived",
+          "observation_id": "cumulative-run-independent_review_or_test_handoff-C-002",
+          "observed_at": "2026-07-30T02:54:23Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 35581
+        },
+        "elapsed_seconds": {
+          "availability": "observed",
+          "observation_id": "elapsed-run-independent_review_or_test_handoff-C-002",
+          "observed_at": "2026-07-30T02:54:23Z",
+          "source": "host_collection",
+          "unit": "seconds",
+          "value": 34.22
+        },
+        "full_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "full_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "input_tokens": {
+          "availability": "observed",
+          "observation_id": "input_tokens-run-independent_review_or_test_handoff-C-002",
+          "observed_at": "2026-07-30T02:54:23Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 35342
+        },
+        "output_tokens": {
+          "availability": "observed",
+          "observation_id": "output_tokens-run-independent_review_or_test_handoff-C-002",
+          "observed_at": "2026-07-30T02:54:23Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 239
+        },
+        "packet_bytes": {
+          "availability": "unavailable",
+          "observation_id": "packet_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "reasoning_tokens": {
+          "availability": "observed",
+          "observation_id": "reasoning_tokens-run-independent_review_or_test_handoff-C-002",
+          "observed_at": "2026-07-30T02:54:23Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 83
+        },
+        "recovery_count": {
+          "availability": "observed",
+          "observation_id": "recovery-run-independent_review_or_test_handoff-C-002",
+          "observed_at": "2026-07-30T02:54:23Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 0
+        },
+        "retry_count": {
+          "availability": "observed",
+          "observation_id": "retry-run-independent_review_or_test_handoff-C-002",
+          "observed_at": "2026-07-30T02:54:23Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 0
+        },
+        "tool_output_bytes": {
+          "availability": "unavailable",
+          "observation_id": "tool_output_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "total_context_tokens": {
+          "availability": "unavailable",
+          "observation_id": "total_context_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        }
+      },
+      "root_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "sample_id": "independent_review_or_test_handoff-C-002",
+      "scenario": {
+        "actual_role_route": "Implementer>Tester",
+        "anchor_type": "issue-comment",
+        "canonical_allowed_tools": [
+          "codex"
+        ],
+        "complexity": "small",
+        "measurement_window": {
+          "definition": "execution-to-terminal",
+          "fixed_execution_window": true
+        },
+        "model_class": "gpt-5.5-medium",
+        "objective_or_acceptance_fixture_id": "real-independent_review_or_test_handoff-v1",
+        "quality_rubric_version": "v1",
+        "risk": "low",
+        "root_budget_unit": "tokens",
+        "route_family": "real-route-family-v1",
+        "scenario_id": "independent_review_or_test_handoff",
+        "scenario_variant": "real-pilot-v1"
+      },
+      "task_class": "independent_review_or_test_handoff",
+      "terminal_state": "completed",
+      "variant": "C",
+      "variant_declaration": {
+        "route_kind": "observed_normal_route"
+      },
+      "work_id": "work-independent_review_or_test_handoff-C-002"
+    },
+    {
+      "anchors": {
+        "context": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "execution": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "work": "https://github.com/farmerhunter/agent-foundry/issues/457"
+      },
+      "attention": {
+        "acknowledgement": {
+          "availability": "unavailable",
+          "value": null
+        },
+        "category": null,
+        "outcome": "not_required",
+        "pairing": {
+          "evidence_anchor": null,
+          "pair_id": null
+        }
+      },
+      "execution_id": "run-independent_review_or_test_handoff-A-003",
+      "policy_version": "normal-observation-v1",
+      "protocol_version": "af18-calibration-protocol-v1",
+      "provenance": {
+        "captured_at": "2026-07-30T02:54:40Z",
+        "collection_method": "codex_jsonl_export",
+        "evidence_anchor": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "observation_kind": "observed",
+        "source": "codex_jsonl_export"
+      },
+      "quality": {
+        "passed": true,
+        "reason": "pilot route completed"
+      },
+      "remaining_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "resources": {
+        "cached_input_tokens": {
+          "availability": "observed",
+          "observation_id": "cached_input_tokens-run-independent_review_or_test_handoff-A-003",
+          "observed_at": "2026-07-30T02:54:40Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 16768
+        },
+        "callback_count": {
+          "availability": "observed",
+          "observation_id": "callback-run-independent_review_or_test_handoff-A-003",
+          "observed_at": "2026-07-30T02:54:40Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 0
+        },
+        "compact_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "compact_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "context_age_hours": {
+          "availability": "unavailable",
+          "observation_id": "context_age_hours-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "hours",
+          "value": null
+        },
+        "cumulative_resource_tokens": {
+          "availability": "observed",
+          "derived_total_component_ids": [
+            "input_tokens-run-independent_review_or_test_handoff-A-003",
+            "output_tokens-run-independent_review_or_test_handoff-A-003"
+          ],
+          "invocation_ids": [
+            "run-independent_review_or_test_handoff-A-003-turn-1"
+          ],
+          "observation_basis": "derived",
+          "observation_id": "cumulative-run-independent_review_or_test_handoff-A-003",
+          "observed_at": "2026-07-30T02:54:40Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 17785
+        },
+        "elapsed_seconds": {
+          "availability": "observed",
+          "observation_id": "elapsed-run-independent_review_or_test_handoff-A-003",
+          "observed_at": "2026-07-30T02:54:40Z",
+          "source": "host_collection",
+          "unit": "seconds",
+          "value": 17.674
+        },
+        "full_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "full_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "input_tokens": {
+          "availability": "observed",
+          "observation_id": "input_tokens-run-independent_review_or_test_handoff-A-003",
+          "observed_at": "2026-07-30T02:54:40Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 17638
+        },
+        "output_tokens": {
+          "availability": "observed",
+          "observation_id": "output_tokens-run-independent_review_or_test_handoff-A-003",
+          "observed_at": "2026-07-30T02:54:40Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 147
+        },
+        "packet_bytes": {
+          "availability": "unavailable",
+          "observation_id": "packet_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "reasoning_tokens": {
+          "availability": "observed",
+          "observation_id": "reasoning_tokens-run-independent_review_or_test_handoff-A-003",
+          "observed_at": "2026-07-30T02:54:40Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 34
+        },
+        "recovery_count": {
+          "availability": "observed",
+          "observation_id": "recovery-run-independent_review_or_test_handoff-A-003",
+          "observed_at": "2026-07-30T02:54:40Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 0
+        },
+        "retry_count": {
+          "availability": "observed",
+          "observation_id": "retry-run-independent_review_or_test_handoff-A-003",
+          "observed_at": "2026-07-30T02:54:40Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 0
+        },
+        "tool_output_bytes": {
+          "availability": "unavailable",
+          "observation_id": "tool_output_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "total_context_tokens": {
+          "availability": "unavailable",
+          "observation_id": "total_context_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        }
+      },
+      "root_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "sample_id": "independent_review_or_test_handoff-A-003",
+      "scenario": {
+        "actual_role_route": "Implementer",
+        "anchor_type": "issue-comment",
+        "canonical_allowed_tools": [
+          "codex"
+        ],
+        "complexity": "small",
+        "measurement_window": {
+          "definition": "execution-to-terminal",
+          "fixed_execution_window": true
+        },
+        "model_class": "gpt-5.5-medium",
+        "objective_or_acceptance_fixture_id": "real-independent_review_or_test_handoff-v1",
+        "quality_rubric_version": "v1",
+        "risk": "low",
+        "root_budget_unit": "tokens",
+        "route_family": "real-route-family-v1",
+        "scenario_id": "independent_review_or_test_handoff",
+        "scenario_variant": "real-pilot-v1"
+      },
+      "task_class": "independent_review_or_test_handoff",
+      "terminal_state": "completed",
+      "variant": "A",
+      "variant_declaration": {
+        "route_kind": "observed_normal_route"
+      },
+      "work_id": "work-independent_review_or_test_handoff-A-003"
+    },
+    {
+      "anchors": {
+        "context": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "execution": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "work": "https://github.com/farmerhunter/agent-foundry/issues/457"
+      },
+      "attention": {
+        "acknowledgement": {
+          "availability": "unavailable",
+          "value": null
+        },
+        "category": null,
+        "outcome": "not_required",
+        "pairing": {
+          "evidence_anchor": null,
+          "pair_id": null
+        }
+      },
+      "execution_id": "run-independent_review_or_test_handoff-B-003",
+      "policy_version": "normal-observation-v1",
+      "protocol_version": "af18-calibration-protocol-v1",
+      "provenance": {
+        "captured_at": "2026-07-30T02:54:40Z",
+        "collection_method": "codex_jsonl_export",
+        "evidence_anchor": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "observation_kind": "counterfactual",
+        "source": "declared-counterfactual"
+      },
+      "quality": {
+        "passed": true,
+        "reason": "pilot route completed"
+      },
+      "remaining_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "resources": {
+        "cached_input_tokens": {
+          "availability": "unavailable",
+          "observation_id": "cached_input_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        },
+        "callback_count": {
+          "availability": "unavailable",
+          "observation_id": "callback_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "compact_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "compact_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "context_age_hours": {
+          "availability": "unavailable",
+          "observation_id": "context_age_hours-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "hours",
+          "value": null
+        },
+        "cumulative_resource_tokens": {
+          "availability": "unavailable",
+          "observation_id": "cumulative_resource_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        },
+        "elapsed_seconds": {
+          "availability": "unavailable",
+          "observation_id": "elapsed_seconds-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "seconds",
+          "value": null
+        },
+        "full_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "full_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "input_tokens": {
+          "availability": "unavailable",
+          "observation_id": "input_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        },
+        "output_tokens": {
+          "availability": "unavailable",
+          "observation_id": "output_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        },
+        "packet_bytes": {
+          "availability": "unavailable",
+          "observation_id": "packet_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "reasoning_tokens": {
+          "availability": "unavailable",
+          "observation_id": "reasoning_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        },
+        "recovery_count": {
+          "availability": "unavailable",
+          "observation_id": "recovery_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "retry_count": {
+          "availability": "unavailable",
+          "observation_id": "retry_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "tool_output_bytes": {
+          "availability": "unavailable",
+          "observation_id": "tool_output_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "total_context_tokens": {
+          "availability": "unavailable",
+          "observation_id": "total_context_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        }
+      },
+      "root_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "sample_id": "independent_review_or_test_handoff-B-003",
+      "scenario": {
+        "actual_role_route": "Implementer",
+        "anchor_type": "issue-comment",
+        "canonical_allowed_tools": [
+          "codex"
+        ],
+        "complexity": "small",
+        "measurement_window": {
+          "definition": "execution-to-terminal",
+          "fixed_execution_window": true
+        },
+        "model_class": "gpt-5.5-medium",
+        "objective_or_acceptance_fixture_id": "real-independent_review_or_test_handoff-v1",
+        "quality_rubric_version": "v1",
+        "risk": "low",
+        "root_budget_unit": "tokens",
+        "route_family": "real-route-family-v1",
+        "scenario_id": "independent_review_or_test_handoff",
+        "scenario_variant": "real-pilot-v1"
+      },
+      "task_class": "independent_review_or_test_handoff",
+      "terminal_state": "completed",
+      "variant": "B",
+      "variant_declaration": {
+        "route_kind": "counterfactual"
+      },
+      "work_id": "work-independent_review_or_test_handoff-B-003"
+    },
+    {
+      "anchors": {
+        "context": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "execution": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "work": "https://github.com/farmerhunter/agent-foundry/issues/457"
+      },
+      "attention": {
+        "acknowledgement": {
+          "availability": "unavailable",
+          "value": null
+        },
+        "category": null,
+        "outcome": "not_required",
+        "pairing": {
+          "evidence_anchor": null,
+          "pair_id": null
+        }
+      },
+      "execution_id": "run-independent_review_or_test_handoff-C-003",
+      "policy_version": "normal-observation-v1",
+      "protocol_version": "af18-calibration-protocol-v1",
+      "provenance": {
+        "captured_at": "2026-07-30T02:55:15Z",
+        "collection_method": "codex_jsonl_export",
+        "evidence_anchor": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "observation_kind": "observed",
+        "source": "codex_jsonl_export"
+      },
+      "quality": {
+        "passed": true,
+        "reason": "pilot route completed"
+      },
+      "remaining_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "resources": {
+        "cached_input_tokens": {
+          "availability": "observed",
+          "observation_id": "cached_input_tokens-run-independent_review_or_test_handoff-C-003",
+          "observed_at": "2026-07-30T02:55:15Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 33536
+        },
+        "callback_count": {
+          "availability": "observed",
+          "observation_id": "callback-run-independent_review_or_test_handoff-C-003",
+          "observed_at": "2026-07-30T02:55:15Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 1
+        },
+        "compact_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "compact_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "context_age_hours": {
+          "availability": "unavailable",
+          "observation_id": "context_age_hours-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "hours",
+          "value": null
+        },
+        "cumulative_resource_tokens": {
+          "availability": "observed",
+          "derived_total_component_ids": [
+            "input_tokens-run-independent_review_or_test_handoff-C-003",
+            "output_tokens-run-independent_review_or_test_handoff-C-003"
+          ],
+          "invocation_ids": [
+            "run-independent_review_or_test_handoff-C-003-turn-1",
+            "run-independent_review_or_test_handoff-C-003-turn-2"
+          ],
+          "observation_basis": "derived",
+          "observation_id": "cumulative-run-independent_review_or_test_handoff-C-003",
+          "observed_at": "2026-07-30T02:55:15Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 35684
+        },
+        "elapsed_seconds": {
+          "availability": "observed",
+          "observation_id": "elapsed-run-independent_review_or_test_handoff-C-003",
+          "observed_at": "2026-07-30T02:55:15Z",
+          "source": "host_collection",
+          "unit": "seconds",
+          "value": 34.559
+        },
+        "full_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "full_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "input_tokens": {
+          "availability": "observed",
+          "observation_id": "input_tokens-run-independent_review_or_test_handoff-C-003",
+          "observed_at": "2026-07-30T02:55:15Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 35370
+        },
+        "output_tokens": {
+          "availability": "observed",
+          "observation_id": "output_tokens-run-independent_review_or_test_handoff-C-003",
+          "observed_at": "2026-07-30T02:55:15Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 314
+        },
+        "packet_bytes": {
+          "availability": "unavailable",
+          "observation_id": "packet_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "reasoning_tokens": {
+          "availability": "observed",
+          "observation_id": "reasoning_tokens-run-independent_review_or_test_handoff-C-003",
+          "observed_at": "2026-07-30T02:55:15Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 114
+        },
+        "recovery_count": {
+          "availability": "observed",
+          "observation_id": "recovery-run-independent_review_or_test_handoff-C-003",
+          "observed_at": "2026-07-30T02:55:15Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 0
+        },
+        "retry_count": {
+          "availability": "observed",
+          "observation_id": "retry-run-independent_review_or_test_handoff-C-003",
+          "observed_at": "2026-07-30T02:55:15Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 0
+        },
+        "tool_output_bytes": {
+          "availability": "unavailable",
+          "observation_id": "tool_output_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "total_context_tokens": {
+          "availability": "unavailable",
+          "observation_id": "total_context_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        }
+      },
+      "root_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "sample_id": "independent_review_or_test_handoff-C-003",
+      "scenario": {
+        "actual_role_route": "Implementer>Tester",
+        "anchor_type": "issue-comment",
+        "canonical_allowed_tools": [
+          "codex"
+        ],
+        "complexity": "small",
+        "measurement_window": {
+          "definition": "execution-to-terminal",
+          "fixed_execution_window": true
+        },
+        "model_class": "gpt-5.5-medium",
+        "objective_or_acceptance_fixture_id": "real-independent_review_or_test_handoff-v1",
+        "quality_rubric_version": "v1",
+        "risk": "low",
+        "root_budget_unit": "tokens",
+        "route_family": "real-route-family-v1",
+        "scenario_id": "independent_review_or_test_handoff",
+        "scenario_variant": "real-pilot-v1"
+      },
+      "task_class": "independent_review_or_test_handoff",
+      "terminal_state": "completed",
+      "variant": "C",
+      "variant_declaration": {
+        "route_kind": "observed_normal_route"
+      },
+      "work_id": "work-independent_review_or_test_handoff-C-003"
+    },
+    {
+      "anchors": {
+        "context": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "execution": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "work": "https://github.com/farmerhunter/agent-foundry/issues/457"
+      },
+      "attention": {
+        "acknowledgement": {
+          "availability": "unavailable",
+          "value": null
+        },
+        "category": null,
+        "outcome": "not_required",
+        "pairing": {
+          "evidence_anchor": null,
+          "pair_id": null
+        }
+      },
+      "execution_id": "run-independent_review_or_test_handoff-A-004",
+      "policy_version": "normal-observation-v1",
+      "protocol_version": "af18-calibration-protocol-v1",
+      "provenance": {
+        "captured_at": "2026-07-30T02:55:34Z",
+        "collection_method": "codex_jsonl_export",
+        "evidence_anchor": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "observation_kind": "observed",
+        "source": "codex_jsonl_export"
+      },
+      "quality": {
+        "passed": true,
+        "reason": "pilot route completed"
+      },
+      "remaining_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "resources": {
+        "cached_input_tokens": {
+          "availability": "observed",
+          "observation_id": "cached_input_tokens-run-independent_review_or_test_handoff-A-004",
+          "observed_at": "2026-07-30T02:55:34Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 14720
+        },
+        "callback_count": {
+          "availability": "observed",
+          "observation_id": "callback-run-independent_review_or_test_handoff-A-004",
+          "observed_at": "2026-07-30T02:55:34Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 0
+        },
+        "compact_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "compact_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "context_age_hours": {
+          "availability": "unavailable",
+          "observation_id": "context_age_hours-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "hours",
+          "value": null
+        },
+        "cumulative_resource_tokens": {
+          "availability": "observed",
+          "derived_total_component_ids": [
+            "input_tokens-run-independent_review_or_test_handoff-A-004",
+            "output_tokens-run-independent_review_or_test_handoff-A-004"
+          ],
+          "invocation_ids": [
+            "run-independent_review_or_test_handoff-A-004-turn-1"
+          ],
+          "observation_basis": "derived",
+          "observation_id": "cumulative-run-independent_review_or_test_handoff-A-004",
+          "observed_at": "2026-07-30T02:55:34Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 17736
+        },
+        "elapsed_seconds": {
+          "availability": "observed",
+          "observation_id": "elapsed-run-independent_review_or_test_handoff-A-004",
+          "observed_at": "2026-07-30T02:55:34Z",
+          "source": "host_collection",
+          "unit": "seconds",
+          "value": 18.902
+        },
+        "full_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "full_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "input_tokens": {
+          "availability": "observed",
+          "observation_id": "input_tokens-run-independent_review_or_test_handoff-A-004",
+          "observed_at": "2026-07-30T02:55:34Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 17638
+        },
+        "output_tokens": {
+          "availability": "observed",
+          "observation_id": "output_tokens-run-independent_review_or_test_handoff-A-004",
+          "observed_at": "2026-07-30T02:55:34Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 98
+        },
+        "packet_bytes": {
+          "availability": "unavailable",
+          "observation_id": "packet_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "reasoning_tokens": {
+          "availability": "observed",
+          "observation_id": "reasoning_tokens-run-independent_review_or_test_handoff-A-004",
+          "observed_at": "2026-07-30T02:55:34Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 20
+        },
+        "recovery_count": {
+          "availability": "observed",
+          "observation_id": "recovery-run-independent_review_or_test_handoff-A-004",
+          "observed_at": "2026-07-30T02:55:34Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 0
+        },
+        "retry_count": {
+          "availability": "observed",
+          "observation_id": "retry-run-independent_review_or_test_handoff-A-004",
+          "observed_at": "2026-07-30T02:55:34Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 0
+        },
+        "tool_output_bytes": {
+          "availability": "unavailable",
+          "observation_id": "tool_output_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "total_context_tokens": {
+          "availability": "unavailable",
+          "observation_id": "total_context_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        }
+      },
+      "root_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "sample_id": "independent_review_or_test_handoff-A-004",
+      "scenario": {
+        "actual_role_route": "Implementer",
+        "anchor_type": "issue-comment",
+        "canonical_allowed_tools": [
+          "codex"
+        ],
+        "complexity": "small",
+        "measurement_window": {
+          "definition": "execution-to-terminal",
+          "fixed_execution_window": true
+        },
+        "model_class": "gpt-5.5-medium",
+        "objective_or_acceptance_fixture_id": "real-independent_review_or_test_handoff-v1",
+        "quality_rubric_version": "v1",
+        "risk": "low",
+        "root_budget_unit": "tokens",
+        "route_family": "real-route-family-v1",
+        "scenario_id": "independent_review_or_test_handoff",
+        "scenario_variant": "real-pilot-v1"
+      },
+      "task_class": "independent_review_or_test_handoff",
+      "terminal_state": "completed",
+      "variant": "A",
+      "variant_declaration": {
+        "route_kind": "observed_normal_route"
+      },
+      "work_id": "work-independent_review_or_test_handoff-A-004"
+    },
+    {
+      "anchors": {
+        "context": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "execution": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "work": "https://github.com/farmerhunter/agent-foundry/issues/457"
+      },
+      "attention": {
+        "acknowledgement": {
+          "availability": "unavailable",
+          "value": null
+        },
+        "category": null,
+        "outcome": "not_required",
+        "pairing": {
+          "evidence_anchor": null,
+          "pair_id": null
+        }
+      },
+      "execution_id": "run-independent_review_or_test_handoff-B-004",
+      "policy_version": "normal-observation-v1",
+      "protocol_version": "af18-calibration-protocol-v1",
+      "provenance": {
+        "captured_at": "2026-07-30T02:55:34Z",
+        "collection_method": "codex_jsonl_export",
+        "evidence_anchor": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "observation_kind": "counterfactual",
+        "source": "declared-counterfactual"
+      },
+      "quality": {
+        "passed": true,
+        "reason": "pilot route completed"
+      },
+      "remaining_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "resources": {
+        "cached_input_tokens": {
+          "availability": "unavailable",
+          "observation_id": "cached_input_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        },
+        "callback_count": {
+          "availability": "unavailable",
+          "observation_id": "callback_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "compact_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "compact_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "context_age_hours": {
+          "availability": "unavailable",
+          "observation_id": "context_age_hours-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "hours",
+          "value": null
+        },
+        "cumulative_resource_tokens": {
+          "availability": "unavailable",
+          "observation_id": "cumulative_resource_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        },
+        "elapsed_seconds": {
+          "availability": "unavailable",
+          "observation_id": "elapsed_seconds-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "seconds",
+          "value": null
+        },
+        "full_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "full_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "input_tokens": {
+          "availability": "unavailable",
+          "observation_id": "input_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        },
+        "output_tokens": {
+          "availability": "unavailable",
+          "observation_id": "output_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        },
+        "packet_bytes": {
+          "availability": "unavailable",
+          "observation_id": "packet_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "reasoning_tokens": {
+          "availability": "unavailable",
+          "observation_id": "reasoning_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        },
+        "recovery_count": {
+          "availability": "unavailable",
+          "observation_id": "recovery_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "retry_count": {
+          "availability": "unavailable",
+          "observation_id": "retry_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "tool_output_bytes": {
+          "availability": "unavailable",
+          "observation_id": "tool_output_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "total_context_tokens": {
+          "availability": "unavailable",
+          "observation_id": "total_context_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        }
+      },
+      "root_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "sample_id": "independent_review_or_test_handoff-B-004",
+      "scenario": {
+        "actual_role_route": "Implementer",
+        "anchor_type": "issue-comment",
+        "canonical_allowed_tools": [
+          "codex"
+        ],
+        "complexity": "small",
+        "measurement_window": {
+          "definition": "execution-to-terminal",
+          "fixed_execution_window": true
+        },
+        "model_class": "gpt-5.5-medium",
+        "objective_or_acceptance_fixture_id": "real-independent_review_or_test_handoff-v1",
+        "quality_rubric_version": "v1",
+        "risk": "low",
+        "root_budget_unit": "tokens",
+        "route_family": "real-route-family-v1",
+        "scenario_id": "independent_review_or_test_handoff",
+        "scenario_variant": "real-pilot-v1"
+      },
+      "task_class": "independent_review_or_test_handoff",
+      "terminal_state": "completed",
+      "variant": "B",
+      "variant_declaration": {
+        "route_kind": "counterfactual"
+      },
+      "work_id": "work-independent_review_or_test_handoff-B-004"
+    },
+    {
+      "anchors": {
+        "context": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "execution": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "work": "https://github.com/farmerhunter/agent-foundry/issues/457"
+      },
+      "attention": {
+        "acknowledgement": {
+          "availability": "unavailable",
+          "value": null
+        },
+        "category": null,
+        "outcome": "not_required",
+        "pairing": {
+          "evidence_anchor": null,
+          "pair_id": null
+        }
+      },
+      "execution_id": "run-independent_review_or_test_handoff-C-004",
+      "policy_version": "normal-observation-v1",
+      "protocol_version": "af18-calibration-protocol-v1",
+      "provenance": {
+        "captured_at": "2026-07-30T02:56:08Z",
+        "collection_method": "codex_jsonl_export",
+        "evidence_anchor": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "observation_kind": "observed",
+        "source": "codex_jsonl_export"
+      },
+      "quality": {
+        "passed": true,
+        "reason": "pilot route completed"
+      },
+      "remaining_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "resources": {
+        "cached_input_tokens": {
+          "availability": "observed",
+          "observation_id": "cached_input_tokens-run-independent_review_or_test_handoff-C-004",
+          "observed_at": "2026-07-30T02:56:08Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 33536
+        },
+        "callback_count": {
+          "availability": "observed",
+          "observation_id": "callback-run-independent_review_or_test_handoff-C-004",
+          "observed_at": "2026-07-30T02:56:08Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 1
+        },
+        "compact_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "compact_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "context_age_hours": {
+          "availability": "unavailable",
+          "observation_id": "context_age_hours-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "hours",
+          "value": null
+        },
+        "cumulative_resource_tokens": {
+          "availability": "observed",
+          "derived_total_component_ids": [
+            "input_tokens-run-independent_review_or_test_handoff-C-004",
+            "output_tokens-run-independent_review_or_test_handoff-C-004"
+          ],
+          "invocation_ids": [
+            "run-independent_review_or_test_handoff-C-004-turn-1",
+            "run-independent_review_or_test_handoff-C-004-turn-2"
+          ],
+          "observation_basis": "derived",
+          "observation_id": "cumulative-run-independent_review_or_test_handoff-C-004",
+          "observed_at": "2026-07-30T02:56:08Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 35606
+        },
+        "elapsed_seconds": {
+          "availability": "observed",
+          "observation_id": "elapsed-run-independent_review_or_test_handoff-C-004",
+          "observed_at": "2026-07-30T02:56:08Z",
+          "source": "host_collection",
+          "unit": "seconds",
+          "value": 34.504999999999995
+        },
+        "full_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "full_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "input_tokens": {
+          "availability": "observed",
+          "observation_id": "input_tokens-run-independent_review_or_test_handoff-C-004",
+          "observed_at": "2026-07-30T02:56:08Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 35342
+        },
+        "output_tokens": {
+          "availability": "observed",
+          "observation_id": "output_tokens-run-independent_review_or_test_handoff-C-004",
+          "observed_at": "2026-07-30T02:56:08Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 264
+        },
+        "packet_bytes": {
+          "availability": "unavailable",
+          "observation_id": "packet_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "reasoning_tokens": {
+          "availability": "observed",
+          "observation_id": "reasoning_tokens-run-independent_review_or_test_handoff-C-004",
+          "observed_at": "2026-07-30T02:56:08Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 98
+        },
+        "recovery_count": {
+          "availability": "observed",
+          "observation_id": "recovery-run-independent_review_or_test_handoff-C-004",
+          "observed_at": "2026-07-30T02:56:08Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 0
+        },
+        "retry_count": {
+          "availability": "observed",
+          "observation_id": "retry-run-independent_review_or_test_handoff-C-004",
+          "observed_at": "2026-07-30T02:56:08Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 0
+        },
+        "tool_output_bytes": {
+          "availability": "unavailable",
+          "observation_id": "tool_output_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "total_context_tokens": {
+          "availability": "unavailable",
+          "observation_id": "total_context_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        }
+      },
+      "root_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "sample_id": "independent_review_or_test_handoff-C-004",
+      "scenario": {
+        "actual_role_route": "Implementer>Tester",
+        "anchor_type": "issue-comment",
+        "canonical_allowed_tools": [
+          "codex"
+        ],
+        "complexity": "small",
+        "measurement_window": {
+          "definition": "execution-to-terminal",
+          "fixed_execution_window": true
+        },
+        "model_class": "gpt-5.5-medium",
+        "objective_or_acceptance_fixture_id": "real-independent_review_or_test_handoff-v1",
+        "quality_rubric_version": "v1",
+        "risk": "low",
+        "root_budget_unit": "tokens",
+        "route_family": "real-route-family-v1",
+        "scenario_id": "independent_review_or_test_handoff",
+        "scenario_variant": "real-pilot-v1"
+      },
+      "task_class": "independent_review_or_test_handoff",
+      "terminal_state": "completed",
+      "variant": "C",
+      "variant_declaration": {
+        "route_kind": "observed_normal_route"
+      },
+      "work_id": "work-independent_review_or_test_handoff-C-004"
+    }
+  ],
+  "schema_version": 1
+}
