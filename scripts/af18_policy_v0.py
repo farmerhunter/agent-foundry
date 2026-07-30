@@ -13,9 +13,14 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_POLICY = ROOT / "policies" / "af18-policy-v0.yaml"
 PROFILE_NAMES = {"economy", "normal", "performance"}
-MODEL_RANK = {"gpt-5.5": 55, "gpt-5.6-luna": 56, "gpt-5.6-terra": 56}
-REASONING_RANK = {"low": 1, "medium": 2, "high": 3}
-PRIVATE_KEYS = {"prompt", "body", "transcript", "secret", "token", "native_provider_id", "provider_id"}
+LOGICAL_MODELS = {"cost_optimized", "general", "high_capability"}
+REASONING_TIERS = {"low", "medium"}
+PROFILE_MAPPING = {
+    "economy": ("cost_optimized", "low", "gpt-5.6-luna"),
+    "normal": ("general", "medium", "gpt-5.6-terra"),
+    "performance": ("high_capability", "medium", "gpt-5.6-sol"),
+}
+PERMITTED_OVERRIDES = {("cost_optimized", "medium"), ("general", "low")}
 
 
 class PolicyError(ValueError):
@@ -40,16 +45,31 @@ def validate_policy(policy: dict[str, Any]) -> None:
     profiles = policy.get("profiles")
     if not isinstance(profiles, dict) or set(profiles) != PROFILE_NAMES:
         raise PolicyError("policy profiles must be exactly economy, normal, performance")
-    required = {"logical_model", "reasoning", "context_tokens", "context_age_hours", "context_turns", "work_ceiling_tokens"}
+    required = {"logical_model", "reasoning", "adapter_mapping", "context_tokens", "context_age_hours", "context_turns", "work_ceiling_tokens"}
     for name, profile in profiles.items():
         if not isinstance(profile, dict) or not required.issubset(profile):
             raise PolicyError(f"malformed profile: {name}")
-        if profile["logical_model"] not in MODEL_RANK or profile["reasoning"] not in REASONING_RANK:
+        adapter_mapping = profile.get("adapter_mapping")
+        mapping = adapter_mapping.get("codex") if isinstance(adapter_mapping, dict) else None
+        if not isinstance(mapping, dict):
+            raise PolicyError(f"malformed adapter mapping: {name}")
+        if (profile["logical_model"], profile["reasoning"], mapping.get("model_id")) != PROFILE_MAPPING[name]:
             raise PolicyError(f"unsupported profile envelope: {name}")
-        if any(not isinstance(profile[field], int) or profile[field] <= 0 for field in required - {"logical_model", "reasoning"}):
+        if any(not isinstance(profile[field], int) or profile[field] <= 0 for field in required - {"logical_model", "reasoning", "adapter_mapping"}):
             raise PolicyError(f"invalid profile limits: {name}")
+    overrides = policy.get("controlled_overrides")
+    override_mappings = {
+        (item.get("logical_model"), item.get("reasoning"), item.get("adapter_mapping", {}).get("codex", {}).get("model_id"))
+        for item in overrides.values() if isinstance(item, dict) and isinstance(item.get("adapter_mapping"), dict) and isinstance(item["adapter_mapping"].get("codex"), dict)
+    } if isinstance(overrides, dict) else set()
+    if not isinstance(overrides, dict) or override_mappings != {("cost_optimized", "medium", "gpt-5.6-luna"), ("general", "low", "gpt-5.6-terra")} or not all(isinstance(item, dict) and item.get("requires_work_reason") is True for item in overrides.values()):
+        raise PolicyError("malformed controlled overrides")
+    baseline = policy.get("migration_ab_baseline", {})
+    baseline_mapping = baseline.get("adapter_mapping") if isinstance(baseline, dict) else None
+    if not isinstance(baseline_mapping, dict) or not isinstance(baseline_mapping.get("codex"), dict) or baseline_mapping["codex"].get("model_id") != "gpt-5.5" or baseline.get("default_route") is not False or baseline.get("requires_explicit_migration_or_ab_contract") is not True:
+        raise PolicyError("malformed migration or A-B baseline")
     safety = policy.get("safety")
-    if not isinstance(safety, dict) or safety.get("model_ceiling") != "gpt-5.5" or safety.get("reasoning_ceiling") != "medium":
+    if not isinstance(safety, dict) or safety.get("unlisted_model_or_effort") != "human_approval_required":
         raise PolicyError("malformed safety ceiling")
     low_limit = policy.get("compatibility", {}).get("low_limit")
     if not isinstance(low_limit, dict) or low_limit.get("status") != "emergency_only" or low_limit.get("normal_path_cap") is not False:
@@ -66,15 +86,8 @@ def control(value: Any, inherited: Any, provenance: str) -> dict[str, Any]:
     return {"state": "explicit", "value": value, "provenance": provenance}
 
 
-def complete_human_approval(approval: Any, work_id: Any) -> bool:
-    if not isinstance(approval, dict):
-        return False
-    required = ("issue", "role", "model", "reasoning", "reason", "expiry")
-    return approval.get("work_id") == work_id and all(approval.get(field) not in (None, "", [], {}) for field in required)
-
-
-def request_exceeds_ceiling(model: str, reasoning: str) -> bool:
-    return MODEL_RANK.get(model, 999) > MODEL_RANK["gpt-5.5"] or REASONING_RANK.get(reasoning, 999) > REASONING_RANK["medium"]
+def nonempty_reason(value: Any) -> bool:
+    return isinstance(value, str) and bool(value.strip())
 
 
 def effective_snapshot(policy: dict[str, Any], work: dict[str, Any]) -> dict[str, Any]:
@@ -102,7 +115,7 @@ def effective_snapshot(policy: dict[str, Any], work: dict[str, Any]) -> dict[str
         return hold_snapshot(policy, work_id, ["requested_envelope_unavailable"], {"profile": profile_control, "logical_model": model, "reasoning": reasoning, "context_tokens": context})
     stops: list[str] = []
     envelope_valid = isinstance(model["value"], str) and isinstance(reasoning["value"], str) and isinstance(context["value"], int) and context["value"] > 0
-    if not envelope_valid or model["value"] not in MODEL_RANK or reasoning["value"] not in REASONING_RANK:
+    if not envelope_valid or model["value"] not in LOGICAL_MODELS or reasoning["value"] not in REASONING_TIERS:
         stops.append("malformed_requested_envelope")
     if isinstance(context["value"], int) and context["value"] > profile["context_tokens"]:
         stops.append("context_exceeds_selected_profile")
@@ -116,13 +129,25 @@ def effective_snapshot(policy: dict[str, Any], work: dict[str, Any]) -> dict[str
         stops.append("risk_not_confirmed")
     if safety.get("privacy_compliant") is not True:
         stops.append("privacy_not_confirmed")
-    if envelope_valid and request_exceeds_ceiling(model["value"], reasoning["value"]) and not complete_human_approval(work.get("human_escalation_approval"), work_id):
-        stops.append("human_approval_required_for_model_or_reasoning_escalation")
+    selected_pair = (profile["logical_model"], profile["reasoning"])
+    requested_pair = (model["value"], reasoning["value"])
+    override_reason = work.get("override_reason")
+    if envelope_valid and requested_pair != selected_pair:
+        if requested_pair not in PERMITTED_OVERRIDES or not nonempty_reason(override_reason):
+            stops.append("human_attention_required_for_unlisted_model_or_effort")
     controls = {"profile": profile_control, "logical_model": model, "reasoning": reasoning, "context_tokens": context}
     output = hold_snapshot(policy, work_id, stops, controls)
     output["effective_work_cap_tokens"] = min(root_budget, profile["work_ceiling_tokens"])
     output["root_budget_tokens"] = root_budget
     output["profile_ceiling_tokens"] = profile["work_ceiling_tokens"]
+    adapter_model = profile["adapter_mapping"]["codex"]["model_id"]
+    if envelope_valid and requested_pair in PERMITTED_OVERRIDES:
+        for override in policy["controlled_overrides"].values():
+            if (override["logical_model"], override["reasoning"]) == requested_pair:
+                adapter_model = override["adapter_mapping"]["codex"]["model_id"]
+                break
+    output["adapter_metadata"] = {"adapter": "codex", "model_id": adapter_model}
+    output["override_reason"] = override_reason if requested_pair in PERMITTED_OVERRIDES and nonempty_reason(override_reason) else None
     return output
 
 
@@ -137,6 +162,8 @@ def human_readout(snapshot: dict[str, Any]) -> dict[str, Any]:
         "work_id": snapshot["work_id"],
         "profile": controls.get("profile"),
         "effective_envelope": {key: controls.get(key) for key in ("logical_model", "reasoning", "context_tokens")},
+        "adapter_mapping": snapshot.get("adapter_metadata"),
+        "override_reason": snapshot.get("override_reason"),
         "effective_work_cap_tokens": snapshot.get("effective_work_cap_tokens"),
         "decision": snapshot["route_decision"],
         "why": snapshot["stop_conditions"] or ["Selected profile and stricter controls are satisfied."],

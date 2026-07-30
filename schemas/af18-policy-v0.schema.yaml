@@ -8,9 +8,11 @@ rules:
   - "effective_work_cap_tokens is min(root_budget_tokens, selected profile work_ceiling_tokens)"
   - "higher safety, risk, privacy, and allowlist restrictions prevail"
   - "logical model classes are Core values; native provider identifiers belong only in adapter metadata"
-  - "a request above gpt-5.5 medium requires a complete explicit Human approval"
+  - "Core canonical logical models are cost_optimized, general, and high_capability; Codex model IDs are adapter mapping metadata"
+  - "only cost_optimized/medium and general/low are permitted Work-reasoned overrides; all other model or effort requests hold for Human attention"
+  - "gpt-5.5/medium is migration or A-B baseline metadata only and never a default route"
   - "low_limit is an emergency-only compatibility override and is not a policy-v0 normal-path profile"
   - "each effective-control snapshot records explicit, inherits, or unavailable with provenance"
 forbidden:
   - "runtime, adapter, dispatch, config, hook, Vault, generated, ledger, or external-action mutation"
-  - "prompt, body, transcript, secret, token, or native provider identifier in Human readout"
+  - "prompt, body, transcript, secret, or token content in Human readout"
