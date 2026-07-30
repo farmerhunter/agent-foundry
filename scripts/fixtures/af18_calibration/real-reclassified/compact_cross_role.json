@@ -1,0 +1,3092 @@
+{
+  "collection_mode": "codex_jsonl_export",
+  "protocol_version": "af18-calibration-protocol-v1",
+  "samples": [
+    {
+      "anchors": {
+        "context": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "execution": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "work": "https://github.com/farmerhunter/agent-foundry/issues/457"
+      },
+      "attention": {
+        "acknowledgement": {
+          "availability": "unavailable",
+          "value": null
+        },
+        "category": null,
+        "outcome": "not_required",
+        "pairing": {
+          "evidence_anchor": null,
+          "pair_id": null
+        }
+      },
+      "execution_id": "run-compact_cross_role-A-000",
+      "policy_version": "normal-observation-v1",
+      "protocol_version": "af18-calibration-protocol-v1",
+      "provenance": {
+        "captured_at": "2026-07-30T02:30:24Z",
+        "collection_method": "codex_jsonl_export",
+        "evidence_anchor": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "observation_kind": "observed",
+        "source": "codex_jsonl_export"
+      },
+      "quality": {
+        "passed": true,
+        "reason": "pilot route completed"
+      },
+      "remaining_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "resources": {
+        "cached_input_tokens": {
+          "availability": "observed",
+          "observation_id": "cached_input_tokens-run-compact_cross_role-A-000",
+          "observed_at": "2026-07-30T02:30:24Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 14720
+        },
+        "callback_count": {
+          "availability": "observed",
+          "observation_id": "callback-run-compact_cross_role-A-000",
+          "observed_at": "2026-07-30T02:30:24Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 0
+        },
+        "compact_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "compact_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "context_age_hours": {
+          "availability": "unavailable",
+          "observation_id": "context_age_hours-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "hours",
+          "value": null
+        },
+        "cumulative_resource_tokens": {
+          "availability": "observed",
+          "derived_total_component_ids": [
+            "input_tokens-run-compact_cross_role-A-000",
+            "output_tokens-run-compact_cross_role-A-000"
+          ],
+          "invocation_ids": [
+            "run-compact_cross_role-A-000-turn-1"
+          ],
+          "observation_basis": "derived",
+          "observation_id": "cumulative-run-compact_cross_role-A-000",
+          "observed_at": "2026-07-30T02:30:24Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 17754
+        },
+        "elapsed_seconds": {
+          "availability": "observed",
+          "observation_id": "elapsed-run-compact_cross_role-A-000",
+          "observed_at": "2026-07-30T02:30:24Z",
+          "source": "host_collection",
+          "unit": "seconds",
+          "value": 15.796
+        },
+        "full_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "full_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "input_tokens": {
+          "availability": "observed",
+          "observation_id": "input_tokens-run-compact_cross_role-A-000",
+          "observed_at": "2026-07-30T02:30:24Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 17635
+        },
+        "output_tokens": {
+          "availability": "observed",
+          "observation_id": "output_tokens-run-compact_cross_role-A-000",
+          "observed_at": "2026-07-30T02:30:24Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 119
+        },
+        "packet_bytes": {
+          "availability": "unavailable",
+          "observation_id": "packet_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "reasoning_tokens": {
+          "availability": "observed",
+          "observation_id": "reasoning_tokens-run-compact_cross_role-A-000",
+          "observed_at": "2026-07-30T02:30:24Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 26
+        },
+        "recovery_count": {
+          "availability": "observed",
+          "observation_id": "recovery-run-compact_cross_role-A-000",
+          "observed_at": "2026-07-30T02:30:24Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 0
+        },
+        "retry_count": {
+          "availability": "observed",
+          "observation_id": "retry-run-compact_cross_role-A-000",
+          "observed_at": "2026-07-30T02:30:24Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 0
+        },
+        "tool_output_bytes": {
+          "availability": "unavailable",
+          "observation_id": "tool_output_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "total_context_tokens": {
+          "availability": "unavailable",
+          "observation_id": "total_context_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        }
+      },
+      "root_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "sample_id": "compact_cross_role-A-000",
+      "scenario": {
+        "actual_role_route": "Implementer",
+        "anchor_type": "issue-comment",
+        "canonical_allowed_tools": [
+          "codex"
+        ],
+        "complexity": "small",
+        "measurement_window": {
+          "definition": "execution-to-terminal",
+          "fixed_execution_window": true
+        },
+        "model_class": "gpt-5.5-medium",
+        "objective_or_acceptance_fixture_id": "real-compact_cross_role-v1",
+        "quality_rubric_version": "v1",
+        "risk": "low",
+        "root_budget_unit": "tokens",
+        "route_family": "real-route-family-v1",
+        "scenario_id": "compact_cross_role",
+        "scenario_variant": "real-pilot-v1"
+      },
+      "task_class": "compact_cross_role",
+      "terminal_state": "completed",
+      "variant": "A",
+      "variant_declaration": {
+        "route_kind": "observed_normal_route"
+      },
+      "work_id": "work-compact_cross_role-A-000"
+    },
+    {
+      "anchors": {
+        "context": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "execution": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "work": "https://github.com/farmerhunter/agent-foundry/issues/457"
+      },
+      "attention": {
+        "acknowledgement": {
+          "availability": "unavailable",
+          "value": null
+        },
+        "category": null,
+        "outcome": "not_required",
+        "pairing": {
+          "evidence_anchor": null,
+          "pair_id": null
+        }
+      },
+      "execution_id": "run-compact_cross_role-B-000",
+      "policy_version": "normal-observation-v1",
+      "protocol_version": "af18-calibration-protocol-v1",
+      "provenance": {
+        "captured_at": "2026-07-30T02:30:24Z",
+        "collection_method": "codex_jsonl_export",
+        "evidence_anchor": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "observation_kind": "counterfactual",
+        "source": "declared-counterfactual"
+      },
+      "quality": {
+        "passed": true,
+        "reason": "pilot route completed"
+      },
+      "remaining_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "resources": {
+        "cached_input_tokens": {
+          "availability": "unavailable",
+          "observation_id": "cached_input_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        },
+        "callback_count": {
+          "availability": "unavailable",
+          "observation_id": "callback_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "compact_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "compact_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "context_age_hours": {
+          "availability": "unavailable",
+          "observation_id": "context_age_hours-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "hours",
+          "value": null
+        },
+        "cumulative_resource_tokens": {
+          "availability": "unavailable",
+          "observation_id": "cumulative_resource_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        },
+        "elapsed_seconds": {
+          "availability": "unavailable",
+          "observation_id": "elapsed_seconds-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "seconds",
+          "value": null
+        },
+        "full_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "full_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "input_tokens": {
+          "availability": "unavailable",
+          "observation_id": "input_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        },
+        "output_tokens": {
+          "availability": "unavailable",
+          "observation_id": "output_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        },
+        "packet_bytes": {
+          "availability": "unavailable",
+          "observation_id": "packet_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "reasoning_tokens": {
+          "availability": "unavailable",
+          "observation_id": "reasoning_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        },
+        "recovery_count": {
+          "availability": "unavailable",
+          "observation_id": "recovery_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "retry_count": {
+          "availability": "unavailable",
+          "observation_id": "retry_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "tool_output_bytes": {
+          "availability": "unavailable",
+          "observation_id": "tool_output_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "total_context_tokens": {
+          "availability": "unavailable",
+          "observation_id": "total_context_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        }
+      },
+      "root_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "sample_id": "compact_cross_role-B-000",
+      "scenario": {
+        "actual_role_route": "Implementer",
+        "anchor_type": "issue-comment",
+        "canonical_allowed_tools": [
+          "codex"
+        ],
+        "complexity": "small",
+        "measurement_window": {
+          "definition": "execution-to-terminal",
+          "fixed_execution_window": true
+        },
+        "model_class": "gpt-5.5-medium",
+        "objective_or_acceptance_fixture_id": "real-compact_cross_role-v1",
+        "quality_rubric_version": "v1",
+        "risk": "low",
+        "root_budget_unit": "tokens",
+        "route_family": "real-route-family-v1",
+        "scenario_id": "compact_cross_role",
+        "scenario_variant": "real-pilot-v1"
+      },
+      "task_class": "compact_cross_role",
+      "terminal_state": "completed",
+      "variant": "B",
+      "variant_declaration": {
+        "route_kind": "counterfactual"
+      },
+      "work_id": "work-compact_cross_role-B-000"
+    },
+    {
+      "anchors": {
+        "context": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "execution": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "work": "https://github.com/farmerhunter/agent-foundry/issues/457"
+      },
+      "attention": {
+        "acknowledgement": {
+          "availability": "unavailable",
+          "value": null
+        },
+        "category": null,
+        "outcome": "not_required",
+        "pairing": {
+          "evidence_anchor": null,
+          "pair_id": null
+        }
+      },
+      "execution_id": "run-compact_cross_role-C-000",
+      "policy_version": "normal-observation-v1",
+      "protocol_version": "af18-calibration-protocol-v1",
+      "provenance": {
+        "captured_at": "2026-07-30T02:30:56Z",
+        "collection_method": "codex_jsonl_export",
+        "evidence_anchor": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "observation_kind": "observed",
+        "source": "codex_jsonl_export"
+      },
+      "quality": {
+        "passed": true,
+        "reason": "pilot route completed"
+      },
+      "remaining_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "resources": {
+        "cached_input_tokens": {
+          "availability": "observed",
+          "observation_id": "cached_input_tokens-run-compact_cross_role-C-000",
+          "observed_at": "2026-07-30T02:30:56Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 33536
+        },
+        "callback_count": {
+          "availability": "observed",
+          "observation_id": "callback-run-compact_cross_role-C-000",
+          "observed_at": "2026-07-30T02:30:56Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 1
+        },
+        "compact_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "compact_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "context_age_hours": {
+          "availability": "unavailable",
+          "observation_id": "context_age_hours-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "hours",
+          "value": null
+        },
+        "cumulative_resource_tokens": {
+          "availability": "observed",
+          "derived_total_component_ids": [
+            "input_tokens-run-compact_cross_role-C-000",
+            "output_tokens-run-compact_cross_role-C-000"
+          ],
+          "invocation_ids": [
+            "run-compact_cross_role-C-000-turn-1",
+            "run-compact_cross_role-C-000-turn-2"
+          ],
+          "observation_basis": "derived",
+          "observation_id": "cumulative-run-compact_cross_role-C-000",
+          "observed_at": "2026-07-30T02:30:56Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 35518
+        },
+        "elapsed_seconds": {
+          "availability": "observed",
+          "observation_id": "elapsed-run-compact_cross_role-C-000",
+          "observed_at": "2026-07-30T02:30:56Z",
+          "source": "host_collection",
+          "unit": "seconds",
+          "value": 31.745
+        },
+        "full_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "full_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "input_tokens": {
+          "availability": "observed",
+          "observation_id": "input_tokens-run-compact_cross_role-C-000",
+          "observed_at": "2026-07-30T02:30:56Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 35324
+        },
+        "output_tokens": {
+          "availability": "observed",
+          "observation_id": "output_tokens-run-compact_cross_role-C-000",
+          "observed_at": "2026-07-30T02:30:56Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 194
+        },
+        "packet_bytes": {
+          "availability": "unavailable",
+          "observation_id": "packet_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "reasoning_tokens": {
+          "availability": "observed",
+          "observation_id": "reasoning_tokens-run-compact_cross_role-C-000",
+          "observed_at": "2026-07-30T02:30:56Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 62
+        },
+        "recovery_count": {
+          "availability": "observed",
+          "observation_id": "recovery-run-compact_cross_role-C-000",
+          "observed_at": "2026-07-30T02:30:56Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 0
+        },
+        "retry_count": {
+          "availability": "observed",
+          "observation_id": "retry-run-compact_cross_role-C-000",
+          "observed_at": "2026-07-30T02:30:56Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 0
+        },
+        "tool_output_bytes": {
+          "availability": "unavailable",
+          "observation_id": "tool_output_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "total_context_tokens": {
+          "availability": "unavailable",
+          "observation_id": "total_context_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        }
+      },
+      "root_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "sample_id": "compact_cross_role-C-000",
+      "scenario": {
+        "actual_role_route": "Coordinator>Reviewer",
+        "anchor_type": "issue-comment",
+        "canonical_allowed_tools": [
+          "codex"
+        ],
+        "complexity": "small",
+        "measurement_window": {
+          "definition": "execution-to-terminal",
+          "fixed_execution_window": true
+        },
+        "model_class": "gpt-5.5-medium",
+        "objective_or_acceptance_fixture_id": "real-compact_cross_role-v1",
+        "quality_rubric_version": "v1",
+        "risk": "low",
+        "root_budget_unit": "tokens",
+        "route_family": "real-route-family-v1",
+        "scenario_id": "compact_cross_role",
+        "scenario_variant": "real-pilot-v1"
+      },
+      "task_class": "compact_cross_role",
+      "terminal_state": "completed",
+      "variant": "C",
+      "variant_declaration": {
+        "route_kind": "observed_normal_route"
+      },
+      "work_id": "work-compact_cross_role-C-000"
+    },
+    {
+      "anchors": {
+        "context": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "execution": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "work": "https://github.com/farmerhunter/agent-foundry/issues/457"
+      },
+      "attention": {
+        "acknowledgement": {
+          "availability": "unavailable",
+          "value": null
+        },
+        "category": null,
+        "outcome": "not_required",
+        "pairing": {
+          "evidence_anchor": null,
+          "pair_id": null
+        }
+      },
+      "execution_id": "run-compact_cross_role-A-001",
+      "policy_version": "normal-observation-v1",
+      "protocol_version": "af18-calibration-protocol-v1",
+      "provenance": {
+        "captured_at": "2026-07-30T02:31:12Z",
+        "collection_method": "codex_jsonl_export",
+        "evidence_anchor": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "observation_kind": "observed",
+        "source": "codex_jsonl_export"
+      },
+      "quality": {
+        "passed": true,
+        "reason": "pilot route completed"
+      },
+      "remaining_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "resources": {
+        "cached_input_tokens": {
+          "availability": "observed",
+          "observation_id": "cached_input_tokens-run-compact_cross_role-A-001",
+          "observed_at": "2026-07-30T02:31:12Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 14720
+        },
+        "callback_count": {
+          "availability": "observed",
+          "observation_id": "callback-run-compact_cross_role-A-001",
+          "observed_at": "2026-07-30T02:31:12Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 0
+        },
+        "compact_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "compact_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "context_age_hours": {
+          "availability": "unavailable",
+          "observation_id": "context_age_hours-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "hours",
+          "value": null
+        },
+        "cumulative_resource_tokens": {
+          "availability": "observed",
+          "derived_total_component_ids": [
+            "input_tokens-run-compact_cross_role-A-001",
+            "output_tokens-run-compact_cross_role-A-001"
+          ],
+          "invocation_ids": [
+            "run-compact_cross_role-A-001-turn-1"
+          ],
+          "observation_basis": "derived",
+          "observation_id": "cumulative-run-compact_cross_role-A-001",
+          "observed_at": "2026-07-30T02:31:12Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 17517
+        },
+        "elapsed_seconds": {
+          "availability": "observed",
+          "observation_id": "elapsed-run-compact_cross_role-A-001",
+          "observed_at": "2026-07-30T02:31:12Z",
+          "source": "host_collection",
+          "unit": "seconds",
+          "value": 16.179
+        },
+        "full_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "full_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "input_tokens": {
+          "availability": "observed",
+          "observation_id": "input_tokens-run-compact_cross_role-A-001",
+          "observed_at": "2026-07-30T02:31:12Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 17412
+        },
+        "output_tokens": {
+          "availability": "observed",
+          "observation_id": "output_tokens-run-compact_cross_role-A-001",
+          "observed_at": "2026-07-30T02:31:12Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 105
+        },
+        "packet_bytes": {
+          "availability": "unavailable",
+          "observation_id": "packet_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "reasoning_tokens": {
+          "availability": "observed",
+          "observation_id": "reasoning_tokens-run-compact_cross_role-A-001",
+          "observed_at": "2026-07-30T02:31:12Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 34
+        },
+        "recovery_count": {
+          "availability": "observed",
+          "observation_id": "recovery-run-compact_cross_role-A-001",
+          "observed_at": "2026-07-30T02:31:12Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 0
+        },
+        "retry_count": {
+          "availability": "observed",
+          "observation_id": "retry-run-compact_cross_role-A-001",
+          "observed_at": "2026-07-30T02:31:12Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 0
+        },
+        "tool_output_bytes": {
+          "availability": "unavailable",
+          "observation_id": "tool_output_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "total_context_tokens": {
+          "availability": "unavailable",
+          "observation_id": "total_context_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        }
+      },
+      "root_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "sample_id": "compact_cross_role-A-001",
+      "scenario": {
+        "actual_role_route": "Implementer",
+        "anchor_type": "issue-comment",
+        "canonical_allowed_tools": [
+          "codex"
+        ],
+        "complexity": "small",
+        "measurement_window": {
+          "definition": "execution-to-terminal",
+          "fixed_execution_window": true
+        },
+        "model_class": "gpt-5.5-medium",
+        "objective_or_acceptance_fixture_id": "real-compact_cross_role-v1",
+        "quality_rubric_version": "v1",
+        "risk": "low",
+        "root_budget_unit": "tokens",
+        "route_family": "real-route-family-v1",
+        "scenario_id": "compact_cross_role",
+        "scenario_variant": "real-pilot-v1"
+      },
+      "task_class": "compact_cross_role",
+      "terminal_state": "completed",
+      "variant": "A",
+      "variant_declaration": {
+        "route_kind": "observed_normal_route"
+      },
+      "work_id": "work-compact_cross_role-A-001"
+    },
+    {
+      "anchors": {
+        "context": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "execution": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "work": "https://github.com/farmerhunter/agent-foundry/issues/457"
+      },
+      "attention": {
+        "acknowledgement": {
+          "availability": "unavailable",
+          "value": null
+        },
+        "category": null,
+        "outcome": "not_required",
+        "pairing": {
+          "evidence_anchor": null,
+          "pair_id": null
+        }
+      },
+      "execution_id": "run-compact_cross_role-B-001",
+      "policy_version": "normal-observation-v1",
+      "protocol_version": "af18-calibration-protocol-v1",
+      "provenance": {
+        "captured_at": "2026-07-30T02:31:12Z",
+        "collection_method": "codex_jsonl_export",
+        "evidence_anchor": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "observation_kind": "counterfactual",
+        "source": "declared-counterfactual"
+      },
+      "quality": {
+        "passed": true,
+        "reason": "pilot route completed"
+      },
+      "remaining_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "resources": {
+        "cached_input_tokens": {
+          "availability": "unavailable",
+          "observation_id": "cached_input_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        },
+        "callback_count": {
+          "availability": "unavailable",
+          "observation_id": "callback_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "compact_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "compact_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "context_age_hours": {
+          "availability": "unavailable",
+          "observation_id": "context_age_hours-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "hours",
+          "value": null
+        },
+        "cumulative_resource_tokens": {
+          "availability": "unavailable",
+          "observation_id": "cumulative_resource_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        },
+        "elapsed_seconds": {
+          "availability": "unavailable",
+          "observation_id": "elapsed_seconds-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "seconds",
+          "value": null
+        },
+        "full_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "full_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "input_tokens": {
+          "availability": "unavailable",
+          "observation_id": "input_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        },
+        "output_tokens": {
+          "availability": "unavailable",
+          "observation_id": "output_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        },
+        "packet_bytes": {
+          "availability": "unavailable",
+          "observation_id": "packet_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "reasoning_tokens": {
+          "availability": "unavailable",
+          "observation_id": "reasoning_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        },
+        "recovery_count": {
+          "availability": "unavailable",
+          "observation_id": "recovery_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "retry_count": {
+          "availability": "unavailable",
+          "observation_id": "retry_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "tool_output_bytes": {
+          "availability": "unavailable",
+          "observation_id": "tool_output_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "total_context_tokens": {
+          "availability": "unavailable",
+          "observation_id": "total_context_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        }
+      },
+      "root_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "sample_id": "compact_cross_role-B-001",
+      "scenario": {
+        "actual_role_route": "Implementer",
+        "anchor_type": "issue-comment",
+        "canonical_allowed_tools": [
+          "codex"
+        ],
+        "complexity": "small",
+        "measurement_window": {
+          "definition": "execution-to-terminal",
+          "fixed_execution_window": true
+        },
+        "model_class": "gpt-5.5-medium",
+        "objective_or_acceptance_fixture_id": "real-compact_cross_role-v1",
+        "quality_rubric_version": "v1",
+        "risk": "low",
+        "root_budget_unit": "tokens",
+        "route_family": "real-route-family-v1",
+        "scenario_id": "compact_cross_role",
+        "scenario_variant": "real-pilot-v1"
+      },
+      "task_class": "compact_cross_role",
+      "terminal_state": "completed",
+      "variant": "B",
+      "variant_declaration": {
+        "route_kind": "counterfactual"
+      },
+      "work_id": "work-compact_cross_role-B-001"
+    },
+    {
+      "anchors": {
+        "context": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "execution": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "work": "https://github.com/farmerhunter/agent-foundry/issues/457"
+      },
+      "attention": {
+        "acknowledgement": {
+          "availability": "unavailable",
+          "value": null
+        },
+        "category": null,
+        "outcome": "not_required",
+        "pairing": {
+          "evidence_anchor": null,
+          "pair_id": null
+        }
+      },
+      "execution_id": "run-compact_cross_role-C-001",
+      "policy_version": "normal-observation-v1",
+      "protocol_version": "af18-calibration-protocol-v1",
+      "provenance": {
+        "captured_at": "2026-07-30T02:31:54Z",
+        "collection_method": "codex_jsonl_export",
+        "evidence_anchor": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "observation_kind": "observed",
+        "source": "codex_jsonl_export"
+      },
+      "quality": {
+        "passed": true,
+        "reason": "pilot route completed"
+      },
+      "remaining_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "resources": {
+        "cached_input_tokens": {
+          "availability": "observed",
+          "observation_id": "cached_input_tokens-run-compact_cross_role-C-001",
+          "observed_at": "2026-07-30T02:31:54Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 33536
+        },
+        "callback_count": {
+          "availability": "observed",
+          "observation_id": "callback-run-compact_cross_role-C-001",
+          "observed_at": "2026-07-30T02:31:54Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 1
+        },
+        "compact_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "compact_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "context_age_hours": {
+          "availability": "unavailable",
+          "observation_id": "context_age_hours-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "hours",
+          "value": null
+        },
+        "cumulative_resource_tokens": {
+          "availability": "observed",
+          "derived_total_component_ids": [
+            "input_tokens-run-compact_cross_role-C-001",
+            "output_tokens-run-compact_cross_role-C-001"
+          ],
+          "invocation_ids": [
+            "run-compact_cross_role-C-001-turn-1",
+            "run-compact_cross_role-C-001-turn-2"
+          ],
+          "observation_basis": "derived",
+          "observation_id": "cumulative-run-compact_cross_role-C-001",
+          "observed_at": "2026-07-30T02:31:54Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 35655
+        },
+        "elapsed_seconds": {
+          "availability": "observed",
+          "observation_id": "elapsed-run-compact_cross_role-C-001",
+          "observed_at": "2026-07-30T02:31:54Z",
+          "source": "host_collection",
+          "unit": "seconds",
+          "value": 41.846000000000004
+        },
+        "full_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "full_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "input_tokens": {
+          "availability": "observed",
+          "observation_id": "input_tokens-run-compact_cross_role-C-001",
+          "observed_at": "2026-07-30T02:31:54Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 35348
+        },
+        "output_tokens": {
+          "availability": "observed",
+          "observation_id": "output_tokens-run-compact_cross_role-C-001",
+          "observed_at": "2026-07-30T02:31:54Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 307
+        },
+        "packet_bytes": {
+          "availability": "unavailable",
+          "observation_id": "packet_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "reasoning_tokens": {
+          "availability": "observed",
+          "observation_id": "reasoning_tokens-run-compact_cross_role-C-001",
+          "observed_at": "2026-07-30T02:31:54Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 126
+        },
+        "recovery_count": {
+          "availability": "observed",
+          "observation_id": "recovery-run-compact_cross_role-C-001",
+          "observed_at": "2026-07-30T02:31:54Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 0
+        },
+        "retry_count": {
+          "availability": "observed",
+          "observation_id": "retry-run-compact_cross_role-C-001",
+          "observed_at": "2026-07-30T02:31:54Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 0
+        },
+        "tool_output_bytes": {
+          "availability": "unavailable",
+          "observation_id": "tool_output_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "total_context_tokens": {
+          "availability": "unavailable",
+          "observation_id": "total_context_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        }
+      },
+      "root_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "sample_id": "compact_cross_role-C-001",
+      "scenario": {
+        "actual_role_route": "Coordinator>Reviewer",
+        "anchor_type": "issue-comment",
+        "canonical_allowed_tools": [
+          "codex"
+        ],
+        "complexity": "small",
+        "measurement_window": {
+          "definition": "execution-to-terminal",
+          "fixed_execution_window": true
+        },
+        "model_class": "gpt-5.5-medium",
+        "objective_or_acceptance_fixture_id": "real-compact_cross_role-v1",
+        "quality_rubric_version": "v1",
+        "risk": "low",
+        "root_budget_unit": "tokens",
+        "route_family": "real-route-family-v1",
+        "scenario_id": "compact_cross_role",
+        "scenario_variant": "real-pilot-v1"
+      },
+      "task_class": "compact_cross_role",
+      "terminal_state": "completed",
+      "variant": "C",
+      "variant_declaration": {
+        "route_kind": "observed_normal_route"
+      },
+      "work_id": "work-compact_cross_role-C-001"
+    },
+    {
+      "anchors": {
+        "context": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "execution": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "work": "https://github.com/farmerhunter/agent-foundry/issues/457"
+      },
+      "attention": {
+        "acknowledgement": {
+          "availability": "unavailable",
+          "value": null
+        },
+        "category": null,
+        "outcome": "not_required",
+        "pairing": {
+          "evidence_anchor": null,
+          "pair_id": null
+        }
+      },
+      "execution_id": "run-compact_cross_role-A-002",
+      "policy_version": "normal-observation-v1",
+      "protocol_version": "af18-calibration-protocol-v1",
+      "provenance": {
+        "captured_at": "2026-07-30T02:32:13Z",
+        "collection_method": "codex_jsonl_export",
+        "evidence_anchor": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "observation_kind": "observed",
+        "source": "codex_jsonl_export"
+      },
+      "quality": {
+        "passed": true,
+        "reason": "pilot route completed"
+      },
+      "remaining_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "resources": {
+        "cached_input_tokens": {
+          "availability": "observed",
+          "observation_id": "cached_input_tokens-run-compact_cross_role-A-002",
+          "observed_at": "2026-07-30T02:32:13Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 16768
+        },
+        "callback_count": {
+          "availability": "observed",
+          "observation_id": "callback-run-compact_cross_role-A-002",
+          "observed_at": "2026-07-30T02:32:13Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 0
+        },
+        "compact_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "compact_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "context_age_hours": {
+          "availability": "unavailable",
+          "observation_id": "context_age_hours-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "hours",
+          "value": null
+        },
+        "cumulative_resource_tokens": {
+          "availability": "observed",
+          "derived_total_component_ids": [
+            "input_tokens-run-compact_cross_role-A-002",
+            "output_tokens-run-compact_cross_role-A-002"
+          ],
+          "invocation_ids": [
+            "run-compact_cross_role-A-002-turn-1"
+          ],
+          "observation_basis": "derived",
+          "observation_id": "cumulative-run-compact_cross_role-A-002",
+          "observed_at": "2026-07-30T02:32:13Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 17747
+        },
+        "elapsed_seconds": {
+          "availability": "observed",
+          "observation_id": "elapsed-run-compact_cross_role-A-002",
+          "observed_at": "2026-07-30T02:32:13Z",
+          "source": "host_collection",
+          "unit": "seconds",
+          "value": 19.371
+        },
+        "full_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "full_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "input_tokens": {
+          "availability": "observed",
+          "observation_id": "input_tokens-run-compact_cross_role-A-002",
+          "observed_at": "2026-07-30T02:32:13Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 17635
+        },
+        "output_tokens": {
+          "availability": "observed",
+          "observation_id": "output_tokens-run-compact_cross_role-A-002",
+          "observed_at": "2026-07-30T02:32:13Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 112
+        },
+        "packet_bytes": {
+          "availability": "unavailable",
+          "observation_id": "packet_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "reasoning_tokens": {
+          "availability": "observed",
+          "observation_id": "reasoning_tokens-run-compact_cross_role-A-002",
+          "observed_at": "2026-07-30T02:32:13Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 22
+        },
+        "recovery_count": {
+          "availability": "observed",
+          "observation_id": "recovery-run-compact_cross_role-A-002",
+          "observed_at": "2026-07-30T02:32:13Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 0
+        },
+        "retry_count": {
+          "availability": "observed",
+          "observation_id": "retry-run-compact_cross_role-A-002",
+          "observed_at": "2026-07-30T02:32:13Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 0
+        },
+        "tool_output_bytes": {
+          "availability": "unavailable",
+          "observation_id": "tool_output_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "total_context_tokens": {
+          "availability": "unavailable",
+          "observation_id": "total_context_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        }
+      },
+      "root_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "sample_id": "compact_cross_role-A-002",
+      "scenario": {
+        "actual_role_route": "Implementer",
+        "anchor_type": "issue-comment",
+        "canonical_allowed_tools": [
+          "codex"
+        ],
+        "complexity": "small",
+        "measurement_window": {
+          "definition": "execution-to-terminal",
+          "fixed_execution_window": true
+        },
+        "model_class": "gpt-5.5-medium",
+        "objective_or_acceptance_fixture_id": "real-compact_cross_role-v1",
+        "quality_rubric_version": "v1",
+        "risk": "low",
+        "root_budget_unit": "tokens",
+        "route_family": "real-route-family-v1",
+        "scenario_id": "compact_cross_role",
+        "scenario_variant": "real-pilot-v1"
+      },
+      "task_class": "compact_cross_role",
+      "terminal_state": "completed",
+      "variant": "A",
+      "variant_declaration": {
+        "route_kind": "observed_normal_route"
+      },
+      "work_id": "work-compact_cross_role-A-002"
+    },
+    {
+      "anchors": {
+        "context": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "execution": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "work": "https://github.com/farmerhunter/agent-foundry/issues/457"
+      },
+      "attention": {
+        "acknowledgement": {
+          "availability": "unavailable",
+          "value": null
+        },
+        "category": null,
+        "outcome": "not_required",
+        "pairing": {
+          "evidence_anchor": null,
+          "pair_id": null
+        }
+      },
+      "execution_id": "run-compact_cross_role-B-002",
+      "policy_version": "normal-observation-v1",
+      "protocol_version": "af18-calibration-protocol-v1",
+      "provenance": {
+        "captured_at": "2026-07-30T02:32:13Z",
+        "collection_method": "codex_jsonl_export",
+        "evidence_anchor": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "observation_kind": "counterfactual",
+        "source": "declared-counterfactual"
+      },
+      "quality": {
+        "passed": true,
+        "reason": "pilot route completed"
+      },
+      "remaining_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "resources": {
+        "cached_input_tokens": {
+          "availability": "unavailable",
+          "observation_id": "cached_input_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        },
+        "callback_count": {
+          "availability": "unavailable",
+          "observation_id": "callback_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "compact_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "compact_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "context_age_hours": {
+          "availability": "unavailable",
+          "observation_id": "context_age_hours-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "hours",
+          "value": null
+        },
+        "cumulative_resource_tokens": {
+          "availability": "unavailable",
+          "observation_id": "cumulative_resource_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        },
+        "elapsed_seconds": {
+          "availability": "unavailable",
+          "observation_id": "elapsed_seconds-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "seconds",
+          "value": null
+        },
+        "full_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "full_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "input_tokens": {
+          "availability": "unavailable",
+          "observation_id": "input_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        },
+        "output_tokens": {
+          "availability": "unavailable",
+          "observation_id": "output_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        },
+        "packet_bytes": {
+          "availability": "unavailable",
+          "observation_id": "packet_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "reasoning_tokens": {
+          "availability": "unavailable",
+          "observation_id": "reasoning_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        },
+        "recovery_count": {
+          "availability": "unavailable",
+          "observation_id": "recovery_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "retry_count": {
+          "availability": "unavailable",
+          "observation_id": "retry_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "tool_output_bytes": {
+          "availability": "unavailable",
+          "observation_id": "tool_output_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "total_context_tokens": {
+          "availability": "unavailable",
+          "observation_id": "total_context_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        }
+      },
+      "root_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "sample_id": "compact_cross_role-B-002",
+      "scenario": {
+        "actual_role_route": "Implementer",
+        "anchor_type": "issue-comment",
+        "canonical_allowed_tools": [
+          "codex"
+        ],
+        "complexity": "small",
+        "measurement_window": {
+          "definition": "execution-to-terminal",
+          "fixed_execution_window": true
+        },
+        "model_class": "gpt-5.5-medium",
+        "objective_or_acceptance_fixture_id": "real-compact_cross_role-v1",
+        "quality_rubric_version": "v1",
+        "risk": "low",
+        "root_budget_unit": "tokens",
+        "route_family": "real-route-family-v1",
+        "scenario_id": "compact_cross_role",
+        "scenario_variant": "real-pilot-v1"
+      },
+      "task_class": "compact_cross_role",
+      "terminal_state": "completed",
+      "variant": "B",
+      "variant_declaration": {
+        "route_kind": "counterfactual"
+      },
+      "work_id": "work-compact_cross_role-B-002"
+    },
+    {
+      "anchors": {
+        "context": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "execution": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "work": "https://github.com/farmerhunter/agent-foundry/issues/457"
+      },
+      "attention": {
+        "acknowledgement": {
+          "availability": "unavailable",
+          "value": null
+        },
+        "category": null,
+        "outcome": "not_required",
+        "pairing": {
+          "evidence_anchor": null,
+          "pair_id": null
+        }
+      },
+      "execution_id": "run-compact_cross_role-C-002",
+      "policy_version": "normal-observation-v1",
+      "protocol_version": "af18-calibration-protocol-v1",
+      "provenance": {
+        "captured_at": "2026-07-30T02:32:57Z",
+        "collection_method": "codex_jsonl_export",
+        "evidence_anchor": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "observation_kind": "observed",
+        "source": "codex_jsonl_export"
+      },
+      "quality": {
+        "passed": true,
+        "reason": "pilot route completed"
+      },
+      "remaining_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "resources": {
+        "cached_input_tokens": {
+          "availability": "observed",
+          "observation_id": "cached_input_tokens-run-compact_cross_role-C-002",
+          "observed_at": "2026-07-30T02:32:57Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 33536
+        },
+        "callback_count": {
+          "availability": "observed",
+          "observation_id": "callback-run-compact_cross_role-C-002",
+          "observed_at": "2026-07-30T02:32:57Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 1
+        },
+        "compact_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "compact_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "context_age_hours": {
+          "availability": "unavailable",
+          "observation_id": "context_age_hours-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "hours",
+          "value": null
+        },
+        "cumulative_resource_tokens": {
+          "availability": "observed",
+          "derived_total_component_ids": [
+            "input_tokens-run-compact_cross_role-C-002",
+            "output_tokens-run-compact_cross_role-C-002"
+          ],
+          "invocation_ids": [
+            "run-compact_cross_role-C-002-turn-1",
+            "run-compact_cross_role-C-002-turn-2"
+          ],
+          "observation_basis": "derived",
+          "observation_id": "cumulative-run-compact_cross_role-C-002",
+          "observed_at": "2026-07-30T02:32:57Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 35606
+        },
+        "elapsed_seconds": {
+          "availability": "observed",
+          "observation_id": "elapsed-run-compact_cross_role-C-002",
+          "observed_at": "2026-07-30T02:32:57Z",
+          "source": "host_collection",
+          "unit": "seconds",
+          "value": 43.503
+        },
+        "full_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "full_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "input_tokens": {
+          "availability": "observed",
+          "observation_id": "input_tokens-run-compact_cross_role-C-002",
+          "observed_at": "2026-07-30T02:32:57Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 35344
+        },
+        "output_tokens": {
+          "availability": "observed",
+          "observation_id": "output_tokens-run-compact_cross_role-C-002",
+          "observed_at": "2026-07-30T02:32:57Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 262
+        },
+        "packet_bytes": {
+          "availability": "unavailable",
+          "observation_id": "packet_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "reasoning_tokens": {
+          "availability": "observed",
+          "observation_id": "reasoning_tokens-run-compact_cross_role-C-002",
+          "observed_at": "2026-07-30T02:32:57Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 99
+        },
+        "recovery_count": {
+          "availability": "observed",
+          "observation_id": "recovery-run-compact_cross_role-C-002",
+          "observed_at": "2026-07-30T02:32:57Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 0
+        },
+        "retry_count": {
+          "availability": "observed",
+          "observation_id": "retry-run-compact_cross_role-C-002",
+          "observed_at": "2026-07-30T02:32:57Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 0
+        },
+        "tool_output_bytes": {
+          "availability": "unavailable",
+          "observation_id": "tool_output_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "total_context_tokens": {
+          "availability": "unavailable",
+          "observation_id": "total_context_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        }
+      },
+      "root_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "sample_id": "compact_cross_role-C-002",
+      "scenario": {
+        "actual_role_route": "Coordinator>Reviewer",
+        "anchor_type": "issue-comment",
+        "canonical_allowed_tools": [
+          "codex"
+        ],
+        "complexity": "small",
+        "measurement_window": {
+          "definition": "execution-to-terminal",
+          "fixed_execution_window": true
+        },
+        "model_class": "gpt-5.5-medium",
+        "objective_or_acceptance_fixture_id": "real-compact_cross_role-v1",
+        "quality_rubric_version": "v1",
+        "risk": "low",
+        "root_budget_unit": "tokens",
+        "route_family": "real-route-family-v1",
+        "scenario_id": "compact_cross_role",
+        "scenario_variant": "real-pilot-v1"
+      },
+      "task_class": "compact_cross_role",
+      "terminal_state": "completed",
+      "variant": "C",
+      "variant_declaration": {
+        "route_kind": "observed_normal_route"
+      },
+      "work_id": "work-compact_cross_role-C-002"
+    },
+    {
+      "anchors": {
+        "context": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "execution": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "work": "https://github.com/farmerhunter/agent-foundry/issues/457"
+      },
+      "attention": {
+        "acknowledgement": {
+          "availability": "unavailable",
+          "value": null
+        },
+        "category": null,
+        "outcome": "not_required",
+        "pairing": {
+          "evidence_anchor": null,
+          "pair_id": null
+        }
+      },
+      "execution_id": "run-compact_cross_role-A-003",
+      "policy_version": "normal-observation-v1",
+      "protocol_version": "af18-calibration-protocol-v1",
+      "provenance": {
+        "captured_at": "2026-07-30T02:33:11Z",
+        "collection_method": "codex_jsonl_export",
+        "evidence_anchor": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "observation_kind": "observed",
+        "source": "codex_jsonl_export"
+      },
+      "quality": {
+        "passed": true,
+        "reason": "pilot route completed"
+      },
+      "remaining_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "resources": {
+        "cached_input_tokens": {
+          "availability": "observed",
+          "observation_id": "cached_input_tokens-run-compact_cross_role-A-003",
+          "observed_at": "2026-07-30T02:33:11Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 16768
+        },
+        "callback_count": {
+          "availability": "observed",
+          "observation_id": "callback-run-compact_cross_role-A-003",
+          "observed_at": "2026-07-30T02:33:11Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 0
+        },
+        "compact_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "compact_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "context_age_hours": {
+          "availability": "unavailable",
+          "observation_id": "context_age_hours-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "hours",
+          "value": null
+        },
+        "cumulative_resource_tokens": {
+          "availability": "observed",
+          "derived_total_component_ids": [
+            "input_tokens-run-compact_cross_role-A-003",
+            "output_tokens-run-compact_cross_role-A-003"
+          ],
+          "invocation_ids": [
+            "run-compact_cross_role-A-003-turn-1"
+          ],
+          "observation_basis": "derived",
+          "observation_id": "cumulative-run-compact_cross_role-A-003",
+          "observed_at": "2026-07-30T02:33:11Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 17742
+        },
+        "elapsed_seconds": {
+          "availability": "observed",
+          "observation_id": "elapsed-run-compact_cross_role-A-003",
+          "observed_at": "2026-07-30T02:33:11Z",
+          "source": "host_collection",
+          "unit": "seconds",
+          "value": 14.524
+        },
+        "full_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "full_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "input_tokens": {
+          "availability": "observed",
+          "observation_id": "input_tokens-run-compact_cross_role-A-003",
+          "observed_at": "2026-07-30T02:33:11Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 17635
+        },
+        "output_tokens": {
+          "availability": "observed",
+          "observation_id": "output_tokens-run-compact_cross_role-A-003",
+          "observed_at": "2026-07-30T02:33:11Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 107
+        },
+        "packet_bytes": {
+          "availability": "unavailable",
+          "observation_id": "packet_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "reasoning_tokens": {
+          "availability": "observed",
+          "observation_id": "reasoning_tokens-run-compact_cross_role-A-003",
+          "observed_at": "2026-07-30T02:33:11Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 21
+        },
+        "recovery_count": {
+          "availability": "observed",
+          "observation_id": "recovery-run-compact_cross_role-A-003",
+          "observed_at": "2026-07-30T02:33:11Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 0
+        },
+        "retry_count": {
+          "availability": "observed",
+          "observation_id": "retry-run-compact_cross_role-A-003",
+          "observed_at": "2026-07-30T02:33:11Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 0
+        },
+        "tool_output_bytes": {
+          "availability": "unavailable",
+          "observation_id": "tool_output_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "total_context_tokens": {
+          "availability": "unavailable",
+          "observation_id": "total_context_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        }
+      },
+      "root_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "sample_id": "compact_cross_role-A-003",
+      "scenario": {
+        "actual_role_route": "Implementer",
+        "anchor_type": "issue-comment",
+        "canonical_allowed_tools": [
+          "codex"
+        ],
+        "complexity": "small",
+        "measurement_window": {
+          "definition": "execution-to-terminal",
+          "fixed_execution_window": true
+        },
+        "model_class": "gpt-5.5-medium",
+        "objective_or_acceptance_fixture_id": "real-compact_cross_role-v1",
+        "quality_rubric_version": "v1",
+        "risk": "low",
+        "root_budget_unit": "tokens",
+        "route_family": "real-route-family-v1",
+        "scenario_id": "compact_cross_role",
+        "scenario_variant": "real-pilot-v1"
+      },
+      "task_class": "compact_cross_role",
+      "terminal_state": "completed",
+      "variant": "A",
+      "variant_declaration": {
+        "route_kind": "observed_normal_route"
+      },
+      "work_id": "work-compact_cross_role-A-003"
+    },
+    {
+      "anchors": {
+        "context": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "execution": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "work": "https://github.com/farmerhunter/agent-foundry/issues/457"
+      },
+      "attention": {
+        "acknowledgement": {
+          "availability": "unavailable",
+          "value": null
+        },
+        "category": null,
+        "outcome": "not_required",
+        "pairing": {
+          "evidence_anchor": null,
+          "pair_id": null
+        }
+      },
+      "execution_id": "run-compact_cross_role-B-003",
+      "policy_version": "normal-observation-v1",
+      "protocol_version": "af18-calibration-protocol-v1",
+      "provenance": {
+        "captured_at": "2026-07-30T02:33:11Z",
+        "collection_method": "codex_jsonl_export",
+        "evidence_anchor": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "observation_kind": "counterfactual",
+        "source": "declared-counterfactual"
+      },
+      "quality": {
+        "passed": true,
+        "reason": "pilot route completed"
+      },
+      "remaining_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "resources": {
+        "cached_input_tokens": {
+          "availability": "unavailable",
+          "observation_id": "cached_input_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        },
+        "callback_count": {
+          "availability": "unavailable",
+          "observation_id": "callback_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "compact_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "compact_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "context_age_hours": {
+          "availability": "unavailable",
+          "observation_id": "context_age_hours-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "hours",
+          "value": null
+        },
+        "cumulative_resource_tokens": {
+          "availability": "unavailable",
+          "observation_id": "cumulative_resource_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        },
+        "elapsed_seconds": {
+          "availability": "unavailable",
+          "observation_id": "elapsed_seconds-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "seconds",
+          "value": null
+        },
+        "full_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "full_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "input_tokens": {
+          "availability": "unavailable",
+          "observation_id": "input_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        },
+        "output_tokens": {
+          "availability": "unavailable",
+          "observation_id": "output_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        },
+        "packet_bytes": {
+          "availability": "unavailable",
+          "observation_id": "packet_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "reasoning_tokens": {
+          "availability": "unavailable",
+          "observation_id": "reasoning_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        },
+        "recovery_count": {
+          "availability": "unavailable",
+          "observation_id": "recovery_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "retry_count": {
+          "availability": "unavailable",
+          "observation_id": "retry_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "tool_output_bytes": {
+          "availability": "unavailable",
+          "observation_id": "tool_output_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "total_context_tokens": {
+          "availability": "unavailable",
+          "observation_id": "total_context_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        }
+      },
+      "root_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "sample_id": "compact_cross_role-B-003",
+      "scenario": {
+        "actual_role_route": "Implementer",
+        "anchor_type": "issue-comment",
+        "canonical_allowed_tools": [
+          "codex"
+        ],
+        "complexity": "small",
+        "measurement_window": {
+          "definition": "execution-to-terminal",
+          "fixed_execution_window": true
+        },
+        "model_class": "gpt-5.5-medium",
+        "objective_or_acceptance_fixture_id": "real-compact_cross_role-v1",
+        "quality_rubric_version": "v1",
+        "risk": "low",
+        "root_budget_unit": "tokens",
+        "route_family": "real-route-family-v1",
+        "scenario_id": "compact_cross_role",
+        "scenario_variant": "real-pilot-v1"
+      },
+      "task_class": "compact_cross_role",
+      "terminal_state": "completed",
+      "variant": "B",
+      "variant_declaration": {
+        "route_kind": "counterfactual"
+      },
+      "work_id": "work-compact_cross_role-B-003"
+    },
+    {
+      "anchors": {
+        "context": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "execution": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "work": "https://github.com/farmerhunter/agent-foundry/issues/457"
+      },
+      "attention": {
+        "acknowledgement": {
+          "availability": "unavailable",
+          "value": null
+        },
+        "category": null,
+        "outcome": "not_required",
+        "pairing": {
+          "evidence_anchor": null,
+          "pair_id": null
+        }
+      },
+      "execution_id": "run-compact_cross_role-C-003",
+      "policy_version": "normal-observation-v1",
+      "protocol_version": "af18-calibration-protocol-v1",
+      "provenance": {
+        "captured_at": "2026-07-30T02:33:56Z",
+        "collection_method": "codex_jsonl_export",
+        "evidence_anchor": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "observation_kind": "observed",
+        "source": "codex_jsonl_export"
+      },
+      "quality": {
+        "passed": true,
+        "reason": "pilot route completed"
+      },
+      "remaining_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "resources": {
+        "cached_input_tokens": {
+          "availability": "observed",
+          "observation_id": "cached_input_tokens-run-compact_cross_role-C-003",
+          "observed_at": "2026-07-30T02:33:56Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 33536
+        },
+        "callback_count": {
+          "availability": "observed",
+          "observation_id": "callback-run-compact_cross_role-C-003",
+          "observed_at": "2026-07-30T02:33:56Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 1
+        },
+        "compact_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "compact_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "context_age_hours": {
+          "availability": "unavailable",
+          "observation_id": "context_age_hours-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "hours",
+          "value": null
+        },
+        "cumulative_resource_tokens": {
+          "availability": "observed",
+          "derived_total_component_ids": [
+            "input_tokens-run-compact_cross_role-C-003",
+            "output_tokens-run-compact_cross_role-C-003"
+          ],
+          "invocation_ids": [
+            "run-compact_cross_role-C-003-turn-1",
+            "run-compact_cross_role-C-003-turn-2"
+          ],
+          "observation_basis": "derived",
+          "observation_id": "cumulative-run-compact_cross_role-C-003",
+          "observed_at": "2026-07-30T02:33:56Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 35400
+        },
+        "elapsed_seconds": {
+          "availability": "observed",
+          "observation_id": "elapsed-run-compact_cross_role-C-003",
+          "observed_at": "2026-07-30T02:33:56Z",
+          "source": "host_collection",
+          "unit": "seconds",
+          "value": 44.82
+        },
+        "full_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "full_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "input_tokens": {
+          "availability": "observed",
+          "observation_id": "input_tokens-run-compact_cross_role-C-003",
+          "observed_at": "2026-07-30T02:33:56Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 35124
+        },
+        "output_tokens": {
+          "availability": "observed",
+          "observation_id": "output_tokens-run-compact_cross_role-C-003",
+          "observed_at": "2026-07-30T02:33:56Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 276
+        },
+        "packet_bytes": {
+          "availability": "unavailable",
+          "observation_id": "packet_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "reasoning_tokens": {
+          "availability": "observed",
+          "observation_id": "reasoning_tokens-run-compact_cross_role-C-003",
+          "observed_at": "2026-07-30T02:33:56Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 113
+        },
+        "recovery_count": {
+          "availability": "observed",
+          "observation_id": "recovery-run-compact_cross_role-C-003",
+          "observed_at": "2026-07-30T02:33:56Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 0
+        },
+        "retry_count": {
+          "availability": "observed",
+          "observation_id": "retry-run-compact_cross_role-C-003",
+          "observed_at": "2026-07-30T02:33:56Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 0
+        },
+        "tool_output_bytes": {
+          "availability": "unavailable",
+          "observation_id": "tool_output_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "total_context_tokens": {
+          "availability": "unavailable",
+          "observation_id": "total_context_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        }
+      },
+      "root_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "sample_id": "compact_cross_role-C-003",
+      "scenario": {
+        "actual_role_route": "Coordinator>Reviewer",
+        "anchor_type": "issue-comment",
+        "canonical_allowed_tools": [
+          "codex"
+        ],
+        "complexity": "small",
+        "measurement_window": {
+          "definition": "execution-to-terminal",
+          "fixed_execution_window": true
+        },
+        "model_class": "gpt-5.5-medium",
+        "objective_or_acceptance_fixture_id": "real-compact_cross_role-v1",
+        "quality_rubric_version": "v1",
+        "risk": "low",
+        "root_budget_unit": "tokens",
+        "route_family": "real-route-family-v1",
+        "scenario_id": "compact_cross_role",
+        "scenario_variant": "real-pilot-v1"
+      },
+      "task_class": "compact_cross_role",
+      "terminal_state": "completed",
+      "variant": "C",
+      "variant_declaration": {
+        "route_kind": "observed_normal_route"
+      },
+      "work_id": "work-compact_cross_role-C-003"
+    },
+    {
+      "anchors": {
+        "context": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "execution": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "work": "https://github.com/farmerhunter/agent-foundry/issues/457"
+      },
+      "attention": {
+        "acknowledgement": {
+          "availability": "unavailable",
+          "value": null
+        },
+        "category": null,
+        "outcome": "not_required",
+        "pairing": {
+          "evidence_anchor": null,
+          "pair_id": null
+        }
+      },
+      "execution_id": "run-compact_cross_role-A-004",
+      "policy_version": "normal-observation-v1",
+      "protocol_version": "af18-calibration-protocol-v1",
+      "provenance": {
+        "captured_at": "2026-07-30T02:34:13Z",
+        "collection_method": "codex_jsonl_export",
+        "evidence_anchor": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "observation_kind": "observed",
+        "source": "codex_jsonl_export"
+      },
+      "quality": {
+        "passed": true,
+        "reason": "pilot route completed"
+      },
+      "remaining_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "resources": {
+        "cached_input_tokens": {
+          "availability": "observed",
+          "observation_id": "cached_input_tokens-run-compact_cross_role-A-004",
+          "observed_at": "2026-07-30T02:34:13Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 16768
+        },
+        "callback_count": {
+          "availability": "observed",
+          "observation_id": "callback-run-compact_cross_role-A-004",
+          "observed_at": "2026-07-30T02:34:13Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 0
+        },
+        "compact_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "compact_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "context_age_hours": {
+          "availability": "unavailable",
+          "observation_id": "context_age_hours-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "hours",
+          "value": null
+        },
+        "cumulative_resource_tokens": {
+          "availability": "observed",
+          "derived_total_component_ids": [
+            "input_tokens-run-compact_cross_role-A-004",
+            "output_tokens-run-compact_cross_role-A-004"
+          ],
+          "invocation_ids": [
+            "run-compact_cross_role-A-004-turn-1"
+          ],
+          "observation_basis": "derived",
+          "observation_id": "cumulative-run-compact_cross_role-A-004",
+          "observed_at": "2026-07-30T02:34:13Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 17744
+        },
+        "elapsed_seconds": {
+          "availability": "observed",
+          "observation_id": "elapsed-run-compact_cross_role-A-004",
+          "observed_at": "2026-07-30T02:34:13Z",
+          "source": "host_collection",
+          "unit": "seconds",
+          "value": 16.654
+        },
+        "full_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "full_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "input_tokens": {
+          "availability": "observed",
+          "observation_id": "input_tokens-run-compact_cross_role-A-004",
+          "observed_at": "2026-07-30T02:34:13Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 17635
+        },
+        "output_tokens": {
+          "availability": "observed",
+          "observation_id": "output_tokens-run-compact_cross_role-A-004",
+          "observed_at": "2026-07-30T02:34:13Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 109
+        },
+        "packet_bytes": {
+          "availability": "unavailable",
+          "observation_id": "packet_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "reasoning_tokens": {
+          "availability": "observed",
+          "observation_id": "reasoning_tokens-run-compact_cross_role-A-004",
+          "observed_at": "2026-07-30T02:34:13Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 35
+        },
+        "recovery_count": {
+          "availability": "observed",
+          "observation_id": "recovery-run-compact_cross_role-A-004",
+          "observed_at": "2026-07-30T02:34:13Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 0
+        },
+        "retry_count": {
+          "availability": "observed",
+          "observation_id": "retry-run-compact_cross_role-A-004",
+          "observed_at": "2026-07-30T02:34:13Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 0
+        },
+        "tool_output_bytes": {
+          "availability": "unavailable",
+          "observation_id": "tool_output_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "total_context_tokens": {
+          "availability": "unavailable",
+          "observation_id": "total_context_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        }
+      },
+      "root_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "sample_id": "compact_cross_role-A-004",
+      "scenario": {
+        "actual_role_route": "Implementer",
+        "anchor_type": "issue-comment",
+        "canonical_allowed_tools": [
+          "codex"
+        ],
+        "complexity": "small",
+        "measurement_window": {
+          "definition": "execution-to-terminal",
+          "fixed_execution_window": true
+        },
+        "model_class": "gpt-5.5-medium",
+        "objective_or_acceptance_fixture_id": "real-compact_cross_role-v1",
+        "quality_rubric_version": "v1",
+        "risk": "low",
+        "root_budget_unit": "tokens",
+        "route_family": "real-route-family-v1",
+        "scenario_id": "compact_cross_role",
+        "scenario_variant": "real-pilot-v1"
+      },
+      "task_class": "compact_cross_role",
+      "terminal_state": "completed",
+      "variant": "A",
+      "variant_declaration": {
+        "route_kind": "observed_normal_route"
+      },
+      "work_id": "work-compact_cross_role-A-004"
+    },
+    {
+      "anchors": {
+        "context": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "execution": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "work": "https://github.com/farmerhunter/agent-foundry/issues/457"
+      },
+      "attention": {
+        "acknowledgement": {
+          "availability": "unavailable",
+          "value": null
+        },
+        "category": null,
+        "outcome": "not_required",
+        "pairing": {
+          "evidence_anchor": null,
+          "pair_id": null
+        }
+      },
+      "execution_id": "run-compact_cross_role-B-004",
+      "policy_version": "normal-observation-v1",
+      "protocol_version": "af18-calibration-protocol-v1",
+      "provenance": {
+        "captured_at": "2026-07-30T02:34:13Z",
+        "collection_method": "codex_jsonl_export",
+        "evidence_anchor": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "observation_kind": "counterfactual",
+        "source": "declared-counterfactual"
+      },
+      "quality": {
+        "passed": true,
+        "reason": "pilot route completed"
+      },
+      "remaining_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "resources": {
+        "cached_input_tokens": {
+          "availability": "unavailable",
+          "observation_id": "cached_input_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        },
+        "callback_count": {
+          "availability": "unavailable",
+          "observation_id": "callback_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "compact_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "compact_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "context_age_hours": {
+          "availability": "unavailable",
+          "observation_id": "context_age_hours-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "hours",
+          "value": null
+        },
+        "cumulative_resource_tokens": {
+          "availability": "unavailable",
+          "observation_id": "cumulative_resource_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        },
+        "elapsed_seconds": {
+          "availability": "unavailable",
+          "observation_id": "elapsed_seconds-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "seconds",
+          "value": null
+        },
+        "full_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "full_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "input_tokens": {
+          "availability": "unavailable",
+          "observation_id": "input_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        },
+        "output_tokens": {
+          "availability": "unavailable",
+          "observation_id": "output_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        },
+        "packet_bytes": {
+          "availability": "unavailable",
+          "observation_id": "packet_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "reasoning_tokens": {
+          "availability": "unavailable",
+          "observation_id": "reasoning_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        },
+        "recovery_count": {
+          "availability": "unavailable",
+          "observation_id": "recovery_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "retry_count": {
+          "availability": "unavailable",
+          "observation_id": "retry_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "tool_output_bytes": {
+          "availability": "unavailable",
+          "observation_id": "tool_output_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "total_context_tokens": {
+          "availability": "unavailable",
+          "observation_id": "total_context_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        }
+      },
+      "root_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "sample_id": "compact_cross_role-B-004",
+      "scenario": {
+        "actual_role_route": "Implementer",
+        "anchor_type": "issue-comment",
+        "canonical_allowed_tools": [
+          "codex"
+        ],
+        "complexity": "small",
+        "measurement_window": {
+          "definition": "execution-to-terminal",
+          "fixed_execution_window": true
+        },
+        "model_class": "gpt-5.5-medium",
+        "objective_or_acceptance_fixture_id": "real-compact_cross_role-v1",
+        "quality_rubric_version": "v1",
+        "risk": "low",
+        "root_budget_unit": "tokens",
+        "route_family": "real-route-family-v1",
+        "scenario_id": "compact_cross_role",
+        "scenario_variant": "real-pilot-v1"
+      },
+      "task_class": "compact_cross_role",
+      "terminal_state": "completed",
+      "variant": "B",
+      "variant_declaration": {
+        "route_kind": "counterfactual"
+      },
+      "work_id": "work-compact_cross_role-B-004"
+    },
+    {
+      "anchors": {
+        "context": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "execution": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "work": "https://github.com/farmerhunter/agent-foundry/issues/457"
+      },
+      "attention": {
+        "acknowledgement": {
+          "availability": "unavailable",
+          "value": null
+        },
+        "category": null,
+        "outcome": "not_required",
+        "pairing": {
+          "evidence_anchor": null,
+          "pair_id": null
+        }
+      },
+      "execution_id": "run-compact_cross_role-C-004",
+      "policy_version": "normal-observation-v1",
+      "protocol_version": "af18-calibration-protocol-v1",
+      "provenance": {
+        "captured_at": "2026-07-30T02:34:59Z",
+        "collection_method": "codex_jsonl_export",
+        "evidence_anchor": "https://github.com/farmerhunter/agent-foundry/issues/457#issuecomment-5125638653",
+        "observation_kind": "observed",
+        "source": "codex_jsonl_export"
+      },
+      "quality": {
+        "passed": true,
+        "reason": "pilot route completed"
+      },
+      "remaining_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "resources": {
+        "cached_input_tokens": {
+          "availability": "observed",
+          "observation_id": "cached_input_tokens-run-compact_cross_role-C-004",
+          "observed_at": "2026-07-30T02:34:59Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 33536
+        },
+        "callback_count": {
+          "availability": "observed",
+          "observation_id": "callback-run-compact_cross_role-C-004",
+          "observed_at": "2026-07-30T02:34:59Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 1
+        },
+        "compact_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "compact_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "context_age_hours": {
+          "availability": "unavailable",
+          "observation_id": "context_age_hours-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "hours",
+          "value": null
+        },
+        "cumulative_resource_tokens": {
+          "availability": "observed",
+          "derived_total_component_ids": [
+            "input_tokens-run-compact_cross_role-C-004",
+            "output_tokens-run-compact_cross_role-C-004"
+          ],
+          "invocation_ids": [
+            "run-compact_cross_role-C-004-turn-1",
+            "run-compact_cross_role-C-004-turn-2"
+          ],
+          "observation_basis": "derived",
+          "observation_id": "cumulative-run-compact_cross_role-C-004",
+          "observed_at": "2026-07-30T02:34:59Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 35346
+        },
+        "elapsed_seconds": {
+          "availability": "observed",
+          "observation_id": "elapsed-run-compact_cross_role-C-004",
+          "observed_at": "2026-07-30T02:34:59Z",
+          "source": "host_collection",
+          "unit": "seconds",
+          "value": 46.620999999999995
+        },
+        "full_rehydration_count": {
+          "availability": "unavailable",
+          "observation_id": "full_rehydration_count-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "count",
+          "value": null
+        },
+        "input_tokens": {
+          "availability": "observed",
+          "observation_id": "input_tokens-run-compact_cross_role-C-004",
+          "observed_at": "2026-07-30T02:34:59Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 35124
+        },
+        "output_tokens": {
+          "availability": "observed",
+          "observation_id": "output_tokens-run-compact_cross_role-C-004",
+          "observed_at": "2026-07-30T02:34:59Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 222
+        },
+        "packet_bytes": {
+          "availability": "unavailable",
+          "observation_id": "packet_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "reasoning_tokens": {
+          "availability": "observed",
+          "observation_id": "reasoning_tokens-run-compact_cross_role-C-004",
+          "observed_at": "2026-07-30T02:34:59Z",
+          "source": "codex_jsonl_export",
+          "unit": "tokens",
+          "value": 55
+        },
+        "recovery_count": {
+          "availability": "observed",
+          "observation_id": "recovery-run-compact_cross_role-C-004",
+          "observed_at": "2026-07-30T02:34:59Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 0
+        },
+        "retry_count": {
+          "availability": "observed",
+          "observation_id": "retry-run-compact_cross_role-C-004",
+          "observed_at": "2026-07-30T02:34:59Z",
+          "source": "host_collection",
+          "unit": "count",
+          "value": 0
+        },
+        "tool_output_bytes": {
+          "availability": "unavailable",
+          "observation_id": "tool_output_bytes-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "bytes",
+          "value": null
+        },
+        "total_context_tokens": {
+          "availability": "unavailable",
+          "observation_id": "total_context_tokens-unavailable",
+          "observed_at": null,
+          "reason": "not_exposed",
+          "source": "host_collection",
+          "unit": "tokens",
+          "value": null
+        }
+      },
+      "root_budget": {
+        "unit": "tokens",
+        "value": 100000
+      },
+      "sample_id": "compact_cross_role-C-004",
+      "scenario": {
+        "actual_role_route": "Coordinator>Reviewer",
+        "anchor_type": "issue-comment",
+        "canonical_allowed_tools": [
+          "codex"
+        ],
+        "complexity": "small",
+        "measurement_window": {
+          "definition": "execution-to-terminal",
+          "fixed_execution_window": true
+        },
+        "model_class": "gpt-5.5-medium",
+        "objective_or_acceptance_fixture_id": "real-compact_cross_role-v1",
+        "quality_rubric_version": "v1",
+        "risk": "low",
+        "root_budget_unit": "tokens",
+        "route_family": "real-route-family-v1",
+        "scenario_id": "compact_cross_role",
+        "scenario_variant": "real-pilot-v1"
+      },
+      "task_class": "compact_cross_role",
+      "terminal_state": "completed",
+      "variant": "C",
+      "variant_declaration": {
+        "route_kind": "observed_normal_route"
+      },
+      "work_id": "work-compact_cross_role-C-004"
+    }
+  ],
+  "schema_version": 1
+}

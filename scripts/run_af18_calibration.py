@@ -110,7 +110,7 @@ def cohort_key(sample: dict[str, Any]) -> tuple[str, ...]:
         str(sample.get("protocol_version", "")), str(sample.get("task_class", "")),
         str(scenario.get("scenario_id", "")), str(scenario.get("scenario_variant", "")),
         str(scenario.get("objective_or_acceptance_fixture_id", "")), str(scenario.get("complexity", "")),
-        str(scenario.get("risk", "")), str(scenario.get("role_route", "")),
+        str(scenario.get("risk", "")), str(scenario.get("route_family", "")),
         str(scenario.get("model_class", "")), str(scenario.get("quality_rubric_version", "")),
         str(sample.get("policy_version", "")), json.dumps(sorted(scenario.get("canonical_allowed_tools", []))),
         str(scenario.get("measurement_window", {}).get("definition", "")),
@@ -185,7 +185,7 @@ def validate_sample(sample: Any, packet: dict[str, Any], now: dt.datetime, max_a
     if "low_limit" in str(sample.get("policy_version", "")).lower() or "low_limit" in json.dumps(sample).lower():
         errors.append("low_limit_not_normal_policy_sample")
     scenario = sample.get("scenario")
-    fields = ("scenario_id", "scenario_variant", "objective_or_acceptance_fixture_id", "complexity", "risk", "role_route", "model_class", "quality_rubric_version", "root_budget_unit", "anchor_type")
+    fields = ("scenario_id", "scenario_variant", "objective_or_acceptance_fixture_id", "complexity", "risk", "actual_role_route", "route_family", "model_class", "quality_rubric_version", "root_budget_unit", "anchor_type")
     if not isinstance(scenario, dict) or any(not scenario.get(field) for field in fields) or not isinstance(scenario.get("canonical_allowed_tools"), list) or not scenario["canonical_allowed_tools"] or any(not isinstance(tool, str) or not tool for tool in scenario["canonical_allowed_tools"]) or not isinstance(scenario.get("measurement_window"), dict) or not isinstance(scenario["measurement_window"].get("definition"), str) or not scenario["measurement_window"]["definition"] or scenario["measurement_window"].get("fixed_execution_window") is not True:
         errors.append("invalid_scenario_comparability")
     else:
@@ -316,7 +316,7 @@ def validate_sample(sample: Any, packet: dict[str, Any], now: dt.datetime, max_a
         return None, sorted(set(errors))
     normalized = {
         "sample_id": sample["sample_id"], "task_class": sample["task_class"], "variant": sample["variant"],
-        "cohort_key": cohort_key(sample), "scenario_id": scenario["scenario_id"], "terminal_state": sample["terminal_state"],
+        "cohort_key": cohort_key(sample), "scenario_id": scenario["scenario_id"], "actual_role_route": scenario["actual_role_route"], "route_family": scenario["route_family"], "terminal_state": sample["terminal_state"],
         "quality": {"passed": quality["passed"], "reason": quality["reason"]}, "attention": dict(attention),
         "resource_observations": normalized_resources, "resources": normalized_resources, "anchors": dict(anchors), "root_budget": dict(budget), "remaining_budget": dict(remaining),
         "provenance": {key: provenance[key] for key in ("source", "collection_method", "captured_at", "evidence_anchor", "observation_kind")},

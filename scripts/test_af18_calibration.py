@@ -16,6 +16,7 @@ SCRIPT = ROOT / "scripts" / "run_af18_calibration.py"
 COLLECTOR = ROOT / "scripts" / "collect_af18_codex_telemetry.py"
 SCHEMA = ROOT / "schemas" / "af18-calibration-protocol.schema.yaml"
 FIXTURE = ROOT / "scripts" / "fixtures" / "af18_calibration" / "representative-fixture.json"
+REAL_FIXTURES = ROOT / "scripts" / "fixtures" / "af18_calibration" / "real-reclassified"
 spec = importlib.util.spec_from_file_location("calibration", SCRIPT)
 calibration = importlib.util.module_from_spec(spec)
 assert spec.loader is not None
@@ -56,7 +57,7 @@ def sample(task_class, variant, index=0, **overrides):
     resources["cumulative_resource_tokens"] = measurement("cumulative_resource_tokens", 140, "tokens", variant, index, ("input_tokens", "output_tokens"))
     resources["cumulative_resource_tokens"]["value"] = resources["input_tokens"]["value"] + resources["output_tokens"]["value"]
     resources["cumulative_resource_tokens"]["invocation_ids"] = [f"invocation-{variant}-{index}"]
-    base = {"sample_id": f"{task_class}-{variant}-{index}", "protocol_version": calibration.PROTOCOL_VERSION, "task_class": task_class, "variant": variant, "variant_declaration": {"route_kind": "counterfactual" if variant == "B" else "observed_normal_route"}, "scenario": {"scenario_id": task_class, "scenario_variant": "default", "objective_or_acceptance_fixture_id": f"fixture-{task_class}", "complexity": "small", "risk": "low", "role_route": route, "model_class": "standard", "quality_rubric_version": "v1", "canonical_allowed_tools": ["gh", "python3"], "measurement_window": {"definition": "execution-to-terminal", "fixed_execution_window": True}, "root_budget_unit": "tokens", "anchor_type": "issue"}, "work_id": f"work-{task_class}-{index}", "execution_id": f"run-{task_class}-{variant}-{index}", "anchors": {"work": "https://github.com/farmerhunter/agent-foundry/issues/457", "execution": f"https://github.com/farmerhunter/agent-foundry/issues/457#{task_class}-{variant}-{index}", "context": "https://github.com/farmerhunter/agent-foundry/issues/457#context", **({"predecessor": "https://github.com/farmerhunter/agent-foundry/issues/457#predecessor", "successor": "https://github.com/farmerhunter/agent-foundry/issues/457#successor"} if task_class == "bounded_successor_hold_recovery" else {})}, "root_budget": {"value": 1000, "unit": "tokens"}, "remaining_budget": {"value": 800, "unit": "tokens"}, "policy_version": "normal-observation-v1", "provenance": {"source": "test-export", "collection_method": "manual_adapter_export", "captured_at": "2026-07-29T09:00:00Z", "evidence_anchor": "https://github.com/farmerhunter/agent-foundry/issues/457#evidence", "observation_kind": "counterfactual" if variant == "B" else "observed"}, "terminal_state": "completed", "quality": {"passed": True, "reason": "test"}, "attention": attention, "resources": resources}
+    base = {"sample_id": f"{task_class}-{variant}-{index}", "protocol_version": calibration.PROTOCOL_VERSION, "task_class": task_class, "variant": variant, "variant_declaration": {"route_kind": "counterfactual" if variant == "B" else "observed_normal_route"}, "scenario": {"scenario_id": task_class, "scenario_variant": "default", "objective_or_acceptance_fixture_id": f"fixture-{task_class}", "complexity": "small", "risk": "low", "actual_role_route": route, "route_family": "fixture-route-family-v1", "model_class": "standard", "quality_rubric_version": "v1", "canonical_allowed_tools": ["gh", "python3"], "measurement_window": {"definition": "execution-to-terminal", "fixed_execution_window": True}, "root_budget_unit": "tokens", "anchor_type": "issue"}, "work_id": f"work-{task_class}-{index}", "execution_id": f"run-{task_class}-{variant}-{index}", "anchors": {"work": "https://github.com/farmerhunter/agent-foundry/issues/457", "execution": f"https://github.com/farmerhunter/agent-foundry/issues/457#{task_class}-{variant}-{index}", "context": "https://github.com/farmerhunter/agent-foundry/issues/457#context", **({"predecessor": "https://github.com/farmerhunter/agent-foundry/issues/457#predecessor", "successor": "https://github.com/farmerhunter/agent-foundry/issues/457#successor"} if task_class == "bounded_successor_hold_recovery" else {})}, "root_budget": {"value": 1000, "unit": "tokens"}, "remaining_budget": {"value": 800, "unit": "tokens"}, "policy_version": "normal-observation-v1", "provenance": {"source": "test-export", "collection_method": "manual_adapter_export", "captured_at": "2026-07-29T09:00:00Z", "evidence_anchor": "https://github.com/farmerhunter/agent-foundry/issues/457#evidence", "observation_kind": "counterfactual" if variant == "B" else "observed"}, "terminal_state": "completed", "quality": {"passed": True, "reason": "test"}, "attention": attention, "resources": resources}
     if task_class == "bounded_successor_hold_recovery":
         base["successor_continuity"] = {"predecessor_work_id": base["work_id"], "successor_work_id": base["work_id"], "predecessor_root_budget": 1000, "successor_root_budget": 1000, "predecessor_remaining_budget": 900, "successor_remaining_budget": 800}
     base.update(overrides)
@@ -204,7 +205,19 @@ def main():
         else:
             raise AssertionError("collector raw content must fail")
 
-    for dimension in ("scenario_id", "scenario_variant", "objective_or_acceptance_fixture_id", "complexity", "risk", "role_route", "model_class", "quality_rubric_version", "policy_version", "canonical_allowed_tools", "measurement_window", "anchor_type"):
+    expect("route-variants-merge-by-family", len([item for item in result["cohorts"] if item["task_class"] == "compact_cross_role"]) == 1, result)
+    route_variants = copy.deepcopy(rows)
+    route_target = next(row for row in route_variants if row["task_class"] == "compact_cross_role" and row["variant"] == "C")
+    route_target["scenario"]["actual_role_route"] = "Coordinator>Reviewer>Tester"
+    route_result = calibration.run(packet(route_variants), NOW, 168)
+    expect("actual-route-retained-not-split", len([item for item in route_result["cohorts"] if item["task_class"] == "compact_cross_role"]) == 1 and any(item["actual_role_route"] == "Coordinator>Reviewer>Tester" for item in route_result["normalized_samples"]), route_result)
+    family_variants = copy.deepcopy(rows)
+    family_target = next(row for row in family_variants if row["task_class"] == "compact_cross_role" and row["variant"] == "C")
+    family_target["scenario"]["route_family"] = "different-family"
+    family_result = calibration.run(packet(family_variants), NOW, 168)
+    expect("route-family-splits", len([item for item in family_result["cohorts"] if item["task_class"] == "compact_cross_role"]) == 2, family_result)
+
+    for dimension in ("scenario_id", "scenario_variant", "objective_or_acceptance_fixture_id", "complexity", "risk", "route_family", "model_class", "quality_rubric_version", "policy_version", "canonical_allowed_tools", "measurement_window", "anchor_type"):
         split = copy.deepcopy(rows)
         target = next(row for row in split if row["task_class"] == "single_session_baseline" and row["variant"] == "A")
         if dimension == "policy_version":
@@ -223,6 +236,13 @@ def main():
     expect("fixture-evidence-only", "fixture evidence only" in fixture_result["human_summary"], fixture_result)
     fixture_candidate = fixture_result["cohorts"][0]["candidate_recommendation"]
     expect("fixture-hold-only-insufficient-sample", fixture_candidate["candidate_status"] == "candidate_hold" and fixture_candidate["candidate_hold_reasons"] == ["insufficient_observed_C_context_age_hours", "insufficient_observed_C_cumulative_resource_tokens", "insufficient_observed_C_total_context_tokens", "requires_at_least_five_valid_A_B_C_rows"], fixture_candidate)
+    for real_name in ("single_session_baseline", "compact_cross_role"):
+        real_packet = json.loads((REAL_FIXTURES / f"{real_name}.json").read_text())
+        real_result = calibration.run(real_packet, NOW, 24 * 365 * 10)
+        expect(f"real-reclassified-{real_name}-valid", len(real_result["invalid_evidence"]) == 0 and len(real_result["cohorts"]) == 1, real_result)
+        real_cohort = real_result["cohorts"][0]
+        expect(f"real-reclassified-{real_name}-5xABC", real_cohort["sample_counts"] == {"A": 5, "B": 5, "C": 5}, real_cohort)
+        expect(f"real-reclassified-{real_name}-context-hold", real_cohort["candidate_recommendation"]["candidate_status"] == "candidate_hold" and "insufficient_observed_C_context_age_hours" in real_cohort["candidate_recommendation"]["candidate_hold_reasons"] and "insufficient_observed_C_total_context_tokens" in real_cohort["candidate_recommendation"]["candidate_hold_reasons"], real_cohort)
     with tempfile.TemporaryDirectory() as directory:
         output_path = Path(directory) / "packet.json"
         completed = subprocess.run([sys.executable, str(SCRIPT), "--input", str(FIXTURE), "--output", str(output_path), "--now", "2026-07-29T10:00:00Z"], text=True, capture_output=True, check=False)
