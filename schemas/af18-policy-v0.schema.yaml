@@ -1,0 +1,19 @@
+# AF18 provisional policy-v0 schema. This is a portable, read-only Core record.
+schema_version: 1
+title: AF18 policy-v0
+required: [policy_id, policy_version, default_profile, profiles, safety]
+rules:
+  - "profiles are economy, normal, and performance only"
+  - "each Work carries a literal positive root_budget_tokens"
+  - "effective_work_cap_tokens is min(root_budget_tokens, selected profile work_ceiling_tokens)"
+  - "higher safety, risk, privacy, and allowlist restrictions prevail"
+  - "logical model classes are Core values; native provider identifiers belong only in adapter metadata"
+  - "Core canonical logical models are cost_optimized, general, and high_capability; Codex model IDs are adapter mapping metadata"
+  - "only cost_optimized/medium and general/low are permitted with structured Work override evidence: expected classification, low risk, nonempty reason, and matching profile"
+  - "override evidence conflicts with risk, privacy, allowlist, or an explicit policy constraint hold for Human attention"
+  - "gpt-5.5/medium is migration or A-B baseline metadata only and never a default route"
+  - "low_limit is an emergency-only compatibility override and is not a policy-v0 normal-path profile"
+  - "each effective-control snapshot records explicit, inherits, or unavailable with provenance"
+forbidden:
+  - "runtime, adapter, dispatch, config, hook, Vault, generated, ledger, or external-action mutation"
+  - "prompt, body, transcript, secret, or token content in Human readout"
