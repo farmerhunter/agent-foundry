@@ -59,14 +59,15 @@ $defs:
       scenario:
         type: object
         additionalProperties: false
-        required: [scenario_id, scenario_variant, objective_or_acceptance_fixture_id, complexity, risk, role_route, model_class, quality_rubric_version, canonical_allowed_tools, measurement_window, root_budget_unit, anchor_type]
+        required: [scenario_id, scenario_variant, objective_or_acceptance_fixture_id, complexity, risk, actual_role_route, route_family, model_class, quality_rubric_version, canonical_allowed_tools, measurement_window, root_budget_unit, anchor_type]
         properties:
           scenario_id: {type: string, minLength: 1}
           scenario_variant: {type: string, minLength: 1}
           objective_or_acceptance_fixture_id: {type: string, minLength: 1}
           complexity: {type: string, minLength: 1}
           risk: {type: string, minLength: 1}
-          role_route: {type: string, minLength: 1}
+          actual_role_route: {type: string, minLength: 1}
+          route_family: {type: string, minLength: 1}
           model_class: {type: string, minLength: 1}
           quality_rubric_version: {type: string, minLength: 1}
           canonical_allowed_tools:
