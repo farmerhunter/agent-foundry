@@ -8,7 +8,7 @@ rules:
   - "Core stores logical model classes; native model IDs are adapter metadata"
   - "effective_work_cap_tokens is min(root_budget_tokens, selected profile work_ceiling_tokens)"
   - "only permitted Work-reasoned overrides are accepted with matching profile, classification, low risk, and reason"
-  - "context_age_hours and total_context_tokens are unavailable/not_exposed unless a trusted producer binding is supplied outside the receipt"
+  - "context_age_hours and total_context_tokens are unavailable/not_exposed unless an external immutable trusted producer binding supplies matching producer_id, receipt_anchor, valid_from, and valid_until"
   - "unavailable measurements use null and never zero"
   - "unknown fields, duplicate event ids, stale or out-of-window events, mismatched route bindings, and forged provenance fail closed"
   - "aggregation is deterministic and records no fixed reasoning multiplier or auto-tuning decision"

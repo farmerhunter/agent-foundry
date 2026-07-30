@@ -11,11 +11,11 @@ from pathlib import Path
 from collect_af18_policy_telemetry import TelemetryError, collect_receipt, parse_time
 
 
-def aggregate(receipts: list[dict], now_text: str, trusted_producers: set[str] | None = None) -> dict:
+def aggregate(receipts: list[dict], now_text: str, trusted_bindings: dict[str, dict[str, str]] | None = None) -> dict:
     if not isinstance(receipts, list):
         raise TelemetryError("telemetry_events_must_be_list")
     now = parse_time(now_text, "now")
-    events = [collect_receipt(receipt, now, trusted_producers) for receipt in receipts]
+    events = [collect_receipt(receipt, now, trusted_bindings) for receipt in receipts]
     ids = [event["event_id"] for event in events]
     if len(ids) != len(set(ids)):
         raise TelemetryError("duplicate_event")
@@ -33,10 +33,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Aggregate static AF18 policy telemetry receipts.")
     parser.add_argument("--events-json", type=Path, required=True)
     parser.add_argument("--now", default="2026-07-30T00:00:00Z")
-    parser.add_argument("--trusted-producer-id", action="append", default=[])
+    parser.add_argument("--trusted-bindings-json", type=Path)
     args = parser.parse_args()
     try:
-        print(json.dumps(aggregate(json.loads(args.events_json.read_text(encoding="utf-8")), args.now, set(args.trusted_producer_id)), sort_keys=True))
+        bindings = json.loads(args.trusted_bindings_json.read_text(encoding="utf-8")) if args.trusted_bindings_json else None
+        print(json.dumps(aggregate(json.loads(args.events_json.read_text(encoding="utf-8")), args.now, bindings), sort_keys=True))
     except (OSError, json.JSONDecodeError, TelemetryError) as error:
         print(str(error), file=sys.stderr)
         return 2

@@ -96,7 +96,30 @@ def validate_route(receipt: dict[str, Any], profile: str, route: dict[str, Any])
         raise TelemetryError("override_safety_conflict")
 
 
-def collect_receipt(receipt: dict[str, Any], now: dt.datetime, trusted_producers: set[str] | None = None) -> dict[str, Any]:
+def trusted_binding_error(producer: dict[str, Any], observed_at: dt.datetime, now: dt.datetime, trusted_bindings: dict[str, dict[str, str]] | None) -> str | None:
+    if not isinstance(trusted_bindings, dict):
+        return "missing_trusted_producer_binding"
+    binding = trusted_bindings.get(producer["producer_id"])
+    if not isinstance(binding, dict):
+        return "missing_trusted_producer_binding"
+    required = {"producer_id", "receipt_anchor", "valid_from", "valid_until"}
+    if set(binding) != required or binding.get("producer_id") != producer["producer_id"]:
+        return "mismatched_producer_binding"
+    if binding.get("receipt_anchor") != producer["receipt_anchor"]:
+        return "mismatched_receipt_anchor"
+    try:
+        valid_from = parse_time(binding["valid_from"], "binding_valid_from")
+        valid_until = parse_time(binding["valid_until"], "binding_valid_until")
+    except TelemetryError:
+        return "malformed_trusted_producer_binding"
+    if now.astimezone(dt.timezone.utc) > valid_until:
+        return "stale_trusted_producer_binding"
+    if valid_from > valid_until or observed_at < valid_from or observed_at > valid_until:
+        return "binding_out_of_window"
+    return None
+
+
+def collect_receipt(receipt: dict[str, Any], now: dt.datetime, trusted_bindings: dict[str, dict[str, str]] | None = None) -> dict[str, Any]:
     reject_private(receipt)
     required = {"event_id", "observed_at", "policy", "work", "route", "limits", "lifecycle_action", "outcome", "observations", "capability_validation", "producer"}
     root = require_keys(receipt, required, required, "receipt")
@@ -126,12 +149,16 @@ def collect_receipt(receipt: dict[str, Any], now: dt.datetime, trusted_producers
     producer = require_keys(root["producer"], {"producer_id", "receipt_anchor", "runtime_owned"}, {"producer_id", "receipt_anchor", "runtime_owned"}, "producer")
     if producer["runtime_owned"] is not False or not isinstance(producer["producer_id"], str) or not producer["producer_id"] or not isinstance(producer["receipt_anchor"], str) or not producer["receipt_anchor"]:
         raise TelemetryError("forged_or_malformed_producer")
-    trusted = producer["producer_id"] in (trusted_producers or set())
     validate_route(root, profile, root["route"])
     if root["lifecycle_action"] not in {"completed", "validated", "reviewed", "held"}:
         raise TelemetryError("invalid_lifecycle_action")
     require_keys(root["outcome"], {"acceptance", "quality"}, {"acceptance", "quality"}, "outcome")
     observations = require_keys(root["observations"], SCALAR_FIELDS, SCALAR_FIELDS, "observations")
+    requires_trusted_binding = any(observations[field].get("provenance") in {"observed", "estimated"} for field in ("total_context_tokens", "context_age_hours") if isinstance(observations[field], dict))
+    binding_error = trusted_binding_error(producer, observed_at, now, trusted_bindings)
+    if requires_trusted_binding and binding_error:
+        raise TelemetryError(binding_error)
+    trusted = binding_error is None
     normalized = {field: scalar(observations[field], field, field in {"total_context_tokens", "context_age_hours"}, trusted) for field in SCALAR_FIELDS}
     if normalized["root_budget_used_tokens"]["provenance"] != "unavailable" and normalized["root_budget_used_tokens"]["value"] > limits["effective_work_cap_tokens"]:
         raise TelemetryError("root_budget_use_exceeds_effective_cap")
@@ -142,11 +169,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Validate one static AF18 policy telemetry receipt.")
     parser.add_argument("--receipt-json", type=Path, required=True)
     parser.add_argument("--now", default="2026-07-30T00:00:00Z")
-    parser.add_argument("--trusted-producer-id", action="append", default=[])
+    parser.add_argument("--trusted-bindings-json", type=Path)
     args = parser.parse_args()
     try:
         receipt = json.loads(args.receipt_json.read_text(encoding="utf-8"))
-        print(json.dumps(collect_receipt(receipt, parse_time(args.now, "now"), set(args.trusted_producer_id)), sort_keys=True))
+        bindings = json.loads(args.trusted_bindings_json.read_text(encoding="utf-8")) if args.trusted_bindings_json else None
+        print(json.dumps(collect_receipt(receipt, parse_time(args.now, "now"), bindings), sort_keys=True))
     except (OSError, json.JSONDecodeError, TelemetryError) as error:
         print(str(error), file=sys.stderr)
         return 2

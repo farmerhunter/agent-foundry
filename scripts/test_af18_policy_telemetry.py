@@ -24,6 +24,7 @@ aggregate_module = importlib.util.module_from_spec(aggregate_spec)
 assert aggregate_spec and aggregate_spec.loader
 aggregate_spec.loader.exec_module(aggregate_module)
 NOW = collector.parse_time("2026-07-30T00:00:00Z", "now")
+TRUSTED_BINDINGS = {"adapter-control-plane-v1": {"producer_id": "adapter-control-plane-v1", "receipt_anchor": "issue-470-fixture", "valid_from": "2026-07-29T00:00:00Z", "valid_until": "2026-08-01T00:00:00Z"}}
 
 
 def expect(name: str, value: bool, detail: object) -> list[str]:
@@ -59,9 +60,19 @@ def main() -> int:
     observed = receipt()
     observed["observations"]["total_context_tokens"] = {"provenance": "observed", "value": 8000, "source": "trusted_adapter_receipt"}
     observed["observations"]["context_age_hours"] = {"provenance": "estimated", "value": 2, "source": "trusted_adapter_receipt"}
-    trusted = collector.collect_receipt(observed, NOW, {"adapter-control-plane-v1"})
+    trusted = collector.collect_receipt(observed, NOW, TRUSTED_BINDINGS)
     errors += expect("trusted-observed-estimated", trusted["producer"]["trusted_binding"] is True and trusted["observations"]["total_context_tokens"]["value"] == 8000, trusted)
-    errors += expect("untrusted-context-holds", holds_prefix(observed, "untrusted_context_measurement_"), observed)
+    errors += expect("missing-trusted-binding-holds", holds(observed, "missing_trusted_producer_binding"), observed)
+    forged_anchor = copy.deepcopy(observed)
+    forged_anchor["producer"]["receipt_anchor"] = "forged-anchor"
+    errors += expect("forged-anchor-holds", holds(forged_anchor, "mismatched_receipt_anchor", TRUSTED_BINDINGS), forged_anchor)
+    mismatched_binding = copy.deepcopy(TRUSTED_BINDINGS)
+    mismatched_binding["adapter-control-plane-v1"]["producer_id"] = "other-producer"
+    errors += expect("mismatched-binding-holds", holds(observed, "mismatched_producer_binding", mismatched_binding), mismatched_binding)
+    stale_binding = copy.deepcopy(TRUSTED_BINDINGS)
+    stale_binding["adapter-control-plane-v1"]["valid_until"] = "2026-07-29T23:00:00Z"
+    errors += expect("stale-binding-holds", holds(observed, "stale_trusted_producer_binding", stale_binding), stale_binding)
+    errors += expect("missing-binding-holds", holds(observed, "missing_trusted_producer_binding", {}), observed)
     unavailable_zero = receipt()
     unavailable_zero["observations"]["total_context_tokens"]["value"] = 0
     errors += expect("unavailable-not-zero", holds(unavailable_zero, "unavailable_not_null_total_context_tokens"), unavailable_zero)
