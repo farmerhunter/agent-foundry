@@ -16,6 +16,7 @@ SCRIPT = ROOT / "scripts" / "run_af18_calibration.py"
 COLLECTOR = ROOT / "scripts" / "collect_af18_codex_telemetry.py"
 SCHEMA = ROOT / "schemas" / "af18-calibration-protocol.schema.yaml"
 FIXTURE = ROOT / "scripts" / "fixtures" / "af18_calibration" / "representative-fixture.json"
+REAL_FIXTURES = ROOT / "scripts" / "fixtures" / "af18_calibration" / "real-reclassified"
 spec = importlib.util.spec_from_file_location("calibration", SCRIPT)
 calibration = importlib.util.module_from_spec(spec)
 assert spec.loader is not None
@@ -235,6 +236,13 @@ def main():
     expect("fixture-evidence-only", "fixture evidence only" in fixture_result["human_summary"], fixture_result)
     fixture_candidate = fixture_result["cohorts"][0]["candidate_recommendation"]
     expect("fixture-hold-only-insufficient-sample", fixture_candidate["candidate_status"] == "candidate_hold" and fixture_candidate["candidate_hold_reasons"] == ["insufficient_observed_C_context_age_hours", "insufficient_observed_C_cumulative_resource_tokens", "insufficient_observed_C_total_context_tokens", "requires_at_least_five_valid_A_B_C_rows"], fixture_candidate)
+    for real_name in ("single_session_baseline", "compact_cross_role"):
+        real_packet = json.loads((REAL_FIXTURES / f"{real_name}.json").read_text())
+        real_result = calibration.run(real_packet, NOW, 24 * 365 * 10)
+        expect(f"real-reclassified-{real_name}-valid", len(real_result["invalid_evidence"]) == 0 and len(real_result["cohorts"]) == 1, real_result)
+        real_cohort = real_result["cohorts"][0]
+        expect(f"real-reclassified-{real_name}-5xABC", real_cohort["sample_counts"] == {"A": 5, "B": 5, "C": 5}, real_cohort)
+        expect(f"real-reclassified-{real_name}-context-hold", real_cohort["candidate_recommendation"]["candidate_status"] == "candidate_hold" and "insufficient_observed_C_context_age_hours" in real_cohort["candidate_recommendation"]["candidate_hold_reasons"] and "insufficient_observed_C_total_context_tokens" in real_cohort["candidate_recommendation"]["candidate_hold_reasons"], real_cohort)
     with tempfile.TemporaryDirectory() as directory:
         output_path = Path(directory) / "packet.json"
         completed = subprocess.run([sys.executable, str(SCRIPT), "--input", str(FIXTURE), "--output", str(output_path), "--now", "2026-07-29T10:00:00Z"], text=True, capture_output=True, check=False)
