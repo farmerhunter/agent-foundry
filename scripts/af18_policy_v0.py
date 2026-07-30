@@ -20,7 +20,11 @@ PROFILE_MAPPING = {
     "normal": ("general", "medium", "gpt-5.6-terra"),
     "performance": ("high_capability", "medium", "gpt-5.6-sol"),
 }
-PERMITTED_OVERRIDES = {("cost_optimized", "medium"), ("general", "low")}
+OVERRIDE_CONTRACTS = {
+    ("cost_optimized", "medium"): ("economy", "low_risk_multi_step_execution_or_test", "gpt-5.6-luna"),
+    ("general", "low"): ("normal", "small_time_sensitive_locally_ambiguous", "gpt-5.6-terra"),
+}
+PERMITTED_OVERRIDES = set(OVERRIDE_CONTRACTS)
 
 
 class PolicyError(ValueError):
@@ -59,10 +63,11 @@ def validate_policy(policy: dict[str, Any]) -> None:
             raise PolicyError(f"invalid profile limits: {name}")
     overrides = policy.get("controlled_overrides")
     override_mappings = {
-        (item.get("logical_model"), item.get("reasoning"), item.get("adapter_mapping", {}).get("codex", {}).get("model_id"))
+        (item.get("logical_model"), item.get("reasoning"), item.get("profile"), item.get("required_work_evidence", {}).get("classification"), item.get("required_work_evidence", {}).get("risk_level"), item.get("adapter_mapping", {}).get("codex", {}).get("model_id"))
         for item in overrides.values() if isinstance(item, dict) and isinstance(item.get("adapter_mapping"), dict) and isinstance(item["adapter_mapping"].get("codex"), dict)
     } if isinstance(overrides, dict) else set()
-    if not isinstance(overrides, dict) or override_mappings != {("cost_optimized", "medium", "gpt-5.6-luna"), ("general", "low", "gpt-5.6-terra")} or not all(isinstance(item, dict) and item.get("requires_work_reason") is True for item in overrides.values()):
+    expected_overrides = {(model, reasoning, profile, classification, "low", adapter_model) for (model, reasoning), (profile, classification, adapter_model) in OVERRIDE_CONTRACTS.items()}
+    if not isinstance(overrides, dict) or override_mappings != expected_overrides:
         raise PolicyError("malformed controlled overrides")
     baseline = policy.get("migration_ab_baseline", {})
     baseline_mapping = baseline.get("adapter_mapping") if isinstance(baseline, dict) else None
@@ -88,6 +93,29 @@ def control(value: Any, inherited: Any, provenance: str) -> dict[str, Any]:
 
 def nonempty_reason(value: Any) -> bool:
     return isinstance(value, str) and bool(value.strip())
+
+
+def validate_override(work: dict[str, Any], profile_name: str, pair: tuple[Any, Any]) -> tuple[bool, list[str], dict[str, Any] | None]:
+    contract = OVERRIDE_CONTRACTS.get(pair)
+    if contract is None:
+        return False, ["human_attention_required_for_unlisted_model_or_effort"], None
+    evidence = work.get("override_evidence")
+    if not isinstance(evidence, dict):
+        return False, ["missing_override_evidence"], None
+    expected_profile, expected_classification, _ = contract
+    stops: list[str] = []
+    if profile_name != expected_profile:
+        stops.append("override_profile_mismatch")
+    if evidence.get("classification") != expected_classification:
+        stops.append("override_classification_mismatch")
+    if evidence.get("risk_level") != "low":
+        stops.append("override_risk_conflict")
+    if not nonempty_reason(evidence.get("reason")):
+        stops.append("missing_override_evidence")
+    constraints = work.get("policy_constraints", {})
+    if not isinstance(constraints, dict) or constraints.get("allow_work_reasoned_overrides", True) is not True:
+        stops.append("override_conflicts_with_policy")
+    return not stops, stops, evidence
 
 
 def effective_snapshot(policy: dict[str, Any], work: dict[str, Any]) -> dict[str, Any]:
@@ -131,23 +159,24 @@ def effective_snapshot(policy: dict[str, Any], work: dict[str, Any]) -> dict[str
         stops.append("privacy_not_confirmed")
     selected_pair = (profile["logical_model"], profile["reasoning"])
     requested_pair = (model["value"], reasoning["value"])
-    override_reason = work.get("override_reason")
+    override_allowed = False
+    override_evidence: dict[str, Any] | None = None
     if envelope_valid and requested_pair != selected_pair:
-        if requested_pair not in PERMITTED_OVERRIDES or not nonempty_reason(override_reason):
-            stops.append("human_attention_required_for_unlisted_model_or_effort")
+        override_allowed, override_stops, override_evidence = validate_override(work, profile_name, requested_pair)
+        stops.extend(override_stops)
     controls = {"profile": profile_control, "logical_model": model, "reasoning": reasoning, "context_tokens": context}
     output = hold_snapshot(policy, work_id, stops, controls)
     output["effective_work_cap_tokens"] = min(root_budget, profile["work_ceiling_tokens"])
     output["root_budget_tokens"] = root_budget
     output["profile_ceiling_tokens"] = profile["work_ceiling_tokens"]
     adapter_model = profile["adapter_mapping"]["codex"]["model_id"]
-    if envelope_valid and requested_pair in PERMITTED_OVERRIDES:
+    if override_allowed and requested_pair in PERMITTED_OVERRIDES:
         for override in policy["controlled_overrides"].values():
             if (override["logical_model"], override["reasoning"]) == requested_pair:
                 adapter_model = override["adapter_mapping"]["codex"]["model_id"]
                 break
     output["adapter_metadata"] = {"adapter": "codex", "model_id": adapter_model}
-    output["override_reason"] = override_reason if requested_pair in PERMITTED_OVERRIDES and nonempty_reason(override_reason) else None
+    output["override_evidence"] = {"classification": override_evidence["classification"], "risk_level": override_evidence["risk_level"], "reason": override_evidence["reason"]} if override_allowed and override_evidence else None
     return output
 
 
@@ -163,7 +192,7 @@ def human_readout(snapshot: dict[str, Any]) -> dict[str, Any]:
         "profile": controls.get("profile"),
         "effective_envelope": {key: controls.get(key) for key in ("logical_model", "reasoning", "context_tokens")},
         "adapter_mapping": snapshot.get("adapter_metadata"),
-        "override_reason": snapshot.get("override_reason"),
+        "override_evidence": snapshot.get("override_evidence"),
         "effective_work_cap_tokens": snapshot.get("effective_work_cap_tokens"),
         "decision": snapshot["route_decision"],
         "why": snapshot["stop_conditions"] or ["Selected profile and stricter controls are satisfied."],
