@@ -11,7 +11,7 @@ properties:
     type: string
     minLength: 1
   collection_mode:
-    enum: [fixture, manual_adapter_export]
+    enum: [fixture, manual_adapter_export, codex_jsonl_export]
   samples:
     type: array
     minItems: 1
@@ -77,9 +77,10 @@ $defs:
           measurement_window:
             type: object
             additionalProperties: false
-            required: [definition]
+            required: [definition, fixed_execution_window]
             properties:
               definition: {type: string, minLength: 1}
+              fixed_execution_window: {const: true}
           root_budget_unit: {const: tokens}
           anchor_type: {type: string, minLength: 1}
       work_id: {type: string, minLength: 1}
@@ -115,7 +116,7 @@ $defs:
         required: [source, collection_method, captured_at, evidence_anchor, observation_kind]
         properties:
           source: {type: string, minLength: 1}
-          collection_method: {enum: [fixture, manual_adapter_export]}
+          collection_method: {enum: [fixture, manual_adapter_export, codex_jsonl_export]}
           captured_at: {type: string, format: date-time}
           evidence_anchor: {type: string, pattern: '^https://github\\.com/'}
           observation_kind: {enum: [observed, counterfactual]}
@@ -197,6 +198,11 @@ $defs:
         minItems: 1
         uniqueItems: true
         items: {type: string, minLength: 1}
+      invocation_ids:
+        type: array
+        minItems: 1
+        uniqueItems: true
+        items: {type: string, minLength: 1}
     allOf:
       - if:
           properties: {availability: {const: unavailable}}
@@ -224,6 +230,8 @@ $defs:
     allOf:
       - $ref: '#/$defs/measurement'
       - oneOf:
+          - properties:
+              availability: {const: unavailable}
           - required: [derived_total_component_ids, observation_basis]
             properties:
               observation_basis: {const: derived}

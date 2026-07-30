@@ -13,6 +13,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "run_af18_calibration.py"
+COLLECTOR = ROOT / "scripts" / "collect_af18_codex_telemetry.py"
 SCHEMA = ROOT / "schemas" / "af18-calibration-protocol.schema.yaml"
 FIXTURE = ROOT / "scripts" / "fixtures" / "af18_calibration" / "representative-fixture.json"
 spec = importlib.util.spec_from_file_location("calibration", SCRIPT)
@@ -20,6 +21,11 @@ calibration = importlib.util.module_from_spec(spec)
 assert spec.loader is not None
 sys.modules[spec.name] = calibration
 spec.loader.exec_module(calibration)
+collector_spec = importlib.util.spec_from_file_location("collector", COLLECTOR)
+collector = importlib.util.module_from_spec(collector_spec)
+assert collector_spec.loader is not None
+sys.modules[collector_spec.name] = collector
+collector_spec.loader.exec_module(collector)
 NOW = calibration.utc("2026-07-29T10:00:00Z")
 
 
@@ -45,9 +51,12 @@ def sample(task_class, variant, index=0, **overrides):
     if task_class == "attention_materiality" and variant == "C":
         attention = {"outcome": "required", "category": "attention-summary", "acknowledgement": {"availability": "observed", "value": True}, "pairing": {"pair_id": pair_id, "evidence_anchor": f"https://github.com/farmerhunter/agent-foundry/issues/457#pair-{index}"}}
     resources = {name: measurement(name, value, unit, variant, index) for name, value, unit in (("input_tokens", 100, "tokens"), ("cached_input_tokens", 20, "tokens"), ("output_tokens", 40, "tokens"), ("reasoning_tokens", 30, "tokens"), ("tool_output_bytes", 80, "bytes"), ("context_age_hours", 1, "hours"), ("packet_bytes", 200, "bytes"), ("callback_count", 1, "count"), ("compact_rehydration_count", 1, "count"), ("full_rehydration_count", 0, "count"), ("retry_count", 0, "count"), ("recovery_count", 0, "count"), ("elapsed_seconds", 10, "seconds"))}
-    resources["total_context_tokens"] = measurement("total_context_tokens", 120, "tokens", variant, index, ("input_tokens", "cached_input_tokens"))
-    resources["cumulative_resource_tokens"] = measurement("cumulative_resource_tokens", 300, "tokens", variant, index, ("input_tokens", "cached_input_tokens", "output_tokens", "reasoning_tokens"))
-    base = {"sample_id": f"{task_class}-{variant}-{index}", "protocol_version": calibration.PROTOCOL_VERSION, "task_class": task_class, "variant": variant, "variant_declaration": {"route_kind": "counterfactual" if variant == "B" else "observed_normal_route"}, "scenario": {"scenario_id": task_class, "scenario_variant": "default", "objective_or_acceptance_fixture_id": f"fixture-{task_class}", "complexity": "small", "risk": "low", "role_route": route, "model_class": "standard", "quality_rubric_version": "v1", "canonical_allowed_tools": ["gh", "python3"], "measurement_window": {"definition": "execution-to-terminal"}, "root_budget_unit": "tokens", "anchor_type": "issue"}, "work_id": f"work-{task_class}-{index}", "execution_id": f"run-{task_class}-{variant}-{index}", "anchors": {"work": "https://github.com/farmerhunter/agent-foundry/issues/457", "execution": f"https://github.com/farmerhunter/agent-foundry/issues/457#{task_class}-{variant}-{index}", "context": "https://github.com/farmerhunter/agent-foundry/issues/457#context", **({"predecessor": "https://github.com/farmerhunter/agent-foundry/issues/457#predecessor", "successor": "https://github.com/farmerhunter/agent-foundry/issues/457#successor"} if task_class == "bounded_successor_hold_recovery" else {})}, "root_budget": {"value": 1000, "unit": "tokens"}, "remaining_budget": {"value": 800, "unit": "tokens"}, "policy_version": "normal-observation-v1", "provenance": {"source": "test-export", "collection_method": "manual_adapter_export", "captured_at": "2026-07-29T09:00:00Z", "evidence_anchor": "https://github.com/farmerhunter/agent-foundry/issues/457#evidence", "observation_kind": "counterfactual" if variant == "B" else "observed"}, "terminal_state": "completed", "quality": {"passed": True, "reason": "test"}, "attention": attention, "resources": resources}
+    resources["total_context_tokens"] = measurement("total_context_tokens", 120, "tokens", variant, index)
+    resources["total_context_tokens"]["observation_basis"] = "independent_observed"
+    resources["cumulative_resource_tokens"] = measurement("cumulative_resource_tokens", 140, "tokens", variant, index, ("input_tokens", "output_tokens"))
+    resources["cumulative_resource_tokens"]["value"] = resources["input_tokens"]["value"] + resources["output_tokens"]["value"]
+    resources["cumulative_resource_tokens"]["invocation_ids"] = [f"invocation-{variant}-{index}"]
+    base = {"sample_id": f"{task_class}-{variant}-{index}", "protocol_version": calibration.PROTOCOL_VERSION, "task_class": task_class, "variant": variant, "variant_declaration": {"route_kind": "counterfactual" if variant == "B" else "observed_normal_route"}, "scenario": {"scenario_id": task_class, "scenario_variant": "default", "objective_or_acceptance_fixture_id": f"fixture-{task_class}", "complexity": "small", "risk": "low", "role_route": route, "model_class": "standard", "quality_rubric_version": "v1", "canonical_allowed_tools": ["gh", "python3"], "measurement_window": {"definition": "execution-to-terminal", "fixed_execution_window": True}, "root_budget_unit": "tokens", "anchor_type": "issue"}, "work_id": f"work-{task_class}-{index}", "execution_id": f"run-{task_class}-{variant}-{index}", "anchors": {"work": "https://github.com/farmerhunter/agent-foundry/issues/457", "execution": f"https://github.com/farmerhunter/agent-foundry/issues/457#{task_class}-{variant}-{index}", "context": "https://github.com/farmerhunter/agent-foundry/issues/457#context", **({"predecessor": "https://github.com/farmerhunter/agent-foundry/issues/457#predecessor", "successor": "https://github.com/farmerhunter/agent-foundry/issues/457#successor"} if task_class == "bounded_successor_hold_recovery" else {})}, "root_budget": {"value": 1000, "unit": "tokens"}, "remaining_budget": {"value": 800, "unit": "tokens"}, "policy_version": "normal-observation-v1", "provenance": {"source": "test-export", "collection_method": "manual_adapter_export", "captured_at": "2026-07-29T09:00:00Z", "evidence_anchor": "https://github.com/farmerhunter/agent-foundry/issues/457#evidence", "observation_kind": "counterfactual" if variant == "B" else "observed"}, "terminal_state": "completed", "quality": {"passed": True, "reason": "test"}, "attention": attention, "resources": resources}
     if task_class == "bounded_successor_hold_recovery":
         base["successor_continuity"] = {"predecessor_work_id": base["work_id"], "successor_work_id": base["work_id"], "predecessor_root_budget": 1000, "successor_root_budget": 1000, "predecessor_remaining_budget": 900, "successor_remaining_budget": 800}
     base.update(overrides)
@@ -79,7 +88,7 @@ def main():
     for index, row in enumerate(item for item in declared_roots if item["task_class"] == "single_session_baseline" and item["variant"] == "C"):
         row["root_budget"]["value"] = 21000 + index * 1000
     root_candidate = cohort(calibration.run(packet(declared_roots), NOW, 168), "single_session_baseline")["candidate_recommendation"]["candidate_root_budget_band"]
-    expect("candidate-root-budget-from-C-cumulative", root_candidate["max"] == 304 and root_candidate["max"] != 25000, root_candidate)
+    expect("candidate-root-budget-from-C-cumulative", root_candidate["max"] == 148 and root_candidate["max"] != 25000, root_candidate)
 
     unavailable = copy.deepcopy(rows)
     unavailable[0]["resources"]["tool_output_bytes"] = {"observation_id": "unavailable-tool", "availability": "unavailable", "value": None, "unit": "bytes", "source": "adapter", "observed_at": None, "reason": "not_exposed"}
@@ -103,11 +112,21 @@ def main():
         ("unavailable-without-reason", lambda x: x["resources"]["input_tokens"].update({"availability": "unavailable", "value": None, "observed_at": None, "reason": None}), "unavailable_measurement_must_be_null_with_reason:input_tokens"),
         ("derived-unavailable", lambda x: (x["resources"]["input_tokens"].update({"availability": "unavailable", "value": None, "observed_at": None, "reason": "not_exposed"}), x["resources"]["cumulative_resource_tokens"].update({"availability": "estimated"})), "derived_total_must_be_unavailable_with_unavailable_component:cumulative_resource_tokens"),
         ("independent-with-components", lambda x: x["resources"]["cumulative_resource_tokens"].update({"observation_basis": "independent_observed"}), "derived_components_require_derived_basis:cumulative_resource_tokens"),
+        ("cached-reasoning-double-count", lambda x: x["resources"]["cumulative_resource_tokens"].update({"value": 190, "derived_total_component_ids": [x["resources"]["input_tokens"]["observation_id"], x["resources"]["cached_input_tokens"]["observation_id"], x["resources"]["output_tokens"]["observation_id"], x["resources"]["reasoning_tokens"]["observation_id"]]}), "cumulative_resource_tokens_must_derive_input_plus_output_only"),
+        ("invalid-derived-total", lambda x: x["resources"]["cumulative_resource_tokens"].update({"value": 141}), "invalid_cumulative_resource_tokens_derivation"),
+        ("duplicate-invocation", lambda x: x["resources"]["cumulative_resource_tokens"].update({"invocation_ids": ["duplicate", "duplicate"]}), "invalid_invocation_ids:cumulative_resource_tokens"),
+        ("missing-durable-anchor", lambda x: x["anchors"].pop("context"), "missing_or_unbound_durable_anchor"),
+        ("non-fixed-execution-window", lambda x: x["scenario"]["measurement_window"].update({"fixed_execution_window": False}), "invalid_scenario_comparability"),
         ("privacy", lambda x: x.update({"prompt": "secret"}), "privacy_forbidden_raw_content"),
         ("low-limit", lambda x: x.update({"policy_version": "low_limit_experiment"}), "low_limit_not_normal_policy_sample"),
     ]:
         bad = copy.deepcopy(rows); mutate(bad[0]); output = calibration.run(packet(bad), NOW, 168)
         expect(name, error in output["invalid_evidence"][0]["errors"], output)
+
+    B_observed = copy.deepcopy(rows)
+    next(row for row in B_observed if row["variant"] == "B")["resources"]["input_tokens"]["availability"] = "observed"
+    B_observed_result = calibration.run(packet(B_observed), NOW, 168)
+    expect("B-observed-rejected", "counterfactual_resources_must_not_be_observed:input_tokens" in B_observed_result["invalid_evidence"][0]["errors"], B_observed_result)
 
     for name, mutate, reason in [
         ("missing-pair", lambda x: x["attention"]["pairing"].update({"pair_id": "missing"}), "attention_pairing_missing_required_pair"),
@@ -141,16 +160,39 @@ def main():
 
     expect("comparability-boundary-encoded", set(calibration.PACKET_GLOBAL_OR_VALIDITY_CONSTRAINED) == {"task_class", "protocol_version", "root_budget_unit"}, calibration.PACKET_GLOBAL_OR_VALIDITY_CONSTRAINED)
 
-    independent_total = copy.deepcopy(rows)
-    independent_total[0]["resources"]["total_context_tokens"].pop("derived_total_component_ids")
-    independent_total[0]["resources"]["total_context_tokens"]["observation_basis"] = "independent_observed"
-    independent_result = calibration.run(packet(independent_total), NOW, 168)
+    independent_result = calibration.run(packet(rows), NOW, 168)
     expect("independent-total-valid", not independent_result["invalid_evidence"], independent_result)
 
     schema_text = SCHEMA.read_text(encoding="utf-8")
     expect("schema-unavailable-null-reason", "value: {type: 'null'}" in schema_text and "reason: {enum: [not_exposed, redacted, not_collected, invalid]}" in schema_text, schema_text)
     expect("schema-derived-total-reference", "total_context_tokens: {$ref: '#/$defs/derived_total_measurement'}" in schema_text and "cumulative_resource_tokens: {$ref: '#/$defs/derived_total_measurement'}" in schema_text, schema_text)
     expect("schema-independent-total-excludes-components", "observation_basis: {enum: [derived, independent_observed]}" in schema_text and "not: {required: [derived_total_component_ids]}" in schema_text, schema_text)
+    expect("schema-invocation-ids", "invocation_ids:" in schema_text, schema_text)
+
+    collector_sample = sample("single_session_baseline", "C")
+    collector_sample.pop("resources")
+    collector_sample.pop("provenance")
+    metadata = {"schema_version": 1, "protocol_version": calibration.PROTOCOL_VERSION, "sample": collector_sample, "captured_at": "2026-07-29T09:00:00Z", "evidence_anchor": "https://github.com/farmerhunter/agent-foundry/issues/457#telemetry", "invocation_ids": ["invocation-1", "invocation-2"]}
+    events = [
+        {"type": "codex.completed", "invocation_id": "invocation-1", "completed_at": "2026-07-29T09:00:00Z", "usage": {"input_tokens": 100, "cached_input_tokens": 20, "output_tokens": 40, "reasoning_tokens": 30}},
+        {"type": "codex.completed", "invocation_id": "invocation-2", "completed_at": "2026-07-29T09:01:00Z", "usage": {"input_tokens": 50, "output_tokens": 10}},
+    ]
+    collected = collector.collect(metadata, events)
+    collected_resources = collected["samples"][0]["resources"]
+    expect("collector-input-output-only-total", collected_resources["cumulative_resource_tokens"]["value"] == 200 and collected_resources["cumulative_resource_tokens"]["derived_total_component_ids"] == ["codex-jsonl-input_tokens", "codex-jsonl-output_tokens"], collected)
+    expect("collector-unavailable-host-metrics", collected_resources["tool_output_bytes"]["availability"] == "unavailable" and collected_resources["tool_output_bytes"]["value"] is None and collected_resources["tool_output_bytes"]["reason"] == "not_exposed", collected)
+    expect("collector-missing-breakdown-unavailable", collected_resources["cached_input_tokens"]["availability"] == "unavailable", collected)
+    with tempfile.TemporaryDirectory() as directory:
+        jsonl = Path(directory) / "completed.jsonl"
+        jsonl.write_text("\n".join(json.dumps(event) for event in events) + "\n", encoding="utf-8")
+        expect("collector-jsonl-dedup", len(collector.read_events(str(jsonl), ["invocation-1", "invocation-2"])) == 2, jsonl.read_text())
+        jsonl.write_text(json.dumps({**events[0], "messages": ["raw"]}) + "\n", encoding="utf-8")
+        try:
+            collector.read_events(str(jsonl), ["invocation-1"])
+        except ValueError as exc:
+            expect("collector-raw-content-rejected", "invalid_completed_event_fields" in str(exc), str(exc))
+        else:
+            raise AssertionError("collector raw content must fail")
 
     for dimension in ("scenario_id", "scenario_variant", "objective_or_acceptance_fixture_id", "complexity", "risk", "role_route", "model_class", "quality_rubric_version", "policy_version", "canonical_allowed_tools", "measurement_window", "anchor_type"):
         split = copy.deepcopy(rows)
@@ -170,7 +212,7 @@ def main():
     fixture_result = calibration.run(fixture, NOW, 168)
     expect("fixture-evidence-only", "fixture evidence only" in fixture_result["human_summary"], fixture_result)
     fixture_candidate = fixture_result["cohorts"][0]["candidate_recommendation"]
-    expect("fixture-hold-only-insufficient-sample", fixture_candidate["candidate_status"] == "candidate_hold" and fixture_candidate["candidate_hold_reasons"] == ["insufficient_observed_C_cumulative_resource_tokens", "requires_at_least_five_valid_A_B_C_rows"], fixture_candidate)
+    expect("fixture-hold-only-insufficient-sample", fixture_candidate["candidate_status"] == "candidate_hold" and fixture_candidate["candidate_hold_reasons"] == ["insufficient_observed_C_context_age_hours", "insufficient_observed_C_cumulative_resource_tokens", "insufficient_observed_C_total_context_tokens", "requires_at_least_five_valid_A_B_C_rows"], fixture_candidate)
     with tempfile.TemporaryDirectory() as directory:
         output_path = Path(directory) / "packet.json"
         completed = subprocess.run([sys.executable, str(SCRIPT), "--input", str(FIXTURE), "--output", str(output_path), "--now", "2026-07-29T10:00:00Z"], text=True, capture_output=True, check=False)

@@ -122,7 +122,7 @@ def validate_measurement(name: str, item: Any, errors: list[str]) -> dict[str, A
     if not isinstance(item, dict):
         errors.append(f"missing_measurement:{name}")
         return {"observation_id": None, "availability": "unavailable", "value": None, "unit": None, "source": None, "observed_at": None}
-    reject_unknown(item, {"observation_id", "availability", "value", "unit", "source", "observed_at", "reason", "observation_basis", "derived_total_component_ids"}, f"measurement_{name}", errors)
+    reject_unknown(item, {"observation_id", "availability", "value", "unit", "source", "observed_at", "reason", "observation_basis", "derived_total_component_ids", "invocation_ids"}, f"measurement_{name}", errors)
     availability = item.get("availability")
     value = item.get("value")
     if not isinstance(item.get("observation_id"), str) or not item["observation_id"]:
@@ -150,7 +150,10 @@ def validate_measurement(name: str, item: Any, errors: list[str]) -> dict[str, A
         errors.append(f"derived_components_require_derived_basis:{name}")
     if basis == "independent_observed" and component_ids is not None:
         errors.append(f"independent_observation_must_not_have_components:{name}")
-    return {key: item.get(key) for key in ("observation_id", "availability", "value", "unit", "source", "observed_at", "reason", "observation_basis", "derived_total_component_ids")}
+    invocation_ids = item.get("invocation_ids")
+    if invocation_ids is not None and (not isinstance(invocation_ids, list) or not invocation_ids or any(not isinstance(value, str) or not value for value in invocation_ids) or len(invocation_ids) != len(set(invocation_ids))):
+        errors.append(f"invalid_invocation_ids:{name}")
+    return {key: item.get(key) for key in ("observation_id", "availability", "value", "unit", "source", "observed_at", "reason", "observation_basis", "derived_total_component_ids", "invocation_ids")}
 
 
 def reject_unknown(value: Any, allowed: set[str], label: str, errors: list[str]) -> None:
@@ -183,11 +186,11 @@ def validate_sample(sample: Any, packet: dict[str, Any], now: dt.datetime, max_a
         errors.append("low_limit_not_normal_policy_sample")
     scenario = sample.get("scenario")
     fields = ("scenario_id", "scenario_variant", "objective_or_acceptance_fixture_id", "complexity", "risk", "role_route", "model_class", "quality_rubric_version", "root_budget_unit", "anchor_type")
-    if not isinstance(scenario, dict) or any(not scenario.get(field) for field in fields) or not isinstance(scenario.get("canonical_allowed_tools"), list) or not scenario["canonical_allowed_tools"] or any(not isinstance(tool, str) or not tool for tool in scenario["canonical_allowed_tools"]) or not isinstance(scenario.get("measurement_window"), dict) or not isinstance(scenario["measurement_window"].get("definition"), str) or not scenario["measurement_window"]["definition"]:
+    if not isinstance(scenario, dict) or any(not scenario.get(field) for field in fields) or not isinstance(scenario.get("canonical_allowed_tools"), list) or not scenario["canonical_allowed_tools"] or any(not isinstance(tool, str) or not tool for tool in scenario["canonical_allowed_tools"]) or not isinstance(scenario.get("measurement_window"), dict) or not isinstance(scenario["measurement_window"].get("definition"), str) or not scenario["measurement_window"]["definition"] or scenario["measurement_window"].get("fixed_execution_window") is not True:
         errors.append("invalid_scenario_comparability")
     else:
         reject_unknown(scenario, set(fields) | {"canonical_allowed_tools", "measurement_window"}, "scenario", errors)
-        reject_unknown(scenario["measurement_window"], {"definition"}, "measurement_window", errors)
+        reject_unknown(scenario["measurement_window"], {"definition", "fixed_execution_window"}, "measurement_window", errors)
     declaration = sample.get("variant_declaration")
     expected_route = "counterfactual" if sample.get("variant") == "B" else "observed_normal_route"
     if not isinstance(declaration, dict) or declaration.get("route_kind") != expected_route:
@@ -210,7 +213,7 @@ def validate_sample(sample: Any, packet: dict[str, Any], now: dt.datetime, max_a
     elif isinstance(budget, dict) and isinstance(budget.get("value"), int) and remaining["value"] > budget["value"]:
         errors.append("remaining_budget_exceeds_root_budget")
     provenance = sample.get("provenance")
-    if not isinstance(provenance, dict) or not is_anchor(provenance.get("evidence_anchor")) or provenance.get("collection_method") not in {"fixture", "manual_adapter_export"} or not provenance.get("source"):
+    if not isinstance(provenance, dict) or not is_anchor(provenance.get("evidence_anchor")) or provenance.get("collection_method") not in {"fixture", "manual_adapter_export", "codex_jsonl_export"} or not provenance.get("source"):
         errors.append("malformed_provenance")
     else:
         try:
@@ -259,7 +262,7 @@ def validate_sample(sample: Any, packet: dict[str, Any], now: dt.datetime, max_a
         for name in DERIVED_TOTALS:
             item = normalized_resources.get(name, {})
             component_ids = item.get("derived_total_component_ids")
-            if not component_ids and item.get("observation_basis") != "independent_observed":
+            if item.get("availability") != "unavailable" and not component_ids and item.get("observation_basis") != "independent_observed":
                 errors.append(f"missing_derived_total_component_ids:{name}")
             if component_ids:
                 if item.get("observation_id") in component_ids or not set(component_ids).issubset(known_ids):
@@ -270,6 +273,22 @@ def validate_sample(sample: Any, packet: dict[str, Any], now: dt.datetime, max_a
                 )
                 if unavailable_component and item.get("availability") != "unavailable":
                     errors.append(f"derived_total_must_be_unavailable_with_unavailable_component:{name}")
+        cumulative = normalized_resources.get("cumulative_resource_tokens", {})
+        cumulative_components = cumulative.get("derived_total_component_ids")
+        required_components = {normalized_resources.get(name, {}).get("observation_id") for name in ("input_tokens", "output_tokens")}
+        if cumulative.get("availability") != "unavailable":
+            if set(cumulative_components or []) != required_components or len(cumulative_components or []) != 2:
+                errors.append("cumulative_resource_tokens_must_derive_input_plus_output_only")
+            input_value = normalized_resources.get("input_tokens", {}).get("value")
+            output_value = normalized_resources.get("output_tokens", {}).get("value")
+            if (not isinstance(input_value, (int, float)) or isinstance(input_value, bool)
+                    or not isinstance(output_value, (int, float)) or isinstance(output_value, bool)
+                    or normalized_resources.get("input_tokens", {}).get("availability") == "unavailable"
+                    or normalized_resources.get("output_tokens", {}).get("availability") == "unavailable"
+                    or cumulative.get("value") != input_value + output_value):
+                errors.append("invalid_cumulative_resource_tokens_derivation")
+            if not cumulative.get("invocation_ids"):
+                errors.append("cumulative_resource_tokens_requires_invocation_ids")
         if sample.get("variant") == "B":
             observed = sorted(name for name, item in normalized_resources.items() if item["availability"] == "observed")
             if observed:
@@ -343,8 +362,9 @@ def analyze(valid: list[dict[str, Any]], invalid: list[dict[str, Any]]) -> list[
         holds: list[str] = []
         if any(len(variants[variant]) < 5 for variant in ("A", "B", "C")):
             holds.append("requires_at_least_five_valid_A_B_C_rows")
-        if summaries["C"].get("cumulative_resource_tokens", {}).get("n_observed", 0) < 5:
-            holds.append("insufficient_observed_C_cumulative_resource_tokens")
+        for metric in ("cumulative_resource_tokens", "total_context_tokens", "context_age_hours"):
+            if summaries["C"].get(metric, {}).get("n_observed", 0) < 5:
+                holds.append(f"insufficient_observed_C_{metric}")
         attention_required = sum(row["attention"]["outcome"] == "required" for row in variants["C"])
         attention_conflicts, attention_pair_count, attention_material_count = attention_pairing_conflicts(variants) if task_class == "attention_materiality" else ([], 0, 0)
         failed_or_held = sum(row["terminal_state"] in {"failed", "held"} for row in variants["C"])
@@ -376,7 +396,7 @@ def run(packet: dict[str, Any], now: dt.datetime, max_age: int) -> dict[str, Any
     packet_errors: list[str] = []
     if forbidden_paths(packet):
         packet_errors.append("privacy_forbidden_raw_content")
-    if packet.get("schema_version") != 1 or packet.get("protocol_version") != PROTOCOL_VERSION or packet.get("collection_mode") not in {"fixture", "manual_adapter_export"} or not isinstance(packet.get("samples"), list):
+    if packet.get("schema_version") != 1 or packet.get("protocol_version") != PROTOCOL_VERSION or packet.get("collection_mode") not in {"fixture", "manual_adapter_export", "codex_jsonl_export"} or not isinstance(packet.get("samples"), list):
         packet_errors.append("invalid_protocol_packet")
     reject_unknown(packet, {"schema_version", "protocol_version", "collection_mode", "samples"}, "packet", packet_errors)
     valid: list[dict[str, Any]] = []
