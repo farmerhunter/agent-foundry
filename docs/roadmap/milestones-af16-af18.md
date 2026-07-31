@@ -126,12 +126,17 @@ than pretend the old thread has lost its history.
 Do not collapse policy layers:
 
 - Current `low_limit` is emergency containment and readback protection.
-- No named normal operating modes or default thresholds are approved yet.
-  Dogfood calibration and a Human policy-freeze decision must determine them.
+- Three provisional policy-v0 profiles exist as static/read-only policy source
+  and Human readout. They are not a final policy freeze, auto-tuning, or
+  activation; calibration and a Human policy-freeze decision still determine
+  any normal operating policy.
 - `EffectiveControlSnapshot` records the exact source/version/band, window/root-budget constraints, measurement rules, and stop conditions used by a released literal contract.
 - Runtime receipts record facts; they do not self-tune policy.
 
-If a future run uses #442 values, label the evidence `low_limit_experiment`, not normal operation.
+If a future run uses [#442](https://github.com/farmerhunter/agent-foundry/issues/442)
+values, label the evidence `low_limit_experiment`, not normal operation.
+`low_limit` remains emergency-only and does not prove a normal operating
+default, policy final freeze, auto-tuning, or activation.
 
 ### AF18 Issue Path
 
@@ -146,40 +151,37 @@ Current canonical path:
 | Runtime-owned capture | #436 / #446 / #447 | Superseded input to MVP path | Runtime-owned observation evidence informed #449/#451. |
 | Integrated MVP scope | #449 | Accepted and closed | Defines bounded MVP path, portability, Human attention, and roadmap to calibration/freeze. |
 | MVP-1 control plane | #450 / PR #453 | Completed | Static/read-only portable control-plane and Human summary proof. |
-| MVP-2 observation bridge | #451 / PR #455 | Completed low-limit experiment | Proves bounded runtime-owned observation/lifecycle bridge; it does not establish normal operating thresholds or activation readiness. |
+| MVP-2 low-limit experiment context | [#451](https://github.com/farmerhunter/agent-foundry/issues/451) / [PR #455](https://github.com/farmerhunter/agent-foundry/pull/455) (`a148b8c4f20c75a58b7f60db221c323f7f6e9ca8`) | static/read-only | Static/reference low-limit experiment context only; it does not prove trusted context observation, normal operating thresholds, or activation readiness. |
 | MVP-3 dogfood | #452 | Accepted and closed | Supplies bounded dogfood evidence; it does not freeze normal policy or authorize activation. |
 | Post-MVP operational readiness | #454 | Accepted and closed | Decomposes calibration, policy freeze, RoleConversation/adaptor successor transition, recovery/rollback, LearningSignal harvest input, limited rollout, and final readiness. |
-| Calibration evidence | #457 | In progress | Design and run a bounded, repeatable normal-collaboration calibration protocol. Existing MVP evidence is input only; it does not establish a normal-policy baseline. |
-| Policy freeze HDC | #458 | Blocked behind #457 | Decide normal operating policy and rollback conditions only after comparable calibration evidence is accepted. |
-| RoleConversation/adaptor successor | #459 | Blocked behind calibration/policy direction | Prepare Human-facing role lifecycle onboarding and adapter successor transition without treating native task ids as Core domain objects. |
-| Recovery/rollback readiness | #460 | Blocked behind calibration/policy direction | Define fail-closed recovery and incident handling before broader activation. |
-| LearningSignal harvest contract | #461 | Blocked behind policy/Human release | Define terminal LearningSignal handoff and HarvestCandidateIndex projection before #426 harvest/publication work resumes. |
-| Limited real-mode rollout | #462 | Blocked behind post-MVP readiness gates | Run bounded real-mode evidence only after the prerequisite gates are accepted and Human release is explicit. |
+| Unavailable trusted-observation evidence | [#467](https://github.com/farmerhunter/agent-foundry/issues/467) / [PR #468](https://github.com/farmerhunter/agent-foundry/pull/468) | trusted live evidence required | The proposed observation bridge is unavailable evidence, never a successful bridge; it does not prove trusted live context observation. |
+| Calibration evidence | [#457](https://github.com/farmerhunter/agent-foundry/issues/457) / [PR #466](https://github.com/farmerhunter/agent-foundry/pull/466) (`d6b628d32a17fb3628db4a48bdae4f11ef975759`) | static/read-only | Closed historical calibration input only: `context_age_hours` and `total_context_tokens` are unavailable/not_exposed, so this does not prove normal numeric calibration or a final policy freeze. |
+| Policy freeze HDC | [#458](https://github.com/farmerhunter/agent-foundry/issues/458) | candidate-only | A candidate Human decision path for normal policy and rollback conditions; it does not prove a frozen policy, auto-tuning, or activation. |
+| RoleConversation/adaptor successor | [#459](https://github.com/farmerhunter/agent-foundry/issues/459) | candidate-only | Candidate lifecycle/onboarding preparation; it does not prove an adapter successor transition or live runtime behavior. |
+| Recovery/rollback readiness | [#460](https://github.com/farmerhunter/agent-foundry/issues/460) | candidate-only | Candidate fail-closed recovery and incident-handling preparation; it does not prove broader activation readiness. |
+| LearningSignal harvest contract | [#461](https://github.com/farmerhunter/agent-foundry/issues/461) | candidate-only | Contract preparation only; no candidate exists and this is not a formal Harvest or publication authorization. |
+| Provisional policy source/readout | [#469](https://github.com/farmerhunter/agent-foundry/issues/469) / [PR #473](https://github.com/farmerhunter/agent-foundry/pull/473) (`8ab846e19b268281899aa8c4747f50c08b7862ec`) | static/read-only | Static portable policy-source and Human readout only; it does not prove runtime enforcement, final freeze, or activation. |
+| Privacy-safe telemetry aggregation | [#470](https://github.com/farmerhunter/agent-foundry/issues/470) / [PR #474](https://github.com/farmerhunter/agent-foundry/pull/474) (`6a6a3bc3fdf621d27a4c7b43b8366dbb890a45a4`) | static/read-only | Static privacy-safe telemetry-aggregation only; it does not prove a trusted live telemetry channel or activation. |
+| W10 provisional-policy evidence | [#471](https://github.com/farmerhunter/agent-foundry/issues/471) | local deterministic/reference only | W10 local deterministic/reference-only evidence; it is not trusted live evidence or a formal Harvest. |
+| Limited real-mode rollout | [#462](https://github.com/farmerhunter/agent-foundry/issues/462) | trusted live evidence required | P3 trusted live evidence and a Human release remain required; it does not prove rollout, activation, or final readiness. |
 | Parent Epic/readiness | #418 / #426 / #427 | Held | Final publish/runtime activation/readiness remain later gates. |
 
 ### AF18 Next Gated Work
 
-The active work is #457 calibration evidence. It must first define and implement
-a bounded, repeatable calibration protocol, then use it to collect comparable
-normal-collaboration samples. Existing MVP and dogfood evidence is calibration
-input, not a substitute for that collection.
-
-#458 must remain blocked until #457 accepts the evidence needed for a Human
-decision, without collapsing low-limit containment into normal operating
-defaults. The remaining post-MVP issues stay blocked until
-their prerequisite evidence or Human release is explicit:
-
-- #459 defines RoleConversation onboarding and adapter successor transition.
-- #460 defines recovery, rollback, and incident handling readiness.
-- #461 defines LearningSignal terminal handoff and HarvestCandidateIndex contract.
-- #462 runs limited real-mode rollout evidence.
+P0, P1, and P2 are preparation only. They must not be described as trusted
+live evidence, normal-policy calibration, formal Harvest, final policy freeze,
+or activation. The gated route is strictly P3 -> P4 -> #426 -> #427 ->
+main/release: P3 requires trusted live evidence, P4 requires its prerequisite
+evidence and a Human release, and #426, #427, and main/release each retain
+their Human gates.
 
 Until these gates are explicitly accepted:
 
 - Do not resume #435's old pre-reset implementation route.
 - Do not treat #442 values as normal Coordinator/session policy.
-- Do not release #426/#427.
-- Do not activate runtime/config/hooks, generated publish, external execution, final AF18 readiness, or policy freeze.
+- Do not release #426/#427 or main/release without their Human gates.
+- Do not activate runtime/config/hooks, generated publish, external execution,
+  final AF18 readiness, final policy freeze, auto-tuning, or activation.
 
 ### AF18 Cleanup Rules
 
