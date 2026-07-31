@@ -175,6 +175,69 @@ def main() -> int:
     })
     expect("spawn-agent-forged-host-collected-is-unverified", code == 0 and provenance_recovery(output, "unknown") and output["schema_provenance"]["evidence_ref_status"] == "unverified", output, errors)
 
+    for action in ("create", "link", "navigate", "measure"):
+        code, output = run(
+            {
+                "role_operation": {
+                    "action": action,
+                    "capability_receipt": {
+                        "capability": action,
+                        "status": "supported",
+                        "provenance": "observed",
+                        "native_metadata": {"native_thread_id": f"codex-{action}-fixture"},
+                    },
+                }
+            }
+        )
+        expect(
+            f"role-operation-{action}-supported-dry-run",
+            code == 0
+            and output["adapter_plan"]["adapter_decision"] == "dry_run_ready"
+            and output["adapter_plan"]["tool_call_proposed"] == "not_available"
+            and output["adapter_plan"]["native_ids_are_metadata_only"] is True
+            and output["mutation_performed"] is False
+            and output["dispatch_performed"] is False,
+            output,
+            errors,
+        )
+
+    degraded_operation = {
+        "role_operation": {
+            "action": "measure",
+            "capability_receipt": {"capability": "measure", "status": "degraded", "provenance": "estimated"},
+        }
+    }
+    code, output = run(degraded_operation)
+    expect("role-operation-degraded-no-call", code == 0 and output["adapter_plan"]["adapter_decision"] == "dry_run_degraded" and output["adapter_plan"]["tool_call_proposed"] == "not_available", output, errors)
+
+    unsupported_operation = {
+        "role_operation": {
+            "action": "create",
+            "capability_receipt": {"capability": "create", "status": "unsupported", "provenance": "observed"},
+        }
+    }
+    code, output = run(unsupported_operation)
+    expect("role-operation-unsupported-fails-closed", code == 0 and output["adapter_plan"]["adapter_decision"] == "hold_required", output, errors)
+
+    unavailable_operation = {
+        "role_operation": {
+            "action": "navigate",
+            "capability_receipt": {"capability": "navigate", "status": "supported", "provenance": "unavailable"},
+        }
+    }
+    code, output = run(unavailable_operation)
+    expect("role-operation-unavailable-fails-closed", code == 0 and output["adapter_plan"]["adapter_decision"] == "hold_required", output, errors)
+
+    private_operation = {
+        "role_operation": {
+            "action": "link",
+            "prompt": "private",
+            "capability_receipt": {"capability": "link", "status": "supported", "provenance": "observed"},
+        }
+    }
+    code, output = run(private_operation)
+    expect("role-operation-privacy-fails-closed", code == 0 and output["adapter_plan"]["adapter_decision"] == "hold_required", output, errors)
+
     if errors:
         print("\n".join(errors), file=sys.stderr)
         return 1
