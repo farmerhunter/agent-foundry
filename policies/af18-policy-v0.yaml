@@ -3,11 +3,11 @@
   "policy_version": "v0",
   "default_profile": "normal",
   "profiles": {
-    "economy": {"logical_model": "cost_optimized", "reasoning": "low", "adapter_mapping": {"codex": {"model_id": "gpt-5.6-luna"}}, "context_tokens": 12000, "context_age_hours": 12, "context_turns": 6, "work_ceiling_tokens": 60000},
+    "economy": {"logical_model": "cost_optimized", "reasoning": "medium", "adapter_mapping": {"codex": {"model_id": "gpt-5.6-luna"}}, "context_tokens": 12000, "context_age_hours": 12, "context_turns": 6, "work_ceiling_tokens": 60000},
     "normal": {"logical_model": "general", "reasoning": "medium", "adapter_mapping": {"codex": {"model_id": "gpt-5.6-terra"}}, "context_tokens": 24000, "context_age_hours": 24, "context_turns": 12, "work_ceiling_tokens": 150000},
     "performance": {"logical_model": "high_capability", "reasoning": "medium", "adapter_mapping": {"codex": {"model_id": "gpt-5.6-sol"}}, "context_tokens": 48000, "context_age_hours": 24, "context_turns": 20, "work_ceiling_tokens": 300000}
   },
-  "controlled_overrides": {"cost_optimized_medium": {"logical_model": "cost_optimized", "reasoning": "medium", "profile": "economy", "adapter_mapping": {"codex": {"model_id": "gpt-5.6-luna"}}, "required_work_evidence": {"classification": "low_risk_multi_step_execution_or_test", "risk_level": "low"}}, "general_low": {"logical_model": "general", "reasoning": "low", "profile": "normal", "adapter_mapping": {"codex": {"model_id": "gpt-5.6-terra"}}, "required_work_evidence": {"classification": "small_time_sensitive_locally_ambiguous", "risk_level": "low"}}},
+  "controlled_overrides": {"cost_optimized_low": {"logical_model": "cost_optimized", "reasoning": "low", "profile": "economy", "adapter_mapping": {"codex": {"model_id": "gpt-5.6-luna"}}, "required_work_evidence": {"classification": "mechanical_work", "risk_level": "low", "fixed_input_output": true, "verification_oracle": "nonempty", "requires_judgment": false, "external_side_effect": false, "failure_rerunnable": true}}, "general_low": {"logical_model": "general", "reasoning": "low", "profile": "normal", "adapter_mapping": {"codex": {"model_id": "gpt-5.6-terra"}}, "required_work_evidence": {"classification": "small_time_sensitive_locally_ambiguous", "risk_level": "low"}}},
   "migration_ab_baseline": {"logical_model": "general", "reasoning": "medium", "adapter_mapping": {"codex": {"model_id": "gpt-5.5"}}, "default_route": false, "requires_explicit_migration_or_ab_contract": true},
   "safety": {"unlisted_model_or_effort": "human_approval_required", "higher_rules_precede_profile": true},
   "compatibility": {"low_limit": {"status": "emergency_only", "historic_context_ceiling": 12000, "normal_path_cap": false, "deployed_gate_remains_active_until_independent_acceptance": true}}

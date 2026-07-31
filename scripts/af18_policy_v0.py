@@ -16,13 +16,29 @@ PROFILE_NAMES = {"economy", "normal", "performance"}
 LOGICAL_MODELS = {"cost_optimized", "general", "high_capability"}
 REASONING_TIERS = {"low", "medium"}
 PROFILE_MAPPING = {
-    "economy": ("cost_optimized", "low", "gpt-5.6-luna"),
+    "economy": ("cost_optimized", "medium", "gpt-5.6-luna"),
     "normal": ("general", "medium", "gpt-5.6-terra"),
     "performance": ("high_capability", "medium", "gpt-5.6-sol"),
 }
 OVERRIDE_CONTRACTS = {
-    ("cost_optimized", "medium"): ("economy", "low_risk_multi_step_execution_or_test", "gpt-5.6-luna"),
-    ("general", "low"): ("normal", "small_time_sensitive_locally_ambiguous", "gpt-5.6-terra"),
+    ("cost_optimized", "low"): {
+        "profile": "economy",
+        "adapter_model": "gpt-5.6-luna",
+        "required_evidence": {
+            "classification": "mechanical_work",
+            "risk_level": "low",
+            "fixed_input_output": True,
+            "verification_oracle": "nonempty",
+            "requires_judgment": False,
+            "external_side_effect": False,
+            "failure_rerunnable": True,
+        },
+    },
+    ("general", "low"): {
+        "profile": "normal",
+        "adapter_model": "gpt-5.6-terra",
+        "required_evidence": {"classification": "small_time_sensitive_locally_ambiguous", "risk_level": "low"},
+    },
 }
 PERMITTED_OVERRIDES = set(OVERRIDE_CONTRACTS)
 
@@ -62,13 +78,20 @@ def validate_policy(policy: dict[str, Any]) -> None:
         if any(not isinstance(profile[field], int) or profile[field] <= 0 for field in required - {"logical_model", "reasoning", "adapter_mapping"}):
             raise PolicyError(f"invalid profile limits: {name}")
     overrides = policy.get("controlled_overrides")
-    override_mappings = {
-        (item.get("logical_model"), item.get("reasoning"), item.get("profile"), item.get("required_work_evidence", {}).get("classification"), item.get("required_work_evidence", {}).get("risk_level"), item.get("adapter_mapping", {}).get("codex", {}).get("model_id"))
-        for item in overrides.values() if isinstance(item, dict) and isinstance(item.get("adapter_mapping"), dict) and isinstance(item["adapter_mapping"].get("codex"), dict)
-    } if isinstance(overrides, dict) else set()
-    expected_overrides = {(model, reasoning, profile, classification, "low", adapter_model) for (model, reasoning), (profile, classification, adapter_model) in OVERRIDE_CONTRACTS.items()}
-    if not isinstance(overrides, dict) or override_mappings != expected_overrides:
+    if not isinstance(overrides, dict) or set(overrides) != {"cost_optimized_low", "general_low"}:
         raise PolicyError("malformed controlled overrides")
+    for pair, contract in OVERRIDE_CONTRACTS.items():
+        name = "_".join(pair)
+        item = overrides.get(name)
+        if not isinstance(item, dict):
+            raise PolicyError("malformed controlled overrides")
+        mapping = item.get("adapter_mapping", {}).get("codex") if isinstance(item.get("adapter_mapping"), dict) else None
+        if (
+            item.get("logical_model"), item.get("reasoning"), item.get("profile"),
+            mapping.get("model_id") if isinstance(mapping, dict) else None,
+            item.get("required_work_evidence"),
+        ) != (*pair, contract["profile"], contract["adapter_model"], contract["required_evidence"]):
+            raise PolicyError("malformed controlled overrides")
     baseline = policy.get("migration_ab_baseline", {})
     baseline_mapping = baseline.get("adapter_mapping") if isinstance(baseline, dict) else None
     if not isinstance(baseline_mapping, dict) or not isinstance(baseline_mapping.get("codex"), dict) or baseline_mapping["codex"].get("model_id") != "gpt-5.5" or baseline.get("default_route") is not False or baseline.get("requires_explicit_migration_or_ab_contract") is not True:
@@ -102,16 +125,28 @@ def validate_override(work: dict[str, Any], profile_name: str, pair: tuple[Any, 
     evidence = work.get("override_evidence")
     if not isinstance(evidence, dict):
         return False, ["missing_override_evidence"], None
-    expected_profile, expected_classification, _ = contract
+    expected_profile = contract["profile"]
+    required_evidence = contract["required_evidence"]
     stops: list[str] = []
     if profile_name != expected_profile:
         stops.append("override_profile_mismatch")
-    if evidence.get("classification") != expected_classification:
+    if evidence.get("classification") != required_evidence["classification"]:
         stops.append("override_classification_mismatch")
-    if evidence.get("risk_level") != "low":
+    if evidence.get("risk_level") != required_evidence["risk_level"]:
         stops.append("override_risk_conflict")
     if not nonempty_reason(evidence.get("reason")):
         stops.append("missing_override_evidence")
+    if pair == ("cost_optimized", "low"):
+        if evidence.get("fixed_input_output") is not True:
+            stops.append("mechanical_fixed_input_output_required")
+        if not nonempty_reason(evidence.get("verification_oracle")):
+            stops.append("mechanical_verification_oracle_required")
+        if evidence.get("requires_judgment") is not False:
+            stops.append("mechanical_judgment_not_allowed")
+        if evidence.get("external_side_effect") is not False:
+            stops.append("mechanical_external_side_effect_not_allowed")
+        if evidence.get("failure_rerunnable") is not True:
+            stops.append("mechanical_failure_rerunnable_required")
     constraints = work.get("policy_constraints", {})
     if not isinstance(constraints, dict) or constraints.get("allow_work_reasoned_overrides", True) is not True:
         stops.append("override_conflicts_with_policy")
@@ -176,12 +211,25 @@ def effective_snapshot(policy: dict[str, Any], work: dict[str, Any]) -> dict[str
                 adapter_model = override["adapter_mapping"]["codex"]["model_id"]
                 break
     output["adapter_metadata"] = {"adapter": "codex", "model_id": adapter_model}
-    output["override_evidence"] = {"classification": override_evidence["classification"], "risk_level": override_evidence["risk_level"], "reason": override_evidence["reason"]} if override_allowed and override_evidence else None
+    output["override_evidence"] = compact_override_evidence(override_evidence) if override_allowed and override_evidence else None
     return output
 
 
 def hold_snapshot(policy: dict[str, Any], work_id: str, stops: list[str], controls: dict[str, Any]) -> dict[str, Any]:
     return {"policy_id": policy["policy_id"], "policy_version": policy["policy_version"], "work_id": work_id, "route_decision": "hold_for_decision" if stops else "read_only_policy_ready", "stop_conditions": stops, "effective_controls": controls, "mutation_performed": False, "dispatch_performed": False}
+
+
+def compact_override_evidence(evidence: dict[str, Any]) -> dict[str, Any]:
+    result = {"classification": evidence["classification"], "risk_level": evidence["risk_level"], "reason": evidence["reason"]}
+    if evidence["classification"] == "mechanical_work":
+        result.update({
+            "fixed_input_output": evidence["fixed_input_output"],
+            "verification_oracle_present": nonempty_reason(evidence["verification_oracle"]),
+            "requires_judgment": evidence["requires_judgment"],
+            "external_side_effect": evidence["external_side_effect"],
+            "failure_rerunnable": evidence["failure_rerunnable"],
+        })
+    return result
 
 
 def human_readout(snapshot: dict[str, Any]) -> dict[str, Any]:
