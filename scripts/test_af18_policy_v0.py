@@ -46,7 +46,7 @@ def main() -> int:
     source = policy.load_json_object(POLICY_PATH, "policy")
     policy.validate_policy(source)
     expected = {
-        "economy": ("cost_optimized", "low", "gpt-5.6-luna", 12000, 12, 6, 60000),
+        "economy": ("cost_optimized", "medium", "gpt-5.6-luna", 12000, 12, 6, 60000),
         "normal": ("general", "medium", "gpt-5.6-terra", 24000, 24, 12, 150000),
         "performance": ("high_capability", "medium", "gpt-5.6-sol", 48000, 24, 20, 300000),
     }
@@ -57,28 +57,46 @@ def main() -> int:
     normal = policy.effective_snapshot(source, work())
     errors += expect("inherits-normal", normal["route_decision"] == "read_only_policy_ready" and normal["effective_controls"]["profile"]["state"] == "inherits" and normal["effective_controls"]["profile"]["value"] == "normal", normal)
     economy = policy.effective_snapshot(source, work(profile="economy", root_budget_tokens=90000))
-    errors += expect("explicit-profile-min-cap", economy["effective_work_cap_tokens"] == 60000 and economy["effective_controls"]["profile"]["state"] == "explicit", economy)
+    errors += expect("economy-luna-medium-default-min-cap", economy["route_decision"] == "read_only_policy_ready" and economy["effective_work_cap_tokens"] == 60000 and economy["effective_controls"]["reasoning"]["value"] == "medium" and economy["adapter_metadata"]["model_id"] == "gpt-5.6-luna", economy)
     performance = policy.effective_snapshot(source, work(profile="performance", root_budget_tokens=70000))
     errors += expect("performance-default-min-cap", performance["route_decision"] == "read_only_policy_ready" and performance["effective_work_cap_tokens"] == 70000 and performance["adapter_metadata"]["model_id"] == "gpt-5.6-sol", performance)
-    luna_evidence = {"classification": "low_risk_multi_step_execution_or_test", "risk_level": "low", "reason": "bounded low-risk test sequence"}
-    luna_override = policy.effective_snapshot(source, work(profile="economy", requested_envelope={"logical_model": "cost_optimized", "reasoning": "medium", "context_tokens": 12000}, override_evidence=luna_evidence))
-    errors += expect("luna-medium-override", luna_override["route_decision"] == "read_only_policy_ready" and luna_override["adapter_metadata"]["model_id"] == "gpt-5.6-luna" and luna_override["override_evidence"] == luna_evidence, luna_override)
+    luna_evidence = {"classification": "mechanical_work", "risk_level": "low", "reason": "fixed fixture comparison", "fixed_input_output": True, "verification_oracle": "exit status and exact JSON", "requires_judgment": False, "external_side_effect": False, "failure_rerunnable": True}
+    luna_override = policy.effective_snapshot(source, work(profile="economy", requested_envelope={"logical_model": "cost_optimized", "reasoning": "low", "context_tokens": 12000}, override_evidence=luna_evidence))
+    errors += expect("luna-low-mechanical-override", luna_override["route_decision"] == "read_only_policy_ready" and luna_override["adapter_metadata"]["model_id"] == "gpt-5.6-luna" and luna_override["override_evidence"] == {"classification": "mechanical_work", "risk_level": "low", "reason": "fixed fixture comparison", "fixed_input_output": True, "verification_oracle_present": True, "requires_judgment": False, "external_side_effect": False, "failure_rerunnable": True}, luna_override)
+    for field, invalid_value, stop in (
+        ("fixed_input_output", False, "mechanical_fixed_input_output_required"),
+        ("verification_oracle", "", "mechanical_verification_oracle_required"),
+        ("requires_judgment", True, "mechanical_judgment_not_allowed"),
+        ("external_side_effect", True, "mechanical_external_side_effect_not_allowed"),
+        ("failure_rerunnable", False, "mechanical_failure_rerunnable_required"),
+    ):
+        invalid_evidence = {**luna_evidence, field: invalid_value}
+        invalid_override = policy.effective_snapshot(source, work(profile="economy", requested_envelope={"logical_model": "cost_optimized", "reasoning": "low", "context_tokens": 12000}, override_evidence=invalid_evidence))
+        errors += expect(f"mechanical-{field}-invalid-holds", invalid_override["route_decision"] == "hold_for_decision" and stop in invalid_override["stop_conditions"], invalid_override)
+        missing_field = dict(luna_evidence)
+        missing_field.pop(field)
+        missing_override = policy.effective_snapshot(source, work(profile="economy", requested_envelope={"logical_model": "cost_optimized", "reasoning": "low", "context_tokens": 12000}, override_evidence=missing_field))
+        errors += expect(f"mechanical-{field}-missing-holds", missing_override["route_decision"] == "hold_for_decision" and stop in missing_override["stop_conditions"], missing_override)
+    for field in ("reason", "verification_oracle"):
+        malformed_evidence = {**luna_evidence, field: ["not", "a", "string"]}
+        malformed_override = policy.effective_snapshot(source, work(profile="economy", requested_envelope={"logical_model": "cost_optimized", "reasoning": "low", "context_tokens": 12000}, override_evidence=malformed_evidence))
+        errors += expect(f"mechanical-{field}-malformed-holds", malformed_override["route_decision"] == "hold_for_decision", malformed_override)
     terra_evidence = {"classification": "small_time_sensitive_locally_ambiguous", "risk_level": "low", "reason": "time-sensitive local ambiguity"}
     terra_override = policy.effective_snapshot(source, work(requested_envelope={"logical_model": "general", "reasoning": "low", "context_tokens": 24000}, override_evidence=terra_evidence))
     errors += expect("terra-low-override", terra_override["route_decision"] == "read_only_policy_ready" and terra_override["adapter_metadata"]["model_id"] == "gpt-5.6-terra", terra_override)
-    arbitrary_reason = policy.effective_snapshot(source, work(profile="economy", requested_envelope={"logical_model": "cost_optimized", "reasoning": "medium", "context_tokens": 12000}, override_reason="anything"))
+    arbitrary_reason = policy.effective_snapshot(source, work(profile="economy", requested_envelope={"logical_model": "cost_optimized", "reasoning": "low", "context_tokens": 12000}, override_reason="anything"))
     errors += expect("arbitrary-reason-holds", "missing_override_evidence" in arbitrary_reason["stop_conditions"], arbitrary_reason)
-    wrong_category = policy.effective_snapshot(source, work(profile="economy", requested_envelope={"logical_model": "cost_optimized", "reasoning": "medium", "context_tokens": 12000}, override_evidence=terra_evidence))
+    wrong_category = policy.effective_snapshot(source, work(profile="economy", requested_envelope={"logical_model": "cost_optimized", "reasoning": "low", "context_tokens": 12000}, override_evidence=terra_evidence))
     errors += expect("wrong-override-category-holds", "override_classification_mismatch" in wrong_category["stop_conditions"], wrong_category)
-    missing_evidence = policy.effective_snapshot(source, work(profile="economy", requested_envelope={"logical_model": "cost_optimized", "reasoning": "medium", "context_tokens": 12000}))
+    missing_evidence = policy.effective_snapshot(source, work(profile="economy", requested_envelope={"logical_model": "cost_optimized", "reasoning": "low", "context_tokens": 12000}))
     errors += expect("missing-override-evidence-holds", "missing_override_evidence" in missing_evidence["stop_conditions"], missing_evidence)
-    high_risk = policy.effective_snapshot(source, work(profile="economy", requested_envelope={"logical_model": "cost_optimized", "reasoning": "medium", "context_tokens": 12000}, override_evidence={**luna_evidence, "risk_level": "high"}))
+    high_risk = policy.effective_snapshot(source, work(profile="economy", requested_envelope={"logical_model": "cost_optimized", "reasoning": "low", "context_tokens": 12000}, override_evidence={**luna_evidence, "risk_level": "high"}))
     errors += expect("high-risk-override-holds", "override_risk_conflict" in high_risk["stop_conditions"], high_risk)
-    privacy_conflict = policy.effective_snapshot(source, work(profile="economy", requested_envelope={"logical_model": "cost_optimized", "reasoning": "medium", "context_tokens": 12000}, override_evidence=luna_evidence, safety={"allowlist_compliant": True, "risk_compliant": True, "privacy_compliant": False}))
+    privacy_conflict = policy.effective_snapshot(source, work(profile="economy", requested_envelope={"logical_model": "cost_optimized", "reasoning": "low", "context_tokens": 12000}, override_evidence=luna_evidence, safety={"allowlist_compliant": True, "risk_compliant": True, "privacy_compliant": False}))
     errors += expect("privacy-conflict-override-holds", "privacy_not_confirmed" in privacy_conflict["stop_conditions"], privacy_conflict)
-    conflicting_policy = policy.effective_snapshot(source, work(profile="economy", requested_envelope={"logical_model": "cost_optimized", "reasoning": "medium", "context_tokens": 12000}, override_evidence=luna_evidence, policy_constraints={"allow_work_reasoned_overrides": False}))
+    conflicting_policy = policy.effective_snapshot(source, work(profile="economy", requested_envelope={"logical_model": "cost_optimized", "reasoning": "low", "context_tokens": 12000}, override_evidence=luna_evidence, policy_constraints={"allow_work_reasoned_overrides": False}))
     errors += expect("conflicting-policy-override-holds", "override_conflicts_with_policy" in conflicting_policy["stop_conditions"], conflicting_policy)
-    profile_mismatch = policy.effective_snapshot(source, work(requested_envelope={"logical_model": "cost_optimized", "reasoning": "medium", "context_tokens": 12000}, override_evidence=luna_evidence))
+    profile_mismatch = policy.effective_snapshot(source, work(requested_envelope={"logical_model": "cost_optimized", "reasoning": "low", "context_tokens": 12000}, override_evidence=luna_evidence))
     errors += expect("override-profile-mismatch-holds", "override_profile_mismatch" in profile_mismatch["stop_conditions"], profile_mismatch)
     for label, envelope in (("high", {"logical_model": "general", "reasoning": "high", "context_tokens": 24000}), ("xhigh", {"logical_model": "general", "reasoning": "xhigh", "context_tokens": 24000}), ("pro", {"logical_model": "pro", "reasoning": "medium", "context_tokens": 24000}), ("gpt55", {"logical_model": "gpt-5.5", "reasoning": "medium", "context_tokens": 24000})):
         held = policy.effective_snapshot(source, work(requested_envelope=envelope, override_evidence=terra_evidence))
