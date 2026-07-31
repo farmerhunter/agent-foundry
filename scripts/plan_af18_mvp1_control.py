@@ -455,7 +455,7 @@ def role_lifecycle_projection(packet: dict[str, Any], now: dt.datetime) -> dict[
     elif action in {"request_successor", "recover_successor"}:
         successor = request.get("successor") if isinstance(request.get("successor"), dict) else {}
         recovery_attempts = request.get("recovery_attempts", 0)
-        if not isinstance(recovery_attempts, int) or recovery_attempts < 0:
+        if type(recovery_attempts) is not int or recovery_attempts not in {0, 1}:
             stops.append("invalid_recovery_attempts")
             recovery_attempts = 1
         for field in (

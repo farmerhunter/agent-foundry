@@ -451,6 +451,25 @@ def main() -> int:
         NOW,
     )
     expect("successor-only-one-recovery", exhausted_successor["one_recovery_remaining"] is False, exhausted_successor)
+    second_recovery = planner.role_lifecycle_projection(
+        {"role_lifecycle": {"action": "recover_successor", "conversation": conversation, "successor": successor, "recovery_attempts": 2}},
+        NOW,
+    )
+    expect(
+        "second-recovery-fails-closed",
+        second_recovery["decision"] == "hold_required"
+        and second_recovery["operation_allowed"] is False
+        and second_recovery["predecessor_state"] == "current"
+        and "successor_packet" not in second_recovery
+        and second_recovery["root_budget_tokens"] == 120000
+        and "invalid_recovery_attempts" in second_recovery["stop_conditions"],
+        second_recovery,
+    )
+    boolean_recovery = planner.role_lifecycle_projection(
+        {"role_lifecycle": {"action": "recover_successor", "conversation": conversation, "successor": successor, "recovery_attempts": True}},
+        NOW,
+    )
+    expect("boolean-recovery-fails-closed", "invalid_recovery_attempts" in boolean_recovery["stop_conditions"], boolean_recovery)
 
     incident_base = {
         "event_time": "2026-07-29T03:40:00Z",
