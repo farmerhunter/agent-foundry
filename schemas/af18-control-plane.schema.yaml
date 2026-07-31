@@ -390,3 +390,213 @@ properties:
     type: array
     items:
       type: object
+  role_lifecycle:
+    type: object
+    additionalProperties: false
+    required:
+      - action
+      - conversation
+    properties:
+      action:
+        enum:
+          - onboard_fresh
+          - adopt_legacy
+          - request_successor
+          - recover_successor
+      onboarding_key:
+        type: string
+        minLength: 1
+      explicit_adoption:
+        type: boolean
+      compactness_preflight:
+        enum:
+          - passed
+          - unavailable
+          - not_run
+      recovery_attempts:
+        type: integer
+        minimum: 0
+        maximum: 1
+      existing_conversations:
+        type: array
+        items:
+          type: object
+      conversation:
+        type: object
+        additionalProperties: false
+        required:
+          - role_conversation_id
+          - project_id
+          - role
+          - work_id
+          - issue
+          - durable_anchor
+          - profile
+          - model
+          - reasoning
+          - root_budget_tokens
+          - max_age_hours
+          - max_turns
+        properties:
+          role_conversation_id:
+            type: string
+            minLength: 1
+          project_id:
+            type: string
+            minLength: 1
+          role:
+            type: string
+            minLength: 1
+          state:
+            enum: [current, historical_reference]
+          legacy:
+            type: boolean
+          work_id:
+            type: string
+            minLength: 1
+          issue:
+            type: integer
+            minimum: 1
+          durable_anchor:
+            type: string
+            minLength: 1
+          profile:
+            const: normal
+          model:
+            const: gpt-5.6-terra
+          reasoning:
+            const: medium
+          root_budget_tokens:
+            const: 120000
+          max_age_hours:
+            const: 24
+          max_turns:
+            const: 12
+      successor:
+        type: object
+        additionalProperties: false
+        required:
+          - context_window_id
+          - compact_capsule
+          - issue
+          - durable_anchor
+          - work_id
+          - root_budget_tokens
+          - remaining_budget_tokens
+          - max_age_hours
+          - max_turns
+          - ready
+        properties:
+          context_window_id:
+            type: string
+            minLength: 1
+          compact_capsule:
+            type: object
+            additionalProperties: false
+            required: [evidence_refs]
+            properties:
+              evidence_refs:
+                type: array
+                minItems: 1
+                items:
+                  type: string
+                  minLength: 1
+          issue:
+            type: integer
+            minimum: 1
+          durable_anchor:
+            type: string
+            minLength: 1
+          work_id:
+            type: string
+            minLength: 1
+          root_budget_tokens:
+            const: 120000
+          remaining_budget_tokens:
+            type: integer
+            minimum: 0
+            maximum: 120000
+          max_age_hours:
+            const: 24
+          max_turns:
+            const: 12
+          ready:
+            type: boolean
+  incident:
+    type: object
+    additionalProperties: false
+    required:
+      - category
+      - event_time
+      - sequence
+      - work_id
+      - issue
+      - durable_anchor
+      - root_budget_tokens
+      - remaining_budget_tokens
+    properties:
+      category:
+        enum:
+          - stale_no_owner
+          - evidence_conflict
+          - budget_breach
+          - unavailable_observation
+          - duplicate_dispatch
+          - successor_failure
+          - escalation_failure
+      event_time:
+        type: string
+        format: date-time
+      sequence:
+        type: integer
+        minimum: 1
+      work_id:
+        type: string
+        minLength: 1
+      issue:
+        type: integer
+        minimum: 1
+      durable_anchor:
+        type: string
+        minLength: 1
+      root_budget_tokens:
+        const: 120000
+      remaining_budget_tokens:
+        type: integer
+        minimum: 0
+        maximum: 120000
+      owner:
+        type: string
+        minLength: 1
+      reason:
+        type: string
+        minLength: 1
+      evidence_ref:
+        type: string
+        minLength: 1
+      capability:
+        type: string
+        minLength: 1
+      observation:
+        type: object
+        additionalProperties: false
+        required: [provenance]
+        properties:
+          provenance:
+            enum: [observed, estimated, unavailable]
+      recovery_attempts:
+        type: integer
+        minimum: 0
+        maximum: 1
+      requested_model:
+        type: string
+        minLength: 1
+      effective_model:
+        type: string
+        minLength: 1
+      requested_reasoning:
+        type: string
+        minLength: 1
+      effective_reasoning:
+        type: string
+        minLength: 1

@@ -32,6 +32,13 @@ NO_ADAPTER_ROUTES = {
 DISPATCH_ADVISORY_ROUTES = {"dispatch_advisory"} | set(ROUTE_DECISION_TO_TOPOLOGY)
 VALID_STATUSES = {"supported", "unsupported", "unknown", "degraded", "not_available"}
 HOST_COLLECTION_MODE = "host_collected"
+ROLE_OPERATION_CAPABILITIES = {
+    "create": "create",
+    "link": "link",
+    "navigate": "navigate",
+    "measure": "measure",
+}
+FORBIDDEN_RECEIPT_KEYS = {"prompt", "body", "message", "messages", "content", "transcript", "tool_output", "raw_log"}
 
 
 def fail(message: str) -> None:
@@ -50,6 +57,20 @@ def require_object(root: dict[str, Any], name: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         fail(f"missing object: {name}")
     return value
+
+
+def forbidden_paths(value: Any, path: str = "$") -> list[str]:
+    if isinstance(value, dict):
+        found: list[str] = []
+        for key, item in value.items():
+            child = f"{path}.{key}"
+            if key in FORBIDDEN_RECEIPT_KEYS:
+                found.append(child)
+            found.extend(forbidden_paths(item, child))
+        return found
+    if isinstance(value, list):
+        return [item for index, value_item in enumerate(value) for item in forbidden_paths(value_item, f"{path}[{index}]")]
+    return []
 
 
 def parse_timestamp(value: Any) -> datetime | None:
@@ -186,7 +207,71 @@ def role_task_dispatch_evidence(portable: dict[str, Any], root: dict[str, Any]) 
     }
 
 
+def project_role_operation(root: dict[str, Any]) -> dict[str, Any]:
+    operation = root.get("role_operation")
+    if not isinstance(operation, dict):
+        fail("role_operation must be an object")
+    action = operation.get("action")
+    capability = ROLE_OPERATION_CAPABILITIES.get(action)
+    receipt = operation.get("capability_receipt")
+    forbidden = forbidden_paths(operation)
+    status = "unsupported"
+    provenance = "unavailable"
+    native_metadata: dict[str, Any] = {}
+    reasons: list[str] = []
+    if forbidden:
+        reasons.append("privacy-safe receipt contains forbidden raw content")
+    if capability is None:
+        reasons.append("unknown role operation")
+    if not isinstance(receipt, dict):
+        reasons.append("capability receipt is unavailable")
+    else:
+        status = receipt.get("status", "unsupported")
+        provenance = receipt.get("provenance", "unavailable")
+        metadata = receipt.get("native_metadata", {})
+        if isinstance(metadata, dict):
+            native_metadata = metadata
+        if receipt.get("capability") != capability:
+            reasons.append("capability receipt does not bind the requested operation")
+        if status not in VALID_STATUSES:
+            reasons.append("capability receipt has an unknown status")
+        if provenance not in {"observed", "estimated", "unavailable"}:
+            reasons.append("capability receipt has an unknown provenance")
+    if status in {"unsupported", "not_available", "unknown"} or provenance == "unavailable":
+        reasons.append("capability is unavailable or unsupported")
+        decision = "hold_required"
+    elif reasons:
+        decision = "hold_required"
+    elif status == "degraded":
+        decision = "dry_run_degraded"
+        reasons.append("capability is degraded; no live operation is proposed")
+    else:
+        decision = "dry_run_ready"
+    return {
+        "adapter": "codex",
+        "adapter_plan": {
+            "mode": "dry_run",
+            "adapter_decision": decision,
+            "role_operation": action,
+            "capability": capability or "not_available",
+            "capability_status": status,
+            "provenance": provenance,
+            "tool_call_proposed": "not_available",
+            "native_ids_are_metadata_only": True,
+            "adapter_metadata": native_metadata,
+        },
+        "attention": reasons,
+        "next_action": "Keep the portable Core route unchanged; obtain supported capability evidence before separately authorized execution.",
+        "mutation_performed": False,
+        "dispatch_performed": False,
+        "user_config_mutation_performed": False,
+        "hook_or_custom_agent_mutation_performed": False,
+    }
+
+
 def project(root: dict[str, Any]) -> dict[str, Any]:
+    if "role_operation" in root:
+        return project_role_operation(root)
     portable = require_object(root, "portable_plan")
     dispatch_plan = require_object(portable, "dispatch_plan")
     require_object(portable, "conversation_projection")
