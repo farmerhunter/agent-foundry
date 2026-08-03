@@ -6,7 +6,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-from practice_catalog_snapshot import POINTER_FORMAT, PointerReceipt, ValidationFailure, _valid_hash
+from practice_catalog_snapshot import POINTER_FORMAT, PointerReceipt, PointerStoreCapability, ValidationFailure, _make_receipt, _register_receipt_backend, _valid_hash
 
 
 class SQLitePointerStore:
@@ -33,6 +33,7 @@ class SQLitePointerStore:
         if not _valid_hash(initial_hash):
             raise ValidationFailure("invalid initial pointer hash")
         self.path = resolved
+        _register_receipt_backend(self)
         self._connection = sqlite3.connect(str(resolved), timeout=2.0)
         self._connection.execute("CREATE TABLE IF NOT EXISTS pointer (slot INTEGER PRIMARY KEY CHECK (slot = 1), generation INTEGER NOT NULL, snapshot_hash TEXT NOT NULL)")
         row = self._connection.execute("SELECT generation, snapshot_hash FROM pointer WHERE slot = 1").fetchone()
@@ -51,7 +52,8 @@ class SQLitePointerStore:
             raise ValidationFailure("pointer row missing")
         self.read_calls += 1
         generation, snapshot_hash = row
-        return PointerReceipt("read", generation, snapshot_hash, f"read:{generation}:{snapshot_hash[:12]}")
+        receipt_id = f"read:{generation}:{snapshot_hash[:12]}"
+        return _make_receipt(self, "read", generation, snapshot_hash, receipt_id)
 
     def compare_and_set(self, expected_generation: int, new_hash: str) -> PointerReceipt | None:
         if not isinstance(expected_generation, int) or not _valid_hash(new_hash):
@@ -67,10 +69,15 @@ class SQLitePointerStore:
             return None
         self._connection.commit()
         row = self._connection.execute("SELECT generation, snapshot_hash FROM pointer WHERE slot = 1").fetchone()
-        return PointerReceipt("cas", row[0], row[1], f"cas:{row[0]}:{row[1][:12]}")
+        receipt_id = f"cas:{row[0]}:{row[1][:12]}"
+        return _make_receipt(self, "cas", row[0], row[1], receipt_id)
 
     def close(self) -> None:
         self._connection.close()
+
+    def as_capability(self) -> PointerStoreCapability:
+        from practice_catalog_snapshot import issue_capability
+        return issue_capability(self)
 
     def rollback(self, expected_generation: int, prior_hash: str, authorization: str | None) -> dict[str, object]:
         before = self.read()

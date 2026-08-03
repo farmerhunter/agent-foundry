@@ -5,12 +5,17 @@ from __future__ import annotations
 
 import hashlib
 import json
+import secrets
+import weakref
 from dataclasses import dataclass
 from typing import Any, Mapping
 
 
 SNAPSHOT_FORMAT = "practice_catalog_snapshot_v1"
 POINTER_FORMAT = "practice_catalog_pointer_v1"
+CAPABILITY_FORMAT = "practice_catalog_capability_v1"
+_CAPABILITY_SEAL = object()
+_RECEIPT_KEYS: weakref.WeakKeyDictionary[object, bytes] = weakref.WeakKeyDictionary()
 
 
 class ValidationFailure(ValueError):
@@ -80,6 +85,53 @@ class PointerReceipt:
     generation: int
     snapshot_hash: str
     receipt_id: str
+    format: str = POINTER_FORMAT
+    version: int = 1
+    signature: str = ""
+
+
+def _register_receipt_backend(backend: object) -> None:
+    _RECEIPT_KEYS[backend] = secrets.token_bytes(32)
+
+
+def _receipt_signature(backend: object, operation: str, generation: int, snapshot_hash: str, receipt_id: str) -> str:
+    key = _RECEIPT_KEYS.get(backend)
+    if key is None:
+        raise ValidationFailure("unregistered receipt producer")
+    return hashlib.sha256(key + f"{operation}|{generation}|{snapshot_hash}|{receipt_id}".encode()).hexdigest()
+
+
+def _make_receipt(backend: object, operation: str, generation: int, snapshot_hash: str, receipt_id: str) -> PointerReceipt:
+    return PointerReceipt(operation, generation, snapshot_hash, receipt_id, signature=_receipt_signature(backend, operation, generation, snapshot_hash, receipt_id))
+
+
+@dataclass(frozen=True, init=False)
+class PointerStoreCapability:
+    backend: object
+    format: str = CAPABILITY_FORMAT
+    version: int = 1
+    _seal: object = _CAPABILITY_SEAL
+
+    def __init__(self, backend: object, *, _seal: object | None = None):
+        if _seal is not _CAPABILITY_SEAL:
+            raise ValidationFailure("capability issuance is private")
+        object.__setattr__(self, "backend", backend)
+        object.__setattr__(self, "format", CAPABILITY_FORMAT)
+        object.__setattr__(self, "version", 1)
+        object.__setattr__(self, "_seal", _CAPABILITY_SEAL)
+
+
+def issue_capability(backend: object) -> PointerStoreCapability:
+    approved = type(backend) is PointerStore
+    if not approved:
+        try:
+            from sqlite_pointer_store import SQLitePointerStore
+            approved = type(backend) is SQLitePointerStore
+        except ImportError:
+            approved = False
+    if not approved:
+        raise ValidationFailure("unknown pointer producer")
+    return PointerStoreCapability(backend, _seal=_CAPABILITY_SEAL)
 
 
 class PointerStore:
@@ -90,11 +142,13 @@ class PointerStore:
             raise ValidationFailure("invalid initial pointer hash")
         self._generation = 0
         self._snapshot_hash = initial_hash
+        _register_receipt_backend(self)
         self.cas_calls = 0
         self.read_calls = 0
 
     def _receipt(self, operation: str) -> PointerReceipt:
-        return PointerReceipt(operation, self._generation, self._snapshot_hash, f"{operation}:{self._generation}:{self._snapshot_hash[:12]}")
+        receipt_id = f"{operation}:{self._generation}:{self._snapshot_hash[:12]}"
+        return _make_receipt(self, operation, self._generation, self._snapshot_hash, receipt_id)
 
     def read(self) -> PointerReceipt:
         self.read_calls += 1
@@ -112,14 +166,24 @@ class PointerStore:
 
 
 def _require_store(store: object) -> PointerStore:
+    if isinstance(store, PointerStoreCapability):
+        if getattr(store, "format", None) != CAPABILITY_FORMAT or getattr(store, "version", None) != 1 or getattr(store, "_seal", None) is not _CAPABILITY_SEAL or not hasattr(store, "backend"):
+            raise ValidationFailure("forged pointer capability")
+        return store.backend  # type: ignore[return-value]
     if not isinstance(store, PointerStore):
         raise ValidationFailure("unknown pointer capability")
     return store
 
 
+def _validate_receipt(receipt: object, backend: object, operation: str = "read") -> PointerReceipt:
+    if not isinstance(receipt, PointerReceipt) or receipt.format != POINTER_FORMAT or receipt.version != 1 or receipt.operation != operation or not isinstance(receipt.generation, int) or receipt.generation < 0 or not _valid_hash(receipt.snapshot_hash) or receipt.signature != _receipt_signature(backend, receipt.operation, receipt.generation, receipt.snapshot_hash, receipt.receipt_id):
+        raise ValidationFailure("forged or invalid pointer receipt")
+    return receipt
+
+
 def pinned_read(store: PointerStore, snapshots: dict[str, dict[str, Any]]) -> tuple[dict[str, Any], PointerReceipt]:
     store = _require_store(store)
-    receipt = store.read()
+    receipt = _validate_receipt(store.read(), store)
     value = snapshots.get(receipt.snapshot_hash)
     if value is None:
         raise ValidationFailure("pointer target snapshot missing")
@@ -170,9 +234,7 @@ def pinned_catalog_view(store: PointerStore, snapshots: dict[str, dict[str, Any]
     store = _require_store(store)
     if not isinstance(snapshots, dict):
         raise ValidationFailure("unknown snapshot-view capability")
-    receipt = store.read()
-    if not isinstance(receipt, PointerReceipt) or receipt.operation != "read":
-        raise ValidationFailure("invalid pinned pointer receipt")
+    receipt = _validate_receipt(store.read(), store)
     value = snapshots.get(receipt.snapshot_hash)
     if value is None:
         raise ValidationFailure("pointer target snapshot missing")

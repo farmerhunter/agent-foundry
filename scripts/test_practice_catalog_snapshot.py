@@ -119,6 +119,54 @@ def main() -> int:
     multi_store = catalog.PointerStore(multi["manifest_sha256"])
     full = catalog.pinned_catalog_view(multi_store, {multi["manifest_sha256"]: multi})
     errors += expect("pinned-catalog-multiple", len(full["records"]) == 2 and multi_store.read_calls == 1)
+    try:
+        catalog.pinned_catalog_view(catalog.PointerStoreCapability.__new__(catalog.PointerStoreCapability), {multi["manifest_sha256"]: multi})  # type: ignore[arg-type]
+        errors.append("forged-capability: accepted")
+    except catalog.ValidationFailure:
+        errors += expect("forged-capability", True)
+    class ForgedBackend:
+        _capability_issuer = "sqlite_pointer_store_v1"
+
+        def read(self):
+            return None
+        def compare_and_set(self, expected_generation: int, new_hash: str):
+            return None
+    try:
+        catalog.issue_capability(ForgedBackend())
+        errors.append("forged-readable-backend: accepted")
+    except catalog.ValidationFailure:
+        errors += expect("forged-readable-backend", True)
+    class ForgedStore(catalog.PointerStore):
+        def read(self):
+            return catalog.PointerReceipt("read", 0, multi["manifest_sha256"], "forged")
+    try:
+        catalog.issue_capability(ForgedStore(multi["manifest_sha256"]))
+        errors.append("forged-subclass: accepted")
+    except catalog.ValidationFailure:
+        errors += expect("forged-subclass", True)
+    monkeypatched = catalog.PointerStore(multi["manifest_sha256"])
+    monkeypatched.read = lambda: catalog.PointerReceipt("read", 0, multi["manifest_sha256"], "forged-valid")  # type: ignore[method-assign]
+    try:
+        catalog.pinned_catalog_view(catalog.issue_capability(monkeypatched), {multi["manifest_sha256"]: multi})
+        errors.append("monkeypatched-receipt: accepted")
+    except catalog.ValidationFailure:
+        errors += expect("monkeypatched-receipt", True)
+    captured_store = catalog.PointerStore(multi["manifest_sha256"])
+    captured = captured_store.read()
+    captured_store.read = lambda: catalog.PointerReceipt("read", captured.generation, "c" * 64, captured.receipt_id, signature=captured.signature)  # type: ignore[method-assign]
+    try:
+        catalog.pinned_catalog_view(catalog.issue_capability(captured_store), {multi["manifest_sha256"]: multi})
+        errors.append("captured-receipt-rewrite: accepted")
+    except catalog.ValidationFailure:
+        errors += expect("captured-receipt-rewrite", True)
+    non_read_store = catalog.PointerStore(multi["manifest_sha256"])
+    non_read = non_read_store.compare_and_set(0, "d" * 64)
+    non_read_store.read = lambda: non_read  # type: ignore[method-assign]
+    try:
+        catalog.pinned_catalog_view(catalog.issue_capability(non_read_store), {multi["manifest_sha256"]: multi})
+        errors.append("signed-non-read-receipt: accepted")
+    except catalog.ValidationFailure:
+        errors += expect("signed-non-read-receipt", True)
     for label, mutate in [("duplicate-id", lambda f: f.update({"indexes/practice_index.yaml": f["indexes/practice_index.yaml"].replace("SYN-002", "SYN-001")})), ("tampered-entry", lambda f: f.update({"practices/synthetic/SYN-002.md": "---\nid: SYN-999\n---\nTampered.\n"}))]:
         altered = dict(multi_files)
         mutate(altered)

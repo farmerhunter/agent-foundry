@@ -10,6 +10,7 @@ sys_path = Path(__file__).resolve().parent
 import sys
 sys.path.insert(0, str(sys_path))
 from practice_catalog_snapshot import ValidationFailure
+import practice_catalog_snapshot as catalog
 from sqlite_pointer_store import SQLitePointerStore
 
 
@@ -39,6 +40,8 @@ def main() -> int:
                 expect("generic-temp-root-rejected", True, errors)
         one = SQLitePointerStore(db, first_hash, Path(temp))
         two = SQLitePointerStore(db, first_hash, Path(temp))
+        capability = one.as_capability()
+        expect("versioned-capability", capability.format == catalog.CAPABILITY_FORMAT and capability.version == 1 and capability.backend is one, errors)
         receipt = one.read()
         expect("read-receipt", receipt.operation == "read" and receipt.generation == 0 and receipt.snapshot_hash == first_hash, errors)
         committed = one.compare_and_set(receipt.generation, second_hash)
