@@ -1,0 +1,19 @@
+# Portable synthetic fixture contract for practice_catalog_snapshot_v1.
+
+required_fields:
+  format: "Must equal practice_catalog_snapshot_v1."
+  snapshot_id: "Opaque fixture-local identifier; it is not a Vault identifier."
+  manifest: "Canonical JSON manifest object with only fixture record metadata."
+  manifest_sha256: "SHA-256 of the canonical manifest bytes."
+
+manifest_fields:
+  format: "Must equal practice_catalog_snapshot_v1."
+  records: "List of path and sha256 metadata; raw record content is excluded."
+  record.path: "Relative POSIX path; no absolute path or traversal."
+  record.sha256: "Lowercase SHA-256 digest."
+
+rules:
+  - "This schema is for disposable synthetic fixtures only."
+  - "Canonical manifest bytes use UTF-8 JSON with sorted keys and compact separators."
+  - "A snapshot hash is the SHA-256 digest of those canonical manifest bytes."
+  - "No selected Vault, candidate content, runtime, network, or working-tree fallback is implied."

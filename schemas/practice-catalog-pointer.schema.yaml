@@ -1,0 +1,18 @@
+# Portable synthetic fixture contract for a practice catalog pointer.
+
+required_fields:
+  format: "Must equal practice_catalog_pointer_v1."
+  generation: "Non-negative integer changed only by a successful CAS."
+  snapshot_hash: "SHA-256 of a validated canonical snapshot manifest."
+
+receipt_fields:
+  operation: "read | cas | rollback | recovery."
+  generation: "Generation observed or committed by the operation."
+  snapshot_hash: "Pointer target observed or committed by the operation."
+  receipt_id: "Opaque deterministic fixture receipt identifier."
+
+rules:
+  - "PointerStore is a capability boundary; this schema does not prove a real backend."
+  - "CAS conflict leaves the pointer unchanged."
+  - "Pinned reads resolve only the received snapshot hash and never fall back to a working tree."
+  - "Rollback requires a caller-supplied Human authorization receipt/reference."

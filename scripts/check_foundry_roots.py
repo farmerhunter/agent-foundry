@@ -36,6 +36,16 @@ CORE_LAYOUT_MARKER = ".agent-foundry-core.yaml"
 VAULT_LAYOUT_MARKER = ".agent-foundry-vault.yaml"
 
 
+def validate_synthetic_snapshot_fixture(manifest: object, pointer: object) -> list[str]:
+    """Validate only explicit S0 synthetic metadata; default root checks never call this."""
+    errors: list[str] = []
+    if not isinstance(manifest, dict) or manifest.get("format") != "practice_catalog_snapshot_v1":
+        errors.append("synthetic snapshot fixture has invalid manifest format")
+    if not isinstance(pointer, dict) or pointer.get("format") != "practice_catalog_pointer_v1":
+        errors.append("synthetic snapshot fixture has invalid pointer format")
+    return errors
+
+
 def read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 

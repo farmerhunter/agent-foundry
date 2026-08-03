@@ -11,6 +11,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "scripts"))
+import check_foundry_roots
 CHECK = ROOT / "scripts" / "check_foundry_roots.py"
 CONFIG = ROOT / "scripts" / "foundry_config.py"
 INIT = ROOT / "scripts" / "init_vault.py"
@@ -325,6 +327,16 @@ def expect(name: str, result: subprocess.CompletedProcess[str], should_pass: boo
 
 def main() -> int:
     errors: list[str] = []
+    errors.extend(
+        check_foundry_roots.validate_synthetic_snapshot_fixture(
+            {"format": "practice_catalog_snapshot_v1"},
+            {"format": "practice_catalog_pointer_v1"},
+        )
+    )
+    if check_foundry_roots.validate_synthetic_snapshot_fixture({}, {}):
+        print("synthetic-snapshot-fixture-validation: ok")
+    else:
+        errors.append("synthetic-snapshot-fixture-validation: malformed fixture accepted")
     with tempfile.TemporaryDirectory(prefix="agent-foundry-root-fixtures-") as tmp:
         base = Path(tmp)
 
