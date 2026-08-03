@@ -1,0 +1,44 @@
+# Static, in-memory-only contract for the AF18 LearningSignal candidate index.
+schema_version: 1
+title: AF18 LearningSignal candidate index
+identity_algorithm: af18-learning-signal-identity-v1
+candidate_fields:
+  - candidate_key
+  - state
+  - source_work_anchor
+  - source_role
+  - lesson_type
+  - summary
+  - applicability
+  - evidence_anchors
+  - residual_limits
+  - privacy_status
+  - explicit_exclusions
+required_values:
+  state: candidate_hold
+  privacy_status: pass_metadata_only
+identity:
+  source_work_anchor: non-empty opaque ASCII source-Work identity
+  evidence_anchors: non-empty HTTPS references, bytewise sorted and deduplicated
+  candidate_key: "af18-ls-v1- plus lowercase SHA-256 of compact sorted UTF-8 JSON identity payload"
+  payload_fields: [identity_algorithm, source_work_identity, evidence_anchors]
+index:
+  storage: in-memory only
+  ordering: stable candidate_key bytewise ascending
+  default_projection: [count, routing_state, next_cursor]
+  page_projection: [references, next_cursor]
+  reference: "af18-ls-ref-v1- plus SHA-256 of candidate_key; no detail lookup exists"
+  cursor:
+    version: af18-learning-signal-cursor-v1
+    integrity: process-local random-secret HMAC-SHA-256
+    payload: [cursor_version, batch_fingerprint, identity_algorithm, page_size, last_ordered_reference]
+    page_size: integer 1..25
+    invalid: held_cursor_invalid
+forbidden:
+  - external approval or acceptance inference
+  - unknown fields, source content, prompt, transcript, tool history, raw model output, logs, user data, identity linkage, or secrets
+  - selected-Vault paths, practice or asset identifiers, publish or activation intent, Harvester routing, native identifiers, or #426 claims
+  - persistence, network or GitHub I/O, Vault, Harvester, publication, activation, runtime, or adapter integration
+boundaries:
+  - candidate_hold is evidence intake only, not formal Harvest or canonical practice activation
+  - invalid candidate batches and cursor inputs hold without candidate or history enumeration
