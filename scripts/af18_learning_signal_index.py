@@ -9,6 +9,7 @@ import hmac
 import json
 import secrets
 import sys
+from urllib.parse import unquote
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +29,11 @@ FORBIDDEN_MARKERS = (
     "harvester", "#426", "formal harvest", "prompt", "transcript", "tool history",
     "raw model", "raw content", "secret", "native id", "identity linkage",
 )
+FORBIDDEN_REFERENCE_MARKERS = (
+    "selected-vault", "selected_vault", "vault/private", "/private/", "native-id",
+    "native_id", "native%2did", "native%5fid", "content=", "/content/", "raw-content",
+    "raw_content", "transcript", "prompt", "secret",
+)
 
 
 class CandidateError(ValueError):
@@ -45,12 +51,17 @@ def is_opaque_ascii(value: Any) -> bool:
 def canonical_anchors(value: Any) -> list[str]:
     if not isinstance(value, list) or not value:
         raise CandidateError("held_candidate_invalid")
-    if any(not isinstance(anchor, str) or not anchor or not anchor.startswith("https://") for anchor in value):
+    if any(not isinstance(anchor, str) or not anchor or not anchor.startswith("https://") or not is_safe_reference(anchor) for anchor in value):
         raise CandidateError("held_candidate_invalid")
     normalized = sorted(value)
     if len(set(normalized)) != len(normalized):
         raise CandidateError("held_candidate_invalid")
     return normalized
+
+
+def is_safe_reference(value: str) -> bool:
+    normalized = unquote(value).lower()
+    return not any(marker in normalized for marker in FORBIDDEN_REFERENCE_MARKERS)
 
 
 def candidate_key(source_work_identity: str, evidence_anchors: list[str]) -> str:
@@ -73,6 +84,8 @@ def validate_candidate(record: Any) -> dict[str, Any]:
     if record.get("state") != "candidate_hold" or record.get("privacy_status") != "pass_metadata_only":
         raise CandidateError("held_candidate_invalid")
     if not is_opaque_ascii(record.get("source_work_anchor")):
+        raise CandidateError("held_candidate_invalid")
+    if not is_safe_reference(record["source_work_anchor"]):
         raise CandidateError("held_candidate_invalid")
     anchors = canonical_anchors(record.get("evidence_anchors"))
     if any(not isinstance(record[name], str) or not record[name].strip() for name in REQUIRED_FIELDS - {"evidence_anchors"}):

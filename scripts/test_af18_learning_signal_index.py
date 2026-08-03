@@ -80,6 +80,11 @@ def main() -> int:
     forbidden = record("work-7")
     forbidden["summary"] = "publish activation intent"
     errors += expect("unknown-and-forbidden-hold", held(module.validate_candidate, unknown) and held(module.validate_candidate, forbidden), (unknown, forbidden))
+    selected_vault_source = record("selected-vault/private/path")
+    private_vault_source = record("vault/private/path")
+    selected_vault_anchor = record("work-8", ["https://example.test/selected-vault/private/path"])
+    native_id_anchor = record("work-9", ["https://example.test/evidence/native-id/123"])
+    errors += expect("source-and-anchor-private-boundaries-hold", all(held(module.validate_candidate, item) for item in (selected_vault_source, private_vault_source, selected_vault_anchor, native_id_anchor)), (selected_vault_source, private_vault_source, selected_vault_anchor, native_id_anchor))
     errors += expect("duplicate-batch-holds", held(module.LearningSignalIndex, [one, copy.deepcopy(one)]), one)
     cursor = default["next_cursor"]
     tampered = cursor[:-1] + ("0" if cursor[-1] != "0" else "1")
@@ -114,9 +119,15 @@ def main() -> int:
         invalid_path = Path(raw) / "invalid.json"
         invalid_path.write_text(json.dumps([unknown]), encoding="utf-8")
         invalid = subprocess.run([sys.executable, str(SCRIPT), "--batch-json", str(invalid_path)], text=True, capture_output=True)
+        private_paths = []
+        for name, item in (("selected-source", selected_vault_source), ("private-source", private_vault_source), ("selected-anchor", selected_vault_anchor), ("native-anchor", native_id_anchor)):
+            path = Path(raw) / f"{name}.json"
+            path.write_text(json.dumps([item]), encoding="utf-8")
+            private_paths.append(path)
+        private_outputs = [subprocess.run([sys.executable, str(SCRIPT), "--batch-json", str(path)], text=True, capture_output=True) for path in private_paths]
         valid_output = json.loads(valid.stdout)
         invalid_output = json.loads(invalid.stdout)
-        errors += expect("cli-static-input-only", valid.returncode == 0 and invalid.returncode == 0 and set(valid_output) == {"count", "routing_state", "next_cursor"} and invalid_output == {"routing_state": "held_candidate_invalid"} and not any(word in valid.stderr.lower() + invalid.stderr.lower() for word in ("github", "vault", "harvester", "network")), (valid, invalid))
+        errors += expect("cli-static-input-only", valid.returncode == 0 and invalid.returncode == 0 and set(valid_output) == {"count", "routing_state", "next_cursor"} and invalid_output == {"routing_state": "held_candidate_invalid"} and all(result.returncode == 0 and json.loads(result.stdout) == {"routing_state": "held_candidate_invalid"} for result in private_outputs) and not any(word in valid.stderr.lower() + invalid.stderr.lower() for word in ("github", "vault", "harvester", "network")), (valid, invalid, private_outputs))
     if errors:
         print("\n".join(errors), file=sys.stderr)
         return 1
