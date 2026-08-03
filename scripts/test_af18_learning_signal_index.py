@@ -92,6 +92,11 @@ def main() -> int:
     malformed_encoded_sources = [record("bad%FF"), record("residual%GZ")]
     malformed_encoded_anchors = [record(f"work-malformed-{number}", [f"https://example.test/evidence/{marker}"]) for number, marker in enumerate(("bad%FF", "residual%GZ"))]
     errors += expect("decode-error-and-residual-encoding-hold", all(held(module.validate_candidate, item) for item in malformed_encoded_sources + malformed_encoded_anchors), (malformed_encoded_sources, malformed_encoded_anchors))
+    backslash_markers = ("vault\\private", "selected-vault\\private", "vault%5Cprivate", "vault/%5Cprivate")
+    backslash_sources = [record(marker) for marker in backslash_markers]
+    backslash_anchors = [record(f"work-backslash-{number}", [f"https://example.test/evidence/{marker}"]) for number, marker in enumerate(backslash_markers)]
+    backslash_anchors += [record("work-backslash-query", ["https://example.test/evidence/safe?path=vault%5Cprivate"]), record("work-backslash-fragment", ["https://example.test/evidence/safe#vault%5Cprivate"])]
+    errors += expect("backslash-source-and-anchor-hold", all(held(module.validate_candidate, item) for item in backslash_sources + backslash_anchors), (backslash_sources, backslash_anchors))
     errors += expect("duplicate-batch-holds", held(module.LearningSignalIndex, [one, copy.deepcopy(one)]), one)
     cursor = default["next_cursor"]
     tampered = cursor[:-1] + ("0" if cursor[-1] != "0" else "1")
@@ -132,6 +137,8 @@ def main() -> int:
         private_cases += tuple((f"double-anchor-{number}", item) for number, item in enumerate(double_encoded_anchors))
         private_cases += tuple((f"malformed-source-{number}", item) for number, item in enumerate(malformed_encoded_sources))
         private_cases += tuple((f"malformed-anchor-{number}", item) for number, item in enumerate(malformed_encoded_anchors))
+        private_cases += tuple((f"backslash-source-{number}", item) for number, item in enumerate(backslash_sources))
+        private_cases += tuple((f"backslash-anchor-{number}", item) for number, item in enumerate(backslash_anchors))
         for name, item in private_cases:
             path = Path(raw) / f"{name}.json"
             path.write_text(json.dumps([item]), encoding="utf-8")

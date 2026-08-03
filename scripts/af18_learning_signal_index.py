@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import hmac
 import json
+import re
 import secrets
 import sys
 from urllib.parse import unquote
@@ -68,7 +69,8 @@ def is_safe_reference(value: str) -> bool:
             if decoded == normalized:
                 if "%" in normalized:
                     return False
-                return not any(marker in normalized.lower() for marker in FORBIDDEN_REFERENCE_MARKERS)
+                marker_value = re.sub(r"[\\\\/]+", "/", normalized).lower()
+                return not any(marker in marker_value for marker in FORBIDDEN_REFERENCE_MARKERS)
             normalized = decoded
     except UnicodeDecodeError:
         return False
