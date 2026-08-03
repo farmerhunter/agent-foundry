@@ -33,7 +33,8 @@ FORBIDDEN_MARKERS = (
 FORBIDDEN_REFERENCE_MARKERS = (
     "selected-vault", "selected_vault", "vault/private", "/private/", "native-id",
     "native_id", "native%2did", "native%5fid", "content=", "/content/", "raw-content",
-    "raw_content", "transcript", "prompt", "secret",
+    "raw_content", "transcript", "prompt", "secret", "harvester", "practice_id",
+    "practice-id", "asset_id", "asset-id", "#426", "publish", "activation",
 )
 MAX_REFERENCE_NORMALIZATION_ROUNDS = 4
 

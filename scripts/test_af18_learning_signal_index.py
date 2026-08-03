@@ -106,6 +106,12 @@ def main() -> int:
     safe_source = record("safe-opaque-id_123")
     safe_anchor = record("safe-query-fragment", ["https://example.test/evidence/a?view=compact#receipt"])
     errors += expect("safe-opaque-and-https-remain-valid", module.validate_candidate(safe_source) == safe_source and module.validate_candidate(safe_anchor) == safe_anchor, (safe_source, safe_anchor))
+    intent_markers = ("harvester", "practice_id", "asset_id", "%23426", "publish", "activation")
+    intent_sources = [record(marker) for marker in intent_markers]
+    intent_anchors = [record(f"work-intent-path-{number}", [f"https://example.test/evidence/{marker}"]) for number, marker in enumerate(intent_markers)]
+    intent_anchors += [record(f"work-intent-query-{number}", [f"https://example.test/evidence/safe?intent={marker}"]) for number, marker in enumerate(intent_markers)]
+    intent_anchors += [record(f"work-intent-fragment-{number}", [f"https://example.test/evidence/safe#{marker}"]) for number, marker in enumerate(intent_markers)]
+    errors += expect("intent-and-identifier-source-and-anchor-hold", all(held(module.validate_candidate, item) for item in intent_sources + intent_anchors), (intent_sources, intent_anchors))
     errors += expect("duplicate-batch-holds", held(module.LearningSignalIndex, [one, copy.deepcopy(one)]), one)
     cursor = default["next_cursor"]
     tampered = cursor[:-1] + ("0" if cursor[-1] != "0" else "1")
@@ -150,6 +156,8 @@ def main() -> int:
         private_cases += tuple((f"backslash-anchor-{number}", item) for number, item in enumerate(backslash_anchors))
         private_cases += tuple((f"guarded-source-{number}", item) for number, item in enumerate(guarded_sources))
         private_cases += tuple((f"guarded-anchor-{number}", item) for number, item in enumerate(guarded_anchors))
+        private_cases += tuple((f"intent-source-{number}", item) for number, item in enumerate(intent_sources))
+        private_cases += tuple((f"intent-anchor-{number}", item) for number, item in enumerate(intent_anchors))
         for name, item in private_cases:
             path = Path(raw) / f"{name}.json"
             path.write_text(json.dumps([item]), encoding="utf-8")
