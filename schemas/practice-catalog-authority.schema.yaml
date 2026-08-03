@@ -1,0 +1,9 @@
+# Synthetic lifecycle authority readout contract.
+format: practice_catalog_authority_v1
+states: [working_tree_authority, snapshot_shadow, snapshot_authority, rollback_pending, held]
+rules:
+  - Default mode is working_tree_authority.
+  - Snapshot authority requires explicit opt-in and a trusted backend.
+  - Readouts expose hashes and generations only; never secrets or practice content.
+  - Snapshot authority requires a verified receipt, successful backup, no pending rollback, and read/status operations only.
+  - Snapshot hash and non-negative generation must match the trusted backend receipt.
