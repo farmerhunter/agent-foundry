@@ -35,6 +35,10 @@ FORBIDDEN_REFERENCE_MARKERS = (
     "native_id", "native%2did", "native%5fid", "content=", "/content/", "raw-content",
     "raw_content", "transcript", "prompt", "secret", "harvester", "practice_id",
     "practice-id", "asset_id", "asset-id", "#426", "publish", "activation",
+    "native id", "nativeid", "native identifier", "nativeidentifier", "native-identifier",
+    "native_identifier", "identity linkage", "identity-linkage", "identity_linkage",
+    "user identity", "user-identity", "user_identity", "real-user-data", "real_user_data",
+    "real user data",
 )
 MAX_REFERENCE_NORMALIZATION_ROUNDS = 4
 

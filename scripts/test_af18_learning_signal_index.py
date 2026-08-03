@@ -11,6 +11,7 @@ import json
 import subprocess
 import sys
 import tempfile
+from urllib.parse import quote
 from pathlib import Path
 
 
@@ -112,6 +113,14 @@ def main() -> int:
     intent_anchors += [record(f"work-intent-query-{number}", [f"https://example.test/evidence/safe?intent={marker}"]) for number, marker in enumerate(intent_markers)]
     intent_anchors += [record(f"work-intent-fragment-{number}", [f"https://example.test/evidence/safe#{marker}"]) for number, marker in enumerate(intent_markers)]
     errors += expect("intent-and-identifier-source-and-anchor-hold", all(held(module.validate_candidate, item) for item in intent_sources + intent_anchors), (intent_sources, intent_anchors))
+    sensitive_markers = ("native id", "native identifier", "identity linkage", "user identity", "real-user-data")
+    encoded_sensitive_markers = tuple(quote(marker, safe="") for marker in sensitive_markers)
+    double_encoded_sensitive_markers = tuple(quote(marker, safe="") for marker in encoded_sensitive_markers)
+    sensitive_sources = [record(marker) for marker in sensitive_markers + encoded_sensitive_markers + double_encoded_sensitive_markers]
+    sensitive_anchors = [record(f"work-sensitive-path-{number}", [f"https://example.test/evidence/{marker}"]) for number, marker in enumerate(sensitive_markers)]
+    sensitive_anchors += [record(f"work-sensitive-query-{number}", [f"https://example.test/evidence/safe?identity={marker}"]) for number, marker in enumerate(encoded_sensitive_markers)]
+    sensitive_anchors += [record(f"work-sensitive-fragment-{number}", [f"https://example.test/evidence/safe#{marker}"]) for number, marker in enumerate(double_encoded_sensitive_markers)]
+    errors += expect("native-identity-user-data-source-and-anchor-hold", all(held(module.validate_candidate, item) for item in sensitive_sources + sensitive_anchors), (sensitive_sources, sensitive_anchors))
     errors += expect("duplicate-batch-holds", held(module.LearningSignalIndex, [one, copy.deepcopy(one)]), one)
     cursor = default["next_cursor"]
     tampered = cursor[:-1] + ("0" if cursor[-1] != "0" else "1")
@@ -158,6 +167,8 @@ def main() -> int:
         private_cases += tuple((f"guarded-anchor-{number}", item) for number, item in enumerate(guarded_anchors))
         private_cases += tuple((f"intent-source-{number}", item) for number, item in enumerate(intent_sources))
         private_cases += tuple((f"intent-anchor-{number}", item) for number, item in enumerate(intent_anchors))
+        private_cases += tuple((f"sensitive-source-{number}", item) for number, item in enumerate(sensitive_sources))
+        private_cases += tuple((f"sensitive-anchor-{number}", item) for number, item in enumerate(sensitive_anchors))
         for name, item in private_cases:
             path = Path(raw) / f"{name}.json"
             path.write_text(json.dumps([item]), encoding="utf-8")
