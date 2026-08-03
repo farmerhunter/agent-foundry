@@ -67,9 +67,11 @@ def is_safe_reference(value: str) -> bool:
         for _ in range(MAX_REFERENCE_NORMALIZATION_ROUNDS):
             decoded = unquote(normalized, errors="strict")
             if decoded == normalized:
-                if "%" in normalized:
+                if "%" in normalized or not normalized.isascii():
                     return False
                 marker_value = re.sub(r"[\\\\/]+", "/", normalized).lower()
+                if marker_value in {".", ".."} or re.search(r"/(?:\.{1,2})(?:[/?#]|$)", marker_value):
+                    return False
                 return not any(marker in marker_value for marker in FORBIDDEN_REFERENCE_MARKERS)
             normalized = decoded
     except UnicodeDecodeError:

@@ -97,6 +97,15 @@ def main() -> int:
     backslash_anchors = [record(f"work-backslash-{number}", [f"https://example.test/evidence/{marker}"]) for number, marker in enumerate(backslash_markers)]
     backslash_anchors += [record("work-backslash-query", ["https://example.test/evidence/safe?path=vault%5Cprivate"]), record("work-backslash-fragment", ["https://example.test/evidence/safe#vault%5Cprivate"])]
     errors += expect("backslash-source-and-anchor-hold", all(held(module.validate_candidate, item) for item in backslash_sources + backslash_anchors), (backslash_sources, backslash_anchors))
+    dot_segment_markers = ("vault/./private", "vault/%2e/private")
+    unicode_markers = ("vault%EF%BC%8Fprivate", "selected%EF%BC%8Dvault", "native%EF%BC%8Did", "vault／private", "selected－vault")
+    guarded_sources = [record(marker) for marker in dot_segment_markers + unicode_markers]
+    guarded_anchors = [record(f"work-guarded-{number}", [f"https://example.test/evidence/{marker}"]) for number, marker in enumerate(dot_segment_markers + unicode_markers)]
+    guarded_anchors += [record("work-dot-query", ["https://example.test/evidence/safe?path=vault/%2e/private"]), record("work-dot-fragment", ["https://example.test/evidence/safe#vault/./private"])]
+    errors += expect("dot-and-unicode-source-and-anchor-hold", all(held(module.validate_candidate, item) for item in guarded_sources + guarded_anchors), (guarded_sources, guarded_anchors))
+    safe_source = record("safe-opaque-id_123")
+    safe_anchor = record("safe-query-fragment", ["https://example.test/evidence/a?view=compact#receipt"])
+    errors += expect("safe-opaque-and-https-remain-valid", module.validate_candidate(safe_source) == safe_source and module.validate_candidate(safe_anchor) == safe_anchor, (safe_source, safe_anchor))
     errors += expect("duplicate-batch-holds", held(module.LearningSignalIndex, [one, copy.deepcopy(one)]), one)
     cursor = default["next_cursor"]
     tampered = cursor[:-1] + ("0" if cursor[-1] != "0" else "1")
@@ -139,6 +148,8 @@ def main() -> int:
         private_cases += tuple((f"malformed-anchor-{number}", item) for number, item in enumerate(malformed_encoded_anchors))
         private_cases += tuple((f"backslash-source-{number}", item) for number, item in enumerate(backslash_sources))
         private_cases += tuple((f"backslash-anchor-{number}", item) for number, item in enumerate(backslash_anchors))
+        private_cases += tuple((f"guarded-source-{number}", item) for number, item in enumerate(guarded_sources))
+        private_cases += tuple((f"guarded-anchor-{number}", item) for number, item in enumerate(guarded_anchors))
         for name, item in private_cases:
             path = Path(raw) / f"{name}.json"
             path.write_text(json.dumps([item]), encoding="utf-8")
