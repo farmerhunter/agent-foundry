@@ -134,7 +134,7 @@ def _manifest_file_hashes(value: dict[str, Any]) -> dict[str, str]:
     return {record["path"]: record["sha256"] for record in records}
 
 
-def _index_entry(index_text: str, practice_id: str) -> dict[str, str]:
+def _index_entries(index_text: str) -> list[dict[str, str]]:
     current: dict[str, str] | None = None
     entries: list[dict[str, str]] = []
     in_practices = False
@@ -155,26 +155,21 @@ def _index_entry(index_text: str, practice_id: str) -> dict[str, str]:
             current[key] = item.strip().strip('"')
     if current is not None:
         entries.append(current)
-    matches = [entry for entry in entries if entry.get("id") == practice_id]
+    return entries
+
+
+def _index_entry(index_text: str, practice_id: str) -> dict[str, str]:
+    matches = [entry for entry in _index_entries(index_text) if entry.get("id") == practice_id]
     if len(matches) != 1:
         raise ValidationFailure("practice entry missing or duplicated")
-    path = matches[0].get("path")
-    if not _valid_path(path):
-        raise ValidationFailure("practice entry path mismatch")
     return matches[0]
 
 
-def injected_snapshot_view(store: PointerStore, snapshots: dict[str, dict[str, Any]], practice_id: str) -> dict[str, Any]:
-    """Read a synthetic practice index and record through one pinned view.
-
-    This is deliberately an injected in-memory capability. It resolves the pointer
-    once, pins the returned receipt/hash, and never falls back to a working tree.
-    """
+def pinned_catalog_view(store: PointerStore, snapshots: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    """Validate the complete synthetic catalog through one pinned in-memory view."""
     store = _require_store(store)
     if not isinstance(snapshots, dict):
         raise ValidationFailure("unknown snapshot-view capability")
-    if not isinstance(practice_id, str) or not practice_id:
-        raise ValidationFailure("invalid practice id")
     receipt = store.read()
     if not isinstance(receipt, PointerReceipt) or receipt.operation != "read":
         raise ValidationFailure("invalid pinned pointer receipt")
@@ -196,18 +191,61 @@ def injected_snapshot_view(store: PointerStore, snapshots: dict[str, dict[str, A
     index_path = "indexes/practice_index.yaml"
     if index_path not in files:
         raise ValidationFailure("practice index missing")
-    entry = _index_entry(files[index_path], practice_id)
-    practice_path = entry["path"]
-    if practice_path not in files or practice_path not in hashes:
-        raise ValidationFailure("practice record missing")
+    entries = _index_entries(files[index_path])
+    if not entries:
+        raise ValidationFailure("practice catalog entries missing")
+    ids: set[str] = set()
+    records: list[dict[str, str]] = []
+    for entry in entries:
+        practice_id = entry.get("id", "")
+        path = entry.get("path")
+        if not practice_id.startswith("SYN-") or practice_id in ids:
+            raise ValidationFailure("synthetic catalog duplicate or non-synthetic id")
+        if not _valid_path(path) or not path.startswith("practices/synthetic/"):
+            raise ValidationFailure("practice entry path mismatch")
+        if path != f"practices/synthetic/{practice_id}.md":
+            raise ValidationFailure("practice entry filename mismatch")
+        if path not in files or path not in hashes:
+            raise ValidationFailure("practice record missing")
+        practice = files[path]
+        lines = practice.splitlines()
+        if not lines or lines[0] != "---":
+            raise ValidationFailure("practice frontmatter missing")
+        end = next((index for index, line in enumerate(lines[1:], 1) if line == "---"), None)
+        if end is None:
+            raise ValidationFailure("practice frontmatter malformed")
+        front_ids = [line.split(":", 1)[1].strip() for line in lines[1:end] if line.startswith("id:")]
+        if len(front_ids) != 1:
+            raise ValidationFailure("practice frontmatter id must be unique")
+        front_id = front_ids[0]
+        if front_id != practice_id:
+            raise ValidationFailure("tampered practice entry")
+        ids.add(practice_id)
+        records.append({"id": practice_id, "path": path, "content": practice})
+    return {"receipt": receipt, "snapshot_hash": receipt.snapshot_hash, "index": files[index_path], "records": records}
+
+
+def injected_snapshot_view(store: PointerStore, snapshots: dict[str, dict[str, Any]], practice_id: str) -> dict[str, Any]:
+    """Read a synthetic practice index and record through one pinned view.
+
+    This is deliberately an injected in-memory capability. It resolves the pointer
+    once, pins the returned receipt/hash, and never falls back to a working tree.
+    """
+    if not isinstance(practice_id, str) or not practice_id:
+        raise ValidationFailure("invalid practice id")
+    view = pinned_catalog_view(store, snapshots)
+    matches = [record for record in view["records"] if record["id"] == practice_id]
+    if len(matches) != 1:
+        raise ValidationFailure("practice entry missing or duplicated")
+    record = matches[0]
     return {
         "practice_id": practice_id,
-        "index_path": index_path,
-        "practice_path": practice_path,
-        "index": files[index_path],
-        "practice": files[practice_path],
-        "receipt": receipt,
-        "snapshot_hash": receipt.snapshot_hash,
+        "index_path": "indexes/practice_index.yaml",
+        "practice_path": record["path"],
+        "index": view["index"],
+        "practice": record["content"],
+        "receipt": view["receipt"],
+        "snapshot_hash": view["snapshot_hash"],
     }
 
 

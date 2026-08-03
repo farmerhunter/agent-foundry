@@ -108,6 +108,27 @@ def main() -> int:
         errors.append("injected-view-working-tree-fallback: accepted")
     except catalog.ValidationFailure:
         errors += expect("injected-view-working-tree-fallback", True)
+
+    multi_files = {
+        "indexes/practice_index.yaml": "schema_version: 1\npractices:\n  - id: SYN-001\n    path: practices/synthetic/SYN-001.md\n  - id: SYN-002\n    path: practices/synthetic/SYN-002.md\n",
+        "practices/synthetic/SYN-001.md": "---\nid: SYN-001\n---\nSynthetic one.\n",
+        "practices/synthetic/SYN-002.md": "---\nid: SYN-002\n---\nSynthetic two.\n",
+    }
+    multi_manifest = {"format": catalog.SNAPSHOT_FORMAT, "records": [{"path": path, "sha256": hashlib.sha256(text.encode()).hexdigest()} for path, text in multi_files.items()]}
+    multi = catalog.snapshot("synthetic-multi", multi_manifest, multi_files)
+    multi_store = catalog.PointerStore(multi["manifest_sha256"])
+    full = catalog.pinned_catalog_view(multi_store, {multi["manifest_sha256"]: multi})
+    errors += expect("pinned-catalog-multiple", len(full["records"]) == 2 and multi_store.read_calls == 1)
+    for label, mutate in [("duplicate-id", lambda f: f.update({"indexes/practice_index.yaml": f["indexes/practice_index.yaml"].replace("SYN-002", "SYN-001")})), ("tampered-entry", lambda f: f.update({"practices/synthetic/SYN-002.md": "---\nid: SYN-999\n---\nTampered.\n"}))]:
+        altered = dict(multi_files)
+        mutate(altered)
+        altered_value = dict(multi)
+        altered_value["files"] = altered
+        try:
+            catalog.pinned_catalog_view(catalog.PointerStore(multi["manifest_sha256"]), {multi["manifest_sha256"]: altered_value})
+            errors.append(f"{label}: accepted")
+        except catalog.ValidationFailure:
+            errors += expect(label, True)
     if errors:
         print("Practice catalog snapshot tests failed:")
         print("\n".join(f"- {error}" for error in errors))
