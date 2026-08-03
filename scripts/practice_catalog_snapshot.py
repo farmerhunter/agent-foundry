@@ -6,7 +6,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Mapping
 
 
 SNAPSHOT_FORMAT = "practice_catalog_snapshot_v1"
@@ -49,11 +49,16 @@ def validate_manifest(manifest: object) -> None:
         paths.add(record["path"])
 
 
-def snapshot(snapshot_id: str, manifest: dict[str, Any]) -> dict[str, Any]:
+def snapshot(snapshot_id: str, manifest: dict[str, Any], files: Mapping[str, str] | None = None) -> dict[str, Any]:
     if not isinstance(snapshot_id, str) or not snapshot_id:
         raise ValidationFailure("invalid snapshot id")
     digest = manifest_hash(manifest)
-    return {"format": SNAPSHOT_FORMAT, "snapshot_id": snapshot_id, "manifest": manifest, "manifest_sha256": digest}
+    value: dict[str, Any] = {"format": SNAPSHOT_FORMAT, "snapshot_id": snapshot_id, "manifest": manifest, "manifest_sha256": digest}
+    if files is not None:
+        if not isinstance(files, Mapping) or any(not _valid_path(path) or not isinstance(content, str) for path, content in files.items()):
+            raise ValidationFailure("invalid snapshot files")
+        value["files"] = dict(files)
+    return value
 
 
 def validate_snapshot(value: object) -> None:
@@ -64,6 +69,9 @@ def validate_snapshot(value: object) -> None:
     validate_manifest(value.get("manifest"))
     if value.get("manifest_sha256") != manifest_hash(value["manifest"]):
         raise ValidationFailure("manifest hash mismatch")
+    files = value.get("files")
+    if files is not None and (not isinstance(files, dict) or any(not _valid_path(path) or not isinstance(content, str) for path, content in files.items())):
+        raise ValidationFailure("invalid snapshot files")
 
 
 @dataclass(frozen=True)
@@ -83,11 +91,13 @@ class PointerStore:
         self._generation = 0
         self._snapshot_hash = initial_hash
         self.cas_calls = 0
+        self.read_calls = 0
 
     def _receipt(self, operation: str) -> PointerReceipt:
         return PointerReceipt(operation, self._generation, self._snapshot_hash, f"{operation}:{self._generation}:{self._snapshot_hash[:12]}")
 
     def read(self) -> PointerReceipt:
+        self.read_calls += 1
         return self._receipt("read")
 
     def compare_and_set(self, expected_generation: int, new_hash: str) -> PointerReceipt | None:
@@ -117,6 +127,91 @@ def pinned_read(store: PointerStore, snapshots: dict[str, dict[str, Any]]) -> tu
     if value["manifest_sha256"] != receipt.snapshot_hash:
         raise ValidationFailure("pointer target hash mismatch")
     return value, receipt
+
+
+def _manifest_file_hashes(value: dict[str, Any]) -> dict[str, str]:
+    records = value["manifest"]["records"]
+    return {record["path"]: record["sha256"] for record in records}
+
+
+def _index_entry(index_text: str, practice_id: str) -> dict[str, str]:
+    current: dict[str, str] | None = None
+    entries: list[dict[str, str]] = []
+    in_practices = False
+    for line in index_text.splitlines():
+        if line.startswith("practices:"):
+            in_practices = True
+            continue
+        if in_practices and line and not line.startswith(" "):
+            in_practices = False
+        if not in_practices:
+            continue
+        if line.startswith("  - id: "):
+            if current is not None:
+                entries.append(current)
+            current = {"id": line.split(":", 1)[1].strip().strip('"')}
+        elif current is not None and line.startswith("    ") and ":" in line:
+            key, item = line.strip().split(":", 1)
+            current[key] = item.strip().strip('"')
+    if current is not None:
+        entries.append(current)
+    matches = [entry for entry in entries if entry.get("id") == practice_id]
+    if len(matches) != 1:
+        raise ValidationFailure("practice entry missing or duplicated")
+    path = matches[0].get("path")
+    if not _valid_path(path):
+        raise ValidationFailure("practice entry path mismatch")
+    return matches[0]
+
+
+def injected_snapshot_view(store: PointerStore, snapshots: dict[str, dict[str, Any]], practice_id: str) -> dict[str, Any]:
+    """Read a synthetic practice index and record through one pinned view.
+
+    This is deliberately an injected in-memory capability. It resolves the pointer
+    once, pins the returned receipt/hash, and never falls back to a working tree.
+    """
+    store = _require_store(store)
+    if not isinstance(snapshots, dict):
+        raise ValidationFailure("unknown snapshot-view capability")
+    if not isinstance(practice_id, str) or not practice_id:
+        raise ValidationFailure("invalid practice id")
+    receipt = store.read()
+    if not isinstance(receipt, PointerReceipt) or receipt.operation != "read":
+        raise ValidationFailure("invalid pinned pointer receipt")
+    value = snapshots.get(receipt.snapshot_hash)
+    if value is None:
+        raise ValidationFailure("pointer target snapshot missing")
+    validate_snapshot(value)
+    if value["manifest_sha256"] != receipt.snapshot_hash:
+        raise ValidationFailure("snapshot receipt hash mismatch")
+    files = value.get("files")
+    if not isinstance(files, dict):
+        raise ValidationFailure("snapshot view files missing")
+    hashes = _manifest_file_hashes(value)
+    if set(files) != set(hashes):
+        raise ValidationFailure("manifest and snapshot paths mismatch")
+    for path, content in files.items():
+        if hashlib.sha256(content.encode("utf-8")).hexdigest() != hashes[path]:
+            raise ValidationFailure("snapshot file hash mismatch")
+    index_path = "indexes/practice_index.yaml"
+    if index_path not in files:
+        raise ValidationFailure("practice index missing")
+    entry = _index_entry(files[index_path], practice_id)
+    practice_path = entry["path"]
+    if practice_path not in files or practice_path not in hashes:
+        raise ValidationFailure("practice record missing")
+    return {
+        "practice_id": practice_id,
+        "index_path": index_path,
+        "practice_path": practice_path,
+        "index": files[index_path],
+        "practice": files[practice_path],
+        "receipt": receipt,
+        "snapshot_hash": receipt.snapshot_hash,
+    }
+
+
+validate_injected_snapshot_view = injected_snapshot_view
 
 
 def commit_snapshot(store: PointerStore, snapshots: dict[str, dict[str, Any]], candidate: dict[str, Any], expected_generation: int, interrupt: str | None = None) -> dict[str, Any]:
