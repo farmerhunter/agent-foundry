@@ -72,6 +72,42 @@ def main() -> int:
             errors += expect(label, True)
     retention = catalog.retain_snapshots(snapshots, {initial["manifest_sha256"]})
     errors += expect("retention_receipt_no_disposal", retention["operation"] == "retention" and retention["retained_hashes"] == [initial["manifest_sha256"]] and not retention["removed_hashes"] and not retention["disposed_hashes"] and initial["manifest_sha256"] in snapshots and candidate["manifest_sha256"] in snapshots)
+
+    practice_text = "---\nid: SYN-001\n---\nSynthetic only.\n"
+    index_text = "schema_version: 1\n\npractices:\n  - id: SYN-001\n    path: practices/synthetic/SYN-001.md\n"
+    files = {
+        "indexes/practice_index.yaml": index_text,
+        "practices/synthetic/SYN-001.md": practice_text,
+    }
+    view_manifest = {
+        "format": catalog.SNAPSHOT_FORMAT,
+        "records": [
+            {"path": path, "sha256": hashlib.sha256(text.encode()).hexdigest()}
+            for path, text in files.items()
+        ],
+    }
+    view = catalog.snapshot("synthetic-view", view_manifest, files)
+    view_store = catalog.PointerStore(view["manifest_sha256"])
+    view_result = catalog.injected_snapshot_view(view_store, {view["manifest_sha256"]: view}, "SYN-001")
+    errors += expect("injected-view-pins-once", view_result["snapshot_hash"] == view["manifest_sha256"] and view_store.read_calls == 1 and view_result["practice"] == practice_text)
+    for label, bad_store, bad_snapshots, bad_id in [
+        ("injected-view-unknown-capability", object(), {view["manifest_sha256"]: view}, "SYN-001"),
+        ("injected-view-missing-entry", view_store, {view["manifest_sha256"]: view}, "UNKNOWN"),
+    ]:
+        try:
+            catalog.injected_snapshot_view(bad_store, bad_snapshots, bad_id)  # type: ignore[arg-type]
+            errors.append(f"{label}: accepted")
+        except catalog.ValidationFailure:
+            errors += expect(label, True)
+    bad_files = dict(files)
+    bad_files["practices/synthetic/SYN-001.md"] = "working-tree fallback"
+    bad_view = dict(view)
+    bad_view["files"] = bad_files
+    try:
+        catalog.injected_snapshot_view(catalog.PointerStore(view["manifest_sha256"]), {view["manifest_sha256"]: bad_view}, "SYN-001")
+        errors.append("injected-view-working-tree-fallback: accepted")
+    except catalog.ValidationFailure:
+        errors += expect("injected-view-working-tree-fallback", True)
     if errors:
         print("Practice catalog snapshot tests failed:")
         print("\n".join(f"- {error}" for error in errors))

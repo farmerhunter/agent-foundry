@@ -13,6 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 import check_foundry_roots
+import practice_catalog_snapshot as catalog
 CHECK = ROOT / "scripts" / "check_foundry_roots.py"
 CONFIG = ROOT / "scripts" / "foundry_config.py"
 INIT = ROOT / "scripts" / "init_vault.py"
@@ -337,6 +338,40 @@ def main() -> int:
         print("synthetic-snapshot-fixture-validation: ok")
     else:
         errors.append("synthetic-snapshot-fixture-validation: malformed fixture accepted")
+    synthetic_files = {
+        "indexes/practice_index.yaml": "schema_version: 1\npractices:\n  - id: SYN-001\n    path: practices/synthetic/SYN-001.md\n",
+        "practices/synthetic/SYN-001.md": "---\nid: SYN-001\n---\nSynthetic only.\n",
+    }
+    synthetic_manifest = {
+        "format": "practice_catalog_snapshot_v1",
+        "records": [{"path": path, "sha256": hashlib.sha256(text.encode()).hexdigest()} for path, text in synthetic_files.items()],
+    }
+    synthetic_snapshot = catalog.snapshot("synthetic-root-view", synthetic_manifest, synthetic_files)
+    synthetic_store = catalog.PointerStore(synthetic_snapshot["manifest_sha256"])
+    view_errors = check_foundry_roots.validate_injected_snapshot_fixture_view(
+        synthetic_store,
+        {synthetic_snapshot["manifest_sha256"]: synthetic_snapshot},
+        "SYN-001",
+    )
+    if not view_errors and synthetic_store.read_calls == 1:
+        print("synthetic-injected-view-consumer: ok")
+    else:
+        errors.append(f"synthetic-injected-view-consumer: {view_errors}, read_calls={synthetic_store.read_calls}")
+    errors.extend(
+        check_foundry_roots.validate_synthetic_snapshot_fixture(
+            synthetic_manifest,
+            {"format": "practice_catalog_pointer_v1", "snapshot_hash": "a" * 64},
+            synthetic_files,
+            "SYN-001",
+        )
+    )
+    missing_entry_errors = check_foundry_roots.validate_synthetic_snapshot_fixture(
+        synthetic_manifest, {}, synthetic_files, "SYN-MISSING"
+    )
+    if missing_entry_errors:
+        print("synthetic-snapshot-missing-entry: ok")
+    else:
+        errors.append("synthetic-snapshot-missing-entry: malformed fixture accepted")
     with tempfile.TemporaryDirectory(prefix="agent-foundry-root-fixtures-") as tmp:
         base = Path(tmp)
 
