@@ -35,6 +35,8 @@ def main() -> int:
 
     interrupted = catalog.commit_snapshot(store, snapshots, candidate, 0, "after_cas_before_receipt")
     calls = store.cas_calls
+    pinned_after_cas, after_cas_receipt = catalog.pinned_read(store, snapshots)
+    errors += expect("after_cas_interruption_pinned_read", pinned_after_cas == candidate and after_cas_receipt.snapshot_hash == candidate["manifest_sha256"] and store.cas_calls == calls)
     recovered = catalog.recover_receipt(store, interrupted)
     errors += expect("committed_receipt_recovered", recovered["state"] == "committed_receipt_recovered" and store.read().snapshot_hash == candidate["manifest_sha256"] and store.cas_calls == calls)
 
@@ -48,6 +50,8 @@ def main() -> int:
 
     pinned, receipt = catalog.pinned_read(store, snapshots)
     errors += expect("pinned_read_no_fallback", pinned == candidate and receipt.snapshot_hash == candidate["manifest_sha256"])
+    authorized = catalog.rollback(store, 1, initial["manifest_sha256"], "#426-G human authorization receipt")
+    errors += expect("authorized_rollback_receipt", authorized["state"] == "rolled_back" and authorized["pointer"].operation == "rollback" and store.read().snapshot_hash == initial["manifest_sha256"])
     missing = catalog.PointerStore("f" * 64)
     try:
         catalog.pinned_read(missing, snapshots)
@@ -66,8 +70,8 @@ def main() -> int:
             errors.append(f"{label}: accepted")
         except catalog.ValidationFailure:
             errors += expect(label, True)
-    retention = catalog.retain_snapshots(dict(snapshots), {candidate["manifest_sha256"]})
-    errors += expect("retention_receipt", retention["operation"] == "retention" and retention["retained_hashes"] == [candidate["manifest_sha256"]])
+    retention = catalog.retain_snapshots(snapshots, {initial["manifest_sha256"]})
+    errors += expect("retention_receipt", retention["operation"] == "retention" and retention["retained_hashes"] == [initial["manifest_sha256"]] and candidate["manifest_sha256"] in retention["removed_hashes"])
     if errors:
         print("Practice catalog snapshot tests failed:")
         print("\n".join(f"- {error}" for error in errors))
