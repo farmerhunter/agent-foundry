@@ -85,6 +85,13 @@ def main() -> int:
     selected_vault_anchor = record("work-8", ["https://example.test/selected-vault/private/path"])
     native_id_anchor = record("work-9", ["https://example.test/evidence/native-id/123"])
     errors += expect("source-and-anchor-private-boundaries-hold", all(held(module.validate_candidate, item) for item in (selected_vault_source, private_vault_source, selected_vault_anchor, native_id_anchor)), (selected_vault_source, private_vault_source, selected_vault_anchor, native_id_anchor))
+    double_encoded_markers = ("selected%252Dvault%252Fprivate", "vault%252Fprivate", "content%253Draw", "native%252Did")
+    double_encoded_sources = [record(marker) for marker in double_encoded_markers]
+    double_encoded_anchors = [record(f"work-double-{number}", [f"https://example.test/evidence/{marker}"]) for number, marker in enumerate(double_encoded_markers)]
+    errors += expect("double-encoded-source-and-anchor-hold", all(held(module.validate_candidate, item) for item in double_encoded_sources + double_encoded_anchors), (double_encoded_sources, double_encoded_anchors))
+    malformed_encoded_sources = [record("bad%FF"), record("residual%GZ")]
+    malformed_encoded_anchors = [record(f"work-malformed-{number}", [f"https://example.test/evidence/{marker}"]) for number, marker in enumerate(("bad%FF", "residual%GZ"))]
+    errors += expect("decode-error-and-residual-encoding-hold", all(held(module.validate_candidate, item) for item in malformed_encoded_sources + malformed_encoded_anchors), (malformed_encoded_sources, malformed_encoded_anchors))
     errors += expect("duplicate-batch-holds", held(module.LearningSignalIndex, [one, copy.deepcopy(one)]), one)
     cursor = default["next_cursor"]
     tampered = cursor[:-1] + ("0" if cursor[-1] != "0" else "1")
@@ -120,7 +127,12 @@ def main() -> int:
         invalid_path.write_text(json.dumps([unknown]), encoding="utf-8")
         invalid = subprocess.run([sys.executable, str(SCRIPT), "--batch-json", str(invalid_path)], text=True, capture_output=True)
         private_paths = []
-        for name, item in (("selected-source", selected_vault_source), ("private-source", private_vault_source), ("selected-anchor", selected_vault_anchor), ("native-anchor", native_id_anchor)):
+        private_cases = (("selected-source", selected_vault_source), ("private-source", private_vault_source), ("selected-anchor", selected_vault_anchor), ("native-anchor", native_id_anchor))
+        private_cases += tuple((f"double-source-{number}", item) for number, item in enumerate(double_encoded_sources))
+        private_cases += tuple((f"double-anchor-{number}", item) for number, item in enumerate(double_encoded_anchors))
+        private_cases += tuple((f"malformed-source-{number}", item) for number, item in enumerate(malformed_encoded_sources))
+        private_cases += tuple((f"malformed-anchor-{number}", item) for number, item in enumerate(malformed_encoded_anchors))
+        for name, item in private_cases:
             path = Path(raw) / f"{name}.json"
             path.write_text(json.dumps([item]), encoding="utf-8")
             private_paths.append(path)

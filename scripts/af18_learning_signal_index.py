@@ -34,6 +34,7 @@ FORBIDDEN_REFERENCE_MARKERS = (
     "native_id", "native%2did", "native%5fid", "content=", "/content/", "raw-content",
     "raw_content", "transcript", "prompt", "secret",
 )
+MAX_REFERENCE_NORMALIZATION_ROUNDS = 4
 
 
 class CandidateError(ValueError):
@@ -60,8 +61,18 @@ def canonical_anchors(value: Any) -> list[str]:
 
 
 def is_safe_reference(value: str) -> bool:
-    normalized = unquote(value).lower()
-    return not any(marker in normalized for marker in FORBIDDEN_REFERENCE_MARKERS)
+    normalized = value
+    try:
+        for _ in range(MAX_REFERENCE_NORMALIZATION_ROUNDS):
+            decoded = unquote(normalized, errors="strict")
+            if decoded == normalized:
+                if "%" in normalized:
+                    return False
+                return not any(marker in normalized.lower() for marker in FORBIDDEN_REFERENCE_MARKERS)
+            normalized = decoded
+    except UnicodeDecodeError:
+        return False
+    return False
 
 
 def candidate_key(source_work_identity: str, evidence_anchors: list[str]) -> str:
