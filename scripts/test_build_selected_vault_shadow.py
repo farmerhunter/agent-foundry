@@ -4,11 +4,19 @@ import tempfile, json, hashlib, sqlite3
 from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from build_selected_vault_shadow import ShadowHold, build_shadow, verify_shadow, _digest
+from build_selected_vault_shadow import ShadowHold, build_shadow, verify_shadow, _digest, validate_cli_roots, cli_main
 
 def main() -> int:
     records={"practices/synthetic/SYN-001.md": b"synthetic one", "practices/synthetic/SYN-002.md": b"synthetic two"}
     errors=[]
+    with tempfile.TemporaryDirectory(prefix="cli-") as temp:
+        selected=Path(temp)/"selected-vault-mock"; selected.mkdir()
+        config=Path(temp)/"config.yaml"; config.write_text(f'vault_root: "{selected}"\n')
+        validate_cli_roots(selected, Path(temp)/"agent-foundry-selected-vault-shadow")
+        if cli_main(["--config", str(config), "--shadow-root", str(Path(temp)/"agent-foundry-selected-vault-shadow")]) == 0: errors.append("cli-source-missing-accepted")
+        if cli_main(["--config", str(config), "--shadow-root", str(Path(temp)/"wrong")]) == 0: errors.append("cli-negative")
+        try: validate_cli_roots(selected, Path(temp)/"wrong-shadow"); errors.append("root-injection")
+        except ShadowHold: pass
     with tempfile.TemporaryDirectory(prefix="shadow-test-") as temp:
         out=Path(temp)/"shadow"
         result=build_shadow("synthetic-anchor-001", records, out)

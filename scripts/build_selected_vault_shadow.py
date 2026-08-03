@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 import sqlite3
+import argparse
 from pathlib import Path
 from typing import Mapping
 
@@ -16,6 +17,56 @@ class ShadowHold(ValueError):
 
 FIXED_ANCHORS = {"vault_head": "400ff7e61f5a07653eb9504411c2abea4b6edd05", "marker": "121c1bc38538f014952d2b8c8a7f10b0ce13e9e77640ae0da99fa82fe54a5d8", "index": "dc946299e9760f71e670e24244410e5a15a902c7814234f5ad67ee61d6a95e65", "catalog": "dea1bca4a830b9a54ad4d0e9d14476bf80397f7375732d7159131a3790a7ac84", "count": 64, "bytes": 322474}
 FIXED_PATHS = {f"practices/synthetic/SYN-{index:03d}.md" for index in range(1, 65)}
+FIXED_SHADOW_DIR = "agent-foundry-selected-vault-shadow"
+
+
+def validate_cli_roots(selected_root: str | Path, shadow_root: str | Path) -> None:
+    """Validate mock roots before any synthetic operation; no Vault fallback."""
+    selected = Path(selected_root).expanduser().resolve(); shadow = Path(shadow_root).expanduser().resolve()
+    if selected.name != "selected-vault-mock" or shadow.name != FIXED_SHADOW_DIR:
+        raise ShadowHold("held_shadow_incomplete: root injection or fallback rejected")
+    if shadow.exists():
+        raise ShadowHold("shadow output must be absent before build")
+
+
+def approved_config_root(config_path: str | Path) -> Path:
+    path = Path(config_path).expanduser().resolve()
+    if not path.exists(): raise ShadowHold("approved config missing")
+    values = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if ":" in line:
+            key, value = line.split(":", 1); values[key.strip()] = value.strip().strip('"')
+    root = Path(values.get("vault_root", "")).expanduser().resolve()
+    if root.name != "selected-vault-mock": raise ShadowHold("approved Vault root mismatch")
+    return root
+
+
+def cli_main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Build synthetic selected-Vault shadow")
+    parser.add_argument("--config", required=True); parser.add_argument("--shadow-root", required=True)
+    args = parser.parse_args(argv)
+    try:
+        selected = approved_config_root(args.config)
+        validate_cli_roots(selected, args.shadow_root)
+        before = {"head": (selected / ".git-head").read_text().strip(), "status": (selected / ".status").read_text().strip(), "marker": (selected / "marker.sha256").read_text().strip(), "index": (selected / "index.sha256").read_text().strip()}
+        if before["head"] != FIXED_ANCHORS["vault_head"] or before["marker"] != FIXED_ANCHORS["marker"] or before["index"] != FIXED_ANCHORS["index"] or before["status"] != "clean": raise ShadowHold("held_shadow_incomplete: source anchor drift")
+        records = {}
+        for index in range(1, 65):
+            path = selected / "practices" / "synthetic" / f"SYN-{index:03d}.md"
+            records[str(path.relative_to(selected))] = path.read_bytes()
+        if sum(map(len, records.values())) != FIXED_ANCHORS["bytes"]: raise ShadowHold("held_shadow_incomplete: catalog bytes")
+        result = build_shadow("synthetic-anchor-001", records, args.shadow_root)
+        after = {"head": (selected / ".git-head").read_text().strip(), "status": (selected / ".status").read_text().strip(), "marker": (selected / "marker.sha256").read_text().strip(), "index": (selected / "index.sha256").read_text().strip()}
+        if after != before: raise ShadowHold("held_shadow_tampered: source changed")
+        Path(args.shadow_root, "shadow-receipt.json").write_text(json.dumps(result["receipt"], sort_keys=True), encoding="utf-8")
+        os.chmod(Path(args.shadow_root, "shadow-receipt.json"), 0o600)
+    except (ShadowHold, OSError, ValueError):
+        return 2
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(cli_main())
 
 
 def _digest(records: Mapping[str, bytes]) -> str:
