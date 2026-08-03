@@ -11,6 +11,7 @@ import tempfile
 from pathlib import Path
 
 import operation_context
+from practice_catalog_authority import HELD, WORKING_TREE
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -113,6 +114,11 @@ def write_locator(home: Path, core: Path, vault: Path) -> dict[str, str]:
 
 def main() -> int:
     errors: list[str] = []
+    default_authority = operation_context.build_context("status")["authority"]
+    if default_authority["mode"] != WORKING_TREE:
+        errors.append("default authority changed")
+    if operation_context.build_context("status", authority_mode="snapshot_authority")["authority"]["mode"] != HELD:
+        errors.append("snapshot opt-in did not hold unavailable backend")
     with tempfile.TemporaryDirectory(prefix="agent-foundry-operation-context-") as tmp:
         base = Path(tmp)
         vault = base / "vault"

@@ -35,6 +35,7 @@ def config_text(repo_root: Path = ROOT, core_root: Path | None = None, vault_roo
     vault_root = (vault_root or repo_root).resolve()
     lines = [
         "schema_version: 1",
+        "authority_mode: working_tree_authority",
         f"repo_root: {quote(repo_root)}",
         f"core_root: {quote(core_root)}",
         f"vault_root: {quote(vault_root)}",
@@ -55,6 +56,7 @@ def config_text(repo_root: Path = ROOT, core_root: Path | None = None, vault_roo
 
 def parse_config(path: Path = CONFIG_PATH) -> dict[str, str | list[str]]:
     data: dict[str, str | list[str]] = {
+        "authority_mode": "working_tree_authority",
         "core_markers": [],
         "vault_markers": [],
         "canonical_markers": [],
@@ -85,6 +87,8 @@ def parse_config(path: Path = CONFIG_PATH) -> dict[str, str | list[str]]:
 def validate(path: Path = CONFIG_PATH) -> list[str]:
     errors: list[str] = []
     data = parse_config(path)
+    if data.get("authority_mode", "working_tree_authority") not in {"working_tree_authority", "snapshot_shadow", "snapshot_authority"}:
+        errors.append("invalid authority_mode")
     repo_root_text = str(data.get("repo_root", ""))
     core_root_text = str(data.get("core_root", ""))
     vault_root_text = str(data.get("vault_root", ""))

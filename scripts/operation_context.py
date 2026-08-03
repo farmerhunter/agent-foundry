@@ -11,6 +11,7 @@ from typing import Any
 from check_foundry_roots import validate
 from foundry_config import CONFIG_PATH, ROOT, parse_config
 from runtime_manifest import LOCAL_MANIFEST, parse_targets
+from practice_catalog_authority import WORKING_TREE, authority_readout
 
 
 DEFAULT_GENERATED_ROOT = Path.home() / ".agent-foundry" / "generated" / "agent-foundry-adapters"
@@ -225,11 +226,13 @@ def build_context(
     core_root: Path | None = None,
     vault_root: Path | None = None,
     adapter_root: Path | None = None,
+    authority_mode: str | None = None,
 ) -> dict[str, Any]:
     cwd = (cwd or Path.cwd()).expanduser().resolve()
     core_root = (core_root or ROOT).expanduser().resolve()
     vault_root = (vault_root or core_root).expanduser().resolve()
     adapter_root = (adapter_root or default_adapter_root(core_root, vault_root)).expanduser().resolve()
+    configured_authority = authority_mode or str(parse_config(CONFIG_PATH).get("authority_mode", WORKING_TREE))
     context = classify_context(cwd, core_root, vault_root, adapter_root)
     root_errors = validate(core_root, vault_root)
     routes = operation_routes(operation, context, cwd, core_root, vault_root, adapter_root)
@@ -256,6 +259,7 @@ def build_context(
         "core_root": str(core_root),
         "vault_root": str(vault_root),
         "adapter_root": str(adapter_root),
+        "authority": authority_readout(configured_authority),
         "manual_targets": manual_targets(),
         "allowed_reads": routes["allowed_reads"],
         "allowed_writes": routes["allowed_writes"],
