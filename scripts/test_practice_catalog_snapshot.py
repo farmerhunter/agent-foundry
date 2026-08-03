@@ -71,7 +71,7 @@ def main() -> int:
         except catalog.ValidationFailure:
             errors += expect(label, True)
     retention = catalog.retain_snapshots(snapshots, {initial["manifest_sha256"]})
-    errors += expect("retention_receipt", retention["operation"] == "retention" and retention["retained_hashes"] == [initial["manifest_sha256"]] and candidate["manifest_sha256"] in retention["removed_hashes"])
+    errors += expect("retention_receipt_no_disposal", retention["operation"] == "retention" and retention["retained_hashes"] == [initial["manifest_sha256"]] and not retention["removed_hashes"] and not retention["disposed_hashes"] and initial["manifest_sha256"] in snapshots and candidate["manifest_sha256"] in snapshots)
     if errors:
         print("Practice catalog snapshot tests failed:")
         print("\n".join(f"- {error}" for error in errors))

@@ -161,13 +161,10 @@ def rollback(store: PointerStore, expected_generation: int, prior_hash: str, hum
 
 
 def retain_snapshots(snapshots: dict[str, dict[str, Any]], keep_hashes: set[str]) -> dict[str, Any]:
-    """Return a deterministic synthetic retention receipt without touching a filesystem."""
+    """Return a receipt only; S0 retention never disposes synthetic snapshots."""
     if not keep_hashes or any(not _valid_hash(value) for value in keep_hashes):
         raise ValidationFailure("invalid retention set")
     missing = keep_hashes.difference(snapshots)
     if missing:
         raise ValidationFailure("retention target snapshot missing")
-    removed = sorted(set(snapshots).difference(keep_hashes))
-    for digest in removed:
-        del snapshots[digest]
-    return {"operation": "retention", "retained_hashes": sorted(keep_hashes), "removed_hashes": removed, "receipt_id": "retention:" + hashlib.sha256("|".join(sorted(keep_hashes)).encode()).hexdigest()[:12]}
+    return {"operation": "retention", "retained_hashes": sorted(keep_hashes), "removed_hashes": [], "disposed_hashes": [], "receipt_id": "retention:" + hashlib.sha256("|".join(sorted(keep_hashes)).encode()).hexdigest()[:12]}
