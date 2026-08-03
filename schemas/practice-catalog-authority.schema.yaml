@@ -10,3 +10,4 @@ rules:
   - Conformance results are reference-only and production_eligibility is always false.
   - trust_domain is same_process_reference and receipt_binding_level is reference_integrity_only.
   - Same-process arbitrary code/introspection is out of scope and adversarial forgery resistance is unsupported.
+  - SQLite catalog qualification state is production_candidate only; production_ready is unreachable.

@@ -60,7 +60,7 @@ def authority_readout(mode: str = WORKING_TREE, backend: object | None = None, *
         state = SNAPSHOT_SHADOW
     else:
         state = HELD
-    return {"mode": state, "authority_id": "snapshot" if backend else None, "backend_version": getattr(backend, "version", None), "generation": getattr(backend, "generation", None), "content_hash": getattr(backend, "snapshot_hash", None), "replica_drift": replica_drift, "migration": migration, "holds": holds, "backup_rollback": {"backup": backup, "rollback": rollback}, "operations": list(operations)}
+    return {"mode": state, "authority_id": "snapshot" if backend else None, "backend_version": getattr(backend, "version", None), "generation": getattr(backend, "generation", None), "content_hash": getattr(backend, "snapshot_hash", None), "replica_drift": replica_drift, "migration": migration, "holds": holds, "backup_rollback": {"backup": backup, "rollback": rollback}, "operations": list(operations), "qualification_state": "production_candidate", "production_eligibility": False}
 
 
 def synthetic_content_hash(text: str) -> str:
