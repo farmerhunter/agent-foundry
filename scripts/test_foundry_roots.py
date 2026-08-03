@@ -349,7 +349,7 @@ def main() -> int:
     synthetic_snapshot = catalog.snapshot("synthetic-root-view", synthetic_manifest, synthetic_files)
     synthetic_store = catalog.PointerStore(synthetic_snapshot["manifest_sha256"])
     view_errors = check_foundry_roots.validate_injected_snapshot_fixture_view(
-        synthetic_store,
+        catalog.issue_capability(synthetic_store),
         {synthetic_snapshot["manifest_sha256"]: synthetic_snapshot},
         "SYN-001",
     )

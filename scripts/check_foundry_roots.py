@@ -75,14 +75,16 @@ def validate_injected_snapshot_fixture_view(
 ) -> list[str]:
     """Consume the synthetic injected view; never read roots or a working tree."""
     errors: list[str] = []
-    if not isinstance(pointer_capability, catalog.PointerStore):
+    try:
+        backend = catalog._require_store(pointer_capability)
+    except catalog.ValidationFailure:
         return ["synthetic snapshot view has unknown pointer capability"]
-    before = pointer_capability.read_calls
+    before = getattr(backend, "read_calls", None)
     try:
         result = catalog.injected_snapshot_view(pointer_capability, snapshot_capability, practice_id)  # type: ignore[arg-type]
     except catalog.ValidationFailure as exc:
         return [f"synthetic snapshot view rejected: {exc}"]
-    if pointer_capability.read_calls - before != 1:
+    if before is None or getattr(backend, "read_calls", None) - before != 1:
         errors.append("synthetic snapshot view resolved pointer more than once")
     receipt = result.get("receipt")
     if not isinstance(receipt, catalog.PointerReceipt) or receipt.operation != "read":
