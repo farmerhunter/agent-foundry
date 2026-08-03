@@ -127,9 +127,9 @@ def commit_snapshot(store: PointerStore, snapshots: dict[str, dict[str, Any]], c
         candidate_hash = candidate["manifest_sha256"]
     except ValidationFailure:
         return {"state": "held_validation_failure", "pointer": before}
+    snapshots[candidate_hash] = candidate
     if interrupt == "before_cas":
         return {"state": "held_interrupted_before_cas", "pointer": before}
-    snapshots[candidate_hash] = candidate
     receipt = store.compare_and_set(expected_generation, candidate_hash)
     if receipt is None:
         return {"state": "held_cas_conflict", "pointer": store.read()}

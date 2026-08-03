@@ -28,7 +28,7 @@ def main() -> int:
     store = catalog.PointerStore(initial["manifest_sha256"])
 
     held = catalog.commit_snapshot(store, snapshots, candidate, 0, "before_cas")
-    errors += expect("held_interrupted_before_cas", held["state"] == "held_interrupted_before_cas" and store.read().generation == 0)
+    errors += expect("held_interrupted_before_cas", held["state"] == "held_interrupted_before_cas" and candidate["manifest_sha256"] in snapshots and store.read().generation == 0 and store.read().snapshot_hash == initial["manifest_sha256"] and store.cas_calls == 0)
 
     conflict = catalog.commit_snapshot(store, snapshots, candidate, 9)
     errors += expect("held_cas_conflict", conflict["state"] == "held_cas_conflict" and store.read().snapshot_hash == initial["manifest_sha256"])
