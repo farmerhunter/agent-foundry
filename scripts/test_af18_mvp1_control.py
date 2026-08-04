@@ -522,6 +522,8 @@ def main() -> int:
     expect("terminal-handoff-none", none["candidate"] is None and none["learning_signal"] == "none", none)
     private = {**handoff, "native_thread_id": "thread-secret"}
     expect("terminal-handoff-privacy", "privacy_exposure" in planner.validate_work_terminal_handoff(private)["stop_conditions"], private)
+    malformed_anchor = {**handoff, "issue_url_anchor": handoff["issue_url_anchor"] + "\n"}
+    expect("terminal-handoff-anchor-strict", "invalid_issue_url_anchor" in planner.validate_work_terminal_handoff(malformed_anchor)["stop_conditions"], malformed_anchor)
 
     class FakeComments:
         def __init__(self, comments=None, fail_add=False):

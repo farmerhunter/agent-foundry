@@ -102,7 +102,7 @@ def validate_work_terminal_handoff(handoff: Any) -> dict[str, Any]:
             stops.append(f"missing_handoff_{field}")
     if handoff.get("handoff_version") != WORK_TERMINAL_HANDOFF_VERSION:
         stops.append("unsupported_handoff_version")
-    if not isinstance(handoff.get("issue_url_anchor"), str) or not re.match(r"^https://github\.com/[^/]+/[^/]+/issues/[1-9][0-9]*$", str(handoff.get("issue_url_anchor", ""))):
+    if not isinstance(handoff.get("issue_url_anchor"), str) or re.fullmatch(r"https://github\.com/[^/]+/[^/]+/issues/[1-9][0-9]*", str(handoff.get("issue_url_anchor", ""))) is None:
         stops.append("invalid_issue_url_anchor")
     if handoff.get("visibility") != "issue_comment_metadata_only":
         stops.append("visibility_mismatch")
