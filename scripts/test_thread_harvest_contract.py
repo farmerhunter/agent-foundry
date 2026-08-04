@@ -14,6 +14,14 @@ def main():
     if review({**base,"coverage":"unknown"})["outcome"] != "rejected": errors.append("coverage")
     if review({**base,"output":"proposed"})["outcome"] != "rejected": errors.append("promotion")
     if review({**base,"output":"active"})["outcome"] != "rejected": errors.append("active-promotion")
+    def mock_wrapper(matches, pages=1, older_exhausted=True, include_outputs=False):
+        if include_outputs: return "unavailable"
+        if len(matches) != 1: return "privacy_held" if len(matches) > 1 else "unavailable"
+        return "complete" if older_exhausted and pages <= 5 else "partial"
+    if mock_wrapper(["thread"], include_outputs=False) != "complete": errors.append("unique-complete")
+    if mock_wrapper([]) != "unavailable" or mock_wrapper(["a", "b"]) != "privacy_held": errors.append("resolution")
+    if mock_wrapper(["thread"], pages=6) != "partial" or mock_wrapper(["thread"], older_exhausted=False) != "partial": errors.append("coverage-bounds")
+    if mock_wrapper(["thread"], include_outputs=True) != "unavailable": errors.append("includeOutputs")
     print("thread harvest tests passed." if not errors else f"failed: {errors}")
     return 1 if errors else 0
 if __name__ == "__main__": raise SystemExit(main())
