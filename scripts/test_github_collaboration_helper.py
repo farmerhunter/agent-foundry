@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import importlib.util
 import os
 import subprocess
 import sys
@@ -15,6 +16,10 @@ ROOT = Path(__file__).resolve().parents[1]
 HELPER = ROOT / "scripts" / "github_collaboration_helper.py"
 TEMPLATE = ROOT / "templates" / "github-role-routing.template.yaml"
 WORKFLOW = ROOT / "workflows" / "github-collaboration-helper.md"
+helper_spec = importlib.util.spec_from_file_location("github_collaboration_helper", HELPER)
+helper_module = importlib.util.module_from_spec(helper_spec)
+assert helper_spec.loader is not None
+helper_spec.loader.exec_module(helper_module)
 
 
 def run(args: list[str], cwd: Path, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
@@ -45,6 +50,28 @@ def expect_ok(name: str, result: subprocess.CompletedProcess[str], expected: str
     return [f"{name}: expected success containing {expected!r}, got {result.returncode}\n{output}"]
 
 
+def terminal_handoff_fixture_checks() -> list[str]:
+    errors: list[str] = []
+    anchor = "https://github.com/farmerhunter/agent-foundry/issues/450"
+    handoff = {
+        "handoff_version": "WorkTerminalLearningSignalHandoff-v1", "work_id": "w-1", "run_id": "r-1",
+        "issue_url_anchor": anchor, "payload_hash": "sha256:x", "retention": "issue_comment_until_disposed",
+        "visibility": "issue_comment_metadata_only", "candidate": None, "learning_signal": "none", "disposition_receipts": [],
+    }
+    class Adapter:
+        def __init__(self): self.comments: list[dict[str, str]] = []
+        def list_comments(self, _anchor): return list(self.comments)
+        def add_comment(self, _anchor, body): self.comments.append({"body": body})
+    adapter = Adapter()
+    first = helper_module.write_work_terminal_handoff(adapter, handoff)
+    again = helper_module.write_work_terminal_handoff(adapter, handoff)
+    if first["status"] != "recorded": errors.append("terminal-handoff-recorded")
+    if again["status"] != "already_recorded": errors.append("terminal-handoff-idempotent")
+    state = helper_module.reconstruct_work_terminal_state(adapter.comments, anchor)
+    if state["status"] != "complete" or "native_thread_id" in adapter.comments[0]["body"]: errors.append("terminal-handoff-privacy")
+    return errors
+
+
 def expect_fail(name: str, result: subprocess.CompletedProcess[str], expected: str) -> list[str]:
     output = result.stdout + result.stderr
     if result.returncode != 0 and expected in output:
@@ -63,6 +90,7 @@ def expect_text_contains(name: str, text: str, snippets: list[str]) -> list[str]
 
 def main() -> int:
     errors: list[str] = []
+    errors.extend(terminal_handoff_fixture_checks())
     workflow_text = WORKFLOW.read_text(encoding="utf-8")
     template_text = TEMPLATE.read_text(encoding="utf-8")
     errors.extend(
