@@ -6,6 +6,8 @@ Locate Agent Foundry before writing canonical records. Prefer explicit roots whe
 
 Follow this route:
 
+For a named thread, use the bounded intake contract first: explicit intent, opaque ref, adapter history capability, and coverage state. Intake only returns candidate_hold/deferred/rejected; it performs no filesystem, network, GitHub, Vault, publish, or activation mutation.
+
 ```text
 session reconstruction
   -> current capability check
