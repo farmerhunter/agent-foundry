@@ -5,6 +5,8 @@ description: Use when the user says "harvest practices", "harvest skills", "harv
 
 # Practice Harvester
 
+Thread intake is bounded by `thread_harvest_request_v1`: require Human intent and an opaque thread reference, report coverage, and keep raw history transient. Do not expose pagination/cursors, expand to other threads, persist transcript/tool/identity/secret data, or promote candidates.
+
 This skill maintains Agent Foundry, the user's canonical capability system.
 
 Asset ID: ASSET-META-001. Canonical constraints include META-001 through META-013, GOV-001 through GOV-006, and RUNTIME-001 through RUNTIME-005.
