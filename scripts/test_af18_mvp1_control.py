@@ -14,6 +14,11 @@ spec = importlib.util.spec_from_file_location("plan_af18_mvp1_control", PLANNER)
 planner = importlib.util.module_from_spec(spec)
 assert spec.loader is not None
 spec.loader.exec_module(planner)
+HELPER = ROOT / "scripts" / "github_collaboration_helper.py"
+helper_spec = importlib.util.spec_from_file_location("github_collaboration_helper", HELPER)
+helper = importlib.util.module_from_spec(helper_spec)
+assert helper_spec.loader is not None
+helper_spec.loader.exec_module(helper)
 
 NOW = dt.datetime(2026, 7, 29, 4, 0, tzinfo=dt.timezone.utc)
 
@@ -507,6 +512,45 @@ def main() -> int:
     expect("incident-no-silent-model-effort-change", "silent_model_change_forbidden" in silent_escalation["stop_conditions"] and "silent_reasoning_change_forbidden" in silent_escalation["stop_conditions"], silent_escalation)
     private_incident = planner.incident_projection({"incident": {**incident_base, "category": "evidence_conflict", "prompt": "private"}}, NOW)
     expect("incident-privacy-holds", "privacy_exposure" in private_incident["stop_conditions"], private_incident)
+
+    handoff = planner.build_work_terminal_handoff(
+        "af18-450", "run-450-a", "https://github.com/farmerhunter/agent-foundry/issues/450", "sha256:abc",
+        {"disposition": "candidate_hold", "summary": "bounded lesson"},
+    )
+    expect("terminal-handoff-valid", planner.validate_work_terminal_handoff(handoff)["valid"], handoff)
+    none = planner.build_work_terminal_handoff("af18-450", "run-450-b", handoff["issue_url_anchor"], "sha256:none")
+    expect("terminal-handoff-none", none["candidate"] is None and none["learning_signal"] == "none", none)
+    private = {**handoff, "native_thread_id": "thread-secret"}
+    expect("terminal-handoff-privacy", "privacy_exposure" in planner.validate_work_terminal_handoff(private)["stop_conditions"], private)
+
+    class FakeComments:
+        def __init__(self, comments=None, fail_add=False):
+            self.comments = list(comments or [])
+            self.fail_add = fail_add
+        def list_comments(self, _anchor):
+            return list(self.comments)
+        def add_comment(self, _anchor, body):
+            if self.fail_add:
+                self.fail_add = False
+                raise RuntimeError("uncertain")
+            self.comments.append({"body": body})
+
+    adapter = FakeComments()
+    recorded = helper.write_work_terminal_handoff(adapter, handoff)
+    expect("terminal-write", recorded["status"] == "recorded", recorded)
+    repeated = helper.write_work_terminal_handoff(adapter, handoff)
+    expect("terminal-idempotent", repeated["status"] == "already_recorded", repeated)
+    conflict = helper.write_work_terminal_handoff(adapter, {**handoff, "payload_hash": "sha256:other"})
+    expect("terminal-conflict", conflict["status"] == "held_handoff_conflict", conflict)
+    uncertain = FakeComments(fail_add=True)
+    uncertain_result = helper.write_work_terminal_handoff(uncertain, handoff)
+    expect("terminal-uncertain-retry", uncertain_result["status"] == "recorded" and uncertain_result["attempts"] == 2, uncertain_result)
+    recovered = helper.reconstruct_work_terminal_state(adapter.list_comments(handoff["issue_url_anchor"]), handoff["issue_url_anchor"])
+    expect("terminal-restart-recovery", recovered["status"] == "complete" and recovered["handoff"]["payload_hash"] == "sha256:abc", recovered)
+    disposition = helper.append_work_terminal_disposition(adapter, handoff, "disposed", "receipt-1")
+    expect("terminal-disposition", disposition["status"] == "recorded" and disposition["state"]["dispositions"][0]["disposition"] == "disposed", disposition)
+    expect("terminal-logical-dispose", len(adapter.comments) >= 2, adapter.comments)
+    expect("terminal-no-runtime-side-effects", helper.WORK_TERMINAL_MARKER in adapter.comments[0]["body"] and "native_thread_id" not in adapter.comments[0]["body"], adapter.comments)
 
     print("af18 mvp1 control-plane tests passed")
     return 0

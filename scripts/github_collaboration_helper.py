@@ -134,6 +134,8 @@ LOCAL_LEDGER_EVENT_TYPES = {
 CAPABILITY_LAYER_VALUES = {"base", "local_orchestration", "mixed"}
 LOCAL_LEDGER_CONFIDENCE_VALUES = {"observed", "inferred", "unknown", "not_available"}
 LOCAL_LEDGER_DEFAULT_ROOT = Path("usage") / "local" / "collaboration-ledger"
+WORK_TERMINAL_MARKER = "<!-- AF18 WorkTerminalLearningSignalHandoff-v1 -->"
+WORK_TERMINAL_DISPOSITIONS = {"retrieved_for_review", "dismissed", "superseded", "disposed"}
 
 
 def fail(code: str, detail: str, exit_code: int = 2) -> None:
@@ -1019,6 +1021,89 @@ def comments_for_item(item: dict[str, Any]) -> list[dict[str, Any]]:
     if not isinstance(comments, list):
         return []
     return [comment for comment in comments if isinstance(comment, dict)]
+
+
+def _handoff_key(handoff: dict[str, Any]) -> tuple[str, str, str]:
+    return (str(handoff.get("work_id", "")), str(handoff.get("run_id", "")), str(handoff.get("issue_url_anchor", "")))
+
+
+def work_terminal_comment_body(handoff: dict[str, Any]) -> str:
+    """Serialize only the approved metadata envelope for an issue comment."""
+    safe = {key: handoff[key] for key in ("handoff_version", "work_id", "run_id", "issue_url_anchor", "payload_hash", "retention", "visibility", "candidate", "learning_signal", "disposition_receipts") if key in handoff}
+    return WORK_TERMINAL_MARKER + "\n```json\n" + json.dumps(safe, sort_keys=True, separators=(",", ":")) + "\n```"
+
+
+def parse_work_terminal_comments(comments: list[dict[str, Any]], issue_url_anchor: str) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    for comment in comments:
+        body = str(comment.get("body") or "") if isinstance(comment, dict) else ""
+        if WORK_TERMINAL_MARKER not in body:
+            continue
+        match = re.search(r"```json\s*(\{.*?\})\s*```", body, re.DOTALL)
+        if not match:
+            continue
+        try:
+            record = json.loads(match.group(1))
+        except json.JSONDecodeError:
+            continue
+        if isinstance(record, dict) and record.get("issue_url_anchor") == issue_url_anchor:
+            records.append(record)
+    return records
+
+
+def reconstruct_work_terminal_state(comments: list[dict[str, Any]], issue_url_anchor: str) -> dict[str, Any]:
+    records = parse_work_terminal_comments(comments, issue_url_anchor)
+    if not records:
+        return {"status": "unavailable", "handoff": None, "dispositions": []}
+    latest = records[-1]
+    if latest.get("learning_signal") != "none" or latest.get("visibility") != "issue_comment_metadata_only":
+        return {"status": "held_privacy_or_invalid", "handoff": None, "dispositions": []}
+    dispositions = [r for record in records for r in record.get("disposition_receipts", []) if isinstance(r, dict) and r.get("disposition") in WORK_TERMINAL_DISPOSITIONS]
+    return {"status": "complete", "handoff": latest, "dispositions": dispositions}
+
+
+def write_work_terminal_handoff(adapter: Any, handoff: dict[str, Any], max_retries: int = 1) -> dict[str, Any]:
+    """Write/readback/dedupe through an injected comment adapter only."""
+    key = _handoff_key(handoff)
+    comments = adapter.list_comments(handoff["issue_url_anchor"])
+    existing = parse_work_terminal_comments(comments, handoff["issue_url_anchor"])
+    for record in existing:
+        if _handoff_key(record) == key:
+            if record.get("payload_hash") == handoff.get("payload_hash"):
+                return {"status": "already_recorded", "handoff": record, "attempts": 0}
+            return {"status": "held_handoff_conflict", "handoff": record, "attempts": 0}
+    attempts = 0
+    while attempts <= max_retries:
+        attempts += 1
+        try:
+            adapter.add_comment(handoff["issue_url_anchor"], work_terminal_comment_body(handoff))
+        except Exception:
+            readback = parse_work_terminal_comments(adapter.list_comments(handoff["issue_url_anchor"]), handoff["issue_url_anchor"])
+            if any(_handoff_key(r) == key and r.get("payload_hash") == handoff.get("payload_hash") for r in readback):
+                return {"status": "already_recorded", "handoff": readback[-1], "attempts": attempts}
+            if attempts > max_retries:
+                return {"status": "held_write_outcome_unknown", "handoff": None, "attempts": attempts}
+            continue
+        readback = parse_work_terminal_comments(adapter.list_comments(handoff["issue_url_anchor"]), handoff["issue_url_anchor"])
+        if any(_handoff_key(r) == key and r.get("payload_hash") == handoff.get("payload_hash") for r in readback):
+            return {"status": "recorded", "handoff": readback[-1], "attempts": attempts}
+        if attempts > max_retries:
+            return {"status": "held_write_outcome_unknown", "handoff": None, "attempts": attempts}
+    return {"status": "held_write_outcome_unknown", "handoff": None, "attempts": attempts}
+
+
+def append_work_terminal_disposition(adapter: Any, handoff: dict[str, Any], disposition: str, receipt_hash: str) -> dict[str, Any]:
+    if disposition not in WORK_TERMINAL_DISPOSITIONS:
+        return {"status": "held_invalid_disposition"}
+    receipt = {"disposition": disposition, "receipt_hash": receipt_hash}
+    updated = dict(handoff)
+    updated["disposition_receipts"] = [receipt]
+    try:
+        adapter.add_comment(handoff["issue_url_anchor"], work_terminal_comment_body(updated))
+    except Exception:
+        return {"status": "held_write_outcome_unknown"}
+    state = reconstruct_work_terminal_state(adapter.list_comments(handoff["issue_url_anchor"]), handoff["issue_url_anchor"])
+    return {"status": "recorded" if state["dispositions"] else "held_write_outcome_unknown", "state": state}
 
 
 def needs_owner_from_labels(labels: list[str]) -> str | None:

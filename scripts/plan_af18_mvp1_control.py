@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -16,6 +17,7 @@ import plan_collaboration_routes as cost_policy
 POLICY_SOURCE = "scripts/plan_collaboration_routes.py"
 POLICY_VERSION = "af18-cost-policy-440-442"
 CONTROL_VERSION = "af18-mvp1-control-plane-v1"
+WORK_TERMINAL_HANDOFF_VERSION = "WorkTerminalLearningSignalHandoff-v1"
 ROLE_LIFECYCLE_VERSION = "af18-role-lifecycle-v1"
 NORMAL_WORK_RESOURCES = {
     "profile": "normal",
@@ -77,6 +79,87 @@ FORBIDDEN_PACKET_KEYS = {
     "full_history",
     "transcript",
 }
+
+HANDOFF_FORBIDDEN_KEYS = {
+    "thread_id", "native_thread_id", "transcript", "raw_transcript", "prompt",
+    "tool_output", "raw_tool_output", "model_output", "identity", "secret",
+    "native_id", "cursor",
+}
+
+
+def validate_work_terminal_handoff(handoff: Any) -> dict[str, Any]:
+    """Validate the metadata-only terminal handoff without doing any I/O."""
+    stops: list[str] = []
+    if not isinstance(handoff, dict):
+        return {"valid": False, "stop_conditions": ["missing_work_terminal_handoff"]}
+    forbidden = find_forbidden(handoff)
+    forbidden.extend(f"$.{key}" for key in HANDOFF_FORBIDDEN_KEYS if key in handoff)
+    if forbidden:
+        stops.append("privacy_exposure")
+    required = ("handoff_version", "work_id", "run_id", "issue_url_anchor", "payload_hash", "retention", "visibility")
+    for field in required:
+        if missing(handoff.get(field)):
+            stops.append(f"missing_handoff_{field}")
+    if handoff.get("handoff_version") != WORK_TERMINAL_HANDOFF_VERSION:
+        stops.append("unsupported_handoff_version")
+    if not isinstance(handoff.get("issue_url_anchor"), str) or not re.match(r"^https://github\.com/[^/]+/[^/]+/issues/[1-9][0-9]*$", str(handoff.get("issue_url_anchor", ""))):
+        stops.append("invalid_issue_url_anchor")
+    if handoff.get("visibility") != "issue_comment_metadata_only":
+        stops.append("visibility_mismatch")
+    candidate = handoff.get("candidate")
+    learning_signal = handoff.get("learning_signal", "none")
+    if candidate is not None:
+        if not isinstance(candidate, dict) or candidate.get("disposition") != "candidate_hold":
+            stops.append("candidate_must_be_candidate_hold")
+    if learning_signal != "none":
+        stops.append("learning_signal_must_be_none")
+    if candidate is not None and learning_signal != "none":
+        stops.append("multiple_learning_payloads")
+    return {"valid": not stops, "stop_conditions": sorted(set(stops)), "privacy_safe": not forbidden}
+
+
+def build_work_terminal_handoff(
+    work_id: str,
+    run_id: str,
+    issue_url_anchor: str,
+    payload_hash: str,
+    candidate: dict[str, Any] | None = None,
+    retention: str = "issue_comment_until_disposed",
+) -> dict[str, Any]:
+    handoff = {
+        "handoff_version": WORK_TERMINAL_HANDOFF_VERSION,
+        "work_id": work_id,
+        "run_id": run_id,
+        "issue_url_anchor": issue_url_anchor,
+        "payload_hash": payload_hash,
+        "retention": retention,
+        "visibility": "issue_comment_metadata_only",
+        "candidate": candidate,
+        "learning_signal": "none",
+        "disposition_receipts": [],
+    }
+    result = validate_work_terminal_handoff(handoff)
+    if not result["valid"]:
+        raise ValueError("invalid WorkTerminalLearningSignalHandoff: " + ",".join(result["stop_conditions"]))
+    return handoff
+
+
+def reconstruct_work_terminal_handoff(comments: list[dict[str, Any]], issue_url_anchor: str) -> dict[str, Any]:
+    """Rebuild the latest handoff and append-only logical dispositions from comments."""
+    records = [c.get("work_terminal_handoff") for c in comments if isinstance(c, dict) and isinstance(c.get("work_terminal_handoff"), dict)]
+    records = [r for r in records if r.get("issue_url_anchor") == issue_url_anchor]
+    if not records:
+        return {"status": "unavailable", "handoff": None, "dispositions": []}
+    latest = records[-1]
+    validation = validate_work_terminal_handoff(latest)
+    if not validation["valid"]:
+        return {"status": "held_privacy_or_invalid", "handoff": None, "dispositions": []}
+    dispositions: list[dict[str, Any]] = []
+    for record in records:
+        for receipt in record.get("disposition_receipts", []):
+            if isinstance(receipt, dict) and receipt.get("disposition") in {"retrieved_for_review", "dismissed", "superseded", "disposed"}:
+                dispositions.append(receipt)
+    return {"status": "complete", "handoff": latest, "dispositions": dispositions}
 
 
 def parse_args() -> argparse.Namespace:

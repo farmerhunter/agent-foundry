@@ -522,6 +522,65 @@ properties:
             const: 12
           ready:
             type: boolean
+  work_terminal_learning_signal_handoff:
+    title: WorkTerminalLearningSignalHandoff v1
+    type: object
+    additionalProperties: false
+    required:
+      - handoff_version
+      - work_id
+      - run_id
+      - issue_url_anchor
+      - payload_hash
+      - retention
+      - visibility
+      - candidate
+      - learning_signal
+    properties:
+      handoff_version:
+        const: WorkTerminalLearningSignalHandoff-v1
+      work_id:
+        type: string
+        minLength: 1
+      run_id:
+        type: string
+        minLength: 1
+      issue_url_anchor:
+        type: string
+        pattern: '^https://github\\.com/[^/]+/[^/]+/issues/[1-9][0-9]*$'
+      payload_hash:
+        type: string
+        minLength: 1
+      retention:
+        const: issue_comment_until_disposed
+      visibility:
+        const: issue_comment_metadata_only
+      candidate:
+        anyOf:
+          - type: 'null'
+          - type: object
+            additionalProperties: false
+            required: [disposition]
+            properties:
+              disposition:
+                const: candidate_hold
+              summary:
+                type: string
+                minLength: 1
+      learning_signal:
+        const: none
+      disposition_receipts:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [disposition, receipt_hash]
+          properties:
+            disposition:
+              enum: [retrieved_for_review, dismissed, superseded, disposed]
+            receipt_hash:
+              type: string
+              minLength: 1
   incident:
     type: object
     additionalProperties: false

@@ -52,6 +52,25 @@ The portable Core owns:
 Native runtime ids, such as Codex task/thread/subagent ids, are adapter
 metadata. They are useful evidence but not Core domain objects.
 
+## Work terminal learning-signal handoff
+
+When a Work reaches a terminal handoff, Coordinator may append one
+`WorkTerminalLearningSignalHandoff-v1` metadata envelope to the existing Work
+issue's durable terminal-handoff comment. The envelope carries portable
+`work_id`, `run_id`, an issue URL anchor, payload hash, retention, and
+visibility. It contains at most one `candidate` with disposition
+`candidate_hold`; otherwise `learning_signal: none`. Native thread ids, raw
+transcripts, prompts, tool/model output, identity, and secrets are forbidden.
+
+Coordinator must read back before and after writing. A matching key and hash is
+`already_recorded`; a matching key with a different hash is
+`held_handoff_conflict`. If the API outcome is uncertain, read back and retry
+at most once, then hold as `held_write_outcome_unknown`. Restart recovery
+reconstructs state from issue comments only. Disposition receipts are
+append-only (`retrieved_for_review`, `dismissed`, `superseded`, or `disposed`);
+`disposed` is logical and never physically deletes a comment. Missing,
+locked, permission-denied, or visibility-mismatched issue state fails closed.
+
 ## AF18 Policy Layers
 
 Do not collapse AF18 policy layers:
