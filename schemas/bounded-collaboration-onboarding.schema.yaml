@@ -6,7 +6,10 @@ description: >-
   transcript access, Vault writes, or runtime activation.
 type: object
 additionalProperties: false
-required: [onboarding_version, request, runtime_capabilities, role_hub, existing_roles, repository_state]
+oneOf:
+  - required: [onboarding_version, request, runtime_capabilities, role_hub, current_thread, existing_roles, repository_state]
+    not: {required: [state]}
+  - $ref: "#/$defs/PlanResult"
 properties:
   onboarding_version:
     const: bounded-collaboration-onboarding-v1
@@ -49,8 +52,8 @@ properties:
         properties:
           role_hub: {$ref: "#/$defs/Capability"}
           current_thread: {$ref: "#/$defs/Capability"}
-          scheduler: {$ref: "#/$defs/Capability"}
-          transient_template: {$ref: "#/$defs/Capability"}
+          scheduler: {$ref: "#/$defs/SchedulerProjection"}
+          transient_template: {$ref: "#/$defs/TransientProjection"}
       operations:
         type: object
         additionalProperties: false
@@ -68,6 +71,14 @@ properties:
     properties:
       status: {enum: [missing, active, held, ambiguous]}
       role_hub_ref: {type: string, minLength: 1}
+  current_thread:
+    type: object
+    additionalProperties: false
+    required: [eligible, current_thread_ref, name]
+    properties:
+      eligible: {type: boolean}
+      current_thread_ref: {type: string, minLength: 1}
+      name: {type: string, minLength: 1}
   existing_roles:
     type: array
     items:
@@ -107,6 +118,15 @@ properties:
         rollback_fingerprint: {type: string, minLength: 1}
   plan_result:
     $ref: "#/$defs/PlanResult"
+  read_only: {const: true}
+  mutation_performed: {const: false}
+  dispatch_performed: {const: false}
+  state: {enum: [preflight, plan_ready, applying, ready, partial_hold, rollback_planned, rolled_back, rollback_incomplete]}
+  transition_history: {type: array}
+  stop_conditions: {type: array}
+  operations: {type: array}
+  rollback_operations: {type: array}
+  summary: {type: object}
 $defs:
   Capability:
     type: object
@@ -114,6 +134,29 @@ $defs:
     required: [status]
     properties:
       status: {enum: [supported, unavailable, unknown]}
+  SchedulerProjection:
+    type: object
+    additionalProperties: false
+    required: [status, binding_ref, binding_status]
+    properties:
+      status: {enum: [supported, unavailable, unknown]}
+      binding_ref: {type: string, minLength: 1}
+      binding_status: {enum: [bound, unavailable]}
+  TransientProjection:
+    type: object
+    additionalProperties: false
+    required: [status, template_refs]
+    properties:
+      status: {enum: [supported, unavailable, unknown]}
+      template_refs:
+        type: object
+        additionalProperties: false
+        required: [Implementer, Reviewer, Tester, Harvester]
+        properties:
+          Implementer: {type: string, minLength: 1}
+          Reviewer: {type: string, minLength: 1}
+          Tester: {type: string, minLength: 1}
+          Harvester: {type: string, minLength: 1}
   PlanResult:
     type: object
     additionalProperties: false
@@ -187,9 +230,15 @@ $defs:
       status: {enum: [applied, failed, not_attempted]}
       receipt_ref: {type: string, minLength: 1}
       operation_fingerprint: {type: string, minLength: 1}
+      result_ref: {type: string, minLength: 1}
     allOf:
       - if:
           properties:
             status: {enum: [applied, failed]}
         then:
           required: [receipt_ref, operation_fingerprint]
+      - if:
+          properties:
+            status: {const: applied}
+        then:
+          required: [result_ref]

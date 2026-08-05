@@ -27,12 +27,16 @@ perform an operation.
 ## Preflight and plan
 
 1. Bind a project by its explicit `project_id`, repository and integration
-   branch. Do not infer it from a transcript or a native thread ID.
+   branch. Record current-thread eligibility, opaque reference and name; do not
+   infer any of them from a transcript or a native thread ID.
 2. Check that role binding plus the RoleHub, current-thread, scheduler and
    transient-template projections are explicitly `supported`. Discover, create,
    rename, link and navigate capabilities must also be explicit. `unknown` and
    `unavailable` are fail-closed.
-3. For each durable role, Coordinator and Architect, reuse exactly one active,
+3. Reuse an active RoleHub only with an opaque RoleHub reference. Otherwise
+   plan `rename_current_to_role_hub` only for an eligible current thread, or
+   `create_role_hub`; each has a preimage, idempotency key and receipt. For
+   each durable role, Coordinator and Architect, reuse exactly one active,
    non-legacy match. Zero matches produce one planned create; two or more
    matches are a duplicate hold. A legacy match is a historical reference,
    never an automatic adoption.
@@ -49,7 +53,11 @@ perform an operation.
 The returned summary must include project identity; capability state
 (`complete`, `partial`, `unavailable`, or `privacy_held`); reused, created,
 unchanged and held entries; adapter-owned active navigation; historical
-references; dirty-state preservation; and the next Human action.
+references; dirty-state preservation; and the next Human action. A `ready`
+summary is derived only from applied receipts and contains final RoleHub,
+Coordinator and Architect navigation references, a bound scheduler reference,
+and four transient template references (Implementer, Reviewer, Tester and
+Harvester).
 
 ## Apply and rollback boundary
 

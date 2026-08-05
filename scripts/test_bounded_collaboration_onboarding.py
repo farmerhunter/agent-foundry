@@ -6,8 +6,12 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
+import jsonschema
+import yaml
+
 
 ROOT = Path(__file__).resolve().parents[1]
+SCHEMA = yaml.safe_load((ROOT / "schemas" / "bounded-collaboration-onboarding.schema.yaml").read_text(encoding="utf-8"))
 spec = importlib.util.spec_from_file_location("onboarding", ROOT / "scripts" / "plan_bounded_collaboration_onboarding.py")
 onboarding = importlib.util.module_from_spec(spec)
 assert spec.loader is not None
@@ -15,11 +19,14 @@ spec.loader.exec_module(onboarding)
 
 
 def capability_set():
-    return {"role_binding": {"status": "supported"}, "projections": {name: {"status": "supported"} for name in onboarding.PROJECTIONS}, "operations": {name: {"status": "supported"} for name in onboarding.CAPABILITIES}}
+    projections = {name: {"status": "supported"} for name in onboarding.PROJECTIONS}
+    projections["scheduler"] = {"status": "supported", "binding_ref": "scheduler:bound", "binding_status": "bound"}
+    projections["transient_template"] = {"status": "supported", "template_refs": {role: f"template:{role}" for role in onboarding.TRANSIENT_ROLES}}
+    return {"role_binding": {"status": "supported"}, "projections": projections, "operations": {name: {"status": "supported"} for name in onboarding.CAPABILITIES}}
 
 
 def fixture(**overrides):
-    value = {"onboarding_version": onboarding.VERSION, "request": {"project_identity": {"project_id": "agent-foundry", "repository": "farmerhunter/agent-foundry", "integration_branch": "codex/integration"}, "onboarding_key": "onboard-agent-foundry-v1", "apply_authorized": False}, "runtime_capabilities": capability_set(), "role_hub": {"status": "missing"}, "existing_roles": [], "repository_state": {"dirty": True, "dirty_preserved": True}}
+    value = {"onboarding_version": onboarding.VERSION, "request": {"project_identity": {"project_id": "agent-foundry", "repository": "farmerhunter/agent-foundry", "integration_branch": "codex/integration"}, "onboarding_key": "onboard-agent-foundry-v1", "apply_authorized": False}, "runtime_capabilities": capability_set(), "role_hub": {"status": "missing"}, "current_thread": {"eligible": False, "current_thread_ref": "opaque-current", "name": "Current"}, "existing_roles": [], "repository_state": {"dirty": True, "dirty_preserved": True}}
     value.update(overrides)
     return value
 
@@ -31,7 +38,7 @@ def expect(name, condition, value):
 
 
 def receipt(item, status="applied", fingerprint=True):
-    value = {"idempotency_key": item["idempotency_key"], "status": status, "receipt_ref": "adapter:receipt"}
+    value = {"idempotency_key": item["idempotency_key"], "status": status, "receipt_ref": "adapter:receipt", "result_ref": f"adapter:{item['subject']}"}
     if fingerprint:
         value["operation_fingerprint"] = item["operation_fingerprint"]
     return value
@@ -39,6 +46,11 @@ def receipt(item, status="applied", fingerprint=True):
 
 def rollback_receipt(item, status="applied"):
     return {"source_idempotency_key": item["source_idempotency_key"], "status": status, "receipt_ref": "adapter:rollback", "source_operation_fingerprint": item["source_operation_fingerprint"], "rollback_fingerprint": item["rollback_fingerprint"]}
+
+
+def schema_expect(name, value):
+    jsonschema.Draft202012Validator(SCHEMA).validate(value)
+    print(f"schema-{name}: ok")
 
 
 def main():
@@ -56,7 +68,11 @@ def main():
     expect("retry-idempotence", fresh["operations"] == onboarding.plan(fixture())["operations"], fresh)
     all_receipts = [receipt(item) for item in fresh["operations"]]
     ready = onboarding.plan(fixture(request={**fixture()["request"], "apply_authorized": True}, operation_receipts=all_receipts))
-    expect("valid-receipts-ready", ready["state"] == "ready", ready)
+    expect("valid-receipts-ready", ready["state"] == "ready" and ready["summary"]["active_navigation"]["coordinator_ref"] == "adapter:Coordinator" and set(ready["summary"]["projections"]["transient_templates"]) == set(onboarding.TRANSIENT_ROLES), ready)
+    active_missing_ref = onboarding.plan(fixture(role_hub={"status": "active"}))
+    expect("active-rolehub-ref-hold", active_missing_ref["state"] == "partial_hold" and "active_role_hub_ref_missing" in active_missing_ref["stop_conditions"], active_missing_ref)
+    current_hub = onboarding.plan(fixture(current_thread={"eligible": True, "current_thread_ref": "opaque-current", "name": "Project"}))
+    expect("rename-current-rolehub", "rename_current_to_role_hub" in {item["kind"] for item in current_hub["operations"]}, current_hub)
     forged = onboarding.plan(fixture(request={**fixture()["request"], "apply_authorized": True}, operation_receipts=[receipt(item, fingerprint=False) for item in fresh["operations"]]))
     expect("forged-receipt-hold", forged["state"] == "partial_hold" and "forged_receipt_fingerprint" in forged["stop_conditions"], forged)
     unknown = onboarding.plan(fixture(request={**fixture()["request"], "apply_authorized": True}, operation_receipts=[{"idempotency_key": "forged", "status": "applied", "receipt_ref": "adapter:x", "operation_fingerprint": "sha256:x"}]))
@@ -81,6 +97,9 @@ def main():
     expect("notes-privacy-hold", notes["state"] == "partial_hold" and notes["summary"]["capability"] == "privacy_held", notes)
     unknown_field = onboarding.plan(fixture(unexpected="reject"))
     expect("unknown-field-hold", unknown_field["state"] == "partial_hold" and "unknown_input_field" in unknown_field["stop_conditions"], unknown_field)
+    schema_expect("ready", ready)
+    schema_expect("hold", active_missing_ref)
+    schema_expect("rollback", partial)
     return 0
 
 

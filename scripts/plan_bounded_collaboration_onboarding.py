@@ -16,7 +16,7 @@ TRANSIENT_ROLES = ("Implementer", "Reviewer", "Tester", "Harvester")
 CAPABILITIES = ("discover", "create", "rename", "link", "navigate")
 PROJECTIONS = ("role_hub", "current_thread", "scheduler", "transient_template")
 FORBIDDEN_KEYS = {"transcript", "raw_transcript", "messages", "prompt", "content", "thread_id", "native_thread_id", "notes", "tool_output", "raw_content", "raw_tool_output"}
-ALLOWED_ROOT_KEYS = {"onboarding_version", "request", "runtime_capabilities", "role_hub", "existing_roles", "repository_state", "operation_receipts", "rollback_receipts"}
+ALLOWED_ROOT_KEYS = {"onboarding_version", "request", "runtime_capabilities", "role_hub", "current_thread", "existing_roles", "repository_state", "operation_receipts", "rollback_receipts"}
 
 
 def canonical(value: Any) -> str:
@@ -45,6 +45,7 @@ def has_unknown_input(value: Any) -> bool:
         "project_identity": {"project_id", "repository", "integration_branch"},
         "repository_state": {"dirty", "dirty_preserved"},
         "role_hub": {"status", "role_hub_ref"},
+        "current_thread": {"eligible", "current_thread_ref", "name"},
         "role": {"project_id", "role", "role_ref", "durable_anchor", "state", "legacy", "display_name", "linked_to_role_hub"},
         "capability": {"status"},
     }
@@ -56,13 +57,17 @@ def has_unknown_input(value: Any) -> bool:
         return True
     if not isinstance(value.get("repository_state"), dict) or set(value["repository_state"]) - expected["repository_state"]:
         return True
-    if not isinstance(value.get("role_hub"), dict) or set(value["role_hub"]) - expected["role_hub"]:
+    if not isinstance(value.get("role_hub"), dict) or set(value["role_hub"]) - expected["role_hub"] or not isinstance(value.get("current_thread"), dict) or set(value["current_thread"]) - expected["current_thread"]:
         return True
     if not isinstance(runtime, dict) or set(runtime) - {"role_binding", "projections", "operations"}:
         return True
     for section, required in (("projections", PROJECTIONS), ("operations", CAPABILITIES)):
         items = runtime.get(section)
-        if not isinstance(items, dict) or set(items) != set(required) or any(not isinstance(items.get(name), dict) or set(items[name]) - expected["capability"] for name in required):
+        allowed_items = {name: expected["capability"] for name in required}
+        if section == "projections":
+            allowed_items["scheduler"] = {"status", "binding_ref", "binding_status"}
+            allowed_items["transient_template"] = {"status", "template_refs"}
+        if not isinstance(items, dict) or set(items) != set(required) or any(not isinstance(items.get(name), dict) or set(items[name]) - allowed_items[name] for name in required):
             return True
     if not isinstance(runtime.get("role_binding"), dict) or set(runtime["role_binding"]) - expected["capability"]:
         return True
@@ -89,6 +94,13 @@ def required_capabilities(payload: dict[str, Any]) -> list[str]:
     for name in PROJECTIONS:
         if ((projections.get(name) or {}).get("status")) != "supported":
             missing.append(f"{name}_projection_unavailable")
+    scheduler = projections.get("scheduler") if isinstance(projections.get("scheduler"), dict) else {}
+    templates = projections.get("transient_template") if isinstance(projections.get("transient_template"), dict) else {}
+    if not scheduler.get("binding_ref") or scheduler.get("binding_status") != "bound":
+        missing.append("scheduler_binding_unavailable")
+    refs = templates.get("template_refs")
+    if not isinstance(refs, dict) or set(refs) != set(TRANSIENT_ROLES) or not all(isinstance(refs.get(role), str) and refs[role] for role in TRANSIENT_ROLES):
+        missing.append("transient_templates_unavailable")
     operations = runtime.get("operations") if isinstance(runtime.get("operations"), dict) else {}
     for name in CAPABILITIES:
         if ((operations.get(name) or {}).get("status")) != "supported":
@@ -115,6 +127,8 @@ def validate_receipts(receipts: Any, operations: list[dict[str, Any]]) -> tuple[
             errors.append("invalid_receipt_status")
         elif status in {"applied", "failed"} and (not isinstance(item.get("receipt_ref"), str) or not item["receipt_ref"]):
             errors.append("missing_receipt_ref")
+        elif status == "applied" and (not isinstance(item.get("result_ref"), str) or not item["result_ref"]):
+            errors.append("missing_result_ref")
         elif status in {"applied", "failed"} and item.get("operation_fingerprint") != expected[key]:
             errors.append("forged_receipt_fingerprint")
         else:
@@ -127,7 +141,7 @@ def rollback_plan(operations: list[dict[str, Any]], receipts: dict[str, dict[str
     for item in reversed(operations):
         if receipts.get(item["idempotency_key"], {}).get("status") != "applied":
             continue
-        if item["kind"] in {"create_role_hub", "create_durable_role"}:
+        if item["kind"] in {"create_role_hub", "rename_current_to_role_hub", "create_durable_role"}:
             kind = "mark_setup_incomplete"
         elif item["kind"] in {"rename_role", "link_role"}:
             kind = "restore_preimage"
@@ -143,6 +157,7 @@ def _plan(payload: dict[str, Any]) -> dict[str, Any]:
     request = payload.get("request") if isinstance(payload.get("request"), dict) else {}
     identity = request.get("project_identity") if isinstance(request.get("project_identity"), dict) else {}
     repo = payload.get("repository_state") if isinstance(payload.get("repository_state"), dict) else {}
+    current = payload.get("current_thread") if isinstance(payload.get("current_thread"), dict) else {}
     base = {"onboarding_version": VERSION, "read_only": True, "mutation_performed": False, "dispatch_performed": False}
     if payload.get("onboarding_version") != VERSION or not all(identity.get(key) for key in ("project_id", "repository", "integration_branch")) or not request.get("onboarding_key"):
         return hold(base, request, repo, ["invalid_onboarding_request"])
@@ -158,13 +173,20 @@ def _plan(payload: dict[str, Any]) -> dict[str, Any]:
     hub = payload.get("role_hub") if isinstance(payload.get("role_hub"), dict) else {}
     if hub.get("status") not in {"missing", "active"}:
         return hold(base, request, repo, ["role_hub_ambiguous_or_held"])
+    if hub.get("status") == "active" and not hub.get("role_hub_ref"):
+        return hold(base, request, repo, ["active_role_hub_ref_missing"])
     existing = payload.get("existing_roles")
     if not isinstance(existing, list):
         return hold(base, request, repo, ["invalid_existing_roles"])
 
     operations = [operation(identity, request["onboarding_key"], "discover_role_hub", "RoleHub", {"status": hub.get("status")})]
     if hub["status"] == "missing":
-        operations.append(operation(identity, request["onboarding_key"], "create_role_hub", "RoleHub", {"status": "missing"}))
+        if current.get("eligible") is True and current.get("current_thread_ref") and current.get("name"):
+            operations.append(operation(identity, request["onboarding_key"], "rename_current_to_role_hub", "RoleHub", {"current_thread_ref": current["current_thread_ref"], "name": current["name"]}))
+        else:
+            operations.append(operation(identity, request["onboarding_key"], "create_role_hub", "RoleHub", {"status": "missing"}))
+    else:
+        operations.append(operation(identity, request["onboarding_key"], "reuse_role_hub", "RoleHub", {"role_hub_ref": hub["role_hub_ref"]}))
     historical: list[dict[str, Any]] = []
     stops: list[str] = []
     reused, created = [], []
@@ -223,8 +245,15 @@ def _plan(payload: dict[str, Any]) -> dict[str, Any]:
         state, history = "ready", ["preflight", "plan_ready", "applying", "ready"]
     else:
         state, history = "applying", ["preflight", "plan_ready", "applying"]
-    navigation = next((item["durable_anchor"] for item in reused if item["role"] == "Coordinator"), "adapter_create_receipt_required")
-    summary = {"project_identity": identity, "capability": "complete", "reused": reused, "created": created, "unchanged": list(TRANSIENT_ROLES), "held": [], "active_navigation": {"authority": "adapter", "value": navigation}, "historical_references": historical, "dirty_state": {"dirty": repo.get("dirty"), "preserved": True}, "next_human_action": "Approve adapter execution of the planned operation keys." if state == "plan_ready" else "Read back adapter receipts and preserve any partial setup.", "projections": {name: "adapter_capability_supported" for name in PROJECTIONS}}
+    final_receipts = {item["subject"]: receipts.get(item["idempotency_key"], {}) for item in operations if item["kind"] in {"create_role_hub", "rename_current_to_role_hub", "reuse_role_hub", "create_durable_role", "reuse_durable_role"}}
+    projections = ((payload.get("runtime_capabilities") or {}).get("projections") or {})
+    if state == "ready":
+        navigation = {"role_hub_ref": final_receipts["RoleHub"]["result_ref"], "coordinator_ref": final_receipts["Coordinator"]["result_ref"], "architect_ref": final_receipts["Architect"]["result_ref"]}
+        next_action = "Bounded collaboration is ready; create transient roles only for an approved Work."
+    else:
+        navigation = {"authority": "adapter", "value": "adapter_create_receipt_required"}
+        next_action = "Approve adapter execution of the planned operation keys." if state == "plan_ready" else "Read back adapter receipts and preserve any partial setup."
+    summary = {"project_identity": identity, "capability": "complete", "reused": reused, "created": created, "unchanged": list(TRANSIENT_ROLES), "held": [], "active_navigation": navigation, "historical_references": historical, "dirty_state": {"dirty": repo.get("dirty"), "preserved": True}, "next_human_action": next_action, "projections": {"scheduler": {"binding_ref": projections["scheduler"].get("binding_ref"), "binding_status": projections["scheduler"].get("binding_status")}, "transient_templates": projections["transient_template"].get("template_refs")}}
     return {**base, "state": state, "transition_history": history, "stop_conditions": [], "operations": operations, "summary": summary}
 
 

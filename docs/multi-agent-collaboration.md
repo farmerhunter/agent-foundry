@@ -398,6 +398,12 @@ It reuses one unambiguous durable Coordinator/Architect pair, or plans only the
 missing durable roles. Implementer, Reviewer, Tester and Harvester remain
 per-Work transient roles.
 
+The plan explicitly handles an eligible current thread: it can be renamed into
+a new RoleHub, while an existing RoleHub is reused only when its opaque adapter
+reference is present. A ready summary uses applied receipts for final RoleHub,
+Coordinator and Architect navigation plus bound scheduler and transient-role
+template references.
+
 The Core plan requires explicit RoleHub/current-thread/scheduler/transient-template
 projections and discover/create/rename/link/navigate capability reports. It is
 deliberately not a native-thread API. It has no transcript
