@@ -231,7 +231,7 @@ The explicit readiness matrix is:
 
 AF18 completion does not imply trusted runtime metrics, normal policy freeze, native successor activation, Vault migration, production/main release, or V2 local-first orchestration completion. Those belong to AF19 or later independent gates.
 
-## AF-19: Adaptive And Observed Collaboration
+## AF-19: Adaptive and Observed Collaboration
 
 AF-19 is the follow-on milestone for capabilities that exceed AF18's transparent bounded collaboration path. It must not block AF18 adoption by existing multi-agent-collaboration environments.
 
