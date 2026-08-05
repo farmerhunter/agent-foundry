@@ -117,6 +117,10 @@ class CodexRoleHubRunner:
             return {"status": "ready", "project_id": plan["project_id"], "logical_rolehub_id": plan["logical_rolehub_id"], "operations": applied}
         except RunnerHold as hold:
             return {"status": hold.status, "reason": hold.reason, "operations": []}
+        except Exception:
+            # Do not surface host errors, RPC payloads, or exception text in a
+            # durable receipt.  The Coordinator can request an independent retry.
+            return {"status": "partial_hold", "reason": "native_call_error", "operations": []}
 
     def _operation(self, plan: dict[str, Any], op: dict[str, Any]) -> dict[str, Any]:
         key = op["idempotency_key"]

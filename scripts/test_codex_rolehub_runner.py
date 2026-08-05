@@ -73,6 +73,15 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(runner.apply(without_cwd)["reason"], "cwd_unproven")
         self.assertNotIn("thread/start", [method for method, _ in rpc.calls])
 
+    def test_rpc_error_is_structured_and_private(self):
+        class Broken(FakeRPC):
+            def __call__(self, method, params):
+                if method == "thread/start":
+                    raise RuntimeError("secret prompt payload")
+                return super().__call__(method, params)
+        result = CodexRoleHubRunner(Broken(), runtime_id="rt-1").apply(plan(op()))
+        self.assertEqual(result, {"status": "partial_hold", "reason": "native_call_error", "operations": []})
+
     def test_logical_link_and_navigation_hold(self):
         rpc = FakeRPC(); runner = CodexRoleHubRunner(rpc, runtime_id="rt-1")
         result = runner.apply(plan(op("link", target_ref="github:issue:501"), op("navigate", key="k2")))
