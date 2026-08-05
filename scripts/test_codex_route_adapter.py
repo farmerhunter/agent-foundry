@@ -299,6 +299,8 @@ def main() -> int:
     code, output = run(rolehub([transient]))
     expect("rolehub-work-role-transient", code == 0 and output["state"] == "partial_hold", output, errors)
     ready = dict(base_op); ready["receipt"] = {"status": "ready"}
+    code, output = run(rolehub([ready]))
+    expect("rolehub-ready-receipt-ready", code == 0 and output["state"] == "ready", output, errors)
     after_ready = dict(base_op); after_ready["operation_id"] = "late"
     code, output = run(rolehub([ready, after_ready]))
     expect("rolehub-after-ready-hold", code == 0 and output["state"] == "partial_hold", output, errors)

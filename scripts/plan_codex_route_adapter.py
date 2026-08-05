@@ -303,6 +303,7 @@ def project_rolehub(root: dict[str, Any]) -> dict[str, Any]:
                 elif len(healthy) == 0:
                     attention.append(f"no reusable {role}; creation must remain a plan")
     terminal_seen = False
+    ready_seen = False
     expected_sequence = 0
     for index, operation in enumerate(operations):
         if not isinstance(operation, dict):
@@ -349,6 +350,8 @@ def project_rolehub(root: dict[str, Any]) -> dict[str, Any]:
         status = receipt.get("status")
         if status in ROLEHUB_TERMINAL:
             terminal_seen = True
+            if status == "ready":
+                ready_seen = True
         elif status not in {"applied", "ready"}:
             attention.append(f"invalid receipt status for {operation.get('operation_id', index)}")
         if status == "applied":
@@ -372,7 +375,7 @@ def project_rolehub(root: dict[str, Any]) -> dict[str, Any]:
         rollback_state = "rolled_back"
     else:
         rollback_state = "not_attempted"
-    state = "ready" if not attention and not terminal_seen else "partial_hold"
+    state = "ready" if not attention and (ready_seen or not terminal_seen) else "partial_hold"
     if rollback_state in {"rolled_back", "rollback_incomplete"}:
         state = rollback_state
     return {
