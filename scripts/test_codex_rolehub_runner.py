@@ -67,6 +67,12 @@ class RunnerTests(unittest.TestCase):
         with self.assertRaises(Exception):
             runner._call("turn/start", {})
 
+    def test_no_cwd_fails_closed(self):
+        rpc = FakeRPC(); runner = CodexRoleHubRunner(rpc, runtime_id="rt-1")
+        without_cwd = plan(op()); del without_cwd["capability_evidence"]["cwd"]
+        self.assertEqual(runner.apply(without_cwd)["reason"], "cwd_unproven")
+        self.assertNotIn("thread/start", [method for method, _ in rpc.calls])
+
     def test_logical_link_and_navigation_hold(self):
         rpc = FakeRPC(); runner = CodexRoleHubRunner(rpc, runtime_id="rt-1")
         result = runner.apply(plan(op("link", target_ref="github:issue:501"), op("navigate", key="k2")))

@@ -136,7 +136,10 @@ class CodexRoleHubRunner:
         native_id = self.native_ids.get(key)
         created = False
         if action == "create":
-            result = self._call("thread/start", {"cwd": plan.get("capability_evidence", {}).get("cwd", "")})
+            cwd = plan.get("capability_evidence", {}).get("cwd")
+            if not isinstance(cwd, str) or not cwd:
+                raise RunnerHold("partial_hold", "cwd_unproven")
+            result = self._call("thread/start", {"cwd": cwd})
             if not isinstance(result, dict):
                 raise RunnerHold("setup_incomplete", "thread_start_no_receipt")
             native_id = result.get("threadId") or result.get("id")
