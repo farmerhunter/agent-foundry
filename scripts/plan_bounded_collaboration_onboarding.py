@@ -130,7 +130,7 @@ def validate_receipts(receipts: Any, operations: list[dict[str, Any]]) -> tuple[
             errors.append("duplicate_receipt")
         elif status not in {"applied", "failed", "not_attempted"}:
             errors.append("invalid_receipt_status")
-        elif terminal_seen and status == "applied":
+        elif terminal_seen:
             errors.append("invalid_receipt_sequence")
         elif status in {"applied", "failed"} and (not isinstance(item.get("receipt_ref"), str) or not item["receipt_ref"]):
             errors.append("missing_receipt_ref")
@@ -151,7 +151,7 @@ def rollback_plan(operations: list[dict[str, Any]], receipts: dict[str, dict[str
             continue
         if item["kind"] in {"create_role_hub", "create_durable_role"}:
             kind = "mark_setup_incomplete"
-        elif item["kind"] in {"rename_role", "link_role"}:
+        elif item["kind"] in {"rename_current_to_role_hub", "rename_role", "link_role"}:
             kind = "restore_preimage"
         else:
             continue
@@ -258,7 +258,7 @@ def _plan(payload: dict[str, Any]) -> dict[str, Any]:
     if state == "ready":
         navigation = {"role_hub_ref": final_receipts["RoleHub"]["result_ref"], "coordinator_ref": final_receipts["Coordinator"]["result_ref"], "architect_ref": final_receipts["Architect"]["result_ref"]}
         next_action = "Bounded collaboration is ready; create transient roles only for an approved Work."
-        created = [{"role": item["subject"], "status": "created", "role_ref": receipts[item["idempotency_key"]]["result_ref"]} for item in operations if item["kind"] == "create_durable_role"]
+        created = [{"role": item["subject"], "status": "occupied_current_thread" if item["kind"] == "rename_current_to_role_hub" else "created", "role_ref": receipts[item["idempotency_key"]]["result_ref"]} for item in operations if item["kind"] in {"create_durable_role", "create_role_hub", "rename_current_to_role_hub"}]
     else:
         navigation = {"authority": "adapter", "value": "adapter_create_receipt_required"}
         next_action = "Approve adapter execution of the planned operation keys." if state == "plan_ready" else "Read back adapter receipts and preserve any partial setup."
