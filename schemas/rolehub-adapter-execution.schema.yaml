@@ -21,6 +21,16 @@ properties:
       create: {type: string, enum: [supported, unavailable, unsupported, unknown]}
       link: {type: string, enum: [supported, unavailable, unsupported, unknown]}
       navigate: {type: string, enum: [supported, unavailable, unsupported, unknown]}
+  role_matches:
+    type: array
+    items:
+      type: object
+      required: [role, project_id, active]
+      properties:
+        role: {type: string, enum: [Coordinator, Architect, Implementer, Reviewer, Tester, Harvester]}
+        project_id: {type: string}
+        active: {type: boolean}
+        legacy: {type: boolean}
   capability_evidence:
     type: object
     required: [trusted, producer, runtime_id, project_id, logical_rolehub_id]
@@ -57,3 +67,9 @@ properties:
             status: {type: string, enum: [applied, ready, partial_hold, rolled_back, rollback_incomplete]}
             project_id: {type: string, minLength: 1}
             logical_rolehub_id: {type: string, minLength: 1}
+  rollback:
+    type: object
+    properties:
+      status: {type: string, enum: [required, complete, failed]}
+      receipt: {type: object}
+      reversed_operation_ids: {type: array, items: {type: string}}
