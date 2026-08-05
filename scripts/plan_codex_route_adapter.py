@@ -49,6 +49,7 @@ ROLE_OPERATION_CAPABILITIES = {
 FORBIDDEN_RECEIPT_KEYS = {"prompt", "body", "message", "messages", "content", "transcript", "tool_output", "raw_log"}
 ROLEHUB_TERMINAL_FAILURE = {"partial_hold", "rolled_back", "rollback_incomplete"}
 ROLEHUB_TERMINAL = ROLEHUB_TERMINAL_FAILURE | {"ready"}
+ROLEHUB_SCHEMA_VALIDATION_FAILURE = "ROLEHUB_SCHEMA_VALIDATION_FAILED"
 
 
 def fail(message: str) -> None:
@@ -289,10 +290,10 @@ def project_rolehub(root: dict[str, Any]) -> dict[str, Any]:
         schema_path = Path(__file__).resolve().parents[1] / "schemas" / "rolehub-adapter-execution.schema.yaml"
         schema = yaml.safe_load(schema_path.read_text(encoding="utf-8"))
         validation_errors = sorted(Draft202012Validator(schema).iter_errors(root), key=lambda error: list(error.path))
-    except Exception as error:
-        validation_errors = [error]
+    except Exception:
+        validation_errors = [None]
     if validation_errors:
-        return {"adapter": "codex", "state": "partial_hold", "attention": [f"RoleHub schema validation failed: {validation_errors[0]}"], "native_io_performed": False, "mutation_performed": False, "dispatch_performed": False, "next_action": "Hold until the portable RoleHub request matches its schema."}
+        return {"adapter": "codex", "state": "partial_hold", "attention": [ROLEHUB_SCHEMA_VALIDATION_FAILURE], "native_io_performed": False, "mutation_performed": False, "dispatch_performed": False, "next_action": "Hold until the portable RoleHub request matches its schema."}
     project_id = root.get("project_id")
     identity = root.get("rolehub_identity")
     operations = root.get("operations")

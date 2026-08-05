@@ -307,6 +307,19 @@ def main() -> int:
     rollback = {"status": "failed"}
     code, output = run(rolehub([base_op], rollback=rollback))
     expect("rolehub-rollback-incomplete", code == 0 and output["state"] == "rollback_incomplete", output, errors)
+
+    raw_sentinel = "RAW_SCHEMA_SENTINEL_SHOULD_NOT_LEAK"
+    invalid_schema = rolehub([base_op])
+    invalid_schema["unexpected_private_field"] = raw_sentinel
+    code, output = run(invalid_schema)
+    expect(
+        "rolehub-schema-validation-redacts-input",
+        code == 0
+        and raw_sentinel not in json.dumps(output, sort_keys=True)
+        and output["attention"] == ["ROLEHUB_SCHEMA_VALIDATION_FAILED"],
+        output,
+        errors,
+    )
     reuse = rolehub([base_op]); reuse["role_matches"] = [{"role": "Architect", "project_id": "tiny-ipa", "active": True, "legacy": False}, {"role": "Coordinator", "project_id": "tiny-ipa", "active": True, "legacy": False}]
     code, output = run(reuse)
     expect("rolehub-reuse-single-active", code == 0 and output["state"] == "ready", output, errors)
