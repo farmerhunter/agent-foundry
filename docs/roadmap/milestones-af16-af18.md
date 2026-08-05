@@ -59,7 +59,7 @@ Acceptance criteria:
 - Missing or stale generated references fail validation instead of silently dropping authority.
 - Runtime context is reduced without making practice authority ambiguous.
 
-## AF-18: Bounded Collaboration Control Plane
+## AF18: Bounded Collaboration Control Plane
 
 Goal: make Agent Foundry's multi-agent collaboration cost-aware, bounded, portable, and human-controllable before it becomes an assumed runtime substrate.
 
@@ -231,7 +231,7 @@ The explicit readiness matrix is:
 
 AF18 completion does not imply trusted runtime metrics, normal policy freeze, native successor activation, Vault migration, production/main release, or V2 local-first orchestration completion. Those belong to AF19 or later independent gates.
 
-## AF-19: Adaptive and Observed Collaboration
+## AF19: Adaptive and Observed Collaboration
 
 AF-19 is the follow-on milestone for capabilities that exceed AF18's transparent bounded collaboration path. It must not block AF18 adoption by existing multi-agent-collaboration environments.
 
