@@ -21,6 +21,16 @@ properties:
       create: {type: string, enum: [supported, unavailable, unsupported, unknown]}
       link: {type: string, enum: [supported, unavailable, unsupported, unknown]}
       navigate: {type: string, enum: [supported, unavailable, unsupported, unknown]}
+  capability_evidence:
+    type: object
+    required: [trusted, producer, runtime_id, project_id, logical_rolehub_id]
+    additionalProperties: false
+    properties:
+      trusted: {type: boolean, const: true}
+      producer: {type: string, minLength: 1}
+      runtime_id: {type: string, minLength: 1}
+      project_id: {type: string, minLength: 1}
+      logical_rolehub_id: {type: string, minLength: 1}
   operations:
     type: array
     items:
@@ -34,4 +44,16 @@ properties:
         role: {type: string}
         target_ref: {type: string}
         preimage: {type: [object, 'null']}
-        receipt: {type: [object, 'null']}
+        receipt:
+          type: [object, 'null']
+          required: [operation_id, idempotency_key, operation_fingerprint, opaque_ref, readback, sequence, status]
+          properties:
+            operation_id: {type: string, minLength: 1}
+            idempotency_key: {type: string, minLength: 1}
+            operation_fingerprint: {type: string, pattern: '^sha256:'}
+            opaque_ref: {type: string, minLength: 1}
+            readback: {type: object}
+            sequence: {type: integer, minimum: 0}
+            status: {type: string, enum: [applied, ready, partial_hold, rolled_back, rollback_incomplete]}
+            project_id: {type: string, minLength: 1}
+            logical_rolehub_id: {type: string, minLength: 1}

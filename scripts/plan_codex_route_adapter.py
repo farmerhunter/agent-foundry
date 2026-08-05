@@ -39,7 +39,7 @@ ROLE_OPERATION_CAPABILITIES = {
     "measure": "measure",
 }
 FORBIDDEN_RECEIPT_KEYS = {"prompt", "body", "message", "messages", "content", "transcript", "tool_output", "raw_log"}
-ROLEHUB_TERMINAL = {"partial_hold", "rolled_back", "rollback_incomplete", "ready"}
+ROLEHUB_TERMINAL_FAILURE = {"partial_hold", "rolled_back", "rollback_incomplete"}
 
 
 def fail(message: str) -> None:
@@ -283,11 +283,26 @@ def project_rolehub(root: dict[str, Any]) -> dict[str, Any]:
     capabilities = root.get("capabilities", {})
     if not isinstance(capabilities, dict):
         capabilities = {}
+    evidence = root.get("capability_evidence")
+    trusted_capabilities = isinstance(evidence, dict) and evidence.get("trusted") is True and isinstance(evidence.get("producer"), str) and isinstance(evidence.get("runtime_id"), str) and evidence.get("project_id") == project_id and evidence.get("logical_rolehub_id") == logical_id
     seen_keys: set[str] = set()
     receipts: list[dict[str, Any]] = []
     applied: list[dict[str, Any]] = []
     attention: list[str] = []
+    role_matches = root.get("role_matches")
+    if role_matches is not None:
+        if not isinstance(role_matches, list):
+            attention.append("role_matches must be an array")
+        else:
+            for role in ("Coordinator", "Architect"):
+                matches = [item for item in role_matches if isinstance(item, dict) and item.get("role") == role and item.get("project_id") == project_id]
+                healthy = [item for item in matches if item.get("active") is True and item.get("legacy") is not True]
+                if len(matches) > 1 or any(item.get("legacy") is True for item in matches):
+                    attention.append(f"duplicate or legacy {role} match requires hold")
+                elif len(healthy) == 0:
+                    attention.append(f"no reusable {role}; creation must remain a plan")
     terminal_seen = False
+    expected_sequence = 0
     for index, operation in enumerate(operations):
         if not isinstance(operation, dict):
             attention.append(f"operation {index} is not an object")
@@ -306,8 +321,12 @@ def project_rolehub(root: dict[str, Any]) -> dict[str, Any]:
         if action not in {"create", "reuse", "link", "navigate"}:
             attention.append(f"unsupported rolehub action: {action}")
             continue
+        if operation.get("role") in {"Implementer", "Reviewer", "Tester", "Harvester"} and action in {"create", "reuse", "link"}:
+            attention.append("Work roles are transient and cannot be persisted in RoleHub")
         if action in {"create", "link", "navigate"} and capabilities.get(action) not in {"supported"}:
             attention.append(f"capability unavailable for {action}")
+        elif action in {"create", "link", "navigate"} and not trusted_capabilities:
+            attention.append(f"trusted capability evidence unavailable for {action}")
         preimage = operation.get("preimage")
         receipt = operation.get("receipt")
         if action in {"link", "navigate"} and not isinstance(preimage, dict):
@@ -315,14 +334,21 @@ def project_rolehub(root: dict[str, Any]) -> dict[str, Any]:
         if not isinstance(receipt, dict):
             attention.append(f"missing receipt for {operation.get('operation_id', index)}")
             continue
+        fingerprint_payload = {key: value for key, value in operation.items() if key != "receipt"}
+        fingerprint = f"sha256:{hashlib.sha256(json.dumps(fingerprint_payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()}"
         if receipt.get("project_id") != project_id or receipt.get("logical_rolehub_id") != logical_id:
             attention.append(f"cross-project or identity-mismatched receipt for {operation.get('operation_id', index)}")
+        if receipt.get("operation_id") != operation.get("operation_id") or receipt.get("idempotency_key") != key or receipt.get("operation_fingerprint") != fingerprint or not isinstance(receipt.get("opaque_ref"), str) or not isinstance(receipt.get("readback"), dict):
+            attention.append(f"receipt binding/readback mismatch for {operation.get('operation_id', index)}")
+        if receipt.get("sequence") != expected_sequence:
+            attention.append(f"out-of-order receipt for {operation.get('operation_id', index)}")
+        expected_sequence += 1
         if terminal_seen:
             attention.append("receipt appears after terminal receipt")
         status = receipt.get("status")
-        if status in ROLEHUB_TERMINAL:
+        if status in ROLEHUB_TERMINAL_FAILURE:
             terminal_seen = True
-        elif status != "applied":
+        elif status not in {"applied", "ready"}:
             attention.append(f"invalid receipt status for {operation.get('operation_id', index)}")
         if status == "applied":
             applied.append(operation)
@@ -332,10 +358,13 @@ def project_rolehub(root: dict[str, Any]) -> dict[str, Any]:
     rollback = root.get("rollback", {})
     if not isinstance(rollback, dict):
         rollback = {}
-    if rollback.get("status") == "failed" or (rollback.get("status") == "required" and not rollback.get("receipt")):
+    rollback_receipt = rollback.get("receipt")
+    applied_ids = [op.get("operation_id") for op in applied]
+    rollback_valid = isinstance(rollback_receipt, dict) and rollback_receipt.get("status") == "complete" and rollback_receipt.get("reversed_operation_ids") == applied_ids and all(isinstance(op.get("preimage"), dict) or op.get("action") == "create" for op in applied)
+    if rollback.get("status") == "failed" or (rollback.get("status") in {"required", "complete"} and not rollback_valid):
         attention.append("rollback receipt missing or failed")
         rollback_state = "rollback_incomplete"
-    elif rollback.get("status") == "complete":
+    elif rollback_valid:
         rollback_state = "rolled_back"
     else:
         rollback_state = "not_attempted"

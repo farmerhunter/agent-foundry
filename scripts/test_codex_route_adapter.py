@@ -239,12 +239,29 @@ def main() -> int:
     expect("role-operation-privacy-fails-closed", code == 0 and output["adapter_plan"]["adapter_decision"] == "hold_required", output, errors)
 
     def rolehub(ops, capabilities=None, rollback=None):
+        normalized = []
+        for sequence, original in enumerate(ops):
+            op = dict(original)
+            receipt = dict(op.get("receipt") or {})
+            payload = {key: value for key, value in op.items() if key != "receipt"}
+            fingerprint = f"sha256:{hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()}"
+            receipt.setdefault("project_id", "tiny-ipa")
+            receipt.setdefault("logical_rolehub_id", "tiny-ipa-rolehub")
+            receipt.setdefault("operation_id", op.get("operation_id"))
+            receipt.setdefault("idempotency_key", op.get("idempotency_key"))
+            receipt.setdefault("operation_fingerprint", fingerprint)
+            receipt.setdefault("opaque_ref", "opaque:fixture")
+            receipt.setdefault("readback", {"status": "observed"})
+            receipt.setdefault("sequence", sequence)
+            op["receipt"] = receipt
+            normalized.append(op)
         return {
             "contract_version": "AF18-rolehub-adapter-v1",
             "project_id": "tiny-ipa",
             "rolehub_identity": {"logical_id": "tiny-ipa-rolehub"},
             "capabilities": capabilities or {"create": "supported", "link": "supported", "navigate": "supported"},
-            "operations": ops,
+            "capability_evidence": {"trusted": True, "producer": "fixture-adapter", "runtime_id": "fixture", "project_id": "tiny-ipa", "logical_rolehub_id": "tiny-ipa-rolehub"},
+            "operations": normalized,
             **({"rollback": rollback} if rollback is not None else {}),
         }
 
@@ -269,6 +286,18 @@ def main() -> int:
     rollback = {"status": "failed"}
     code, output = run(rolehub([base_op], rollback=rollback))
     expect("rolehub-rollback-incomplete", code == 0 and output["state"] == "rollback_incomplete", output, errors)
+    reuse = rolehub([base_op]); reuse["role_matches"] = [{"role": "Architect", "project_id": "tiny-ipa", "active": True, "legacy": False}, {"role": "Coordinator", "project_id": "tiny-ipa", "active": True, "legacy": False}]
+    code, output = run(reuse)
+    expect("rolehub-reuse-single-active", code == 0 and output["state"] == "ready", output, errors)
+    duplicate_match = rolehub([base_op]); duplicate_match["role_matches"] = [{"role": "Architect", "project_id": "tiny-ipa", "active": True}, {"role": "Architect", "project_id": "tiny-ipa", "active": True}]
+    code, output = run(duplicate_match)
+    expect("rolehub-duplicate-match-hold", code == 0 and output["state"] == "partial_hold", output, errors)
+    unavailable = rolehub([base_op], capabilities={"create": "unavailable", "link": "unavailable", "navigate": "unavailable"})
+    code, output = run(unavailable)
+    expect("rolehub-unavailable-capability-hold", code == 0 and output["state"] == "partial_hold", output, errors)
+    transient = dict(base_op); transient["role"] = "Implementer"
+    code, output = run(rolehub([transient]))
+    expect("rolehub-work-role-transient", code == 0 and output["state"] == "partial_hold", output, errors)
 
     if errors:
         print("\n".join(errors), file=sys.stderr)
