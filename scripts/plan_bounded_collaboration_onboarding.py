@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Plan metadata-only bounded-collaboration project onboarding without I/O."""
+"""Build and validate a metadata-only bounded-collaboration onboarding plan."""
 
 from __future__ import annotations
 
@@ -13,6 +13,8 @@ from typing import Any
 VERSION = "bounded-collaboration-onboarding-v1"
 DURABLE_ROLES = ("Coordinator", "Architect")
 TRANSIENT_ROLES = ("Implementer", "Reviewer", "Tester", "Harvester")
+CAPABILITIES = ("discover", "create", "rename", "link", "navigate")
+PROJECTIONS = ("role_hub", "current_thread", "scheduler", "transient_template")
 FORBIDDEN_KEYS = {"transcript", "raw_transcript", "messages", "prompt", "content", "thread_id", "native_thread_id"}
 
 
@@ -20,9 +22,12 @@ def canonical(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
-def key_for(project_id: str, role: str, onboarding_key: str) -> str:
-    material = canonical({"project_id": project_id, "role": role, "onboarding_key": onboarding_key, "version": VERSION})
-    return "onboard:" + hashlib.sha256(material.encode("utf-8")).hexdigest()
+def digest(value: Any) -> str:
+    return "sha256:" + hashlib.sha256(canonical(value).encode("utf-8")).hexdigest()
+
+
+def key_for(project_id: str, kind: str, subject: str, onboarding_key: str) -> str:
+    return "onboard:" + digest({"project_id": project_id, "kind": kind, "subject": subject, "onboarding_key": onboarding_key, "version": VERSION}).split(":", 1)[1]
 
 
 def contains_forbidden(value: Any) -> bool:
@@ -31,85 +36,155 @@ def contains_forbidden(value: Any) -> bool:
     return isinstance(value, list) and any(contains_forbidden(item) for item in value)
 
 
-def fail_summary(request: dict[str, Any], repository_state: dict[str, Any], reason: str, historical: list[dict[str, Any]] | None = None) -> dict[str, Any]:
-    return {
-        "project_identity": request.get("project_identity", {}),
-        "capability": "privacy_held" if reason == "privacy_exposure" else "unavailable" if reason == "role_binding_unavailable" else "partial",
-        "reused": [], "created": [], "unchanged": list(TRANSIENT_ROLES), "held": [reason],
-        "active_navigation": {"authority": "adapter", "value": "unavailable"},
-        "historical_references": historical or [],
-        "dirty_state": {"dirty": repository_state.get("dirty"), "preserved": repository_state.get("dirty_preserved")},
-        "next_human_action": "Resolve the hold and run a new read-only preflight; do not reuse a partial plan.",
-    }
+def operation(identity: dict[str, Any], onboarding_key: str, kind: str, subject: str, preimage: dict[str, Any]) -> dict[str, Any]:
+    item = {"kind": kind, "subject": subject, "idempotency_key": key_for(identity["project_id"], kind, subject, onboarding_key), "preimage": preimage}
+    item["operation_fingerprint"] = digest(item)
+    return item
+
+
+def hold(base: dict[str, Any], request: dict[str, Any], repo: dict[str, Any], reasons: list[str], historical: list[dict[str, Any]] | None = None, operations: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    capability = "privacy_held" if "privacy_exposure" in reasons else "unavailable" if any("capability" in item for item in reasons) else "partial"
+    return {**base, "state": "partial_hold", "transition_history": ["preflight", "partial_hold"], "stop_conditions": sorted(set(reasons)), "operations": operations or [], "summary": {"project_identity": request.get("project_identity", {}), "capability": capability, "reused": [], "created": [], "unchanged": list(TRANSIENT_ROLES), "held": sorted(set(reasons)), "active_navigation": {"authority": "adapter", "value": "unavailable"}, "historical_references": historical or [], "dirty_state": {"dirty": repo.get("dirty"), "preserved": repo.get("dirty_preserved")}, "next_human_action": "Resolve the hold and run a new read-only preflight; do not reuse a partial plan."}}
+
+
+def required_capabilities(payload: dict[str, Any]) -> list[str]:
+    runtime = payload.get("runtime_capabilities") if isinstance(payload.get("runtime_capabilities"), dict) else {}
+    missing = []
+    if ((runtime.get("role_binding") or {}).get("status")) != "supported":
+        missing.append("role_binding_capability_unavailable")
+    projections = runtime.get("projections") if isinstance(runtime.get("projections"), dict) else {}
+    for name in PROJECTIONS:
+        if ((projections.get(name) or {}).get("status")) != "supported":
+            missing.append(f"{name}_projection_unavailable")
+    operations = runtime.get("operations") if isinstance(runtime.get("operations"), dict) else {}
+    for name in CAPABILITIES:
+        if ((operations.get(name) or {}).get("status")) != "supported":
+            missing.append(f"{name}_capability_unavailable")
+    return missing
+
+
+def validate_receipts(receipts: Any, operations: list[dict[str, Any]]) -> tuple[dict[str, dict[str, Any]], list[str]]:
+    if receipts is None:
+        return {}, []
+    if not isinstance(receipts, list):
+        return {}, ["invalid_receipts"]
+    expected = {item["idempotency_key"]: item["operation_fingerprint"] for item in operations}
+    found: dict[str, dict[str, Any]] = {}
+    errors: list[str] = []
+    for item in receipts:
+        key = item.get("idempotency_key") if isinstance(item, dict) else None
+        status = item.get("status") if isinstance(item, dict) else None
+        if not isinstance(item, dict) or key not in expected:
+            errors.append("unknown_receipt")
+        elif key in found:
+            errors.append("duplicate_receipt")
+        elif status not in {"applied", "failed", "not_attempted"}:
+            errors.append("invalid_receipt_status")
+        elif status in {"applied", "failed"} and (not isinstance(item.get("receipt_ref"), str) or not item["receipt_ref"]):
+            errors.append("missing_receipt_ref")
+        elif status in {"applied", "failed"} and item.get("operation_fingerprint") != expected[key]:
+            errors.append("forged_receipt_fingerprint")
+        else:
+            found[key] = item
+    return found, sorted(set(errors))
+
+
+def rollback_plan(operations: list[dict[str, Any]], receipts: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    result = []
+    for item in reversed(operations):
+        if receipts.get(item["idempotency_key"], {}).get("status") != "applied":
+            continue
+        if item["kind"] in {"create_role_hub", "create_durable_role"}:
+            kind = "mark_setup_incomplete"
+        elif item["kind"] in {"rename_role", "link_role"}:
+            kind = "restore_preimage"
+        else:
+            continue
+        result.append({"kind": kind, "subject": item["subject"], "source_idempotency_key": item["idempotency_key"], "preimage": item["preimage"], "automatic": False, "never_delete_or_archive": True})
+    return result
 
 
 def plan(payload: dict[str, Any]) -> dict[str, Any]:
     request = payload.get("request") if isinstance(payload.get("request"), dict) else {}
     identity = request.get("project_identity") if isinstance(request.get("project_identity"), dict) else {}
-    repository_state = payload.get("repository_state") if isinstance(payload.get("repository_state"), dict) else {}
+    repo = payload.get("repository_state") if isinstance(payload.get("repository_state"), dict) else {}
     base = {"onboarding_version": VERSION, "read_only": True, "mutation_performed": False, "dispatch_performed": False}
-    if payload.get("onboarding_version") != VERSION or not all(identity.get(item) for item in ("project_id", "repository", "integration_branch")) or not request.get("onboarding_key"):
-        return {**base, "state": "partial_hold", "transition_history": ["preflight", "partial_hold"], "stop_conditions": ["invalid_onboarding_request"], "summary": fail_summary(request, repository_state, "invalid_onboarding_request"), "operations": []}
+    if payload.get("onboarding_version") != VERSION or not all(identity.get(key) for key in ("project_id", "repository", "integration_branch")) or not request.get("onboarding_key"):
+        return hold(base, request, repo, ["invalid_onboarding_request"])
     if contains_forbidden(payload):
-        return {**base, "state": "partial_hold", "transition_history": ["preflight", "partial_hold"], "stop_conditions": ["privacy_exposure"], "summary": fail_summary(request, repository_state, "privacy_exposure"), "operations": []}
-    if repository_state.get("dirty_preserved") is not True:
-        return {**base, "state": "partial_hold", "transition_history": ["preflight", "partial_hold"], "stop_conditions": ["dirty_state_not_proven_preserved"], "summary": fail_summary(request, repository_state, "dirty_state_not_proven_preserved"), "operations": []}
-    capability = ((payload.get("runtime_capabilities") or {}).get("role_binding") or {}).get("status")
-    if capability != "supported":
-        return {**base, "state": "partial_hold", "transition_history": ["preflight", "partial_hold"], "stop_conditions": ["role_binding_unavailable"], "summary": fail_summary(request, repository_state, "role_binding_unavailable"), "operations": []}
-
+        return hold(base, request, repo, ["privacy_exposure"])
+    if repo.get("dirty_preserved") is not True:
+        return hold(base, request, repo, ["dirty_state_not_proven_preserved"])
+    missing = required_capabilities(payload)
+    if missing:
+        return hold(base, request, repo, missing)
+    hub = payload.get("role_hub") if isinstance(payload.get("role_hub"), dict) else {}
+    if hub.get("status") not in {"missing", "active"}:
+        return hold(base, request, repo, ["role_hub_ambiguous_or_held"])
     existing = payload.get("existing_roles")
     if not isinstance(existing, list):
-        return {**base, "state": "partial_hold", "transition_history": ["preflight", "partial_hold"], "stop_conditions": ["invalid_existing_roles"], "summary": fail_summary(request, repository_state, "invalid_existing_roles"), "operations": []}
-    operations, reused, created, historical, stops = [], [], [], [], []
+        return hold(base, request, repo, ["invalid_existing_roles"])
+
+    operations = [operation(identity, request["onboarding_key"], "discover_role_hub", "RoleHub", {"status": hub.get("status")})]
+    if hub["status"] == "missing":
+        operations.append(operation(identity, request["onboarding_key"], "create_role_hub", "RoleHub", {"status": "missing"}))
+    historical: list[dict[str, Any]] = []
+    stops: list[str] = []
+    reused, created = [], []
+    names = request.get("role_display_names") if isinstance(request.get("role_display_names"), dict) else {}
     for role in DURABLE_ROLES:
-        matching = [item for item in existing if isinstance(item, dict) and item.get("project_id") == identity["project_id"] and item.get("role") == role]
-        legacy = [item for item in matching if item.get("legacy") is True or item.get("state") == "historical_reference"]
-        active = [item for item in matching if item.get("legacy") is not True and item.get("state") == "active"]
-        historical.extend({"role": item.get("role"), "durable_anchor": item.get("durable_anchor"), "reason": "legacy_or_historical_reference"} for item in legacy)
-        if legacy:
-            stops.append("legacy_adoption_requires_explicit_human_review")
+        matches = [item for item in existing if isinstance(item, dict) and item.get("project_id") == identity["project_id"] and item.get("role") == role]
+        active = [item for item in matches if item.get("state") == "active" and item.get("legacy") is False]
+        nonactive = [item for item in matches if item not in active]
+        for item in nonactive:
+            historical.append({"role": role, "durable_anchor": item.get("durable_anchor"), "reason": "held_legacy_or_historical_match"})
         if len(active) > 1:
             stops.append(f"duplicate_{role.lower()}_matches")
-        op_key = key_for(identity["project_id"], role, request["onboarding_key"])
-        if len(active) == 1:
+        if nonactive:
+            stops.append(f"held_legacy_or_ambiguous_{role.lower()}_match")
+        if len(active) == 1 and not nonactive:
             item = active[0]
-            operations.append({"kind": "reuse_durable_role", "role": role, "idempotency_key": op_key, "preimage": {"match_count": 1, "durable_anchor": item.get("durable_anchor")}, "receipt": None})
+            operations.append(operation(identity, request["onboarding_key"], "reuse_durable_role", role, {"match_count": 1, "durable_anchor": item.get("durable_anchor")}))
             reused.append({"role": role, "durable_anchor": item.get("durable_anchor")})
-        elif not matching:
-            operations.append({"kind": "create_durable_role", "role": role, "idempotency_key": op_key, "preimage": {"match_count": 0}, "receipt": None})
+            desired = names.get(role)
+            if desired and item.get("display_name") != desired:
+                operations.append(operation(identity, request["onboarding_key"], "rename_role", role, {"display_name": item.get("display_name")}))
+            if item.get("linked_to_role_hub") is not True:
+                operations.append(operation(identity, request["onboarding_key"], "link_role", role, {"linked_to_role_hub": item.get("linked_to_role_hub")}))
+        elif not matches:
+            operations.append(operation(identity, request["onboarding_key"], "create_durable_role", role, {"match_count": 0}))
             created.append({"role": role, "status": "planned"})
+    operations.append(operation(identity, request["onboarding_key"], "navigate_role_hub", "RoleHub", {"current_navigation": "adapter_owned"}))
     if stops:
-        return {**base, "state": "partial_hold", "transition_history": ["preflight", "partial_hold"], "stop_conditions": sorted(set(stops)), "summary": fail_summary(request, repository_state, sorted(set(stops))[0], historical), "operations": operations}
+        return hold(base, request, repo, stops, historical, operations)
 
-    receipts = {item.get("idempotency_key"): item for item in payload.get("operation_receipts", []) if isinstance(item, dict)}
+    receipts, receipt_errors = validate_receipts(payload.get("operation_receipts"), operations)
+    if receipt_errors:
+        return hold(base, request, repo, receipt_errors, historical, operations)
     if not request.get("apply_authorized"):
-        state = "plan_ready"
-    elif any(receipts.get(item["idempotency_key"], {}).get("status") == "failed" for item in operations):
-        failed = [item for item in operations if receipts.get(item["idempotency_key"], {}).get("status") == "failed"]
-        rollback = [{"kind": "rollback_created_role", "role": item["role"], "idempotency_key": item["idempotency_key"], "automatic": False} for item in failed if item["kind"] == "create_durable_role"]
-        rollback_receipts = {item.get("idempotency_key"): item for item in payload.get("rollback_receipts", []) if isinstance(item, dict)}
-        if rollback and all(rollback_receipts.get(item["idempotency_key"], {}).get("status") == "applied" for item in rollback):
-            rollback_state = "rolled_back"
-        elif any(rollback_receipts.get(item["idempotency_key"], {}).get("status") == "failed" for item in rollback):
+        state, history = "plan_ready", ["preflight", "plan_ready"]
+    elif any(item.get("status") == "failed" for item in receipts.values()):
+        rollback = rollback_plan(operations, receipts)
+        rollback_errors: list[str] = []
+        # Rollback receipts are independently checked against only planned reverse operations.
+        rollback_keys = {item["source_idempotency_key"] for item in rollback}
+        raw_rollback = payload.get("rollback_receipts", [])
+        if raw_rollback and (not isinstance(raw_rollback, list) or len(raw_rollback) != len(rollback_keys) or {item.get("source_idempotency_key") for item in raw_rollback if isinstance(item, dict)} != rollback_keys or any(not isinstance(item, dict) or item.get("source_idempotency_key") not in rollback_keys or item.get("status") not in {"applied", "failed"} or not item.get("receipt_ref") for item in raw_rollback)):
+            rollback_errors.append("invalid_rollback_receipt")
+        if rollback_errors:
             rollback_state = "rollback_incomplete"
+        elif rollback and raw_rollback and all(item.get("status") == "applied" for item in raw_rollback):
+            rollback_state = "rolled_back"
         else:
             rollback_state = "rollback_planned"
-        history = ["preflight", "plan_ready", "applying", "partial_hold", "rollback_planned"]
-        if rollback_state != "rollback_planned":
-            history.append(rollback_state)
-        return {**base, "state": rollback_state, "transition_history": history, "stop_conditions": ["partial_operation_failure"], "operations": operations, "rollback_operations": rollback, "summary": {**fail_summary(request, repository_state, "partial_operation_failure", historical), "created": created}}
-    elif all(receipts.get(item["idempotency_key"], {}).get("status") == "applied" for item in operations):
-        state = "ready"
+        history = ["preflight", "plan_ready", "applying", "partial_hold", "rollback_planned"] + ([] if rollback_state == "rollback_planned" else [rollback_state])
+        return {**base, "state": rollback_state, "transition_history": history, "stop_conditions": ["partial_operation_failure"], "operations": operations, "rollback_operations": rollback, "summary": {**hold(base, request, repo, ["partial_operation_failure"], historical)["summary"], "created": created}}
+    elif len(receipts) == len(operations) and all(item.get("status") == "applied" for item in receipts.values()):
+        state, history = "ready", ["preflight", "plan_ready", "applying", "ready"]
     else:
-        state = "applying"
+        state, history = "applying", ["preflight", "plan_ready", "applying"]
     navigation = next((item["durable_anchor"] for item in reused if item["role"] == "Coordinator"), "adapter_create_receipt_required")
-    summary = {"project_identity": identity, "capability": "complete", "reused": reused, "created": created, "unchanged": list(TRANSIENT_ROLES), "held": [], "active_navigation": {"authority": "adapter", "value": navigation}, "historical_references": historical, "dirty_state": {"dirty": repository_state.get("dirty"), "preserved": True}, "next_human_action": "Approve adapter execution of the planned operation keys." if state == "plan_ready" else "Read back adapter receipts and preserve any partial setup."}
-    history = ["preflight", "plan_ready"]
-    if state in {"applying", "ready"}:
-        history.append("applying")
-    if state == "ready":
-        history.append("ready")
+    summary = {"project_identity": identity, "capability": "complete", "reused": reused, "created": created, "unchanged": list(TRANSIENT_ROLES), "held": [], "active_navigation": {"authority": "adapter", "value": navigation}, "historical_references": historical, "dirty_state": {"dirty": repo.get("dirty"), "preserved": True}, "next_human_action": "Approve adapter execution of the planned operation keys." if state == "plan_ready" else "Read back adapter receipts and preserve any partial setup.", "projections": {name: "adapter_capability_supported" for name in PROJECTIONS}}
     return {**base, "state": state, "transition_history": history, "stop_conditions": [], "operations": operations, "summary": summary}
 
 

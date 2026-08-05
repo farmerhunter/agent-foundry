@@ -25,6 +25,12 @@ properties:
           integration_branch: {type: string, minLength: 1}
       onboarding_key: {type: string, minLength: 1}
       apply_authorized: {type: boolean}
+      role_display_names:
+        type: object
+        additionalProperties: false
+        properties:
+          Coordinator: {type: string, minLength: 1}
+          Architect: {type: string, minLength: 1}
   runtime_capabilities:
     type: object
     additionalProperties: false
@@ -36,6 +42,32 @@ properties:
         required: [status]
         properties:
           status: {enum: [supported, unavailable, unknown]}
+      projections:
+        type: object
+        additionalProperties: false
+        required: [role_hub, current_thread, scheduler, transient_template]
+        properties:
+          role_hub: {$ref: "#/$defs/Capability"}
+          current_thread: {$ref: "#/$defs/Capability"}
+          scheduler: {$ref: "#/$defs/Capability"}
+          transient_template: {$ref: "#/$defs/Capability"}
+      operations:
+        type: object
+        additionalProperties: false
+        required: [discover, create, rename, link, navigate]
+        properties:
+          discover: {$ref: "#/$defs/Capability"}
+          create: {$ref: "#/$defs/Capability"}
+          rename: {$ref: "#/$defs/Capability"}
+          link: {$ref: "#/$defs/Capability"}
+          navigate: {$ref: "#/$defs/Capability"}
+  role_hub:
+    type: object
+    additionalProperties: false
+    required: [status]
+    properties:
+      status: {enum: [missing, active, held, ambiguous]}
+      role_hub_ref: {type: string, minLength: 1}
   existing_roles:
     type: array
     items:
@@ -49,6 +81,8 @@ properties:
         durable_anchor: {type: string, minLength: 1}
         state: {enum: [active, held, historical_reference]}
         legacy: {type: boolean}
+        display_name: {type: string, minLength: 1}
+        linked_to_role_hub: {type: boolean}
   repository_state:
     type: object
     additionalProperties: false
@@ -58,25 +92,26 @@ properties:
       dirty_preserved: {type: boolean}
   operation_receipts:
     type: array
-    items:
-      type: object
-      additionalProperties: false
-      required: [idempotency_key, status]
-      properties:
-        idempotency_key: {type: string, minLength: 1}
-        status: {enum: [applied, failed, not_attempted]}
-        receipt_ref: {type: string, minLength: 1}
+    items: {$ref: "#/$defs/OperationReceipt"}
   rollback_receipts:
     type: array
     items:
       type: object
       additionalProperties: false
-      required: [idempotency_key, status]
+      required: [source_idempotency_key, status, receipt_ref]
       properties:
-        idempotency_key: {type: string, minLength: 1}
-        status: {enum: [applied, failed, not_attempted]}
+        source_idempotency_key: {type: string, minLength: 1}
+        status: {enum: [applied, failed]}
         receipt_ref: {type: string, minLength: 1}
+  plan_result:
+    $ref: "#/$defs/PlanResult"
 $defs:
+  Capability:
+    type: object
+    additionalProperties: false
+    required: [status]
+    properties:
+      status: {enum: [supported, unavailable, unknown]}
   PlanResult:
     type: object
     required: [state, transition_history, operations, summary]
@@ -86,3 +121,22 @@ $defs:
         type: array
         minItems: 1
         items: {type: string}
+      operations:
+        type: array
+      summary:
+        type: object
+  OperationReceipt:
+    type: object
+    additionalProperties: false
+    required: [idempotency_key, status]
+    properties:
+      idempotency_key: {type: string, minLength: 1}
+      status: {enum: [applied, failed, not_attempted]}
+      receipt_ref: {type: string, minLength: 1}
+      operation_fingerprint: {type: string, minLength: 1}
+    allOf:
+      - if:
+          properties:
+            status: {enum: [applied, failed]}
+        then:
+          required: [receipt_ref, operation_fingerprint]

@@ -398,11 +398,14 @@ It reuses one unambiguous durable Coordinator/Architect pair, or plans only the
 missing durable roles. Implementer, Reviewer, Tester and Harvester remain
 per-Work transient roles.
 
-The Core plan is deliberately not a native-thread API. It has no transcript
+The Core plan requires explicit RoleHub/current-thread/scheduler/transient-template
+projections and discover/create/rename/link/navigate capability reports. It is
+deliberately not a native-thread API. It has no transcript
 scan, history migration, thread deletion/archive, Vault write, runtime change,
 or automatic apply. The adapter owns native thread creation, navigation and
 receipts. Ambiguity, duplicate roles, legacy adoption, unavailable capability,
-privacy exposure and partial failures are held rather than guessed.
+privacy exposure, forged/unknown receipts and partial failures are held rather
+than guessed.
 
 **中文要点：** 新项目可以请求一次“准备有界协作”。系统先只读检查：唯一匹配就复用
 Coordinator/Architect，缺失才计划创建；Implementer、Reviewer、Tester、Harvester 仍在

@@ -28,7 +28,9 @@ perform an operation.
 
 1. Bind a project by its explicit `project_id`, repository and integration
    branch. Do not infer it from a transcript or a native thread ID.
-2. Check that role binding capability is explicitly `supported`. `unknown` and
+2. Check that role binding plus the RoleHub, current-thread, scheduler and
+   transient-template projections are explicitly `supported`. Discover, create,
+   rename, link and navigate capabilities must also be explicit. `unknown` and
    `unavailable` are fail-closed.
 3. For each durable role, Coordinator and Architect, reuse exactly one active,
    non-legacy match. Zero matches produce one planned create; two or more
@@ -36,8 +38,11 @@ perform an operation.
    never an automatic adoption.
 4. Implementer, Reviewer, Tester and Harvester are transient per-Work roles.
    Do not create them during project onboarding.
-5. Give each planned create/reuse a preimage, deterministic idempotency key and
-   an eventual receipt slot. Preserve repository dirty state as metadata only.
+5. Give each planned discover/create/reuse/rename/link/navigate operation a
+   preimage, deterministic idempotency key, operation fingerprint and receipt
+   slot. Applied/failed receipts require a reference and matching fingerprint;
+   unknown, duplicate or missing receipts are held. Preserve repository dirty
+   state as metadata only.
 
 ## OnboardingSummary
 
@@ -51,9 +56,10 @@ references; dirty-state preservation; and the next Human action.
 An adapter may execute only a `plan_ready` plan whose operation keys have been
 explicitly approved. It must record one receipt per operation and read it back.
 On the first failure, it must stop, preserve existing threads, mark
-`setup_incomplete`, and return a rollback plan. Rollback is limited to objects
-created by this attempt and is never automatic deletion by this Core workflow.
-Failure to read back a rollback is `rollback_incomplete`.
+`setup_incomplete`, and return a reverse-order rollback plan for operations
+with an applied receipt only. It restores preimages or marks attempt-created
+objects incomplete; it never deletes or archives. Failure to read back a
+rollback is `rollback_incomplete`.
 
 Canonical practice apply, adapter publishing, runtime installation, transcript
 migration, and project/release mutation are separate gates.
