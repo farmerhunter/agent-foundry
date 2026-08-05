@@ -289,7 +289,7 @@ def project_rolehub(root: dict[str, Any]) -> dict[str, Any]:
         schema_path = Path(__file__).resolve().parents[1] / "schemas" / "rolehub-adapter-execution.schema.yaml"
         schema = yaml.safe_load(schema_path.read_text(encoding="utf-8"))
         validation_errors = sorted(Draft202012Validator(schema).iter_errors(root), key=lambda error: list(error.path))
-    except (OSError, ValueError, TypeError) as error:
+    except Exception as error:
         validation_errors = [error]
     if validation_errors:
         return {"adapter": "codex", "state": "partial_hold", "attention": [f"RoleHub schema validation failed: {validation_errors[0]}"], "native_io_performed": False, "mutation_performed": False, "dispatch_performed": False, "next_action": "Hold until the portable RoleHub request matches its schema."}
