@@ -87,7 +87,35 @@ class RunnerTests(unittest.TestCase):
                     raise RuntimeError("secret prompt payload")
                 return super().__call__(method, params)
         result = CodexRoleHubRunner(Broken(), runtime_id="rt-1").apply(plan(op()))
-        self.assertEqual(result, {"status": "partial_hold", "reason": "native_call_error", "operations": []})
+        self.assertEqual(result["status"], "setup_incomplete")
+        self.assertEqual(result["operations"][0]["status"], "setup_incomplete")
+
+    def test_new_thread_failure_is_setup_incomplete_with_receipt(self):
+        class Broken(FakeRPC):
+            def __call__(self, method, params):
+                if method == "thread/start":
+                    raise RuntimeError("private native error")
+                return super().__call__(method, params)
+        result = CodexRoleHubRunner(Broken(), runtime_id="rt-1").apply(plan(op()))
+        self.assertEqual(result["status"], "setup_incomplete")
+        self.assertEqual(result["operations"][0]["status"], "setup_incomplete")
+        self.assertNotIn("private", str(result))
+
+    def test_mid_plan_failure_preserves_applied_evidence(self):
+        rpc = FakeRPC(); runner = CodexRoleHubRunner(rpc, runtime_id="rt-1")
+        result = runner.apply(plan(op("create", key="first"), op("name", key="second", role="Reviewer")))
+        self.assertEqual(result["status"], "partial_hold")
+        self.assertEqual(result["operations"][0]["status"], "applied")
+
+    def test_forged_rollback_receipt_is_rejected(self):
+        rpc = FakeRPC(); runner = CodexRoleHubRunner(rpc, runtime_id="rt-1")
+        runner.apply(plan(op("create", title="old")))
+        result = runner.apply(plan(op("name", title="new", key="named")))
+        forged = copy.deepcopy(result["operations"][0])
+        forged["readback"]["previous_title"] = "forged"
+        rollback = runner.rollback([forged])
+        self.assertEqual(rollback["status"], "rollback_incomplete")
+        self.assertEqual(rpc.threads["t1"]["name"], "new")
 
     def test_logical_link_and_navigation_hold(self):
         rpc = FakeRPC(); runner = CodexRoleHubRunner(rpc, runtime_id="rt-1")

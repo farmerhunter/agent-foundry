@@ -52,6 +52,7 @@ class CodexRoleHubRunner:
         self.native_ids: dict[str, str] = {}
         self.role_native: dict[str, str] = {}
         self.receipts: dict[str, dict[str, Any]] = {}
+        self.rollback_records: dict[str, dict[str, Any]] = {}
         self._sequence = 0
 
     def _call(self, method: str, params: dict[str, Any] | None = None) -> Any:
@@ -109,18 +110,33 @@ class CodexRoleHubRunner:
             raise RunnerHold("partial_hold", "forbidden_method_observed")
 
     def apply(self, plan: dict[str, Any]) -> dict[str, Any]:
+        applied: list[dict[str, Any]] = []
         try:
             self._validate(plan)
-            applied: list[dict[str, Any]] = []
             for operation in plan["operations"]:
-                applied.append(self._operation(plan, operation))
+                try:
+                    applied.append(self._operation(plan, operation))
+                except RunnerHold as hold:
+                    if operation.get("action") == "create" and hold.reason in {"native_call_error", "readback_not_object", "native_id_unavailable"}:
+                        applied.append(self._failure_receipt(plan, operation, "setup_incomplete", hold.reason))
+                    raise
+                except Exception:
+                    if operation.get("action") == "create":
+                        applied.append(self._failure_receipt(plan, operation, "setup_incomplete", "native_call_error"))
+                        raise RunnerHold("setup_incomplete", "native_call_error")
+                    raise RunnerHold("partial_hold", "native_call_error")
             return {"status": "ready", "project_id": plan["project_id"], "logical_rolehub_id": plan["logical_rolehub_id"], "operations": applied}
         except RunnerHold as hold:
-            return {"status": hold.status, "reason": hold.reason, "operations": []}
+            return {"status": hold.status, "reason": hold.reason, "operations": applied}
         except Exception:
             # Do not surface host errors, RPC payloads, or exception text in a
             # durable receipt.  The Coordinator can request an independent retry.
-            return {"status": "partial_hold", "reason": "native_call_error", "operations": []}
+            return {"status": "partial_hold", "reason": "native_call_error", "operations": applied}
+
+    def _failure_receipt(self, plan: dict[str, Any], op: dict[str, Any], status: str, reason: str) -> dict[str, Any]:
+        receipt = self._receipt(plan, op, status, {"availability": "unknown", "reason": reason})
+        self.receipts[op["idempotency_key"]] = receipt
+        return receipt
 
     def _operation(self, plan: dict[str, Any], op: dict[str, Any]) -> dict[str, Any]:
         key = op["idempotency_key"]
@@ -180,6 +196,8 @@ class CodexRoleHubRunner:
         self._sequence += 1
         receipt = self._receipt(plan, op, "applied", {**after, "created": created, "native_id_held_in_memory": True})
         self.receipts[key] = receipt
+        if action == "name":
+            self.rollback_records[key] = {"fingerprint": receipt["operation_fingerprint"], "previous_title": before.get("title"), "native_id": native_id, "operation_id": op["operation_id"]}
         return receipt
 
     def rollback(self, receipts: list[dict[str, Any]]) -> dict[str, Any]:
@@ -191,7 +209,10 @@ class CodexRoleHubRunner:
             readback = receipt.get("readback", {})
             previous = readback.get("previous_title") if isinstance(readback, dict) else None
             key = receipt.get("idempotency_key")
-            native_id = self.native_ids.get(key)
+            stored = self.rollback_records.get(key)
+            if not stored or receipt.get("operation_fingerprint") != stored.get("fingerprint") or previous != stored.get("previous_title"):
+                return {"status": "rollback_incomplete", "reason": "reverse_receipt_mismatch", "reversed_operation_ids": reversed_ids}
+            native_id = stored.get("native_id")
             if not isinstance(previous, str) or not native_id:
                 return {"status": "rollback_incomplete", "reason": "reverse_receipt_unavailable", "reversed_operation_ids": reversed_ids}
             try:
