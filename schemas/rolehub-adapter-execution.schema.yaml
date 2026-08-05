@@ -25,6 +25,7 @@ properties:
     type: array
     items:
       type: object
+      additionalProperties: false
       required: [role, project_id, active]
       properties:
         role: {type: string, enum: [Coordinator, Architect, Implementer, Reviewer, Tester, Harvester]}
@@ -69,6 +70,7 @@ properties:
             logical_rolehub_id: {type: string, minLength: 1}
   rollback:
     type: object
+    additionalProperties: false
     properties:
       status: {type: string, enum: [required, complete, failed]}
       receipt: {type: object}

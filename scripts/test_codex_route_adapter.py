@@ -298,6 +298,16 @@ def main() -> int:
     transient = dict(base_op); transient["role"] = "Implementer"
     code, output = run(rolehub([transient]))
     expect("rolehub-work-role-transient", code == 0 and output["state"] == "partial_hold", output, errors)
+    ready = dict(base_op); ready["receipt"] = {"status": "ready"}
+    after_ready = dict(base_op); after_ready["operation_id"] = "late"
+    code, output = run(rolehub([ready, after_ready]))
+    expect("rolehub-after-ready-hold", code == 0 and output["state"] == "partial_hold", output, errors)
+    first = dict(base_op); first["operation_id"] = "first"; first["preimage"] = {}
+    second = dict(base_op); second["operation_id"] = "second"; second["preimage"] = {}
+    code, output = run(rolehub([first, second], rollback={"status": "complete", "receipt": {"status": "complete", "reversed_operation_ids": ["first", "second"]}}))
+    expect("rolehub-rollback-forward-order-rejected", code == 0 and output["state"] == "rollback_incomplete", output, errors)
+    code, output = run(rolehub([first, second], rollback={"status": "complete", "receipt": {"status": "complete", "reversed_operation_ids": ["second", "first"]}}))
+    expect("rolehub-rollback-reverse-order-accepted", code == 0 and output["state"] == "rolled_back", output, errors)
 
     if errors:
         print("\n".join(errors), file=sys.stderr)

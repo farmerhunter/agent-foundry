@@ -40,6 +40,7 @@ ROLE_OPERATION_CAPABILITIES = {
 }
 FORBIDDEN_RECEIPT_KEYS = {"prompt", "body", "message", "messages", "content", "transcript", "tool_output", "raw_log"}
 ROLEHUB_TERMINAL_FAILURE = {"partial_hold", "rolled_back", "rollback_incomplete"}
+ROLEHUB_TERMINAL = ROLEHUB_TERMINAL_FAILURE | {"ready"}
 
 
 def fail(message: str) -> None:
@@ -346,7 +347,7 @@ def project_rolehub(root: dict[str, Any]) -> dict[str, Any]:
         if terminal_seen:
             attention.append("receipt appears after terminal receipt")
         status = receipt.get("status")
-        if status in ROLEHUB_TERMINAL_FAILURE:
+        if status in ROLEHUB_TERMINAL:
             terminal_seen = True
         elif status not in {"applied", "ready"}:
             attention.append(f"invalid receipt status for {operation.get('operation_id', index)}")
@@ -360,7 +361,7 @@ def project_rolehub(root: dict[str, Any]) -> dict[str, Any]:
         rollback = {}
     rollback_receipt = rollback.get("receipt")
     applied_ids = [op.get("operation_id") for op in applied]
-    rollback_valid = isinstance(rollback_receipt, dict) and rollback_receipt.get("status") == "complete" and rollback_receipt.get("reversed_operation_ids") == applied_ids and all(isinstance(op.get("preimage"), dict) or op.get("action") == "create" for op in applied)
+    rollback_valid = isinstance(rollback_receipt, dict) and rollback_receipt.get("status") == "complete" and rollback_receipt.get("reversed_operation_ids") == list(reversed(applied_ids)) and all(isinstance(op.get("preimage"), dict) or op.get("action") == "create" for op in applied)
     if rollback.get("status") == "failed" or (rollback.get("status") in {"required", "complete"} and not rollback_valid):
         attention.append("rollback receipt missing or failed")
         rollback_state = "rollback_incomplete"
