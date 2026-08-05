@@ -117,6 +117,17 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(rollback["status"], "rollback_incomplete")
         self.assertEqual(rpc.threads["t1"]["name"], "new")
 
+    def test_forged_digest_and_external_rename_are_rejected(self):
+        rpc = FakeRPC(); runner = CodexRoleHubRunner(rpc, runtime_id="rt-1")
+        runner.apply(plan(op("create", title="old")))
+        result = runner.apply(plan(op("name", title="new", key="named")))
+        forged = copy.deepcopy(result["operations"][0])
+        forged["readback"]["digest"] = "sha256:forged"
+        self.assertEqual(runner.rollback([forged])["status"], "rollback_incomplete")
+        rpc.threads["t1"]["name"] = "changed-externally"
+        self.assertEqual(runner.rollback([result["operations"][0]])["reason"], "current_preimage_changed")
+        self.assertEqual(rpc.threads["t1"]["name"], "changed-externally")
+
     def test_logical_link_and_navigation_hold(self):
         rpc = FakeRPC(); runner = CodexRoleHubRunner(rpc, runtime_id="rt-1")
         result = runner.apply(plan(op("link", target_ref="github:issue:501"), op("navigate", key="k2")))

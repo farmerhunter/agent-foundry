@@ -135,7 +135,7 @@ class CodexRoleHubRunner:
 
     def _failure_receipt(self, plan: dict[str, Any], op: dict[str, Any], status: str, reason: str) -> dict[str, Any]:
         receipt = self._receipt(plan, op, status, {"availability": "unknown", "reason": reason})
-        self.receipts[op["idempotency_key"]] = receipt
+        self.receipts[op["idempotency_key"]] = deepcopy(receipt)
         return receipt
 
     def _operation(self, plan: dict[str, Any], op: dict[str, Any]) -> dict[str, Any]:
@@ -195,7 +195,7 @@ class CodexRoleHubRunner:
             after["previous_title"] = before["title"]
         self._sequence += 1
         receipt = self._receipt(plan, op, "applied", {**after, "created": created, "native_id_held_in_memory": True})
-        self.receipts[key] = receipt
+        self.receipts[key] = deepcopy(receipt)
         if action == "name":
             self.rollback_records[key] = {"fingerprint": receipt["operation_fingerprint"], "previous_title": before.get("title"), "native_id": native_id, "operation_id": op["operation_id"]}
         return receipt
@@ -209,12 +209,20 @@ class CodexRoleHubRunner:
             readback = receipt.get("readback", {})
             previous = readback.get("previous_title") if isinstance(readback, dict) else None
             key = receipt.get("idempotency_key")
+            stored_receipt = self.receipts.get(key)
             stored = self.rollback_records.get(key)
-            if not stored or receipt.get("operation_fingerprint") != stored.get("fingerprint") or previous != stored.get("previous_title"):
+            if not stored_receipt or receipt != stored_receipt or not stored or receipt.get("operation_fingerprint") != stored.get("fingerprint") or previous != stored.get("previous_title"):
                 return {"status": "rollback_incomplete", "reason": "reverse_receipt_mismatch", "reversed_operation_ids": reversed_ids}
             native_id = stored.get("native_id")
             if not isinstance(previous, str) or not native_id:
                 return {"status": "rollback_incomplete", "reason": "reverse_receipt_unavailable", "reversed_operation_ids": reversed_ids}
+            try:
+                current = self._readback(native_id)
+            except Exception:
+                return {"status": "rollback_incomplete", "reason": "current_readback_unavailable", "reversed_operation_ids": reversed_ids}
+            expected_readback = stored_receipt.get("readback", {})
+            if not isinstance(expected_readback, dict) or current.get("digest") != expected_readback.get("digest") or current.get("title") != expected_readback.get("title"):
+                return {"status": "rollback_incomplete", "reason": "current_preimage_changed", "reversed_operation_ids": reversed_ids}
             try:
                 self._call("thread/name/set", {"threadId": native_id, "name": previous})
             except Exception:
