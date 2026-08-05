@@ -1,0 +1,88 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://agent-foundry.local/schemas/bounded-collaboration-onboarding.schema.yaml"
+title: Bounded Collaboration Onboarding Plan
+description: >-
+  Portable metadata-only planning contract, not authority for native threads,
+  transcript access, Vault writes, or runtime activation.
+type: object
+additionalProperties: false
+required: [onboarding_version, request, runtime_capabilities, existing_roles, repository_state]
+properties:
+  onboarding_version:
+    const: bounded-collaboration-onboarding-v1
+  request:
+    type: object
+    additionalProperties: false
+    required: [project_identity, onboarding_key, apply_authorized]
+    properties:
+      project_identity:
+        type: object
+        additionalProperties: false
+        required: [project_id, repository, integration_branch]
+        properties:
+          project_id: {type: string, minLength: 1}
+          repository: {type: string, pattern: "^[^/]+/[^/]+$"}
+          integration_branch: {type: string, minLength: 1}
+      onboarding_key: {type: string, minLength: 1}
+      apply_authorized: {type: boolean}
+  runtime_capabilities:
+    type: object
+    additionalProperties: false
+    required: [role_binding]
+    properties:
+      role_binding:
+        type: object
+        additionalProperties: false
+        required: [status]
+        properties:
+          status: {enum: [supported, unavailable, unknown]}
+  existing_roles:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      required: [project_id, role, role_ref, durable_anchor, state, legacy]
+      properties:
+        project_id: {type: string, minLength: 1}
+        role: {enum: [Coordinator, Architect, Implementer, Reviewer, Tester, Harvester]}
+        role_ref: {type: string, minLength: 1}
+        durable_anchor: {type: string, minLength: 1}
+        state: {enum: [active, held, historical_reference]}
+        legacy: {type: boolean}
+  repository_state:
+    type: object
+    additionalProperties: false
+    required: [dirty, dirty_preserved]
+    properties:
+      dirty: {type: boolean}
+      dirty_preserved: {type: boolean}
+  operation_receipts:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      required: [idempotency_key, status]
+      properties:
+        idempotency_key: {type: string, minLength: 1}
+        status: {enum: [applied, failed, not_attempted]}
+        receipt_ref: {type: string, minLength: 1}
+  rollback_receipts:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      required: [idempotency_key, status]
+      properties:
+        idempotency_key: {type: string, minLength: 1}
+        status: {enum: [applied, failed, not_attempted]}
+        receipt_ref: {type: string, minLength: 1}
+$defs:
+  PlanResult:
+    type: object
+    required: [state, transition_history, operations, summary]
+    properties:
+      state: {enum: [preflight, plan_ready, applying, ready, partial_hold, rollback_planned, rolled_back, rollback_incomplete]}
+      transition_history:
+        type: array
+        minItems: 1
+        items: {type: string}
