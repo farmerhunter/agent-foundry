@@ -283,6 +283,17 @@ def project_rolehub(root: dict[str, Any]) -> dict[str, Any]:
     logical_id = identity.get("logical_id")
     if not isinstance(logical_id, str) or not logical_id:
         fail("rolehub_identity.logical_id is required")
+    attention: list[str] = []
+    allowed_root = {"contract_version", "project_id", "rolehub_identity", "capabilities", "capability_evidence", "role_matches", "operations", "rollback"}
+    for key in root:
+        if key not in allowed_root:
+            attention.append(f"unknown RoleHub field: {key}")
+    allowed_identity = {"logical_id", "role_conversations"}
+    allowed_capabilities = {"create", "link", "navigate"}
+    allowed_evidence = {"trusted", "producer", "runtime_id", "project_id", "logical_rolehub_id"}
+    for key in identity:
+        if key not in allowed_identity:
+            attention.append(f"unknown rolehub_identity field: {key}")
     capabilities = root.get("capabilities", {})
     if not isinstance(capabilities, dict):
         capabilities = {}
@@ -291,7 +302,10 @@ def project_rolehub(root: dict[str, Any]) -> dict[str, Any]:
     seen_keys: set[str] = set()
     receipts: list[dict[str, Any]] = []
     applied: list[dict[str, Any]] = []
-    attention: list[str] = []
+    if isinstance(capabilities, dict):
+        attention.extend(f"unknown capabilities field: {key}" for key in capabilities if key not in allowed_capabilities)
+    if isinstance(evidence, dict):
+        attention.extend(f"unknown capability_evidence field: {key}" for key in evidence if key not in allowed_evidence)
     role_matches = root.get("role_matches")
     if role_matches is not None:
         if not isinstance(role_matches, list):
@@ -312,6 +326,8 @@ def project_rolehub(root: dict[str, Any]) -> dict[str, Any]:
             attention.append(f"operation {index} is not an object")
             continue
         action = operation.get("action")
+        allowed_operation = {"operation_id", "action", "idempotency_key", "role", "target_ref", "preimage", "receipt"}
+        attention.extend(f"unknown operation field: {key}" for key in operation if key not in allowed_operation)
         if not isinstance(operation.get("operation_id"), str) or not operation.get("operation_id"):
             attention.append(f"operation {index} is missing operation_id")
         if not isinstance(action, str) or not action:
@@ -342,6 +358,8 @@ def project_rolehub(root: dict[str, Any]) -> dict[str, Any]:
         if not isinstance(receipt, dict):
             attention.append(f"missing receipt for {operation.get('operation_id', index)}")
             continue
+        allowed_receipt = {"operation_id", "idempotency_key", "operation_fingerprint", "opaque_ref", "readback", "sequence", "status", "project_id", "logical_rolehub_id"}
+        attention.extend(f"unknown receipt field: {key}" for key in receipt if key not in allowed_receipt)
         fingerprint_payload = {key: value for key, value in operation.items() if key != "receipt"}
         fingerprint = f"sha256:{hashlib.sha256(json.dumps(fingerprint_payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()}"
         if receipt.get("project_id") != project_id or receipt.get("logical_rolehub_id") != logical_id:
@@ -369,6 +387,11 @@ def project_rolehub(root: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(rollback, dict):
         rollback = {}
     rollback_receipt = rollback.get("receipt")
+    allowed_rollback = {"status", "receipt", "reversed_operation_ids"}
+    attention.extend(f"unknown rollback field: {key}" for key in rollback if key not in allowed_rollback)
+    if isinstance(rollback_receipt, dict):
+        allowed_rollback_receipt = {"status", "reversed_operation_ids"}
+        attention.extend(f"unknown rollback receipt field: {key}" for key in rollback_receipt if key not in allowed_rollback_receipt)
     rollback_forbidden = forbidden_paths(rollback)
     if rollback_forbidden:
         attention.append(f"privacy violation at {rollback_forbidden[0]}")
