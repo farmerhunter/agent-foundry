@@ -1,0 +1,35 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://agent-foundry.dev/schemas/codex-rolehub-runner.schema.yaml
+title: AF18 generic Codex RoleHub runner contract
+type: object
+additionalProperties: false
+required: [contract_version, project_id, logical_rolehub_id, operations]
+properties:
+  contract_version: {type: string, const: AF18-codex-rolehub-runner-v1}
+  project_id: {type: string, minLength: 1}
+  logical_rolehub_id: {type: string, minLength: 1}
+  runtime_id: {type: string, minLength: 1}
+  capability_evidence:
+    type: object
+    additionalProperties: false
+    required: [trusted, runtime_id, methods]
+    properties:
+      trusted: {type: boolean, const: true}
+      runtime_id: {type: string, minLength: 1}
+      methods: {type: array, items: {type: string}}
+      cwd: {type: string, minLength: 1}
+  operations:
+    type: array
+    minItems: 1
+    items:
+      type: object
+      additionalProperties: false
+      required: [operation_id, action, idempotency_key, role]
+      properties:
+        operation_id: {type: string, minLength: 1}
+        action: {type: string, enum: [create, reuse, name, link, navigate]}
+        idempotency_key: {type: string, minLength: 1}
+        role: {type: string, enum: [Coordinator, Architect, Implementer, Reviewer, Tester, Harvester]}
+        target_ref: {type: string, minLength: 1}
+        title: {type: string, minLength: 1, maxLength: 200}
+        preimage_digest: {type: [string, 'null'], pattern: '^sha256:'}
