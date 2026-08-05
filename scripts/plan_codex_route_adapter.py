@@ -7,8 +7,16 @@ import argparse
 import hashlib
 import json
 import sys
+from pathlib import Path
 from datetime import datetime
 from typing import Any
+
+try:
+    import yaml
+    from jsonschema import Draft202012Validator
+except ImportError:  # pragma: no cover - environments without optional validator fail closed
+    yaml = None
+    Draft202012Validator = None
 
 
 TOPOLOGY_TO_TOOL = {
@@ -275,6 +283,16 @@ def project_rolehub(root: dict[str, Any]) -> dict[str, Any]:
     """Validate a portable RoleHub projection without invoking a native API."""
     if root.get("contract_version") != "AF18-rolehub-adapter-v1":
         return {"adapter": "codex", "state": "partial_hold", "attention": ["unsupported or missing RoleHub contract_version"], "native_io_performed": False, "mutation_performed": False, "dispatch_performed": False, "next_action": "Hold until the exact portable contract version is supplied."}
+    if yaml is None or Draft202012Validator is None:
+        return {"adapter": "codex", "state": "partial_hold", "attention": ["portable RoleHub schema validator is unavailable"], "native_io_performed": False, "mutation_performed": False, "dispatch_performed": False, "next_action": "Install the pinned schema validator before projection."}
+    try:
+        schema_path = Path(__file__).resolve().parents[1] / "schemas" / "rolehub-adapter-execution.schema.yaml"
+        schema = yaml.safe_load(schema_path.read_text(encoding="utf-8"))
+        validation_errors = sorted(Draft202012Validator(schema).iter_errors(root), key=lambda error: list(error.path))
+    except (OSError, ValueError, TypeError) as error:
+        validation_errors = [error]
+    if validation_errors:
+        return {"adapter": "codex", "state": "partial_hold", "attention": [f"RoleHub schema validation failed: {validation_errors[0]}"], "native_io_performed": False, "mutation_performed": False, "dispatch_performed": False, "next_action": "Hold until the portable RoleHub request matches its schema."}
     project_id = root.get("project_id")
     identity = root.get("rolehub_identity")
     operations = root.get("operations")

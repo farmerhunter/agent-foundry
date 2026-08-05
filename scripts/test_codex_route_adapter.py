@@ -286,6 +286,9 @@ def main() -> int:
     unknown_receipt = rolehub([{**base_op, "receipt": {"unexpected": "x"}}])
     code, output = run(unknown_receipt)
     expect("rolehub-unknown-receipt-field-hold", code == 0 and output["state"] == "partial_hold", output, errors)
+    malformed_nested = rolehub([base_op]); malformed_nested["role_matches"] = [{"role": "Architect", "project_id": "tiny-ipa"}]
+    code, output = run(malformed_nested)
+    expect("rolehub-malformed-role-match-hold", code == 0 and output["state"] == "partial_hold", output, errors)
     duplicate = dict(base_op)
     code, output = run(rolehub([base_op, duplicate]))
     expect("rolehub-duplicate-idempotency-hold", code == 0 and output["state"] == "partial_hold", output, errors)
@@ -330,7 +333,7 @@ def main() -> int:
     expect("rolehub-rollback-reverse-order-accepted", code == 0 and output["state"] == "rolled_back", output, errors)
     private_rollback = {"status": "complete", "receipt": {"status": "complete", "reversed_operation_ids": ["second", "first"], "prompt": "SECRET"}}
     code, output = run(rolehub([first, second], rollback=private_rollback))
-    expect("rolehub-rollback-privacy-hold", code == 0 and output["state"] == "rollback_incomplete", output, errors)
+    expect("rolehub-rollback-privacy-hold", code == 0 and output["state"] == "partial_hold", output, errors)
 
     if errors:
         print("\n".join(errors), file=sys.stderr)
