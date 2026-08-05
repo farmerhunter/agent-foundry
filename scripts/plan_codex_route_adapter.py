@@ -7,8 +7,16 @@ import argparse
 import hashlib
 import json
 import sys
+from pathlib import Path
 from datetime import datetime
 from typing import Any
+
+try:
+    import yaml
+    from jsonschema import Draft202012Validator
+except ImportError:  # pragma: no cover - environments without optional validator fail closed
+    yaml = None
+    Draft202012Validator = None
 
 
 TOPOLOGY_TO_TOOL = {
@@ -39,6 +47,9 @@ ROLE_OPERATION_CAPABILITIES = {
     "measure": "measure",
 }
 FORBIDDEN_RECEIPT_KEYS = {"prompt", "body", "message", "messages", "content", "transcript", "tool_output", "raw_log"}
+ROLEHUB_TERMINAL_FAILURE = {"partial_hold", "rolled_back", "rollback_incomplete"}
+ROLEHUB_TERMINAL = ROLEHUB_TERMINAL_FAILURE | {"ready"}
+ROLEHUB_SCHEMA_VALIDATION_FAILURE = "ROLEHUB_SCHEMA_VALIDATION_FAILED"
 
 
 def fail(message: str) -> None:
@@ -269,7 +280,172 @@ def project_role_operation(root: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def project_rolehub(root: dict[str, Any]) -> dict[str, Any]:
+    """Validate a portable RoleHub projection without invoking a native API."""
+    if root.get("contract_version") != "AF18-rolehub-adapter-v1":
+        return {"adapter": "codex", "state": "partial_hold", "attention": ["unsupported or missing RoleHub contract_version"], "native_io_performed": False, "mutation_performed": False, "dispatch_performed": False, "next_action": "Hold until the exact portable contract version is supplied."}
+    if yaml is None or Draft202012Validator is None:
+        return {"adapter": "codex", "state": "partial_hold", "attention": ["portable RoleHub schema validator is unavailable"], "native_io_performed": False, "mutation_performed": False, "dispatch_performed": False, "next_action": "Install the pinned schema validator before projection."}
+    try:
+        schema_path = Path(__file__).resolve().parents[1] / "schemas" / "rolehub-adapter-execution.schema.yaml"
+        schema = yaml.safe_load(schema_path.read_text(encoding="utf-8"))
+        validation_errors = sorted(Draft202012Validator(schema).iter_errors(root), key=lambda error: list(error.path))
+    except Exception:
+        validation_errors = [None]
+    if validation_errors:
+        return {"adapter": "codex", "state": "partial_hold", "attention": [ROLEHUB_SCHEMA_VALIDATION_FAILURE], "native_io_performed": False, "mutation_performed": False, "dispatch_performed": False, "next_action": "Hold until the portable RoleHub request matches its schema."}
+    project_id = root.get("project_id")
+    identity = root.get("rolehub_identity")
+    operations = root.get("operations")
+    if not isinstance(project_id, str) or not project_id or not isinstance(identity, dict) or not isinstance(operations, list):
+        fail("rolehub projection requires project_id, rolehub_identity and operations")
+    logical_id = identity.get("logical_id")
+    if not isinstance(logical_id, str) or not logical_id:
+        fail("rolehub_identity.logical_id is required")
+    attention: list[str] = []
+    allowed_root = {"contract_version", "project_id", "rolehub_identity", "capabilities", "capability_evidence", "role_matches", "operations", "rollback"}
+    for key in root:
+        if key not in allowed_root:
+            attention.append(f"unknown RoleHub field: {key}")
+    allowed_identity = {"logical_id", "role_conversations"}
+    allowed_capabilities = {"create", "link", "navigate"}
+    allowed_evidence = {"trusted", "producer", "runtime_id", "project_id", "logical_rolehub_id"}
+    for key in identity:
+        if key not in allowed_identity:
+            attention.append(f"unknown rolehub_identity field: {key}")
+    capabilities = root.get("capabilities", {})
+    if not isinstance(capabilities, dict):
+        capabilities = {}
+    evidence = root.get("capability_evidence")
+    trusted_capabilities = isinstance(evidence, dict) and evidence.get("trusted") is True and isinstance(evidence.get("producer"), str) and isinstance(evidence.get("runtime_id"), str) and evidence.get("project_id") == project_id and evidence.get("logical_rolehub_id") == logical_id
+    seen_keys: set[str] = set()
+    receipts: list[dict[str, Any]] = []
+    applied: list[dict[str, Any]] = []
+    if isinstance(capabilities, dict):
+        attention.extend(f"unknown capabilities field: {key}" for key in capabilities if key not in allowed_capabilities)
+    if isinstance(evidence, dict):
+        attention.extend(f"unknown capability_evidence field: {key}" for key in evidence if key not in allowed_evidence)
+    role_matches = root.get("role_matches")
+    if role_matches is not None:
+        if not isinstance(role_matches, list):
+            attention.append("role_matches must be an array")
+        else:
+            for role in ("Coordinator", "Architect"):
+                matches = [item for item in role_matches if isinstance(item, dict) and item.get("role") == role and item.get("project_id") == project_id]
+                healthy = [item for item in matches if item.get("active") is True and item.get("legacy") is not True]
+                if len(matches) > 1 or any(item.get("legacy") is True for item in matches):
+                    attention.append(f"duplicate or legacy {role} match requires hold")
+                elif len(healthy) == 0:
+                    attention.append(f"no reusable {role}; creation must remain a plan")
+    terminal_seen = False
+    ready_seen = False
+    expected_sequence = 0
+    for index, operation in enumerate(operations):
+        if not isinstance(operation, dict):
+            attention.append(f"operation {index} is not an object")
+            continue
+        action = operation.get("action")
+        allowed_operation = {"operation_id", "action", "idempotency_key", "role", "target_ref", "preimage", "receipt"}
+        attention.extend(f"unknown operation field: {key}" for key in operation if key not in allowed_operation)
+        if not isinstance(operation.get("operation_id"), str) or not operation.get("operation_id"):
+            attention.append(f"operation {index} is missing operation_id")
+        if not isinstance(action, str) or not action:
+            attention.append(f"operation {index} is missing action")
+        key = operation.get("idempotency_key")
+        if not isinstance(key, str) or not key:
+            attention.append(f"operation {index} is missing idempotency_key")
+        elif key in seen_keys:
+            attention.append(f"duplicate idempotency_key: {key}")
+        else:
+            seen_keys.add(key)
+        forbidden = forbidden_paths(operation)
+        if forbidden:
+            attention.append(f"privacy violation at {forbidden[0]}")
+        if action not in {"create", "reuse", "link", "navigate"}:
+            attention.append(f"unsupported rolehub action: {action}")
+            continue
+        if operation.get("role") in {"Implementer", "Reviewer", "Tester", "Harvester"} and action in {"create", "reuse", "link"}:
+            attention.append("Work roles are transient and cannot be persisted in RoleHub")
+        if action in {"create", "link", "navigate"} and capabilities.get(action) not in {"supported"}:
+            attention.append(f"capability unavailable for {action}")
+        elif action in {"create", "link", "navigate"} and not trusted_capabilities:
+            attention.append(f"trusted capability evidence unavailable for {action}")
+        preimage = operation.get("preimage")
+        receipt = operation.get("receipt")
+        if action in {"link", "navigate"} and not isinstance(preimage, dict):
+            attention.append(f"missing preimage for {operation.get('operation_id', index)}")
+        if not isinstance(receipt, dict):
+            attention.append(f"missing receipt for {operation.get('operation_id', index)}")
+            continue
+        allowed_receipt = {"operation_id", "idempotency_key", "operation_fingerprint", "opaque_ref", "readback", "sequence", "status", "project_id", "logical_rolehub_id"}
+        attention.extend(f"unknown receipt field: {key}" for key in receipt if key not in allowed_receipt)
+        fingerprint_payload = {key: value for key, value in operation.items() if key != "receipt"}
+        fingerprint = f"sha256:{hashlib.sha256(json.dumps(fingerprint_payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()}"
+        if receipt.get("project_id") != project_id or receipt.get("logical_rolehub_id") != logical_id:
+            attention.append(f"cross-project or identity-mismatched receipt for {operation.get('operation_id', index)}")
+        if receipt.get("operation_id") != operation.get("operation_id") or receipt.get("idempotency_key") != key or receipt.get("operation_fingerprint") != fingerprint or not isinstance(receipt.get("opaque_ref"), str) or not isinstance(receipt.get("readback"), dict):
+            attention.append(f"receipt binding/readback mismatch for {operation.get('operation_id', index)}")
+        if receipt.get("sequence") != expected_sequence:
+            attention.append(f"out-of-order receipt for {operation.get('operation_id', index)}")
+        expected_sequence += 1
+        if terminal_seen:
+            attention.append("receipt appears after terminal receipt")
+        status = receipt.get("status")
+        if status in ROLEHUB_TERMINAL:
+            terminal_seen = True
+            if status == "ready":
+                ready_seen = True
+        elif status not in {"applied", "ready"}:
+            attention.append(f"invalid receipt status for {operation.get('operation_id', index)}")
+        if status == "applied":
+            applied.append(operation)
+        receipts.append(receipt)
+    if any(receipt.get("status") == "failed" for receipt in receipts):
+        attention.append("operation failure requires partial_hold and reverse rollback")
+    rollback = root.get("rollback", {})
+    if not isinstance(rollback, dict):
+        rollback = {}
+    rollback_receipt = rollback.get("receipt")
+    allowed_rollback = {"status", "receipt", "reversed_operation_ids"}
+    attention.extend(f"unknown rollback field: {key}" for key in rollback if key not in allowed_rollback)
+    if isinstance(rollback_receipt, dict):
+        allowed_rollback_receipt = {"status", "reversed_operation_ids"}
+        attention.extend(f"unknown rollback receipt field: {key}" for key in rollback_receipt if key not in allowed_rollback_receipt)
+    rollback_forbidden = forbidden_paths(rollback)
+    if rollback_forbidden:
+        attention.append(f"privacy violation at {rollback_forbidden[0]}")
+    applied_ids = [op.get("operation_id") for op in applied]
+    rollback_valid = not rollback_forbidden and isinstance(rollback_receipt, dict) and rollback_receipt.get("status") == "complete" and rollback_receipt.get("reversed_operation_ids") == list(reversed(applied_ids)) and all(isinstance(op.get("preimage"), dict) or op.get("action") == "create" for op in applied)
+    if rollback.get("status") == "failed" or (rollback.get("status") in {"required", "complete"} and not rollback_valid):
+        attention.append("rollback receipt missing or failed")
+        rollback_state = "rollback_incomplete"
+    elif rollback_valid:
+        rollback_state = "rolled_back"
+    else:
+        rollback_state = "not_attempted"
+    state = "ready" if not attention and (ready_seen or not terminal_seen) else "partial_hold"
+    if rollback_state in {"rolled_back", "rollback_incomplete"}:
+        state = rollback_state
+    return {
+        "adapter": "codex",
+        "contract_version": root.get("contract_version", "not_available"),
+        "project_id": project_id,
+        "rolehub_identity": {"logical_id": logical_id},
+        "state": state,
+        "operations": [{"operation_id": op.get("operation_id", "not_available"), "action": op.get("action"), "status": "applied" if op in applied else "held"} for op in operations if isinstance(op, dict)],
+        "applied_operations": [op.get("operation_id", "not_available") for op in applied],
+        "rollback": {"status": rollback_state, "applied_only": True, "delete_or_archive": False},
+        "attention": attention,
+        "native_io_performed": False,
+        "mutation_performed": False,
+        "dispatch_performed": False,
+        "next_action": "Hold for an independently authorized adapter execution receipt." if state == "partial_hold" else "Portable projection is ready; no native call is proposed.",
+    }
+
+
 def project(root: dict[str, Any]) -> dict[str, Any]:
+    if "rolehub_identity" in root:
+        return project_rolehub(root)
     if "role_operation" in root:
         return project_role_operation(root)
     portable = require_object(root, "portable_plan")
