@@ -389,6 +389,35 @@ integration、Epic/stage closure、隐私/安全/破坏性动作仍需要相应�
 **中文要点：** 不要为了形式感拆 agent。只有当独立判断、测试证据、批量 checkpoint 或
 human gate 的价值超过协调成本时，才使用更重的协作模式。
 
+## Bounded Collaboration Project Onboarding
+
+For a project that explicitly asks to set up bounded collaboration, first run
+the metadata-only onboarding preflight in
+[`workflows/onboard-bounded-collaboration.md`](../workflows/onboard-bounded-collaboration.md).
+It reuses one unambiguous durable Coordinator/Architect pair, or plans only the
+missing durable roles. Implementer, Reviewer, Tester and Harvester remain
+per-Work transient roles.
+
+The plan explicitly handles an eligible current thread: it can be renamed into
+a new RoleHub, while an existing RoleHub is reused only when its opaque adapter
+reference is present. A ready summary uses applied receipts for final RoleHub,
+Coordinator and Architect navigation plus bound scheduler and transient-role
+template references.
+
+The Core plan requires explicit RoleHub/current-thread/scheduler/transient-template
+projections and discover/create/rename/link/navigate capability reports. It is
+deliberately not a native-thread API. It has no transcript
+scan, history migration, thread deletion/archive, Vault write, runtime change,
+or automatic apply. The adapter owns native thread creation, navigation and
+receipts. Ambiguity, duplicate roles, legacy adoption, unavailable capability,
+privacy exposure, forged/unknown receipts and partial failures are held rather
+than guessed.
+
+**中文要点：** 新项目可以请求一次“准备有界协作”。系统先只读检查：唯一匹配就复用
+Coordinator/Architect，缺失才计划创建；Implementer、Reviewer、Tester、Harvester 仍在
+具体 Work 开始时临时创建。任何重名、旧 thread 认领、能力缺失或半途失败都会停住并显示
+下一步，不会偷偷读取历史、删 thread、写 Vault 或启用 runtime。
+
 ## Anti-Patterns
 
 - routing every non-Implementer transition to Human;
