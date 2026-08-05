@@ -268,6 +268,15 @@ def main() -> int:
     base_op = {"operation_id": "create-hub", "action": "create", "idempotency_key": "tiny-ipa:create-hub", "receipt": {"project_id": "tiny-ipa", "logical_rolehub_id": "tiny-ipa-rolehub", "status": "applied"}}
     code, output = run(rolehub([base_op]))
     expect("rolehub-fresh-ready-no-io", code == 0 and output["state"] == "ready" and output["native_io_performed"] is False, output, errors)
+    missing_version = rolehub([base_op]); missing_version.pop("contract_version")
+    code, output = run(missing_version)
+    expect("rolehub-missing-version-hold", code == 0 and output["state"] == "partial_hold", output, errors)
+    wrong_version = rolehub([base_op]); wrong_version["contract_version"] = "AF18-rolehub-adapter-v0"
+    code, output = run(wrong_version)
+    expect("rolehub-wrong-version-hold", code == 0 and output["state"] == "partial_hold", output, errors)
+    malformed = rolehub([{**base_op, "operation_id": ""}])
+    code, output = run(malformed)
+    expect("rolehub-missing-operation-id-hold", code == 0 and output["state"] == "partial_hold", output, errors)
     duplicate = dict(base_op)
     code, output = run(rolehub([base_op, duplicate]))
     expect("rolehub-duplicate-idempotency-hold", code == 0 and output["state"] == "partial_hold", output, errors)

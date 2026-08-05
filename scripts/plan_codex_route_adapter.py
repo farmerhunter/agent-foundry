@@ -273,6 +273,8 @@ def project_role_operation(root: dict[str, Any]) -> dict[str, Any]:
 
 def project_rolehub(root: dict[str, Any]) -> dict[str, Any]:
     """Validate a portable RoleHub projection without invoking a native API."""
+    if root.get("contract_version") != "AF18-rolehub-adapter-v1":
+        return {"adapter": "codex", "state": "partial_hold", "attention": ["unsupported or missing RoleHub contract_version"], "native_io_performed": False, "mutation_performed": False, "dispatch_performed": False, "next_action": "Hold until the exact portable contract version is supplied."}
     project_id = root.get("project_id")
     identity = root.get("rolehub_identity")
     operations = root.get("operations")
@@ -309,8 +311,12 @@ def project_rolehub(root: dict[str, Any]) -> dict[str, Any]:
         if not isinstance(operation, dict):
             attention.append(f"operation {index} is not an object")
             continue
-        key = operation.get("idempotency_key")
         action = operation.get("action")
+        if not isinstance(operation.get("operation_id"), str) or not operation.get("operation_id"):
+            attention.append(f"operation {index} is missing operation_id")
+        if not isinstance(action, str) or not action:
+            attention.append(f"operation {index} is missing action")
+        key = operation.get("idempotency_key")
         if not isinstance(key, str) or not key:
             attention.append(f"operation {index} is missing idempotency_key")
         elif key in seen_keys:
