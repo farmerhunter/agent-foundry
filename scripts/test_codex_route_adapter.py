@@ -238,6 +238,38 @@ def main() -> int:
     code, output = run(private_operation)
     expect("role-operation-privacy-fails-closed", code == 0 and output["adapter_plan"]["adapter_decision"] == "hold_required", output, errors)
 
+    def rolehub(ops, capabilities=None, rollback=None):
+        return {
+            "contract_version": "AF18-rolehub-adapter-v1",
+            "project_id": "tiny-ipa",
+            "rolehub_identity": {"logical_id": "tiny-ipa-rolehub"},
+            "capabilities": capabilities or {"create": "supported", "link": "supported", "navigate": "supported"},
+            "operations": ops,
+            **({"rollback": rollback} if rollback is not None else {}),
+        }
+
+    base_op = {"operation_id": "create-hub", "action": "create", "idempotency_key": "tiny-ipa:create-hub", "receipt": {"project_id": "tiny-ipa", "logical_rolehub_id": "tiny-ipa-rolehub", "status": "applied"}}
+    code, output = run(rolehub([base_op]))
+    expect("rolehub-fresh-ready-no-io", code == 0 and output["state"] == "ready" and output["native_io_performed"] is False, output, errors)
+    duplicate = dict(base_op)
+    code, output = run(rolehub([base_op, duplicate]))
+    expect("rolehub-duplicate-idempotency-hold", code == 0 and output["state"] == "partial_hold", output, errors)
+    forged = dict(base_op)
+    forged["receipt"] = {"project_id": "other-project", "logical_rolehub_id": "tiny-ipa-rolehub", "status": "applied"}
+    code, output = run(rolehub([forged]))
+    expect("rolehub-cross-project-hold", code == 0 and output["state"] == "partial_hold", output, errors)
+    missing_preimage = dict(base_op)
+    missing_preimage.update({"operation_id": "link", "action": "link"})
+    code, output = run(rolehub([missing_preimage]))
+    expect("rolehub-missing-preimage-hold", code == 0 and output["state"] == "partial_hold", output, errors)
+    terminal = {"operation_id": "hold", "action": "navigate", "idempotency_key": "tiny-ipa:hold", "preimage": {}, "receipt": {"project_id": "tiny-ipa", "logical_rolehub_id": "tiny-ipa-rolehub", "status": "partial_hold"}}
+    late = dict(base_op)
+    code, output = run(rolehub([terminal, late]))
+    expect("rolehub-late-receipt-hold", code == 0 and output["state"] == "partial_hold", output, errors)
+    rollback = {"status": "failed"}
+    code, output = run(rolehub([base_op], rollback=rollback))
+    expect("rolehub-rollback-incomplete", code == 0 and output["state"] == "rollback_incomplete", output, errors)
+
     if errors:
         print("\n".join(errors), file=sys.stderr)
         return 1

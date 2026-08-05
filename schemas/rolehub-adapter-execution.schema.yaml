@@ -1,0 +1,37 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://agent-foundry.dev/schemas/rolehub-adapter-execution.schema.yaml
+title: Portable RoleHub adapter execution contract
+type: object
+required: [contract_version, project_id, rolehub_identity, operations]
+additionalProperties: false
+properties:
+  contract_version: {type: string, const: AF18-rolehub-adapter-v1}
+  project_id: {type: string, minLength: 1}
+  rolehub_identity:
+    type: object
+    required: [logical_id]
+    additionalProperties: false
+    properties:
+      logical_id: {type: string, minLength: 1}
+      role_conversations: {type: array, items: {type: string}}
+  capabilities:
+    type: object
+    additionalProperties: false
+    properties:
+      create: {type: string, enum: [supported, unavailable, unsupported, unknown]}
+      link: {type: string, enum: [supported, unavailable, unsupported, unknown]}
+      navigate: {type: string, enum: [supported, unavailable, unsupported, unknown]}
+  operations:
+    type: array
+    items:
+      type: object
+      required: [operation_id, action, idempotency_key]
+      additionalProperties: false
+      properties:
+        operation_id: {type: string, minLength: 1}
+        action: {type: string, enum: [create, reuse, link, navigate]}
+        idempotency_key: {type: string, minLength: 1}
+        role: {type: string}
+        target_ref: {type: string}
+        preimage: {type: [object, 'null']}
+        receipt: {type: [object, 'null']}
