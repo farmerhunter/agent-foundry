@@ -170,7 +170,9 @@ class CodexRoleHubRunner:
         expected = op.get("preimage_digest")
         if expected and expected != before["digest"]:
             raise RunnerHold("partial_hold", "stale_preimage")
-        if action == "name":
+        if action == "create" and isinstance(op.get("title"), str) and op["title"]:
+            self._call("thread/name/set", {"threadId": native_id, "name": op["title"]})
+        elif action == "name":
             self._call("thread/name/set", {"threadId": native_id, "name": op.get("title", "")})
         after = self._readback(native_id)
         if action == "name" and isinstance(before.get("title"), str):

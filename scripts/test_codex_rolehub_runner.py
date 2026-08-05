@@ -60,6 +60,13 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(first, second)
         self.assertEqual(runner.apply(plan(op(title="other")))["reason"], "foreign_idempotency_key")
 
+    def test_stale_preimage_holds_before_mutation(self):
+        rpc = FakeRPC(); runner = CodexRoleHubRunner(rpc, runtime_id="rt-1")
+        runner.apply(plan(op("create", title="old")))
+        result = runner.apply(plan(op("name", key="k2", title="new", preimage_digest="sha256:stale")))
+        self.assertEqual(result["reason"], "stale_preimage")
+        self.assertEqual(rpc.threads["t1"]["name"], "old")
+
     def test_schema_drift_and_forbidden_rpc(self):
         rpc = FakeRPC(); runner = CodexRoleHubRunner(rpc, runtime_id="rt-1")
         bad = plan(op()); bad["unexpected"] = True
