@@ -308,6 +308,9 @@ def main() -> int:
     expect("rolehub-rollback-forward-order-rejected", code == 0 and output["state"] == "rollback_incomplete", output, errors)
     code, output = run(rolehub([first, second], rollback={"status": "complete", "receipt": {"status": "complete", "reversed_operation_ids": ["second", "first"]}}))
     expect("rolehub-rollback-reverse-order-accepted", code == 0 and output["state"] == "rolled_back", output, errors)
+    private_rollback = {"status": "complete", "receipt": {"status": "complete", "reversed_operation_ids": ["second", "first"], "prompt": "SECRET"}}
+    code, output = run(rolehub([first, second], rollback=private_rollback))
+    expect("rolehub-rollback-privacy-hold", code == 0 and output["state"] == "rollback_incomplete", output, errors)
 
     if errors:
         print("\n".join(errors), file=sys.stderr)

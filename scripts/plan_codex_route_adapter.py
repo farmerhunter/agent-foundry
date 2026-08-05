@@ -360,8 +360,11 @@ def project_rolehub(root: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(rollback, dict):
         rollback = {}
     rollback_receipt = rollback.get("receipt")
+    rollback_forbidden = forbidden_paths(rollback)
+    if rollback_forbidden:
+        attention.append(f"privacy violation at {rollback_forbidden[0]}")
     applied_ids = [op.get("operation_id") for op in applied]
-    rollback_valid = isinstance(rollback_receipt, dict) and rollback_receipt.get("status") == "complete" and rollback_receipt.get("reversed_operation_ids") == list(reversed(applied_ids)) and all(isinstance(op.get("preimage"), dict) or op.get("action") == "create" for op in applied)
+    rollback_valid = not rollback_forbidden and isinstance(rollback_receipt, dict) and rollback_receipt.get("status") == "complete" and rollback_receipt.get("reversed_operation_ids") == list(reversed(applied_ids)) and all(isinstance(op.get("preimage"), dict) or op.get("action") == "create" for op in applied)
     if rollback.get("status") == "failed" or (rollback.get("status") in {"required", "complete"} and not rollback_valid):
         attention.append("rollback receipt missing or failed")
         rollback_state = "rollback_incomplete"

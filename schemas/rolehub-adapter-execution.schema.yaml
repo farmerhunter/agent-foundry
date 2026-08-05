@@ -57,6 +57,7 @@ properties:
         preimage: {type: [object, 'null']}
         receipt:
           type: [object, 'null']
+          additionalProperties: false
           required: [operation_id, idempotency_key, operation_fingerprint, opaque_ref, readback, sequence, status]
           properties:
             operation_id: {type: string, minLength: 1}
@@ -73,5 +74,10 @@ properties:
     additionalProperties: false
     properties:
       status: {type: string, enum: [required, complete, failed]}
-      receipt: {type: object}
+      receipt:
+        type: object
+        additionalProperties: false
+        properties:
+          status: {type: string, enum: [complete]}
+          reversed_operation_ids: {type: array, items: {type: string}}
       reversed_operation_ids: {type: array, items: {type: string}}
