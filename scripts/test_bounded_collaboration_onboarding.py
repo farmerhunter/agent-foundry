@@ -37,6 +37,10 @@ def receipt(item, status="applied", fingerprint=True):
     return value
 
 
+def rollback_receipt(item, status="applied"):
+    return {"source_idempotency_key": item["source_idempotency_key"], "status": status, "receipt_ref": "adapter:rollback", "source_operation_fingerprint": item["source_operation_fingerprint"], "rollback_fingerprint": item["rollback_fingerprint"]}
+
+
 def main():
     fresh = onboarding.plan(fixture())
     expect("fresh-rolehub-setup", fresh["state"] == "plan_ready" and {item["kind"] for item in fresh["operations"]} >= {"discover_role_hub", "create_role_hub", "create_durable_role", "navigate_role_hub"}, fresh)
@@ -65,10 +69,18 @@ def main():
     failed = fresh["operations"][2]
     partial = onboarding.plan(fixture(request={**fixture()["request"], "apply_authorized": True}, operation_receipts=[receipt(successful), receipt(failed, "failed")]))
     expect("success-then-failure-reverse-rollback", partial["state"] == "rollback_planned" and partial["rollback_operations"][0]["source_idempotency_key"] == successful["idempotency_key"] and partial["rollback_operations"][0]["kind"] == "mark_setup_incomplete", partial)
-    rolled = onboarding.plan(fixture(request={**fixture()["request"], "apply_authorized": True}, operation_receipts=[receipt(successful), receipt(failed, "failed")], rollback_receipts=[{"source_idempotency_key": successful["idempotency_key"], "status": "applied", "receipt_ref": "adapter:rollback"}]))
+    rolled = onboarding.plan(fixture(request={**fixture()["request"], "apply_authorized": True}, operation_receipts=[receipt(successful), receipt(failed, "failed")], rollback_receipts=[rollback_receipt(partial["rollback_operations"][0])]))
     expect("rollback-readback", rolled["state"] == "rolled_back", rolled)
+    rollback_failed = onboarding.plan(fixture(request={**fixture()["request"], "apply_authorized": True}, operation_receipts=[receipt(successful), receipt(failed, "failed")], rollback_receipts=[rollback_receipt(partial["rollback_operations"][0], "failed")]))
+    expect("rollback-failure-incomplete", rollback_failed["state"] == "rollback_incomplete", rollback_failed)
+    rollback_forged = onboarding.plan(fixture(request={**fixture()["request"], "apply_authorized": True}, operation_receipts=[receipt(successful), receipt(failed, "failed")], rollback_receipts=[{**rollback_receipt(partial["rollback_operations"][0]), "rollback_fingerprint": "sha256:forged"}]))
+    expect("rollback-forgery-incomplete", rollback_forged["state"] == "rollback_incomplete", rollback_forged)
     privacy = onboarding.plan(fixture(extra={"transcript": "must-not-appear"}))
     expect("privacy-hold", privacy["state"] == "partial_hold" and privacy["summary"]["capability"] == "privacy_held", privacy)
+    notes = onboarding.plan(fixture(notes={"tool_output": "must-not-appear"}))
+    expect("notes-privacy-hold", notes["state"] == "partial_hold" and notes["summary"]["capability"] == "privacy_held", notes)
+    unknown_field = onboarding.plan(fixture(unexpected="reject"))
+    expect("unknown-field-hold", unknown_field["state"] == "partial_hold" and "unknown_input_field" in unknown_field["stop_conditions"], unknown_field)
     return 0
 
 

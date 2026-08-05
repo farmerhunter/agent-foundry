@@ -6,7 +6,7 @@ description: >-
   transcript access, Vault writes, or runtime activation.
 type: object
 additionalProperties: false
-required: [onboarding_version, request, runtime_capabilities, existing_roles, repository_state]
+required: [onboarding_version, request, runtime_capabilities, role_hub, existing_roles, repository_state]
 properties:
   onboarding_version:
     const: bounded-collaboration-onboarding-v1
@@ -34,7 +34,7 @@ properties:
   runtime_capabilities:
     type: object
     additionalProperties: false
-    required: [role_binding]
+    required: [role_binding, projections, operations]
     properties:
       role_binding:
         type: object
@@ -98,11 +98,13 @@ properties:
     items:
       type: object
       additionalProperties: false
-      required: [source_idempotency_key, status, receipt_ref]
+      required: [source_idempotency_key, status, receipt_ref, source_operation_fingerprint, rollback_fingerprint]
       properties:
         source_idempotency_key: {type: string, minLength: 1}
         status: {enum: [applied, failed]}
         receipt_ref: {type: string, minLength: 1}
+        source_operation_fingerprint: {type: string, minLength: 1}
+        rollback_fingerprint: {type: string, minLength: 1}
   plan_result:
     $ref: "#/$defs/PlanResult"
 $defs:
@@ -114,8 +116,13 @@ $defs:
       status: {enum: [supported, unavailable, unknown]}
   PlanResult:
     type: object
-    required: [state, transition_history, operations, summary]
+    additionalProperties: false
+    required: [onboarding_version, read_only, mutation_performed, dispatch_performed, state, transition_history, stop_conditions, operations, summary]
     properties:
+      onboarding_version: {const: bounded-collaboration-onboarding-v1}
+      read_only: {const: true}
+      mutation_performed: {const: false}
+      dispatch_performed: {const: false}
       state: {enum: [preflight, plan_ready, applying, ready, partial_hold, rollback_planned, rolled_back, rollback_incomplete]}
       transition_history:
         type: array
@@ -123,8 +130,54 @@ $defs:
         items: {type: string}
       operations:
         type: array
+        items: {$ref: "#/$defs/Operation"}
+      rollback_operations:
+        type: array
+        items: {$ref: "#/$defs/RollbackOperation"}
       summary:
-        type: object
+        $ref: "#/$defs/OnboardingSummary"
+      stop_conditions:
+        type: array
+        items: {type: string, minLength: 1}
+  Operation:
+    type: object
+    additionalProperties: false
+    required: [kind, subject, idempotency_key, preimage, operation_fingerprint]
+    properties:
+      kind: {type: string, minLength: 1}
+      subject: {type: string, minLength: 1}
+      idempotency_key: {type: string, minLength: 1}
+      preimage: {type: object}
+      operation_fingerprint: {type: string, minLength: 1}
+  RollbackOperation:
+    type: object
+    additionalProperties: false
+    required: [kind, subject, source_idempotency_key, source_operation_fingerprint, preimage, automatic, never_delete_or_archive, rollback_fingerprint]
+    properties:
+      kind: {enum: [mark_setup_incomplete, restore_preimage]}
+      subject: {type: string, minLength: 1}
+      source_idempotency_key: {type: string, minLength: 1}
+      source_operation_fingerprint: {type: string, minLength: 1}
+      preimage: {type: object}
+      automatic: {const: false}
+      never_delete_or_archive: {const: true}
+      rollback_fingerprint: {type: string, minLength: 1}
+  OnboardingSummary:
+    type: object
+    additionalProperties: false
+    required: [project_identity, capability, reused, created, unchanged, held, active_navigation, historical_references, dirty_state, next_human_action]
+    properties:
+      project_identity: {type: object}
+      capability: {enum: [complete, partial, unavailable, privacy_held]}
+      reused: {type: array}
+      created: {type: array}
+      unchanged: {type: array}
+      held: {type: array}
+      active_navigation: {type: object}
+      historical_references: {type: array}
+      dirty_state: {type: object}
+      next_human_action: {type: string, minLength: 1}
+      projections: {type: object}
   OperationReceipt:
     type: object
     additionalProperties: false

@@ -15,7 +15,8 @@ DURABLE_ROLES = ("Coordinator", "Architect")
 TRANSIENT_ROLES = ("Implementer", "Reviewer", "Tester", "Harvester")
 CAPABILITIES = ("discover", "create", "rename", "link", "navigate")
 PROJECTIONS = ("role_hub", "current_thread", "scheduler", "transient_template")
-FORBIDDEN_KEYS = {"transcript", "raw_transcript", "messages", "prompt", "content", "thread_id", "native_thread_id"}
+FORBIDDEN_KEYS = {"transcript", "raw_transcript", "messages", "prompt", "content", "thread_id", "native_thread_id", "notes", "tool_output", "raw_content", "raw_tool_output"}
+ALLOWED_ROOT_KEYS = {"onboarding_version", "request", "runtime_capabilities", "role_hub", "existing_roles", "repository_state", "operation_receipts", "rollback_receipts"}
 
 
 def canonical(value: Any) -> str:
@@ -34,6 +35,38 @@ def contains_forbidden(value: Any) -> bool:
     if isinstance(value, dict):
         return any(key in FORBIDDEN_KEYS or contains_forbidden(item) for key, item in value.items())
     return isinstance(value, list) and any(contains_forbidden(item) for item in value)
+
+
+def has_unknown_input(value: Any) -> bool:
+    if not isinstance(value, dict) or set(value) - ALLOWED_ROOT_KEYS:
+        return True
+    expected = {
+        "request": {"project_identity", "onboarding_key", "apply_authorized", "role_display_names"},
+        "project_identity": {"project_id", "repository", "integration_branch"},
+        "repository_state": {"dirty", "dirty_preserved"},
+        "role_hub": {"status", "role_hub_ref"},
+        "role": {"project_id", "role", "role_ref", "durable_anchor", "state", "legacy", "display_name", "linked_to_role_hub"},
+        "capability": {"status"},
+    }
+    request = value.get("request")
+    runtime = value.get("runtime_capabilities")
+    if not isinstance(request, dict) or set(request) - expected["request"] or not isinstance(request.get("project_identity"), dict) or set(request["project_identity"]) - expected["project_identity"]:
+        return True
+    if "role_display_names" in request and (not isinstance(request["role_display_names"], dict) or set(request["role_display_names"]) - set(DURABLE_ROLES)):
+        return True
+    if not isinstance(value.get("repository_state"), dict) or set(value["repository_state"]) - expected["repository_state"]:
+        return True
+    if not isinstance(value.get("role_hub"), dict) or set(value["role_hub"]) - expected["role_hub"]:
+        return True
+    if not isinstance(runtime, dict) or set(runtime) - {"role_binding", "projections", "operations"}:
+        return True
+    for section, required in (("projections", PROJECTIONS), ("operations", CAPABILITIES)):
+        items = runtime.get(section)
+        if not isinstance(items, dict) or set(items) != set(required) or any(not isinstance(items.get(name), dict) or set(items[name]) - expected["capability"] for name in required):
+            return True
+    if not isinstance(runtime.get("role_binding"), dict) or set(runtime["role_binding"]) - expected["capability"]:
+        return True
+    return not isinstance(value.get("existing_roles"), list) or any(not isinstance(item, dict) or set(item) - expected["role"] for item in value["existing_roles"])
 
 
 def operation(identity: dict[str, Any], onboarding_key: str, kind: str, subject: str, preimage: dict[str, Any]) -> dict[str, Any]:
@@ -100,11 +133,13 @@ def rollback_plan(operations: list[dict[str, Any]], receipts: dict[str, dict[str
             kind = "restore_preimage"
         else:
             continue
-        result.append({"kind": kind, "subject": item["subject"], "source_idempotency_key": item["idempotency_key"], "preimage": item["preimage"], "automatic": False, "never_delete_or_archive": True})
+        reverse = {"kind": kind, "subject": item["subject"], "source_idempotency_key": item["idempotency_key"], "source_operation_fingerprint": item["operation_fingerprint"], "preimage": item["preimage"], "automatic": False, "never_delete_or_archive": True}
+        reverse["rollback_fingerprint"] = digest(reverse)
+        result.append(reverse)
     return result
 
 
-def plan(payload: dict[str, Any]) -> dict[str, Any]:
+def _plan(payload: dict[str, Any]) -> dict[str, Any]:
     request = payload.get("request") if isinstance(payload.get("request"), dict) else {}
     identity = request.get("project_identity") if isinstance(request.get("project_identity"), dict) else {}
     repo = payload.get("repository_state") if isinstance(payload.get("repository_state"), dict) else {}
@@ -113,6 +148,8 @@ def plan(payload: dict[str, Any]) -> dict[str, Any]:
         return hold(base, request, repo, ["invalid_onboarding_request"])
     if contains_forbidden(payload):
         return hold(base, request, repo, ["privacy_exposure"])
+    if has_unknown_input(payload):
+        return hold(base, request, repo, ["unknown_input_field"])
     if repo.get("dirty_preserved") is not True:
         return hold(base, request, repo, ["dirty_state_not_proven_preserved"])
     missing = required_capabilities(payload)
@@ -169,9 +206,12 @@ def plan(payload: dict[str, Any]) -> dict[str, Any]:
         # Rollback receipts are independently checked against only planned reverse operations.
         rollback_keys = {item["source_idempotency_key"] for item in rollback}
         raw_rollback = payload.get("rollback_receipts", [])
-        if raw_rollback and (not isinstance(raw_rollback, list) or len(raw_rollback) != len(rollback_keys) or {item.get("source_idempotency_key") for item in raw_rollback if isinstance(item, dict)} != rollback_keys or any(not isinstance(item, dict) or item.get("source_idempotency_key") not in rollback_keys or item.get("status") not in {"applied", "failed"} or not item.get("receipt_ref") for item in raw_rollback)):
+        planned_rollback = {item["source_idempotency_key"]: item for item in rollback}
+        if raw_rollback and (not isinstance(raw_rollback, list) or len(raw_rollback) != len(rollback_keys) or {item.get("source_idempotency_key") for item in raw_rollback if isinstance(item, dict)} != rollback_keys or any(not isinstance(item, dict) or item.get("source_idempotency_key") not in rollback_keys or item.get("status") not in {"applied", "failed"} or not item.get("receipt_ref") or item.get("source_operation_fingerprint") != planned_rollback[item["source_idempotency_key"]]["source_operation_fingerprint"] or item.get("rollback_fingerprint") != planned_rollback[item["source_idempotency_key"]]["rollback_fingerprint"] for item in raw_rollback)):
             rollback_errors.append("invalid_rollback_receipt")
         if rollback_errors:
+            rollback_state = "rollback_incomplete"
+        elif rollback and raw_rollback and any(item.get("status") == "failed" for item in raw_rollback):
             rollback_state = "rollback_incomplete"
         elif rollback and raw_rollback and all(item.get("status") == "applied" for item in raw_rollback):
             rollback_state = "rolled_back"
@@ -186,6 +226,23 @@ def plan(payload: dict[str, Any]) -> dict[str, Any]:
     navigation = next((item["durable_anchor"] for item in reused if item["role"] == "Coordinator"), "adapter_create_receipt_required")
     summary = {"project_identity": identity, "capability": "complete", "reused": reused, "created": created, "unchanged": list(TRANSIENT_ROLES), "held": [], "active_navigation": {"authority": "adapter", "value": navigation}, "historical_references": historical, "dirty_state": {"dirty": repo.get("dirty"), "preserved": True}, "next_human_action": "Approve adapter execution of the planned operation keys." if state == "plan_ready" else "Read back adapter receipts and preserve any partial setup.", "projections": {name: "adapter_capability_supported" for name in PROJECTIONS}}
     return {**base, "state": state, "transition_history": history, "stop_conditions": [], "operations": operations, "summary": summary}
+
+
+def validate_plan_result(result: dict[str, Any]) -> dict[str, Any]:
+    required = {"onboarding_version", "read_only", "mutation_performed", "dispatch_performed", "state", "transition_history", "stop_conditions", "operations", "summary"}
+    allowed = required | {"rollback_operations"}
+    summary_required = {"project_identity", "capability", "reused", "created", "unchanged", "held", "active_navigation", "historical_references", "dirty_state", "next_human_action"}
+    summary_allowed = summary_required | {"projections"}
+    operation_required = {"kind", "subject", "idempotency_key", "preimage", "operation_fingerprint"}
+    rollback_required = {"kind", "subject", "source_idempotency_key", "source_operation_fingerprint", "preimage", "automatic", "never_delete_or_archive", "rollback_fingerprint"}
+    valid = isinstance(result, dict) and required.issubset(result) and not (set(result) - allowed) and isinstance(result.get("operations"), list) and isinstance(result.get("summary"), dict) and summary_required.issubset(result["summary"]) and not (set(result["summary"]) - summary_allowed) and all(isinstance(item, dict) and operation_required == set(item) for item in result["operations"]) and ("rollback_operations" not in result or isinstance(result["rollback_operations"], list) and all(isinstance(item, dict) and rollback_required == set(item) for item in result["rollback_operations"]))
+    if valid:
+        return result
+    return {"onboarding_version": VERSION, "read_only": True, "mutation_performed": False, "dispatch_performed": False, "state": "partial_hold", "transition_history": ["preflight", "partial_hold"], "stop_conditions": ["invalid_plan_result"], "operations": [], "summary": {"project_identity": {}, "capability": "partial", "reused": [], "created": [], "unchanged": list(TRANSIENT_ROLES), "held": ["invalid_plan_result"], "active_navigation": {"authority": "adapter", "value": "unavailable"}, "historical_references": [], "dirty_state": {"dirty": None, "preserved": False}, "next_human_action": "Repair the Core planning contract before apply."}}
+
+
+def plan(payload: dict[str, Any]) -> dict[str, Any]:
+    return validate_plan_result(_plan(payload if isinstance(payload, dict) else {}))
 
 
 def main() -> int:
