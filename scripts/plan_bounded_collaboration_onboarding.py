@@ -74,8 +74,10 @@ def has_unknown_input(value: Any) -> bool:
     return not isinstance(value.get("existing_roles"), list) or any(not isinstance(item, dict) or set(item) - expected["role"] for item in value["existing_roles"])
 
 
-def operation(identity: dict[str, Any], onboarding_key: str, kind: str, subject: str, preimage: dict[str, Any]) -> dict[str, Any]:
-    item = {"kind": kind, "subject": subject, "idempotency_key": key_for(identity["project_id"], kind, subject, onboarding_key), "preimage": preimage}
+def operation(identity: dict[str, Any], onboarding_key: str, kind: str, subject: str, preimage: dict[str, Any], desired_state: dict[str, Any], depends_on: list[str] | None = None) -> dict[str, Any]:
+    item = {"kind": kind, "subject": subject, "idempotency_key": key_for(identity["project_id"], kind, subject, onboarding_key), "preimage": preimage, "desired_state": desired_state}
+    if depends_on:
+        item["depends_on"] = depends_on
     item["operation_fingerprint"] = digest(item)
     return item
 
@@ -116,15 +118,20 @@ def validate_receipts(receipts: Any, operations: list[dict[str, Any]]) -> tuple[
     expected = {item["idempotency_key"]: item["operation_fingerprint"] for item in operations}
     found: dict[str, dict[str, Any]] = {}
     errors: list[str] = []
-    for item in receipts:
+    terminal_seen = False
+    for index, item in enumerate(receipts):
         key = item.get("idempotency_key") if isinstance(item, dict) else None
         status = item.get("status") if isinstance(item, dict) else None
-        if not isinstance(item, dict) or key not in expected:
+        if not isinstance(item, dict) or index >= len(operations) or key != operations[index]["idempotency_key"]:
+            errors.append("invalid_receipt_sequence")
+        elif key not in expected:
             errors.append("unknown_receipt")
         elif key in found:
             errors.append("duplicate_receipt")
         elif status not in {"applied", "failed", "not_attempted"}:
             errors.append("invalid_receipt_status")
+        elif terminal_seen and status == "applied":
+            errors.append("invalid_receipt_sequence")
         elif status in {"applied", "failed"} and (not isinstance(item.get("receipt_ref"), str) or not item["receipt_ref"]):
             errors.append("missing_receipt_ref")
         elif status == "applied" and (not isinstance(item.get("result_ref"), str) or not item["result_ref"]):
@@ -133,6 +140,7 @@ def validate_receipts(receipts: Any, operations: list[dict[str, Any]]) -> tuple[
             errors.append("forged_receipt_fingerprint")
         else:
             found[key] = item
+            terminal_seen = terminal_seen or status in {"failed", "not_attempted"}
     return found, sorted(set(errors))
 
 
@@ -141,7 +149,7 @@ def rollback_plan(operations: list[dict[str, Any]], receipts: dict[str, dict[str
     for item in reversed(operations):
         if receipts.get(item["idempotency_key"], {}).get("status") != "applied":
             continue
-        if item["kind"] in {"create_role_hub", "rename_current_to_role_hub", "create_durable_role"}:
+        if item["kind"] in {"create_role_hub", "create_durable_role"}:
             kind = "mark_setup_incomplete"
         elif item["kind"] in {"rename_role", "link_role"}:
             kind = "restore_preimage"
@@ -179,14 +187,14 @@ def _plan(payload: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(existing, list):
         return hold(base, request, repo, ["invalid_existing_roles"])
 
-    operations = [operation(identity, request["onboarding_key"], "discover_role_hub", "RoleHub", {"status": hub.get("status")})]
+    operations = [operation(identity, request["onboarding_key"], "discover_role_hub", "RoleHub", {"status": hub.get("status")}, {"project_id": identity["project_id"]})]
     if hub["status"] == "missing":
         if current.get("eligible") is True and current.get("current_thread_ref") and current.get("name"):
-            operations.append(operation(identity, request["onboarding_key"], "rename_current_to_role_hub", "RoleHub", {"current_thread_ref": current["current_thread_ref"], "name": current["name"]}))
+            operations.append(operation(identity, request["onboarding_key"], "rename_current_to_role_hub", "RoleHub", {"current_thread_ref": current["current_thread_ref"], "name": current["name"]}, {"project_id": identity["project_id"], "role": "RoleHub", "name": "RoleHub"}, [operations[0]["idempotency_key"]]))
         else:
-            operations.append(operation(identity, request["onboarding_key"], "create_role_hub", "RoleHub", {"status": "missing"}))
+            operations.append(operation(identity, request["onboarding_key"], "create_role_hub", "RoleHub", {"status": "missing"}, {"project_id": identity["project_id"], "role": "RoleHub", "name": "RoleHub"}, [operations[0]["idempotency_key"]]))
     else:
-        operations.append(operation(identity, request["onboarding_key"], "reuse_role_hub", "RoleHub", {"role_hub_ref": hub["role_hub_ref"]}))
+        operations.append(operation(identity, request["onboarding_key"], "reuse_role_hub", "RoleHub", {"role_hub_ref": hub["role_hub_ref"]}, {"project_id": identity["project_id"], "role": "RoleHub"}, [operations[0]["idempotency_key"]]))
     historical: list[dict[str, Any]] = []
     stops: list[str] = []
     reused, created = [], []
@@ -203,17 +211,17 @@ def _plan(payload: dict[str, Any]) -> dict[str, Any]:
             stops.append(f"held_legacy_or_ambiguous_{role.lower()}_match")
         if len(active) == 1 and not nonactive:
             item = active[0]
-            operations.append(operation(identity, request["onboarding_key"], "reuse_durable_role", role, {"match_count": 1, "durable_anchor": item.get("durable_anchor")}))
+            operations.append(operation(identity, request["onboarding_key"], "reuse_durable_role", role, {"match_count": 1, "durable_anchor": item.get("durable_anchor")}, {"project_id": identity["project_id"], "role": role, "role_hub_link": "RoleHub"}, [operations[1]["idempotency_key"]]))
             reused.append({"role": role, "durable_anchor": item.get("durable_anchor")})
             desired = names.get(role)
             if desired and item.get("display_name") != desired:
-                operations.append(operation(identity, request["onboarding_key"], "rename_role", role, {"display_name": item.get("display_name")}))
+                operations.append(operation(identity, request["onboarding_key"], "rename_role", role, {"display_name": item.get("display_name")}, {"name": desired, "role_hub_link": "RoleHub"}, [operations[-1]["idempotency_key"]]))
             if item.get("linked_to_role_hub") is not True:
-                operations.append(operation(identity, request["onboarding_key"], "link_role", role, {"linked_to_role_hub": item.get("linked_to_role_hub")}))
+                operations.append(operation(identity, request["onboarding_key"], "link_role", role, {"linked_to_role_hub": item.get("linked_to_role_hub")}, {"role_hub_link": "RoleHub"}, [operations[-1]["idempotency_key"]]))
         elif not matches:
-            operations.append(operation(identity, request["onboarding_key"], "create_durable_role", role, {"match_count": 0}))
+            operations.append(operation(identity, request["onboarding_key"], "create_durable_role", role, {"match_count": 0}, {"project_id": identity["project_id"], "role": role, "role_hub_link": "RoleHub"}, [operations[1]["idempotency_key"]]))
             created.append({"role": role, "status": "planned"})
-    operations.append(operation(identity, request["onboarding_key"], "navigate_role_hub", "RoleHub", {"current_navigation": "adapter_owned"}))
+    operations.append(operation(identity, request["onboarding_key"], "navigate_role_hub", "RoleHub", {"current_navigation": "adapter_owned"}, {"active_navigation": "RoleHub"}, [operations[1]["idempotency_key"]]))
     if stops:
         return hold(base, request, repo, stops, historical, operations)
 
@@ -250,6 +258,7 @@ def _plan(payload: dict[str, Any]) -> dict[str, Any]:
     if state == "ready":
         navigation = {"role_hub_ref": final_receipts["RoleHub"]["result_ref"], "coordinator_ref": final_receipts["Coordinator"]["result_ref"], "architect_ref": final_receipts["Architect"]["result_ref"]}
         next_action = "Bounded collaboration is ready; create transient roles only for an approved Work."
+        created = [{"role": item["subject"], "status": "created", "role_ref": receipts[item["idempotency_key"]]["result_ref"]} for item in operations if item["kind"] == "create_durable_role"]
     else:
         navigation = {"authority": "adapter", "value": "adapter_create_receipt_required"}
         next_action = "Approve adapter execution of the planned operation keys." if state == "plan_ready" else "Read back adapter receipts and preserve any partial setup."
@@ -262,9 +271,10 @@ def validate_plan_result(result: dict[str, Any]) -> dict[str, Any]:
     allowed = required | {"rollback_operations"}
     summary_required = {"project_identity", "capability", "reused", "created", "unchanged", "held", "active_navigation", "historical_references", "dirty_state", "next_human_action"}
     summary_allowed = summary_required | {"projections"}
-    operation_required = {"kind", "subject", "idempotency_key", "preimage", "operation_fingerprint"}
+    operation_required = {"kind", "subject", "idempotency_key", "preimage", "desired_state", "operation_fingerprint"}
+    operation_allowed = operation_required | {"depends_on"}
     rollback_required = {"kind", "subject", "source_idempotency_key", "source_operation_fingerprint", "preimage", "automatic", "never_delete_or_archive", "rollback_fingerprint"}
-    valid = isinstance(result, dict) and required.issubset(result) and not (set(result) - allowed) and isinstance(result.get("operations"), list) and isinstance(result.get("summary"), dict) and summary_required.issubset(result["summary"]) and not (set(result["summary"]) - summary_allowed) and all(isinstance(item, dict) and operation_required == set(item) for item in result["operations"]) and ("rollback_operations" not in result or isinstance(result["rollback_operations"], list) and all(isinstance(item, dict) and rollback_required == set(item) for item in result["rollback_operations"]))
+    valid = isinstance(result, dict) and required.issubset(result) and not (set(result) - allowed) and isinstance(result.get("operations"), list) and isinstance(result.get("summary"), dict) and summary_required.issubset(result["summary"]) and not (set(result["summary"]) - summary_allowed) and all(isinstance(item, dict) and operation_required.issubset(item) and not (set(item) - operation_allowed) for item in result["operations"]) and ("rollback_operations" not in result or isinstance(result["rollback_operations"], list) and all(isinstance(item, dict) and rollback_required == set(item) for item in result["rollback_operations"]))
     if valid:
         return result
     return {"onboarding_version": VERSION, "read_only": True, "mutation_performed": False, "dispatch_performed": False, "state": "partial_hold", "transition_history": ["preflight", "partial_hold"], "stop_conditions": ["invalid_plan_result"], "operations": [], "summary": {"project_identity": {}, "capability": "partial", "reused": [], "created": [], "unchanged": list(TRANSIENT_ROLES), "held": ["invalid_plan_result"], "active_navigation": {"authority": "adapter", "value": "unavailable"}, "historical_references": [], "dirty_state": {"dirty": None, "preserved": False}, "next_human_action": "Repair the Core planning contract before apply."}}

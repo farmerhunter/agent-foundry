@@ -185,12 +185,16 @@ $defs:
   Operation:
     type: object
     additionalProperties: false
-    required: [kind, subject, idempotency_key, preimage, operation_fingerprint]
+    required: [kind, subject, idempotency_key, preimage, desired_state, operation_fingerprint]
     properties:
       kind: {type: string, minLength: 1}
       subject: {type: string, minLength: 1}
       idempotency_key: {type: string, minLength: 1}
       preimage: {type: object}
+      desired_state: {type: object}
+      depends_on:
+        type: array
+        items: {type: string, minLength: 1}
       operation_fingerprint: {type: string, minLength: 1}
   RollbackOperation:
     type: object
