@@ -295,7 +295,7 @@ def main() -> int:
             "creation_boundary": creation_boundary(**override),
         }}}
         code, output = run(case)
-        expected_state = "creation_boundary_proof_untrusted" if name == "forged-runtime-proof" else "not_available"
+        expected_state = "creation_boundary_proof_untrusted" if name == "forged-runtime-proof" else "same_project_creation_boundary_unverified"
         expect(f"creation-boundary-{name}-held", code == 0 and output["adapter_plan"]["adapter_decision"] == "hold_required" and output["adapter_plan"]["creation_boundary_state"] == expected_state, output, errors)
 
     if errors:

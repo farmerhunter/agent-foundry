@@ -241,7 +241,17 @@ def project_role_operation(root: dict[str, Any]) -> dict[str, Any]:
         if action == "create" and status == "supported" and provenance == "observed":
             creation_boundary, boundary_reasons = validate_creation_boundary(receipt.get("creation_boundary"))
             reasons.extend(boundary_reasons)
-    if status in {"unsupported", "not_available", "unknown"} or provenance == "unavailable":
+            if creation_boundary is None:
+                creation_boundary = {
+                    "creation_boundary_state": "same_project_creation_boundary_unverified",
+                    "freshness_forensic_evidence": "unavailable",
+                }
+            # Generic JSON input has no trusted scheduler verifier.  Creation
+            # can never become dry-run-ready in this adapter.
+            reasons.append("generic creation projection lacks a trusted scheduler verifier")
+    if action == "create" and status == "supported":
+        decision = "hold_required"
+    elif status in {"unsupported", "not_available", "unknown"} or provenance == "unavailable":
         reasons.append("capability is unavailable or unsupported")
         decision = "hold_required"
     elif reasons:
@@ -330,9 +340,9 @@ def validate_creation_boundary(value: Any) -> tuple[dict[str, Any] | None, list[
     if reasons:
         return None, reasons
     return {
-        "creation_boundary_state": "same_project_creation_boundary_verified",
+        "creation_boundary_state": "same_project_creation_boundary_unverified",
         "freshness_forensic_evidence": "unavailable",
-    }, []
+    }, ["durable creation receipt refs are caller-supplied; no trusted scheduler verifier is available"]
 
 
 def project(root: dict[str, Any]) -> dict[str, Any]:
