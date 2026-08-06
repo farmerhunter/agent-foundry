@@ -1,0 +1,7 @@
+format: thread_harvest_request_v1
+required: [human_intent_confirmed, thread_ref, adapter_history]
+coverage: [complete, partial, unavailable, privacy_held]
+outputs: [candidate_hold, deferred, rejected]
+rules:
+  - thread_ref is opaque and ranges are optional.
+  - page_size, cursor, cross_thread expansion, and raw persistence are forbidden.

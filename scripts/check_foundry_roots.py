@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 
 from foundry_config import CORE_MARKERS, ROOT, VAULT_MARKERS
+import practice_catalog_snapshot as catalog
 
 
 PRACTICE_STATUSES = {
@@ -34,6 +35,69 @@ ASSET_STATUSES = {
 }
 CORE_LAYOUT_MARKER = ".agent-foundry-core.yaml"
 VAULT_LAYOUT_MARKER = ".agent-foundry-vault.yaml"
+
+
+def validate_synthetic_snapshot_fixture(
+    manifest: object,
+    pointer: object,
+    files: object | None = None,
+    practice_id: object | None = None,
+) -> list[str]:
+    """Validate only explicit S0 synthetic metadata; default root checks never call this."""
+    errors: list[str] = []
+    if not isinstance(manifest, dict) or manifest.get("format") != "practice_catalog_snapshot_v1":
+        errors.append("synthetic snapshot fixture has invalid manifest format")
+    if not isinstance(pointer, dict) or pointer.get("format") != "practice_catalog_pointer_v1":
+        errors.append("synthetic snapshot fixture has invalid pointer format")
+    if files is None:
+        return errors
+    if not isinstance(files, dict) or any(not isinstance(path, str) or not isinstance(content, str) for path, content in files.items()):
+        errors.append("synthetic snapshot fixture has invalid files")
+        return errors
+    if not isinstance(practice_id, str) or not practice_id.startswith("SYN-"):
+        errors.append("synthetic snapshot fixture practice id must be synthetic")
+    records = manifest.get("records", []) if isinstance(manifest, dict) else []
+    paths = {record.get("path") for record in records if isinstance(record, dict)}
+    if set(files) != paths:
+        errors.append("synthetic snapshot fixture manifest/path mismatch")
+    if "indexes/practice_index.yaml" not in files:
+        errors.append("synthetic snapshot fixture practice index missing")
+    if isinstance(practice_id, str) and practice_id and isinstance(files.get("indexes/practice_index.yaml"), str):
+        if f"id: {practice_id}" not in files["indexes/practice_index.yaml"]:
+            errors.append("synthetic snapshot fixture practice entry missing")
+    return errors
+
+
+def validate_injected_snapshot_fixture_view(
+    pointer_capability: object,
+    snapshot_capability: object,
+    practice_id: object,
+) -> list[str]:
+    """Consume the synthetic injected view; never read roots or a working tree."""
+    errors: list[str] = []
+    try:
+        backend = catalog._require_store(pointer_capability)
+    except catalog.ValidationFailure:
+        return ["synthetic snapshot view has unknown pointer capability"]
+    before = getattr(backend, "read_calls", None)
+    try:
+        result = catalog.injected_snapshot_view(pointer_capability, snapshot_capability, practice_id)  # type: ignore[arg-type]
+    except catalog.ValidationFailure as exc:
+        return [f"synthetic snapshot view rejected: {exc}"]
+    if before is None or getattr(backend, "read_calls", None) - before != 1:
+        errors.append("synthetic snapshot view resolved pointer more than once")
+    receipt = result.get("receipt")
+    if not isinstance(receipt, catalog.PointerReceipt) or receipt.operation != "read":
+        errors.append("synthetic snapshot view missing read receipt")
+    if result.get("snapshot_hash") != receipt.snapshot_hash:
+        errors.append("synthetic snapshot view receipt hash mismatch")
+    if result.get("index_path") != "indexes/practice_index.yaml" or not result.get("index"):
+        errors.append("synthetic snapshot view index missing")
+    if result.get("practice_id") != practice_id or result.get("practice_path") not in result.get("index", ""):
+        errors.append("synthetic snapshot view entry mismatch")
+    if not result.get("practice"):
+        errors.append("synthetic snapshot view practice record missing")
+    return errors
 
 
 def read(path: Path) -> str:

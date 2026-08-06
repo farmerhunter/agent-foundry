@@ -79,6 +79,42 @@ branches.
 Implementer 做 scoped change，Tester 提供测试证据，Reviewer 做独立审查，Human 做真实
 产品/风险决策，Harvester 把经验整理成候选资产。
 
+## Human-Facing Role Conversations
+
+Human collaboration needs a stable way to return to Architect, Coordinator,
+Reviewer, or another role for questions, design discussion, interruption, and
+decision making. That need is distinct from a bounded implementation or review
+run.
+
+Use this model:
+
+```text
+RoleConversation -> ContextWindow -> role operation
+Issue -> Work -> ExecutionRun
+```
+
+`RoleConversation` is the stable Human-facing role relationship. A `Work` is a
+bounded delivery unit linked to an Issue. A conversation can discuss several
+Issues without silently becoming a Work; when a request needs execution,
+evidence, acceptance, or routing, it binds or creates the appropriate Work.
+
+The active `ContextWindow` may be replaced to avoid unbounded context growth.
+The successor receives a compact capsule and durable anchors, not full chat or
+tool history. The Human continues to address the same role. A refresh normally
+does not require approval, but a continuity notice is required when the active
+window changes; missing anchors, evidence conflict, escalation, or unavailable
+measurement must hold instead.
+
+`RoleHub` is one optional project-level directory of current role conversations,
+Work summaries, and material attention. It is not a replacement for role
+conversation, a per-role hub, an execution controller, or a source of truth.
+GitHub issue/PR/comment state remains durable authority.
+
+**中文要点：** Human 需要持续与 Architect、Coordinator 等角色对话；这不等同于让
+同一个物理 thread 无限增长。`RoleConversation` 保持角色身份，`ContextWindow` 可以
+自动 successor。RoleHub 只有一个项目级入口，负责投影和跳转，不取代角色对话或 GitHub
+权威状态。
+
 ## Standard Flow
 
 | Step | Owner | What happens | Exit signal |
@@ -255,6 +291,8 @@ Agent Foundry's current presets are:
 
 - V1.x maintenance: `Branch strategy: mainline-maintenance`,
   `Target branch: main`.
+- AF18 collaboration cost-control: `Branch strategy: integration-branch`,
+  `Target branch: codex/af18-collaboration-cost-policy-integration`.
 - V2 integration: `Branch strategy: integration-branch`,
   `Target branch: codex/v2-local-first-orchestration`.
 - V2 merge-back to `main` remains a later readiness and Human-gated decision.
@@ -350,6 +388,35 @@ integration、Epic/stage closure、隐私/安全/破坏性动作仍需要相应�
 
 **中文要点：** 不要为了形式感拆 agent。只有当独立判断、测试证据、批量 checkpoint 或
 human gate 的价值超过协调成本时，才使用更重的协作模式。
+
+## Bounded Collaboration Project Onboarding
+
+For a project that explicitly asks to set up bounded collaboration, first run
+the metadata-only onboarding preflight in
+[`workflows/onboard-bounded-collaboration.md`](../workflows/onboard-bounded-collaboration.md).
+It reuses one unambiguous durable Coordinator/Architect pair, or plans only the
+missing durable roles. Implementer, Reviewer, Tester and Harvester remain
+per-Work transient roles.
+
+The plan explicitly handles an eligible current thread: it can be renamed into
+a new RoleHub, while an existing RoleHub is reused only when its opaque adapter
+reference is present. A ready summary uses applied receipts for final RoleHub,
+Coordinator and Architect navigation plus bound scheduler and transient-role
+template references.
+
+The Core plan requires explicit RoleHub/current-thread/scheduler/transient-template
+projections and discover/create/rename/link/navigate capability reports. It is
+deliberately not a native-thread API. It has no transcript
+scan, history migration, thread deletion/archive, Vault write, runtime change,
+or automatic apply. The adapter owns native thread creation, navigation and
+receipts. Ambiguity, duplicate roles, legacy adoption, unavailable capability,
+privacy exposure, forged/unknown receipts and partial failures are held rather
+than guessed.
+
+**中文要点：** 新项目可以请求一次“准备有界协作”。系统先只读检查：唯一匹配就复用
+Coordinator/Architect，缺失才计划创建；Implementer、Reviewer、Tester、Harvester 仍在
+具体 Work 开始时临时创建。任何重名、旧 thread 认领、能力缺失或半途失败都会停住并显示
+下一步，不会偷偷读取历史、删 thread、写 Vault 或启用 runtime。
 
 ## Anti-Patterns
 

@@ -52,6 +52,129 @@ Useful smoke commands:
 The last command must fail closed because `agent-label` mutates scheduler
 ownership and is outside AF11 activation scope.
 
+## Portable Route Planning
+
+AF18 provides a read-only, portable lifecycle route-planning surface at
+`scripts/plan_collaboration_routes.py`. It consumes a JSON fixture containing
+PolicySet, WorkUnit, RoleContext, RuntimeCapabilities, an optional
+OverrideGrant, and prior EvaluationRecord evidence. It returns a bounded
+DispatchPlan with at most four candidates, a Pareto-style explanation, explicit
+confidence, reset, and hold-for-decision conditions.
+
+The conversation-facing projection resolves policy deterministically: current
+work-unit Human grant, project record, personal record, then an explicitly
+labelled unsaved `normal` default. It exposes the selected profile, Chinese
+profile label, source, validity, and fingerprint or `unsaved-normal-default`;
+invalid or drifted sources remain visible. It also projects task class, bounded
+one-work-unit corrections, material signals, a compact recommendation,
+requested-versus-observable runtime state, attention, and exactly one next
+action. The portable mode is one of `economy`, `normal`, `performance`, or
+temporary `low_limit`.
+The lifecycle section models three aligned levels: collaboration operating
+mode, execution-context lifecycle, and bounded work-unit lifecycle. It reports
+create/reuse/compact-rehydrate/callback/cooldown/archive eligibility as
+guidance only. Routine `serial_current_session` work suppresses a separate
+marker unless attention or a material correction exists.
+
+The planner recommends only these bounded routes:
+`serial_current_session`, `reuse_relevant_thread`, `fresh_bounded_thread`,
+`bounded_subagent`, `batch_checkpoint`, or `hold_for_decision`. Role
+specialization value, project continuity relevance, and independent-review
+value are explicit inputs; the planner must not infer them from role label or
+thread age alone.
+
+The named conversation action `set up collaboration policy` is distinct from
+V2 guided onboarding. It supports read-only inspection, dry-run preview, and an
+explicit setup flow: read preflight, select one of `节俭`, `正常`, or `高性能`,
+select `personal` or `project` scope, show a compact before/after diff, require
+one confirmation, write exactly one selected policy record, validate/read it
+back in the same conversation, and make it effective for the next eligible
+dispatch. The personal record path is
+`~/.agent-foundry/collaboration-routing-policy.yaml`; the project record path
+is `<repo>/.agent-foundry/collaboration-routing-policy.yaml`. Records are
+versioned, policy-data only, and fingerprinted. Invalid input, failed write,
+failed validation/readback, or fingerprint mismatch preserves the prior
+effective state and returns one recovery action.
+
+Outside a confirmed policy lifecycle apply action, the planner remains
+advisory: it reports `dispatch_performed: false`, does not create, fork,
+resume, or message a thread, does not start subagents or automation, and does
+not change runtime settings. Portable policy uses named capability/reasoning
+tiers rather than provider or model identifiers. Missing effective retained
+settings remain `unknown`; fork and heartbeat are non-enforcing; hook and
+custom-agent enforcement remain unsupported until a later Human-gated adapter
+scope.
+
+Example:
+
+```bash
+python3 scripts/plan_collaboration_routes.py --input-json route-fixture.json --json
+```
+
+Treat `hold_for_decision` as a decision boundary, not a failed dispatch. A later
+runtime adapter may map an accepted advisory plan to supported tool calls; that
+adapter is outside this workflow slice.
+
+This planner does not create telemetry, a monitoring history, dashboard, or
+report product. It must not write the user's live personal or repository policy
+record unless the conversation explicitly confirms the setup action and the
+caller selected that scope. Tests must use isolated temp roots or controlled
+fixtures for policy-record writes.
+
+### Optional Codex Adapter Pilot
+
+AF18's optional Codex adapter is a separate dry-run projection at
+`scripts/plan_codex_route_adapter.py`. It consumes a portable plan and a
+timestamped current Codex tool-schema observation supplied by the executing
+host. A caller-provided JSON observation is only reported evidence: it cannot
+make a route dry-run-ready unless the adapter can verify a runtime-owned
+capture with runtime identity, resolvable discovery evidence, and a digest of
+the observed tools. The current pilot has no such capture producer, so it
+fails closed with one recovery action rather than trusting fixture, stale,
+absent, untrusted, or self-asserted host-collected input. Codex-specific
+fields and model names stay adapter-local; they are never written into
+`collaboration-routing-policy.schema.yaml`.
+
+The adapter maps durable routes to `send_message_to_thread`, fresh routes to
+`create_thread`, and subagent routes to `spawn_agent` only when the observed
+tool exposes the required explicit envelope fields. Forks remain visibly
+unsupported for envelope enforcement. Omitted, stale, unknown, or unsupported
+configuration produces one recovery action and never silently inherits a
+retained setting. Its lifecycle evidence is bounded to one work unit and states
+that close/archive/resume was not executed in dry-run mode.
+
+For Agent Foundry role dispatches that create a new Codex task, the adapter
+projection must prefer a project-scoped task under Codex project
+`local-eb6e22ec0d00ef785d687022be1b433d` for
+`/Users/jinghuliu/Desktop/Code/Personal Projects/agent-foundry`. Existing
+healthy Agent Foundry role tasks remain preferred when resumable. A projectless
+chat or subagent fallback is degraded, bounded to one work unit, and must be
+evidenced; it is not the default policy.
+
+It proposes no real tool call: all adapter output reports
+`mutation_performed: false` and `dispatch_performed: false`. User config,
+hooks, custom agents, policy records, runtime installation, and telemetry stay
+outside this pilot.
+
+### Codex project/thread binding classification
+
+Before a host creates a successor thread, classify a metadata-only
+`project_binding_observation`. The classifier distinguishes `local_folder_project`,
+`git_repository_project`, `git_worktree_project`, `fork_inherited_context`, and
+`projectless_fresh_context`. A same-project fresh result is valid only when
+`project_id`, `project_root`, and `cwd` match exactly, `fresh_context` is true,
+and trusted host readback is present. Core never treats a caller-supplied
+`runtime_owned_proof: true` boolean as trusted and therefore never emits a
+ready result; only a future trusted host adapter may emit
+`same_project_fresh_verified`. Forks hold as
+`held_inherited_context_rejected`; projectless results hold as
+`held_projectless_fallback_rejected`; missing or mismatched identity holds as
+`held_project_binding_mismatch`. A non-Git local folder without runtime-owned
+proof holds as `held_same_project_fresh_unavailable` and explicitly requires a
+Human UI fallback. This is classification only: it makes no host call and must
+report both mutation and dispatch as false. Desktop UI success must never be
+used as evidence that the connector supports the same request.
+
 ## User-Facing Entry Points
 
 Agents should expose these as natural-language workflows rather than requiring
@@ -139,6 +262,8 @@ Agent Foundry presets:
 
 - V1.x maintenance uses `Branch strategy: mainline-maintenance` and
   `Target branch: main`.
+- AF18 collaboration cost-control uses `Branch strategy: integration-branch`
+  and `Target branch: codex/af18-collaboration-cost-policy-integration`.
 - V2 integration uses `Branch strategy: integration-branch` and
   `Target branch: codex/v2-local-first-orchestration`.
 - V2 merge-back to `main` remains a later readiness and Human-gated decision.

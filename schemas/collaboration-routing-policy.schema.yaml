@@ -1,204 +1,108 @@
-$schema: "https://json-schema.org/draft/2020-12/schema"
-$id: "https://agent-foundry.local/schemas/collaboration-routing-policy.schema.yaml"
-title: Collaboration Routing Policy
-type: object
-additionalProperties: false
-required:
-  - issue
-  - role
-  - token_budget
-  - context
-  - readback
-  - duplicate_dispatch
-  - hold_conditions
-  - model
-properties:
-  issue:
-    type: integer
-    minimum: 1
-  role:
-    type: string
-    minLength: 1
-  dispatch_id:
-    type: string
-    minLength: 1
-  durable_anchor:
-    type: string
-    minLength: 1
-  requested_route:
-    type: string
-    enum:
-      - serial_current_session
-      - fresh_bounded_thread
-      - bounded_subagent
-      - no_dispatch
-      - hold_for_decision
-  token_budget:
-    type: object
-    additionalProperties: false
-    required:
-      - first_active_turn_words
-      - total_role_thread_tokens
-    properties:
-      first_active_turn_words:
-        type: integer
-        minimum: 1
-        maximum: 1500
-      total_role_thread_tokens:
-        type: integer
-        minimum: 1
-        maximum: 25000
-  context:
-    type: object
-    additionalProperties: false
-    required:
-      - source_timestamp
-      - threshold_band
-    properties:
-      source_timestamp:
-        type: string
-        format: date-time
-      threshold_band:
-        type: string
-        enum:
-          - generic_default
-          - coordinator_routing_status_readback
-          - architect_design_gate
-          - implementer_small_scoped_implementation
-          - reviewer_exact_pr_review
-          - tester_focused_validation
-      max_age_hours:
-        type: integer
-        minimum: 1
-      estimated_context_tokens:
-        type: integer
-        minimum: 0
-      max_context_tokens:
-        type: integer
-        minimum: 1
-        maximum: 12000
-      threshold_exception:
-        type: object
-        additionalProperties: false
-        required:
-          - issue
-          - role
-          - temporary_cap
-          - reason
-          - expiry
-        properties:
-          issue:
-            type: integer
-            minimum: 1
-          role:
-            type: string
-            minLength: 1
-          temporary_cap:
-            type: integer
-            minimum: 1
-            maximum: 12000
-          reason:
-            type: string
-            minLength: 1
-          expiry:
-            type: string
-            format: date-time
-  readback:
-    type: object
-    additionalProperties: false
-    required:
-      - mode
-      - compact_readback_available
-    properties:
-      mode:
-        const: cursor_only_compact
-      compact_readback_available:
-        const: true
-  duplicate_dispatch:
-    type: object
-    additionalProperties: false
-    required:
-      - duplicate_owner_detected
-      - same_issue_role_boundary_seen
-    properties:
-      duplicate_owner_detected:
-        const: false
-      same_issue_role_boundary_seen:
-        const: false
-  hold_conditions:
-    type: array
-    uniqueItems: true
-    contains:
-      const: missing_required_fields
-    allOf:
-      - contains:
-          const: missing_budget
-      - contains:
-          const: budget_breach
-      - contains:
-          const: stale_context
-      - contains:
-          const: oversized_context
-      - contains:
-          const: duplicate_owner
-      - contains:
-          const: compact_readback_unavailable
-      - contains:
-          const: escalation_need
-    items:
-      type: string
-      enum:
-        - missing_budget
-        - budget_breach
-        - stale_context
-        - oversized_context
-        - duplicate_owner
-        - compact_readback_unavailable
-        - escalation_need
-        - missing_required_fields
-  model:
-    type: object
-    additionalProperties: false
-    required:
-      - name
-      - reasoning
-    properties:
-      name:
-        type: string
-      reasoning:
-        type: string
-        enum:
-          - minimal
-          - low
-          - medium
-          - high
-      human_escalation_approval:
-        type: object
-        additionalProperties: false
-        required:
-          - issue
-          - role
-          - model
-          - reasoning
-          - purpose
-          - budget
-        properties:
-          issue:
-            type: integer
-          role:
-            type: string
-          model:
-            type: string
-          reasoning:
-            type: string
-          purpose:
-            type: string
-            minLength: 1
-          budget:
-            type: string
-            minLength: 1
-anyOf:
-  - required:
-      - dispatch_id
-  - required:
-      - durable_anchor
+# Portable Collaboration Routing Policy schema.
+# This AF18 schema is advisory and runtime-neutral. It never stores provider
+# or model identifiers and does not authorize dispatch or runtime mutation.
+
+schema_version: 1
+objects:
+  PolicySet:
+    required: [schema_version, policy_id, quality_floor, automatic_budget, allowed_tiers, enforcement]
+    rules:
+      - "portable policy uses named capability and reasoning tiers, never provider or model slugs"
+      - "lower-precedence policy cannot relax Human gates, authority boundaries, or budget limits"
+      - "effective policy precedence is current-work-unit Human grant, then project record, then personal record, then unsaved normal default"
+      - "invalid, missing, or drifted records remain visible and are never represented as valid persisted policy"
+      - "effective policy mode is economy, normal, performance, or temporary low_limit"
+  WorkUnit:
+    required: [work_unit_id, purpose, risk, ambiguity, verification_oracle, stop_conditions]
+    rules:
+      - "one bounded issue, PR, review target, experiment, or batch only"
+      - "Human-owned actions stop advisory routing until an explicit decision exists"
+      - "task_class is routine, standard, complex, or human_owned; any correction is bounded to one work unit and resets afterward"
+      - "bounded work-unit lifecycle actions are advisory only and never create, resume, archive, or dispatch context"
+  RoleContext:
+    required: [required_role, specialization_available, continuity_value, context_relevance, independence_requirement]
+    rules:
+      - "role specialization, continuity, and independence are separate inputs"
+      - "specialization value, project continuity relevance, and independent-review value are not inferred from role label or thread age alone"
+  CreationBoundaryEvidence:
+    required: [terminal_receipt_ref, architect_acceptance_ref, source, digest, opaque_identity_ref, readback_identity_ref, verification_source, create_count, primitive, project_id, cwd, binding_project_id, binding_cwd]
+    rules:
+      - "same_project_creation_boundary_verified requires one create_thread primitive, a new opaque identity, readback_identity_ref equal to opaque_identity_ref, and matching project_id/cwd binding"
+      - "predecessor, fork source, projectless, child worktree, retry, dispatch, transcript, history, and turn reads must all be explicitly false"
+      - "verification_source is durable_scheduler_reference and refs/digest are durable evidence inputs; the projection never verifies them or dispatches"
+      - "freshness_forensic_evidence remains unavailable unless a future host receipt supplies parentThreadId, forkSource, and contextInheritance evidence"
+  RuntimeCapabilities:
+    required: [observed_at, mechanisms]
+    rules:
+      - "runtime discovery is timestamped evidence, not permanent truth"
+      - "effective retained settings are unknown when unobserved"
+      - "fork and heartbeat are non-enforcing"
+      - "hook and custom-agent enforcement are unsupported in this slice"
+  RouteCandidate:
+    required: [candidate_id, topology, context_mode, eligible, expected_cost_band, expected_quality_band, confidence]
+    rules:
+      - "at most four candidates, including serial whenever it is eligible"
+      - "eligibility failures stay visible instead of being silently repaired"
+  DispatchPlan:
+    required: [route_decision, selected_candidate, explanation, runtime_mapping, reset, stop_conditions]
+    rules:
+      - "advisory only; mutation_performed and dispatch_performed must be false"
+      - "unsupported runtime paths report enforcement_not_available"
+      - "route_decision is one bounded route, never an instruction to execute dispatch"
+  ConversationProjection:
+    required: [effective_policy, work_unit, recommendation, lifecycle, runtime_projection, attention, evidence, next_action]
+    rules:
+      - "primary fields are compact conversation guidance; JSON stays secondary technical evidence"
+      - "routine serial_current_session paths emit no separate marker unless attention or a material correction exists"
+      - "runtime projection distinguishes requested abstract tier from observable, unknown, or unsupported runtime configuration"
+      - "explicit set up collaboration policy intent is distinct from guided-onboarding and follows preflight, preview, one confirmation, one selected policy-record write, and same-conversation readback"
+      - "lifecycle models collaboration operating mode, execution-context lifecycle, and bounded work-unit lifecycle"
+      - "create, reuse, compact-rehydrate, callback, cooldown, and archive eligibility are reported only as next-action guidance"
+      - "fixed setup profiles are 节俭, 正常, and 高性能"
+  PolicyRecordLifecycle:
+    required: [action, scope, path, diff, confirmation_required, write_performed, readback]
+    rules:
+      - "personal path is ~/.agent-foundry/collaboration-routing-policy.yaml"
+      - "project path is <repo>/.agent-foundry/collaboration-routing-policy.yaml"
+      - "policy record is versioned and contains policy data only"
+      - "invalid input, failed write, failed validation/readback, or fingerprint mismatch preserves the prior effective state and shows one recovery action"
+      - "read-only inspection and dry-run preview perform no writes"
+      - "new Agent Foundry role task creation prefers project-scoped Codex tasks under local-eb6e22ec0d00ef785d687022be1b433d when creating a new role task"
+  ProjectBindingObservation:
+    required: [project_kind, context_mode, identity, target, fresh_context, runtime_owned_proof]
+    rules:
+      - "project_kind distinguishes local_folder_project, git_repository_project, git_worktree_project, fork_inherited_context, and projectless_fresh_context"
+      - "same-project fresh requires exact project_id, project_root, cwd, fresh_context=true, and runtime-owned proof"
+      - "fork and projectless contexts are held and are never reported as same-project fresh"
+      - "caller-supplied runtime_owned_proof is never trusted by Core; without trusted host readback every same-project fresh classification remains held_runtime_proof_unverified or held_same_project_fresh_unavailable"
+  OverrideGrant:
+    required: [active, scope, expires_after_work_unit, reset_required]
+    rules:
+      - "an override is scoped to one work unit and never follows a target thread implicitly"
+  EvaluationRecord:
+    required: [work_unit_id, outcome, estimate_band, confidence, quality_guardrails]
+    rules:
+      - "ordinal estimates are not billing-grade token or cost claims"
+
+allowed_values:
+  capability_tier: [economy, balanced, frontier]
+  reasoning_tier: [low, medium, high]
+  topology: [serial, durable_thread, fresh_thread, fork, subagent, team, batch, portable]
+  context_mode: [fresh, compact, filtered_history, full_continuity, artifact_reference]
+  independence_requirement: [none, separate_context, separate_evidence]
+  confidence: [high, medium, low, unknown]
+  runtime_status: [supported, unsupported, unknown, degraded, not_available]
+  effective_configuration: [observed, unknown, not_available]
+  route_decision: [serial_current_session, reuse_relevant_thread, fresh_bounded_thread, bounded_subagent, batch_checkpoint, hold_for_decision]
+  policy_profile: [economy, normal, performance, low_limit]
+  policy_validity: [valid, invalid, drifted, missing, unsaved_default]
+  task_class: [routine, standard, complex, human_owned]
+  policy_lifecycle_action: [inspect, preview, apply]
+  policy_lifecycle_scope: [personal, project]
+
+forbidden:
+  - "provider, provider_slug, model, or model_slug fields in PolicySet"
+  - "dispatch, thread, subagent, automation, runtime, config, hook, custom-agent, Vault, generated, GitHub Project, or telemetry mutation"
+  - "claims that omitted runtime envelope fields reveal effective retained settings"
+  - "live personal or live repository policy writes outside an explicit confirmed setup action or isolated test root"
+  - "telemetry persistence, monitoring, dashboards, or report products"

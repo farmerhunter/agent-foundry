@@ -1,0 +1,25 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://agent-foundry.dev/schemas/codex-host-rolehub-adapter.schema.yaml
+title: Codex host RoleHub adapter mapping
+type: object
+required: [contract_version, project_id, project_root, logical_rolehub_id, operations]
+additionalProperties: false
+properties:
+  contract_version: {type: string, const: AF18-codex-host-rolehub-adapter-v1}
+  project_id: {type: string, minLength: 1}
+  project_root: {type: string, minLength: 1}
+  logical_rolehub_id: {type: string, minLength: 1}
+  operations:
+    type: array
+    items:
+      type: object
+      required: [operation_id, action, idempotency_key]
+      additionalProperties: false
+      properties:
+        operation_id: {type: string, minLength: 1}
+        action: {type: string, enum: [create, reuse, name, link, navigate]}
+        idempotency_key: {type: string, minLength: 1}
+        role: {type: string, minLength: 1}
+        title: {type: string, minLength: 1}
+        target_ref: {type: string, minLength: 1}
+        preimage: {type: [object, 'null']}

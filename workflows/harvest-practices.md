@@ -77,6 +77,8 @@ Summarize:
 
 Keep this summary local to the harvest report unless the user asks to store it.
 
+When the Human explicitly names a Codex/runtime thread, that thread is a valid bounded evidence window for this workflow. Read the currently accessible history for that thread, using internal pagination or chunking as needed; do not expose page size, opaque cursors, or Work-index mechanics as the Human-facing interface. If the accessible history is incomplete, report `coverage: partial` and do not claim a complete reconstruction. Do not expand to other threads unless the Human names them.
+
 If using memories, rollout summaries, or activity logs, treat them as evidence only. Apply META-006: durable rules belong in canonical practice entries, not memory alone.
 
 If the agent has native self-growth capabilities, apply META-007: do not suppress native learning. Treat native memories or generated skills as candidate inputs when they should become durable or cross-agent.
@@ -102,6 +104,8 @@ Use these artifact classes:
 Only items routed to `practice candidate` continue through practice drafting. Items routed to `workflow update` may update this or another workflow after review. Items routed to `skill/asset candidate` should use `workflows/discover-assets.md` or the asset workflow. Items routed to evidence, design, research, or project-local decision classes need an implemented canonical destination before writing.
 
 When the user corrects the agent's method, first treat the correction as process evidence. Analyze whether it reveals an agent failure mode, workflow weakness, prompting gap, review checklist gap, handoff risk, harvest risk, or generalizable practice evidence before treating it as content inside the current domain.
+
+The Human-facing entry point should remain simple: “从这个 thread 做一次 harvest practice”。Return a concise review list with paraphrased lessons and evidence windows; raw transcript, prompts, tool output, secrets, identities, and large message bodies remain transient processing data and must not enter canonical output.
 
 ## 4. Generalization Gate
 
@@ -325,4 +329,8 @@ Files changed:
 
 Needs human review:
 - <entry id/title or none>
+
+## Bounded thread intake contract
+
+Thread harvest requires explicit Human intent, an opaque named `thread_ref`, and an adapter-provided history capability. Coverage is reported as `complete`, `partial`, `unavailable`, or `privacy_held`. Page size/cursors are internal implementation details and never Human UX; no cross-thread expansion is allowed. Raw transcript, prompts, tool output, identities, and secrets remain transient and are never persisted. Outputs are limited to `candidate_hold`, `deferred`, or `rejected`; proposed/active promotion is not performed by intake.
 ```

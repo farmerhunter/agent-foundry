@@ -1,8 +1,8 @@
 # Agent Foundry Roadmap
 
 Status: planning document
-Updated: 2026-07-08
-Scope: Agent Foundry productization, runtime adapter framework, Trae support, capability-system hardening, repository hygiene, role-orchestration optimization, V1.0 public release baseline, V2 local-first orchestration planning, and memory-system readiness.
+Updated: 2026-07-29
+Scope: Agent Foundry productization, runtime adapter framework, Trae support, capability-system hardening, repository hygiene, role-orchestration optimization, collaboration cost-control, V1.0 public release baseline, V2 local-first orchestration planning, and memory-system readiness.
 
 ## Purpose
 
@@ -85,11 +85,16 @@ Agent Foundry should use maturity stages for planning and release versions for d
 | AF-13 | External Skills Import And Reference Workflow | Users can evaluate external skills, prompt packs, articles, repositories, and local skill folders through a reviewed import/reference workflow before anything becomes active Agent Foundry behavior. | External sources have clear outcomes, reference-only semantics, review packets, user-facing docs, fixture validation, and readiness evidence without treating external material as authority. |
 | AF-14 | Tester Role And Test Planning Workflow | Testing becomes a first-class collaboration workflow so complex user-visible or stateful work has a clear test plan, evidence taxonomy, and automation/human-trial boundary before acceptance. | Tester role boundaries, testing contracts, scheduler support, docs, helper validation, and a bounded pilot prove that testing evidence improves confidence without replacing Architect, Implementer, Reviewer, or Human gates. |
 | AF-15 | Collaboration Readiness And Action Workflow | New and existing repos can audit multi-agent collaboration readiness and receive user-facing safe next actions before any repair/apply behavior exists. | Read-only readiness reports, action-plan output, degraded GitHub/Project visibility, dry-run repair planning, docs, dogfood evidence, and capability-pack enablement are accepted without making GitHub Project the source of truth. |
+| AF-16 | Branch-Aware Collaboration And Safety | Multi-agent issue and PR work becomes branch-line aware so V1.x maintenance, V2 integration, AF18 integration, stacked PRs, and custom branch policies do not silently mix. | Execution Contracts, helper reports, docs, and tests expose branch strategy, target branch, PR base, current checkout, and safe next actions without auto-retargeting, checkout, merge, reset, or repair. |
+| AF-17 | Semantic Practice Loading And Adapter Reachability | Generated collaboration and architecture Skills load the right canonical practice references conditionally instead of forcing every thread to carry every practice. | Semantic practice routes, generated references, reachability checks, and adapter packaging preserve canonical practice authority while reducing irrelevant runtime context. |
+| AF-18 | Collaboration Cost-Control And Control Plane | Multi-agent collaboration becomes cost-aware, bounded, portable, and human-controllable before it becomes an assumed runtime substrate. | AF18 has one integration branch, one control-plane design path, explicit policy layers, bounded runtime-owned observations, Human-facing summaries, dogfood calibration, and separate activation/policy-freeze gates. |
 | V2.0 | Local-First Orchestration And Foundry Board | Agent Foundry becomes a local-first orchestration system with GitHub Project as a remote sync surface, not the source of truth. The work must cover new projects and migration/backfill for existing issue-driven projects. | Users can understand, control, resume, and audit multi-agent work from local durable state, see it in a Foundry Board, sync safely with GitHub Project, and migrate existing GitHub issue/project workflows without losing provenance or review gates. |
 
-Current planning stage: V2.0 planning and decomposition.
+Current planning stage: AF18 collaboration cost-control and V2.0 planning remain
+separate. AF18 is the active collaboration-runtime control-plane lane; V2.0 is
+the local-first orchestration product lane.
 
-AF-0 explains the existing mixed history. AF-1 starts the stricter planning and multi-agent coordination era. AF-2 designs the productization boundary. AF-3 executes the local Core/Vault split. AF-4 proves the split system works for the current real user across existing deployments and establishes the migration discipline needed for later major upgrades. AF-5 makes onboarding humane and reliable for new users. AF-6 closes the current Foundry product lifecycle so install, pack deployment, refresh, status, and rollback are usable beyond a one-off maintainer path. AF-7 upgrades runtime adapters and adds Trae CN support around a verified global Skill path. AF-8 hardens the capability system under realistic multi-user, multi-machine, multi-runtime, long-running-agent, and drift scenarios. AF-9 adds advanced capability-pack discovery, lifecycle, privacy-safe transfer planning, and user-facing Skill workflow packaging. AF-10 optimizes the Coordinator-driven role workflow using AF9 evidence, then pauses for an AF11 pilot migration, then resumes to analyze real telemetry and harden the workflow model. AF-11 is reserved for the Tiny IPA-incubated GitHub collaboration workflow helper migration pilot. AF-12 closes the V1 user-facing UX/docs/starter-pack surface. AF-13 adds the independent external-skills import/reference workflow. AF-14 adds a Tester role and test-planning workflow as V1.x maintenance. AF-15 adds collaboration readiness audit and action workflow as V1.x maintenance. V2.0 moves the orchestration source of truth local-first, with GitHub Project as a sync target. Memory-system planning now uses the separate MS milestone axis.
+AF-0 explains the existing mixed history. AF-1 starts the stricter planning and multi-agent coordination era. AF-2 designs the productization boundary. AF-3 executes the local Core/Vault split. AF-4 proves the split system works for the current real user across existing deployments and establishes the migration discipline needed for later major upgrades. AF-5 makes onboarding humane and reliable for new users. AF-6 closes the current Foundry product lifecycle so install, pack deployment, refresh, status, and rollback are usable beyond a one-off maintainer path. AF-7 upgrades runtime adapters and adds Trae CN support around a verified global Skill path. AF-8 hardens the capability system under realistic multi-user, multi-machine, multi-runtime, long-running-agent, and drift scenarios. AF-9 adds advanced capability-pack discovery, lifecycle, privacy-safe transfer planning, and user-facing Skill workflow packaging. AF-10 optimizes the Coordinator-driven role workflow using AF9 evidence, then pauses for an AF11 pilot migration, then resumes to analyze real telemetry and harden the workflow model. AF-11 is reserved for the Tiny IPA-incubated GitHub collaboration workflow helper migration pilot. AF-12 closes the V1 user-facing UX/docs/starter-pack surface. AF-13 adds the independent external-skills import/reference workflow. AF-14 adds a Tester role and test-planning workflow as V1.x maintenance. AF-15 adds collaboration readiness audit and action workflow as V1.x maintenance. AF-16 adds branch-aware collaboration safety. AF-17 adds semantic practice loading and generated Skill reachability. AF-18 adds collaboration cost-control and control-plane governance. V2.0 moves the orchestration source of truth local-first, with GitHub Project as a sync target. Memory-system planning now uses the separate MS milestone axis.
 
 Memory-system milestones are tracked separately as MS-01 and MS-02 so repeated AF roadmap changes do not keep renumbering memory planning. MS milestones do not authorize memory-system implementation unless an explicit human decision does so.
 
@@ -117,6 +122,9 @@ Suggested mapping:
 | V1.0 readiness | `v1.0.0`: public Core release after AF-1 through AF-13 and the release checklist are accepted. |
 | AF-14 | `v1.1.0` candidate: Tester role, testing contract, and test-evidence workflow as V1.x maintenance. |
 | AF-15 | `v1.1.0` candidate: collaboration readiness audit, action-plan output, dry-run repair planning, and multi-agent optional pack enablement as V1.x maintenance. |
+| AF-16 | `v1.1.x` maintenance candidate: branch-aware collaboration contracts and helper safety. |
+| AF-17 | `v1.1.x` maintenance candidate: semantic practice loading and generated Skill reachability. |
+| AF-18 | `v1.1.x` / pre-V2 collaboration-runtime control plane candidate; final activation and policy freeze remain separate Human-gated decisions. |
 | V2.0 | `v2.0.0`: local-first orchestration, ledger storage/replay, ledger-backed Foundry Board, existing-project backfill, GitHub Project dry-run sync planning, and readiness evidence after V2 capability gates are accepted. |
 
 `v1.0` is the first public release target. It includes the accepted AF-1 through AF-13 baseline plus release notes, verification, tag, and GitHub Release work needed for external users to rely on Agent Foundry without understanding this repository's personal history.
@@ -144,6 +152,13 @@ This matters because Agent Foundry Core can keep receiving harvest-driven, user-
 - V2 child branches target `codex/v2-local-first-orchestration`, not `main`, unless the change is explicitly a V1.x-compatible Core maintenance improvement.
 - V2 periodically forward-merges from `main` so V1.x maintenance and harvest improvements are not lost.
 - V2 merges back to `main` only after V2 readiness is accepted and a final human-gated release/integration decision is made.
+- AF18 collaboration cost-control work uses
+  `codex/af18-collaboration-cost-policy-integration` as its only integration
+  branch. AF18 child PRs target that branch unless a specific Human Decision
+  Contract authorizes direct-to-`main`.
+- AF18 merge-back to `main`, final activation, runtime/config/hook mutation,
+  generated adapter publish, external execution, and policy freeze remain
+  separate Human-gated decisions.
 
 Default harvest routing:
 
@@ -151,6 +166,7 @@ Default harvest routing:
 | --- | --- |
 | Backward-compatible Core practice/workflow/template/docs/test improvement | `main`, then forward-merge into V2 |
 | V2-only orchestration, ledger, board, migration, or sync behavior | `codex/v2-local-first-orchestration` |
+| AF18 collaboration cost-control, routing policy, lifecycle control-plane, runtime-owned observation bridge, or dogfood calibration | `codex/af18-collaboration-cost-policy-integration` |
 | Private or canonical User Vault practice/asset update | selected User Vault, not Core |
 | Breaking schema/runtime/source-of-truth change | V2 branch or explicit major-version gate, not default `main` maintenance |
 
@@ -163,7 +179,47 @@ Agent Foundry `v1.0.0` is published. The active planning area is now V2.0 local-
 | Agent Foundry `v1.0.0` release | #267 | First downloadable public Core release for external users. | Completed; GitHub Release and tag published |
 | AF-14 Tester Role And Test Planning Workflow | #302 Epic; #303 through #308; PR #311 | Users need test planning and evidence that answer what was tested, why it is enough, which risks remain, and when human trial is still needed. | Completed; integrated into `main` as V1.x maintenance |
 | AF-15 Collaboration Readiness And Action Workflow | #314 Epic; #315 through #321 plus #328 through #331 | Users need a clear audit and action plan for new/existing repo collaboration readiness before any live repair/apply behavior. | Completed; integrated into `main` as V1.x maintenance |
+| AF-16 Through AF-18 Collaboration Control Path | [roadmap/milestones-af16-af18.md](roadmap/milestones-af16-af18.md) | Users need branch-aware, context-aware, and semantically loaded collaboration before long-running multi-agent work is safe to scale. | AF16/AF17 completed as maintenance; AF18 active bounded lane; #418 is the sole Epic authority; #450/#451/#452/#454 accepted; post-MVP issues #457-#462 now track calibration through limited rollout before #426/#427 |
 | V2.0 Local-First Orchestration And Foundry Board | #292 Epic; #293 through #299; #359 through #362; #266 telemetry window | Users need a local source of truth for multi-agent orchestration that can still sync to GitHub Project, plus migration from the current GitHub-first workflow. | Design gates partially accepted; implementation gates held; #299 readiness held |
+
+AF18's single high-level goal is to make Agent Foundry's multi-agent
+collaboration cost-aware, bounded, portable, and human-controllable before it
+becomes an assumed runtime substrate. It turns role-thread reuse, dispatch,
+context growth, resource observations, successor handoff, duplicate prevention,
+and Human attention into explicit control-plane concepts instead of relying on
+long chat history or ad hoc Coordinator narration.
+
+AF18's high-level design is `Codex-first, portable-core`: GitHub issues,
+comments, PRs, labels, and exact SHAs are the current durable authority binding;
+Codex is the only MVP runtime/dogfood adapter; Core semantics stay portable.
+The portable Core owns `Work`, `ExecutionRun`, `DispatchClaim`,
+`SuccessorPacket`, `TransitionReceipt`, resource-observation provenance,
+budget inheritance, semantic execution modes, and policy readout/explain.
+Native Codex task/thread/subagent ids are adapter metadata, not Core domain
+objects.
+
+#418 remains the sole AF18 Epic and human-facing roadmap authority. #449 is the
+MVP decision record, not a replacement roadmap. #454 is the accepted post-MVP
+operational readiness review. Its follow-up path is tracked by #457 calibration
+evidence, #458 policy-freeze HDC, #459 RoleConversation/adaptor successor design,
+#460 recovery and rollback readiness, #461 LearningSignal/HarvestCandidateIndex
+contract, and #462 limited real-mode rollout before #426 canonical
+delivery/activation and #427 final readiness can be released.
+
+AF18 documentation is intentionally centralized as follows:
+
+- `docs/roadmap.md` records the single high-level goal, active branch line, and
+  roadmap relationship to V2.
+- `docs/roadmap/milestones-af16-af18.md` records the AF16/AF17/AF18
+  collaboration-control path and the current AF18 issue sequence.
+- `workflows/coordinate-agent-work.md` records the AF18 control-plane design,
+  policy layers, telemetry interpretation, and Coordinator lifecycle model.
+- `workflows/github-collaboration-helper.md` and
+  `docs/multi-agent-collaboration.md` record branch strategy and collaboration
+  contract presets.
+- `schemas/af18-control-plane.schema.yaml` plus
+  `scripts/plan_af18_mvp1_control.py` are implementation contracts, not the
+  primary human design narrative.
 
 V2.0 does not authorize memory-system work, automatic token capture, live Vault/private/runtime/generated mutation, generated adapter publish, or broad implementation outside reviewed child issues. It must preserve the V1 Core/User Vault/Generated/Runtime/Local Private boundaries.
 
@@ -192,7 +248,7 @@ Minimal fields:
 | Field | Values | Purpose |
 | --- | --- | --- |
 | Status | Inbox, Ready, In Progress, Review, Done, Blocked | Human-visible work state. |
-| Stage | AF-1 through AF-15, V1.0, V2.0, MS-01, MS-02 | Maturity, release-readiness, product-version, or memory-system planning stage the item serves. |
+| Stage | AF-1 through AF-18, V1.0, V1.1, V2.0, MS-01, MS-02 | Maturity, release-readiness, product-version, or memory-system planning stage the item serves. V2.1 remains label-only until #401 accepts Project-field expansion. |
 | Epic | Free text or single-select | Groups issues by roadmap epic. |
 | Owner Role | Architect, Implementer, Reviewer, Harvester | Clarifies expected agent/human role. |
 | Depends On | Issue or PR references | Prevents ready queues from bypassing dependencies. |
@@ -210,8 +266,8 @@ Issue types:
 
 Recommended labels:
 
-- `stage:AF-1` through `stage:AF-15`
-- `stage:v1.0`, `stage:v2.0`
+- `stage:AF-1` through `stage:AF-18`
+- `stage:v1.0`, `stage:v1.1`, `stage:v2.0`, `stage:v2.1`
 - `stage:MS-01`, `stage:MS-02`
 - `type:epic`, `type:task`, `type:decision`, `type:review`, `type:evidence`
 - `area:core`, `area:vault`, `area:generated`, `area:runtime`, `area:privacy`, `area:memory-readiness`, `area:adapters`
@@ -237,6 +293,7 @@ Detailed milestone plans are split out of this overview so the roadmap stays rea
 | AF-0 through AF-6 | [roadmap/milestones-af0-af6.md](roadmap/milestones-af0-af6.md) | Planning context, repository hygiene, productization, Core/Vault split, current-user deployment migration, onboarding, and existing Foundry lifecycle completion. |
 | AF-7 through AF-12 | [roadmap/milestones-af7-af12.md](roadmap/milestones-af7-af12.md) | Runtime adapter framework, capability hardening, advanced capability-pack discovery, Coordinator workflow optimization, GitHub collaboration helper migration, and end-to-end UX/docs/starter-pack completion. |
 | AF-13 through AF-15 | [roadmap/milestones-af13-af15.md](roadmap/milestones-af13-af15.md) | External skills import/reference workflow support, Tester role and test planning, and collaboration readiness/action workflow support. |
+| AF-16 through AF-18 | [roadmap/milestones-af16-af18.md](roadmap/milestones-af16-af18.md) | Branch-aware collaboration, semantic practice loading, and AF18 collaboration cost-control/control-plane path. |
 | V1.0 release | GitHub issue #267 | Public release definition, release notes, verification, tag, and GitHub Release gate after AF-13 acceptance. |
 | V2.0 | [roadmap/milestones-v2.md](roadmap/milestones-v2.md) | Local-first orchestration, telemetry evidence, Local Collaboration Ledger, Foundry Board, existing project migration, GitHub Project remote sync, and V2 readiness. |
 | MS-01 through MS-02 | [roadmap/memory-system-milestones.md](roadmap/memory-system-milestones.md) | Memory-system readiness design and memory implementation-home decision, tracked outside the AF stage sequence. |

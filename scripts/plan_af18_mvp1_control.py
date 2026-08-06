@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -16,6 +17,16 @@ import plan_collaboration_routes as cost_policy
 POLICY_SOURCE = "scripts/plan_collaboration_routes.py"
 POLICY_VERSION = "af18-cost-policy-440-442"
 CONTROL_VERSION = "af18-mvp1-control-plane-v1"
+WORK_TERMINAL_HANDOFF_VERSION = "WorkTerminalLearningSignalHandoff-v1"
+ROLE_LIFECYCLE_VERSION = "af18-role-lifecycle-v1"
+NORMAL_WORK_RESOURCES = {
+    "profile": "normal",
+    "model": "gpt-5.6-terra",
+    "reasoning": "medium",
+    "root_budget_tokens": 120000,
+    "max_age_hours": 24,
+    "max_turns": 12,
+}
 ROUTE_PERMISSIONS = {
     "isolated_execution": "allow",
     "interactive_execution": "successor_required",
@@ -44,6 +55,15 @@ SUPPRESSED_EVENT_CATEGORIES = {
     "successor_retry_mechanic",
     "ordinary_receipt",
 }
+INCIDENT_RULES = {
+    "stale_no_owner": ("hold", "Coordinator", "assign an owner or request a Human decision", False),
+    "evidence_conflict": ("quarantine", "Coordinator", "review the durable evidence anchor", False),
+    "budget_breach": ("stop", "Human", "preserve the receipt and request an explicit budget decision", False),
+    "unavailable_observation": ("hold", "Coordinator", "obtain a trusted observation without inference", False),
+    "duplicate_dispatch": ("reject_allocation", "Coordinator", "retain the canonical active Work", False),
+    "successor_failure": ("hold", "current_owner", "attempt the single bounded recovery", True),
+    "escalation_failure": ("hold", "Human", "request explicit model or reasoning approval", False),
+}
 FORBIDDEN_PACKET_KEYS = {
     "prompt",
     "body",
@@ -60,13 +80,94 @@ FORBIDDEN_PACKET_KEYS = {
     "transcript",
 }
 
+HANDOFF_FORBIDDEN_KEYS = {
+    "thread_id", "native_thread_id", "transcript", "raw_transcript", "prompt",
+    "tool_output", "raw_tool_output", "model_output", "identity", "secret",
+    "native_id", "cursor",
+}
+
+
+def validate_work_terminal_handoff(handoff: Any) -> dict[str, Any]:
+    """Validate the metadata-only terminal handoff without doing any I/O."""
+    stops: list[str] = []
+    if not isinstance(handoff, dict):
+        return {"valid": False, "stop_conditions": ["missing_work_terminal_handoff"]}
+    forbidden = find_forbidden(handoff)
+    forbidden.extend(f"$.{key}" for key in HANDOFF_FORBIDDEN_KEYS if key in handoff)
+    if forbidden:
+        stops.append("privacy_exposure")
+    required = ("handoff_version", "work_id", "run_id", "issue_url_anchor", "payload_hash", "retention", "visibility")
+    for field in required:
+        if missing(handoff.get(field)):
+            stops.append(f"missing_handoff_{field}")
+    if handoff.get("handoff_version") != WORK_TERMINAL_HANDOFF_VERSION:
+        stops.append("unsupported_handoff_version")
+    if not isinstance(handoff.get("issue_url_anchor"), str) or re.fullmatch(r"https://github\.com/[^/]+/[^/]+/issues/[1-9][0-9]*", str(handoff.get("issue_url_anchor", ""))) is None:
+        stops.append("invalid_issue_url_anchor")
+    if handoff.get("visibility") != "issue_comment_metadata_only":
+        stops.append("visibility_mismatch")
+    candidate = handoff.get("candidate")
+    learning_signal = handoff.get("learning_signal", "none")
+    if candidate is not None:
+        if not isinstance(candidate, dict) or candidate.get("disposition") != "candidate_hold":
+            stops.append("candidate_must_be_candidate_hold")
+    if learning_signal != "none":
+        stops.append("learning_signal_must_be_none")
+    if candidate is not None and learning_signal != "none":
+        stops.append("multiple_learning_payloads")
+    return {"valid": not stops, "stop_conditions": sorted(set(stops)), "privacy_safe": not forbidden}
+
+
+def build_work_terminal_handoff(
+    work_id: str,
+    run_id: str,
+    issue_url_anchor: str,
+    payload_hash: str,
+    candidate: dict[str, Any] | None = None,
+    retention: str = "issue_comment_until_disposed",
+) -> dict[str, Any]:
+    handoff = {
+        "handoff_version": WORK_TERMINAL_HANDOFF_VERSION,
+        "work_id": work_id,
+        "run_id": run_id,
+        "issue_url_anchor": issue_url_anchor,
+        "payload_hash": payload_hash,
+        "retention": retention,
+        "visibility": "issue_comment_metadata_only",
+        "candidate": candidate,
+        "learning_signal": "none",
+        "disposition_receipts": [],
+    }
+    result = validate_work_terminal_handoff(handoff)
+    if not result["valid"]:
+        raise ValueError("invalid WorkTerminalLearningSignalHandoff: " + ",".join(result["stop_conditions"]))
+    return handoff
+
+
+def reconstruct_work_terminal_handoff(comments: list[dict[str, Any]], issue_url_anchor: str) -> dict[str, Any]:
+    """Rebuild the latest handoff and append-only logical dispositions from comments."""
+    records = [c.get("work_terminal_handoff") for c in comments if isinstance(c, dict) and isinstance(c.get("work_terminal_handoff"), dict)]
+    records = [r for r in records if r.get("issue_url_anchor") == issue_url_anchor]
+    if not records:
+        return {"status": "unavailable", "handoff": None, "dispositions": []}
+    latest = records[-1]
+    validation = validate_work_terminal_handoff(latest)
+    if not validation["valid"]:
+        return {"status": "held_privacy_or_invalid", "handoff": None, "dispositions": []}
+    dispositions: list[dict[str, Any]] = []
+    for record in records:
+        for receipt in record.get("disposition_receipts", []):
+            if isinstance(receipt, dict) and receipt.get("disposition") in {"retrieved_for_review", "dismissed", "superseded", "disposed"}:
+                dispositions.append(receipt)
+    return {"status": "complete", "handoff": latest, "dispositions": dispositions}
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Plan AF18 MVP-1 lifecycle control-plane readouts and preflights.")
     parser.add_argument("--input", help="Control-plane packet JSON path. Defaults to stdin when provided.")
     parser.add_argument(
         "--mode",
-        choices=("preflight", "readout", "explain", "work-summary", "attention-summary"),
+        choices=("preflight", "readout", "explain", "work-summary", "attention-summary", "role-lifecycle", "incident"),
         default="preflight",
     )
     parser.add_argument("--now", help="Current UTC timestamp for deterministic tests.")
@@ -355,6 +456,246 @@ def successor_packet(work: dict[str, Any], run: dict[str, Any], route: str, now:
     }
 
 
+def role_lifecycle_projection(packet: dict[str, Any], now: dt.datetime) -> dict[str, Any]:
+    request = packet.get("role_lifecycle")
+    stops: list[str] = []
+    if not isinstance(request, dict):
+        request = {}
+        stops.append("missing_role_lifecycle")
+    action = request.get("action")
+    conversation = request.get("conversation") if isinstance(request.get("conversation"), dict) else {}
+    for field in ("role_conversation_id", "project_id", "role", "work_id", "issue", "durable_anchor", "root_budget_tokens"):
+        if missing(conversation.get(field)):
+            stops.append(f"missing_role_conversation_{field}")
+    for field, expected in NORMAL_WORK_RESOURCES.items():
+        if conversation.get(field) != expected:
+            stops.append(f"role_conversation_{field}_does_not_match_normal_work")
+    if find_forbidden(request):
+        stops.append("privacy_exposure")
+
+    result: dict[str, Any] = {
+        "projection_type": "RoleLifecyclePlan",
+        "lifecycle_version": ROLE_LIFECYCLE_VERSION,
+        "action": action,
+        "role_conversation_id": conversation.get("role_conversation_id"),
+        "logical_identity": {
+            "project_id": conversation.get("project_id"),
+            "role": conversation.get("role"),
+        },
+        "work_id": conversation.get("work_id"),
+        "issue": conversation.get("issue"),
+        "durable_anchor": conversation.get("durable_anchor"),
+        "root_budget_tokens": conversation.get("root_budget_tokens"),
+        "operation_allowed": False,
+        "materialization_required": False,
+        "legacy_disposition": "not_legacy",
+        "predecessor_state": conversation.get("state", "current"),
+        "successor_state": "not_requested",
+        "one_recovery_remaining": False,
+        "stop_conditions": [],
+        "read_only": True,
+        "mutation_performed": False,
+        "dispatch_performed": False,
+    }
+
+    if action == "onboard_fresh":
+        onboarding_key = request.get("onboarding_key")
+        if missing(onboarding_key):
+            stops.append("missing_onboarding_key")
+        existing = request.get("existing_conversations")
+        if not isinstance(existing, list):
+            stops.append("invalid_existing_conversations")
+            existing = []
+        match = next(
+            (
+                item
+                for item in existing
+                if isinstance(item, dict)
+                and item.get("project_id") == conversation.get("project_id")
+                and item.get("role") == conversation.get("role")
+                and item.get("onboarding_key") == onboarding_key
+            ),
+            None,
+        )
+        result["materialization_required"] = match is None and not stops
+        result["idempotent_reuse"] = match is not None
+        result["effective_role_conversation_id"] = (
+            match.get("role_conversation_id") if isinstance(match, dict) else conversation.get("role_conversation_id")
+        )
+        result["operation_allowed"] = not stops
+    elif action == "adopt_legacy":
+        if conversation.get("legacy") is not True:
+            stops.append("adoption_requires_legacy_conversation")
+        if request.get("explicit_adoption") is not True:
+            result["legacy_disposition"] = "historical_reference"
+            stops.append("legacy_adoption_not_explicit")
+        elif request.get("compactness_preflight") != "passed":
+            result["legacy_disposition"] = "historical_reference"
+            stops.append("legacy_adoption_compactness_not_proven")
+        else:
+            result["legacy_disposition"] = "adoption_planned"
+            result["operation_allowed"] = not stops
+    elif action in {"request_successor", "recover_successor"}:
+        successor = request.get("successor") if isinstance(request.get("successor"), dict) else {}
+        recovery_attempts = request.get("recovery_attempts", 0)
+        if type(recovery_attempts) is not int or recovery_attempts not in {0, 1}:
+            stops.append("invalid_recovery_attempts")
+            recovery_attempts = 1
+        for field in (
+            "context_window_id",
+            "compact_capsule",
+            "issue",
+            "durable_anchor",
+            "work_id",
+            "root_budget_tokens",
+            "remaining_budget_tokens",
+            "ready",
+            "max_age_hours",
+            "max_turns",
+        ):
+            if missing(successor.get(field)):
+                stops.append(f"missing_successor_{field}")
+        capsule = successor.get("compact_capsule")
+        if not isinstance(capsule, dict) or not capsule.get("evidence_refs") or find_forbidden(capsule):
+            stops.append("invalid_or_private_successor_capsule")
+        for field in ("issue", "durable_anchor", "work_id", "root_budget_tokens"):
+            if successor.get(field) != conversation.get(field):
+                stops.append(f"successor_{field}_continuity_mismatch")
+        for field in ("max_age_hours", "max_turns"):
+            if successor.get(field) != NORMAL_WORK_RESOURCES[field]:
+                stops.append(f"successor_{field}_does_not_match_normal_work")
+        remaining = successor.get("remaining_budget_tokens")
+        if not isinstance(remaining, int) or remaining < 0 or remaining > conversation.get("root_budget_tokens", -1):
+            stops.append("successor_remaining_budget_invalid")
+        if successor.get("ready") is not True:
+            stops.append("successor_not_ready")
+        if stops:
+            result["predecessor_state"] = "current"
+            result["successor_state"] = "failed"
+            result["one_recovery_remaining"] = recovery_attempts < 1
+            result["recovery_action"] = (
+                "prepare one corrected compact successor packet" if recovery_attempts < 1 else None
+            )
+        else:
+            result["predecessor_state"] = "supersede_planned"
+            result["successor_state"] = "ready"
+            result["operation_allowed"] = True
+            result["successor_packet"] = {
+                "context_window_id": successor.get("context_window_id"),
+                "compact_capsule": capsule,
+                "issue": successor.get("issue"),
+                "durable_anchor": successor.get("durable_anchor"),
+                "work_id": successor.get("work_id"),
+                "root_budget_tokens": successor.get("root_budget_tokens"),
+                "remaining_budget_tokens": successor.get("remaining_budget_tokens"),
+                "max_age_hours": successor.get("max_age_hours"),
+                "max_turns": successor.get("max_turns"),
+            }
+    else:
+        stops.append("unknown_role_lifecycle_action")
+
+    result["stop_conditions"] = sorted(set(stops))
+    result["decision"] = "ready" if result["operation_allowed"] and not stops else "hold_required"
+    result["human_attention_required"] = bool(stops)
+    result["reason"] = (
+        "Role lifecycle dry-run is ready."
+        if not stops
+        else f"Role lifecycle held: {sorted(set(stops))[0]}."
+    )
+    return result
+
+
+def incident_projection(packet: dict[str, Any], now: dt.datetime) -> dict[str, Any]:
+    incident = packet.get("incident")
+    stops: list[str] = []
+    if not isinstance(incident, dict):
+        incident = {}
+        stops.append("missing_incident")
+    category = incident.get("category")
+    rule = INCIDENT_RULES.get(category)
+    if rule is None:
+        stops.append("unknown_incident_category")
+        rule = ("hold", "Coordinator", "provide a supported incident category", False)
+    required = ("event_time", "sequence", "work_id", "issue", "durable_anchor", "root_budget_tokens", "remaining_budget_tokens")
+    for field in required:
+        if missing(incident.get(field)):
+            stops.append(f"missing_incident_{field}")
+    try:
+        event_time = cost_policy.parse_timestamp(incident.get("event_time"), "incident.event_time")
+    except (TypeError, ValueError):
+        event_time = None
+        stops.append("invalid_incident_event_time")
+    if event_time is not None and event_time > now:
+        stops.append("incident_event_from_future")
+    if not isinstance(incident.get("sequence"), int) or incident.get("sequence", 0) < 1:
+        stops.append("invalid_incident_sequence")
+    root_budget = incident.get("root_budget_tokens")
+    remaining = incident.get("remaining_budget_tokens")
+    if not isinstance(root_budget, int) or root_budget <= 0 or not isinstance(remaining, int) or remaining < 0:
+        stops.append("invalid_incident_budget")
+    if isinstance(root_budget, int) and isinstance(remaining, int) and remaining > root_budget:
+        stops.append("incident_budget_continuity_breach")
+    if category == "unavailable_observation":
+        observation = incident.get("observation") if isinstance(incident.get("observation"), dict) else {}
+        if observation.get("provenance") != "unavailable" or "value" in observation:
+            stops.append("unavailable_observation_must_not_supply_value")
+    if category == "successor_failure" and incident.get("recovery_attempts") not in (0, 1):
+        stops.append("successor_recovery_limit_invalid")
+    if category == "escalation_failure":
+        if incident.get("requested_model") != incident.get("effective_model"):
+            stops.append("silent_model_change_forbidden")
+        if incident.get("requested_reasoning") != incident.get("effective_reasoning"):
+            stops.append("silent_reasoning_change_forbidden")
+    forbidden = find_forbidden(incident)
+    if forbidden:
+        stops.append("privacy_exposure")
+
+    action, owner, corrective_action, recovery_allowed = rule
+    if category == "successor_failure" and incident.get("recovery_attempts") == 1:
+        recovery_allowed = False
+    receipt = {
+        "receipt_type": "IncidentReceipt",
+        "category": category,
+        "state": action,
+        "event_time": incident.get("event_time"),
+        "sequence": incident.get("sequence"),
+        "work_id": incident.get("work_id"),
+        "issue": incident.get("issue"),
+        "durable_anchor": incident.get("durable_anchor"),
+        "root_budget_tokens": root_budget,
+        "remaining_budget_tokens": remaining,
+        "owner": incident.get("owner") or owner,
+        "corrective_action": corrective_action,
+        "capability": incident.get("capability"),
+        "provenance": incident.get("observation", {}).get("provenance")
+        if isinstance(incident.get("observation"), dict)
+        else None,
+    }
+    attention = {
+        "projection_type": "AttentionSummary",
+        "human_attention_required": True,
+        "category": category,
+        "reason": compact_reason(incident.get("reason"), corrective_action),
+        "owner": owner,
+        "evidence_ref": incident.get("evidence_ref"),
+        "read_only": True,
+    }
+    return {
+        "projection_type": "IncidentPlan",
+        "valid": not stops,
+        "decision": action if not stops else "hold",
+        "incident_receipt": receipt,
+        "attention_summary": attention,
+        "predecessor_state": "current" if category == "successor_failure" else "not_applicable",
+        "successor_allowed": category == "successor_failure" and recovery_allowed and not stops,
+        "recovery_attempts_remaining": 1 if category == "successor_failure" and recovery_allowed else 0,
+        "stop_conditions": sorted(set(stops)),
+        "read_only": True,
+        "mutation_performed": False,
+        "dispatch_performed": False,
+    }
+
+
 def compact_reason(raw: Any, fallback: str) -> str:
     if isinstance(raw, str) and raw.strip():
         words = raw.strip().split()
@@ -585,6 +926,10 @@ def main() -> int:
         result = work_summary_projection(packet, now)
     elif args.mode == "attention-summary":
         result = attention_summary_projection(packet, now)
+    elif args.mode == "role-lifecycle":
+        result = role_lifecycle_projection(packet, now)
+    elif args.mode == "incident":
+        result = incident_projection(packet, now)
     else:
         result = plan_preflight(packet, now)
     print(json.dumps(result, indent=2, sort_keys=True))

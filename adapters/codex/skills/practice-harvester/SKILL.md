@@ -5,6 +5,12 @@ description: Use when the user says "harvest practices", "harvest skills", "harv
 
 # Practice Harvester
 
+## Current Codex thread intake capability
+
+For a Human-named thread, use the supported wrapper capability `list_threads(query=<Human name>)` followed by `read_thread(includeOutputs=false)`. Resolve exactly one result: no match is `unavailable`, ambiguity is `privacy_held`, and cross-thread expansion is forbidden. Internal cursors are not Human UX: use `turnLimit=20`, at most 5 pages/100 summaries. Report `content_fidelity=native_turn_summary`; `complete` requires the lower bound or exhausted older cursor, otherwise `partial`. Raw transcript, prompts, tool output, identities, secrets, native IDs, and cursors are transient and never persisted.
+
+Thread intake is bounded by `thread_harvest_request_v1`: require Human intent and an opaque thread reference, report coverage, and keep raw history transient. Do not expose pagination/cursors, expand to other threads, persist transcript/tool/identity/secret data, or promote candidates.
+
 This skill maintains Agent Foundry, the user's canonical capability system.
 
 Asset ID: ASSET-META-001. Canonical constraints include META-001 through META-013, GOV-001 through GOV-006, and RUNTIME-001 through RUNTIME-005.

@@ -14,6 +14,11 @@ spec = importlib.util.spec_from_file_location("plan_af18_mvp1_control", PLANNER)
 planner = importlib.util.module_from_spec(spec)
 assert spec.loader is not None
 spec.loader.exec_module(planner)
+HELPER = ROOT / "scripts" / "github_collaboration_helper.py"
+helper_spec = importlib.util.spec_from_file_location("github_collaboration_helper", HELPER)
+helper = importlib.util.module_from_spec(helper_spec)
+assert helper_spec.loader is not None
+helper_spec.loader.exec_module(helper)
 
 NOW = dt.datetime(2026, 7, 29, 4, 0, tzinfo=dt.timezone.utc)
 
@@ -382,6 +387,172 @@ def main() -> int:
         and invalid_summary["human_attention_reason"].startswith("Invalid summary input:"),
         invalid_summary,
     )
+
+    conversation = {
+        "role_conversation_id": "role-conversation-459",
+        "project_id": "project-459",
+        "role": "Implementer",
+        "state": "current",
+        "work_id": "af18-459-460",
+        "issue": 459,
+        "durable_anchor": "https://github.com/farmerhunter/agent-foundry/issues/459",
+        "profile": "normal",
+        "model": "gpt-5.6-terra",
+        "reasoning": "medium",
+        "root_budget_tokens": 120000,
+        "max_age_hours": 24,
+        "max_turns": 12,
+    }
+    lifecycle = {
+        "role_lifecycle": {
+            "action": "onboard_fresh",
+            "onboarding_key": "project-459-implementer",
+            "conversation": conversation,
+            "existing_conversations": [],
+        }
+    }
+    fresh = planner.role_lifecycle_projection(lifecycle, NOW)
+    expect("fresh-onboarding-ready", fresh["decision"] == "ready" and fresh["materialization_required"] is True, fresh)
+    repeated = planner.role_lifecycle_projection(
+        {"role_lifecycle": {**lifecycle["role_lifecycle"], "existing_conversations": [{"project_id": "project-459", "role": "Implementer", "onboarding_key": "project-459-implementer", "role_conversation_id": "existing-role-conversation"}]}},
+        NOW,
+    )
+    expect("fresh-onboarding-idempotent", repeated["idempotent_reuse"] is True and repeated["materialization_required"] is False, repeated)
+    legacy = planner.role_lifecycle_projection(
+        {"role_lifecycle": {"action": "adopt_legacy", "conversation": {**conversation, "legacy": True}, "explicit_adoption": False}},
+        NOW,
+    )
+    expect("legacy-default-historical-reference", legacy["legacy_disposition"] == "historical_reference" and legacy["operation_allowed"] is False, legacy)
+    adopted = planner.role_lifecycle_projection(
+        {"role_lifecycle": {"action": "adopt_legacy", "conversation": {**conversation, "legacy": True}, "explicit_adoption": True, "compactness_preflight": "passed"}},
+        NOW,
+    )
+    expect("legacy-explicit-adoption", adopted["decision"] == "ready" and adopted["legacy_disposition"] == "adoption_planned", adopted)
+    successor = {
+        "context_window_id": "window-459-b",
+        "compact_capsule": {"evidence_refs": ["https://github.com/farmerhunter/agent-foundry/issues/460"]},
+        "issue": 459,
+        "durable_anchor": "https://github.com/farmerhunter/agent-foundry/issues/459",
+        "work_id": "af18-459-460",
+        "root_budget_tokens": 120000,
+        "remaining_budget_tokens": 110000,
+        "max_age_hours": 24,
+        "max_turns": 12,
+        "ready": True,
+    }
+    successor_ready = planner.role_lifecycle_projection(
+        {"role_lifecycle": {"action": "request_successor", "conversation": conversation, "successor": successor, "recovery_attempts": 0}},
+        NOW,
+    )
+    expect("successor-readiness-before-supersede", successor_ready["decision"] == "ready" and successor_ready["predecessor_state"] == "supersede_planned", successor_ready)
+    expect("successor-anchor-budget-continuity", successor_ready["successor_packet"]["root_budget_tokens"] == 120000 and successor_ready["successor_packet"]["durable_anchor"] == conversation["durable_anchor"], successor_ready)
+    failed_successor = planner.role_lifecycle_projection(
+        {"role_lifecycle": {"action": "request_successor", "conversation": conversation, "successor": {**successor, "compact_capsule": {}, "ready": False}, "recovery_attempts": 0}},
+        NOW,
+    )
+    expect("successor-failure-keeps-predecessor", failed_successor["predecessor_state"] == "current" and failed_successor["one_recovery_remaining"] is True, failed_successor)
+    exhausted_successor = planner.role_lifecycle_projection(
+        {"role_lifecycle": {"action": "recover_successor", "conversation": conversation, "successor": {**successor, "ready": False}, "recovery_attempts": 1}},
+        NOW,
+    )
+    expect("successor-only-one-recovery", exhausted_successor["one_recovery_remaining"] is False, exhausted_successor)
+    second_recovery = planner.role_lifecycle_projection(
+        {"role_lifecycle": {"action": "recover_successor", "conversation": conversation, "successor": successor, "recovery_attempts": 2}},
+        NOW,
+    )
+    expect(
+        "second-recovery-fails-closed",
+        second_recovery["decision"] == "hold_required"
+        and second_recovery["operation_allowed"] is False
+        and second_recovery["predecessor_state"] == "current"
+        and "successor_packet" not in second_recovery
+        and second_recovery["root_budget_tokens"] == 120000
+        and "invalid_recovery_attempts" in second_recovery["stop_conditions"],
+        second_recovery,
+    )
+    boolean_recovery = planner.role_lifecycle_projection(
+        {"role_lifecycle": {"action": "recover_successor", "conversation": conversation, "successor": successor, "recovery_attempts": True}},
+        NOW,
+    )
+    expect("boolean-recovery-fails-closed", "invalid_recovery_attempts" in boolean_recovery["stop_conditions"], boolean_recovery)
+
+    incident_base = {
+        "event_time": "2026-07-29T03:40:00Z",
+        "sequence": 1,
+        "work_id": "af18-459-460",
+        "issue": 459,
+        "durable_anchor": "https://github.com/farmerhunter/agent-foundry/issues/459",
+        "root_budget_tokens": 120000,
+        "remaining_budget_tokens": 110000,
+        "evidence_ref": "issue-460",
+    }
+    expected_incidents = {
+        "stale_no_owner": "hold",
+        "evidence_conflict": "quarantine",
+        "budget_breach": "stop",
+        "unavailable_observation": "hold",
+        "duplicate_dispatch": "reject_allocation",
+        "successor_failure": "hold",
+        "escalation_failure": "hold",
+    }
+    for category, decision in expected_incidents.items():
+        incident = {**incident_base, "category": category}
+        if category == "unavailable_observation":
+            incident["observation"] = {"provenance": "unavailable"}
+        if category == "successor_failure":
+            incident["recovery_attempts"] = 0
+        if category == "escalation_failure":
+            incident.update({"requested_model": "gpt-5.6-terra", "effective_model": "gpt-5.6-terra", "requested_reasoning": "medium", "effective_reasoning": "medium"})
+        projected = planner.incident_projection({"incident": incident}, NOW)
+        expect(f"incident-{category}-material", projected["valid"] is True and projected["decision"] == decision and projected["attention_summary"]["human_attention_required"] is True, projected)
+        expect(f"incident-{category}-privacy-safe-receipt", forbidden_paths(projected["incident_receipt"]) == [], projected)
+    unavailable_with_value = planner.incident_projection({"incident": {**incident_base, "category": "unavailable_observation", "observation": {"provenance": "unavailable", "value": 0}}}, NOW)
+    expect("unavailable-incident-never-zero", "unavailable_observation_must_not_supply_value" in unavailable_with_value["stop_conditions"], unavailable_with_value)
+    silent_escalation = planner.incident_projection({"incident": {**incident_base, "category": "escalation_failure", "requested_model": "gpt-5.6-terra", "effective_model": "gpt-5.5", "requested_reasoning": "medium", "effective_reasoning": "low"}}, NOW)
+    expect("incident-no-silent-model-effort-change", "silent_model_change_forbidden" in silent_escalation["stop_conditions"] and "silent_reasoning_change_forbidden" in silent_escalation["stop_conditions"], silent_escalation)
+    private_incident = planner.incident_projection({"incident": {**incident_base, "category": "evidence_conflict", "prompt": "private"}}, NOW)
+    expect("incident-privacy-holds", "privacy_exposure" in private_incident["stop_conditions"], private_incident)
+
+    handoff = planner.build_work_terminal_handoff(
+        "af18-450", "run-450-a", "https://github.com/farmerhunter/agent-foundry/issues/450", "sha256:abc",
+        {"disposition": "candidate_hold", "summary": "bounded lesson"},
+    )
+    expect("terminal-handoff-valid", planner.validate_work_terminal_handoff(handoff)["valid"], handoff)
+    none = planner.build_work_terminal_handoff("af18-450", "run-450-b", handoff["issue_url_anchor"], "sha256:none")
+    expect("terminal-handoff-none", none["candidate"] is None and none["learning_signal"] == "none", none)
+    private = {**handoff, "native_thread_id": "thread-secret"}
+    expect("terminal-handoff-privacy", "privacy_exposure" in planner.validate_work_terminal_handoff(private)["stop_conditions"], private)
+    malformed_anchor = {**handoff, "issue_url_anchor": handoff["issue_url_anchor"] + "\n"}
+    expect("terminal-handoff-anchor-strict", "invalid_issue_url_anchor" in planner.validate_work_terminal_handoff(malformed_anchor)["stop_conditions"], malformed_anchor)
+
+    class FakeComments:
+        def __init__(self, comments=None, fail_add=False):
+            self.comments = list(comments or [])
+            self.fail_add = fail_add
+        def list_comments(self, _anchor):
+            return list(self.comments)
+        def add_comment(self, _anchor, body):
+            if self.fail_add:
+                self.fail_add = False
+                raise RuntimeError("uncertain")
+            self.comments.append({"body": body})
+
+    adapter = FakeComments()
+    recorded = helper.write_work_terminal_handoff(adapter, handoff)
+    expect("terminal-write", recorded["status"] == "recorded", recorded)
+    repeated = helper.write_work_terminal_handoff(adapter, handoff)
+    expect("terminal-idempotent", repeated["status"] == "already_recorded", repeated)
+    conflict = helper.write_work_terminal_handoff(adapter, {**handoff, "payload_hash": "sha256:other"})
+    expect("terminal-conflict", conflict["status"] == "held_handoff_conflict", conflict)
+    uncertain = FakeComments(fail_add=True)
+    uncertain_result = helper.write_work_terminal_handoff(uncertain, handoff)
+    expect("terminal-uncertain-retry", uncertain_result["status"] == "recorded" and uncertain_result["attempts"] == 2, uncertain_result)
+    recovered = helper.reconstruct_work_terminal_state(adapter.list_comments(handoff["issue_url_anchor"]), handoff["issue_url_anchor"])
+    expect("terminal-restart-recovery", recovered["status"] == "complete" and recovered["handoff"]["payload_hash"] == "sha256:abc", recovered)
+    disposition = helper.append_work_terminal_disposition(adapter, handoff, "disposed", "receipt-1")
+    expect("terminal-disposition", disposition["status"] == "recorded" and disposition["state"]["dispositions"][0]["disposition"] == "disposed", disposition)
+    expect("terminal-logical-dispose", len(adapter.comments) >= 2, adapter.comments)
+    expect("terminal-no-runtime-side-effects", helper.WORK_TERMINAL_MARKER in adapter.comments[0]["body"] and "native_thread_id" not in adapter.comments[0]["body"], adapter.comments)
 
     print("af18 mvp1 control-plane tests passed")
     return 0
