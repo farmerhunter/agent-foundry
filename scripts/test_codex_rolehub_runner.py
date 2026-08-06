@@ -21,13 +21,13 @@ class FakeRPC:
             return {"threads": [{"id": k, "name": v["name"]} for k, v in self.threads.items()]}
         if method == "thread/start":
             tid = f"t{self.next_id}"; self.next_id += 1
-            self.threads[tid] = {"name": ""}
-            return {"threadId": tid}
+            self.threads[tid] = {"name": "", "cwd": params["cwd"]}
+            return {"thread": {"id": tid, "cwd": params["cwd"], "name": ""}}
         if method == "thread/read":
             tid = params["threadId"]
             if tid not in self.threads:
                 raise RuntimeError("foreign")
-            return {"id": tid, "name": self.threads[tid]["name"], "turns": [{"message": "secret"}]}
+            return {"thread": {"id": tid, "cwd": self.threads[tid]["cwd"], "name": self.threads[tid]["name"], "turns": [{"message": "secret"}]}}
         if method == "thread/name/set":
             self.threads[params["threadId"]]["name"] = params["name"]
             return {"ok": True}
@@ -89,6 +89,29 @@ class RunnerTests(unittest.TestCase):
         result = CodexRoleHubRunner(Broken(), runtime_id="rt-1").apply(plan(op()))
         self.assertEqual(result["status"], "setup_incomplete")
         self.assertEqual(result["operations"][0]["status"], "setup_incomplete")
+
+    def test_nested_start_requires_thread_metadata(self):
+        class MissingThread(FakeRPC):
+            def __call__(self, method, params):
+                if method == "thread/start":
+                    return {"thread": {"id": "t1", "name": ""}}
+                return super().__call__(method, params)
+        result = CodexRoleHubRunner(MissingThread(), runtime_id="rt-1").apply(plan(op()))
+        self.assertEqual(result["status"], "setup_incomplete")
+        self.assertEqual(result["operations"][0]["status"], "setup_incomplete")
+        self.assertNotIn("threadId", str(result))
+
+    def test_nested_read_rejects_foreign_cwd(self):
+        class ForeignRead(FakeRPC):
+            def __call__(self, method, params):
+                value = super().__call__(method, params)
+                if method == "thread/read":
+                    value["thread"]["cwd"] = "/foreign"
+                return value
+        rpc = ForeignRead(); runner = CodexRoleHubRunner(rpc, runtime_id="rt-1")
+        result = runner.apply(plan(op()))
+        self.assertEqual(result["status"], "partial_hold")
+        self.assertNotIn("/foreign", str(result))
 
     def test_new_thread_failure_is_setup_incomplete_with_receipt(self):
         class Broken(FakeRPC):

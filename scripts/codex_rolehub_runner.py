@@ -50,6 +50,7 @@ class CodexRoleHubRunner:
         self.rpc = rpc
         self.runtime_id = runtime_id
         self.native_ids: dict[str, str] = {}
+        self.native_cwds: dict[str, str] = {}
         self.role_native: dict[str, str] = {}
         self.receipts: dict[str, dict[str, Any]] = {}
         self.rollback_records: dict[str, dict[str, Any]] = {}
@@ -64,16 +65,33 @@ class CodexRoleHubRunner:
     def _readback(self, native_id: str) -> dict[str, Any]:
         # includeTurns is explicitly false; the runner never reads transcript history.
         value = self._call("thread/read", {"threadId": native_id, "includeTurns": False})
-        if not isinstance(value, dict):
-            raise RunnerHold("partial_hold", "readback_not_object")
-        result = {"digest": digest(value), "opaque_ref": "native:" + digest(native_id)[:24]}
+        metadata = self._decode_thread(value, expected_id=native_id, expected_cwd=self.native_cwds.get(native_id), reason_prefix="readback")
+        result = {"digest": digest(metadata), "opaque_ref": "native:" + digest(native_id)[:24]}
         # Titles are metadata needed for a bounded reverse receipt; no body or turns
         # are retained.  The native id itself is never put in a durable receipt.
-        if isinstance(value.get("name"), str):
-            result["title"] = value["name"]
-        elif isinstance(value.get("title"), str):
-            result["title"] = value["title"]
+        result["title"] = metadata["name"]
         return result
+
+    def _decode_thread(
+        self,
+        value: Any,
+        *,
+        expected_id: str | None = None,
+        expected_cwd: str | None = None,
+        reason_prefix: str,
+    ) -> dict[str, str]:
+        """Decode app-server 0.133.0 nested Thread*Response metadata only."""
+        if not isinstance(value, dict) or not isinstance(value.get("thread"), dict):
+            raise RunnerHold("setup_incomplete", reason_prefix + "_malformed")
+        thread = value["thread"]
+        thread_id, cwd, name = thread.get("id"), thread.get("cwd"), thread.get("name")
+        if not all(isinstance(item, str) and item for item in (thread_id, cwd)) or not isinstance(name, str):
+            raise RunnerHold("setup_incomplete", reason_prefix + "_missing_metadata")
+        if expected_id is not None and thread_id != expected_id:
+            raise RunnerHold("partial_hold", reason_prefix + "_foreign_id")
+        if expected_cwd is not None and cwd != expected_cwd:
+            raise RunnerHold("partial_hold", reason_prefix + "_foreign_cwd")
+        return {"id": thread_id, "cwd": cwd, "name": name}
 
     def preflight(self) -> dict[str, Any]:
         try:
@@ -117,7 +135,7 @@ class CodexRoleHubRunner:
                 try:
                     applied.append(self._operation(plan, operation))
                 except RunnerHold as hold:
-                    if operation.get("action") == "create" and hold.reason in {"native_call_error", "readback_not_object", "native_id_unavailable"}:
+                    if operation.get("action") == "create" and hold.status == "setup_incomplete":
                         applied.append(self._failure_receipt(plan, operation, "setup_incomplete", hold.reason))
                     raise
                 except Exception:
@@ -160,12 +178,10 @@ class CodexRoleHubRunner:
             if not isinstance(cwd, str) or not cwd:
                 raise RunnerHold("partial_hold", "cwd_unproven")
             result = self._call("thread/start", {"cwd": cwd})
-            if not isinstance(result, dict):
-                raise RunnerHold("setup_incomplete", "thread_start_no_receipt")
-            native_id = result.get("threadId") or result.get("id")
-            if not isinstance(native_id, str) or not native_id:
-                raise RunnerHold("setup_incomplete", "native_id_unavailable")
+            metadata = self._decode_thread(result, expected_cwd=cwd, reason_prefix="thread_start")
+            native_id = metadata["id"]
             self.native_ids[key] = native_id
+            self.native_cwds[native_id] = cwd
             self.role_native[op["role"]] = native_id
             created = True
         elif action == "reuse":
