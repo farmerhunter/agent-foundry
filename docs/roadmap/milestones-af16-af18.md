@@ -172,16 +172,27 @@ Current canonical path:
 | W10 provisional-policy evidence | [#471](https://github.com/farmerhunter/agent-foundry/issues/471) | local deterministic/reference only | W10 local deterministic/reference-only evidence; it is not trusted live evidence or a formal Harvest. |
 | Provisional-policy no-change hold | [#472](https://github.com/farmerhunter/agent-foundry/issues/472) (CLOSED) | static/read-only | No-change hold retains provisional policy-v0 and forbids parameter divergence or final freeze without a new Human HDC; it does not prove a new policy or activation. |
 | Limited real-mode rollout | [#462](https://github.com/farmerhunter/agent-foundry/issues/462) | AF19 candidate / held | Full trusted-metrics real-mode rollout is no longer an AF18 MVP gate. The bounded collaboration controls are usable through the existing collaboration practice; #462 moves to AF19 for trusted observation, calibration, and higher-order rollout evidence. |
-| Parent Epic/readiness | #418 / #426 / #427 | AF18 transparent integration | #418 remains the Epic authority; #426 applies the accepted collaboration practice and publishes selected adapters; #427 performs one adopter dogfood/readback. Trusted runtime and production gates move to AF19. |
+| Parent Epic/readiness | #418 / #426 / #427 | AF18 transparent integration | #426 and #427 are complete and closed with evidence; #418 remains the Epic authority for the final readiness audit. Trusted runtime and production gates move to AF19. |
 
-### AF18 Next Gated Work
+### AF18 Current Closure State
 
-The remaining AF18 route is deliberately user-facing and transparent:
+The AF18 implementation and adopter gates are now complete on the integration
+branch. #426 records the Human-approved canonical practice/Vault application
+and selected adapter publication; #427 records adopter acceptance; #497 and
+#502 record the bounded onboarding planner and portable RoleHub projection;
+#517 records the real-host fresh-thread/project-binding evidence. These issues
+are closed with durable terminal receipts.
 
-1. Human approves the canonical collaboration-practice application.
-2. Selected adapters publish that practice to environments that already use
-   multi-agent collaboration; there is no separate AF18 opt-in.
-3. One adopter runs a bounded dogfood and readback through #427.
+The current user path is intentionally simple: create a new thread in the
+target project, then say “开启多agent协作”. The adapter performs bounded
+preflight/onboarding, reuses or creates only the required durable roles, and
+holds on ambiguity or partial failure. Native apply remains separately
+controlled, and freshness forensic evidence remains `unverified`; neither is
+silently presented as stronger than the host can prove.
+
+AF18's remaining action is a final Epic/readiness audit in #418 and a roadmap
+readback. No new implementation is required to use the bounded path through
+the existing multi-agent-collaboration practice.
 
 Trusted runtime observation, P3/P4 evidence, normal-policy calibration/freeze,
 native successor/runtime activation, and main/release are AF19 enhancement
@@ -202,8 +213,9 @@ Older AF18 issues may be closed or superseded only after compact evidence commen
 - #435 is stale as an active implementation route and should not keep `needs:implementer`.
 - #444/#445/#433/#436/#432 need narrow closure/supersession packets before closing.
 - #452 and #454 are complete evidence/design inputs.
-- #426/#427 remain AF18 integration/adopter gates; #418 remains the AF18 Epic
-  authority. AF19 owns the trusted-runtime and production gates.
+- #426/#427/#497/#502/#517 are closed with evidence receipts; #418 remains the
+  AF18 Epic authority. #501-B native RoleHub apply and trusted-runtime gates
+  are AF19 work and must not be reopened as AF18 blockers.
 
 ### AF18 Acceptance Criteria
 
@@ -215,6 +227,8 @@ AF18 is complete when:
 - the bounded collaboration control path is integrated into the existing multi-agent-collaboration practice;
 - a Human approves the canonical practice application and the selected adapters are published;
 - one adopter dogfood/readback confirms the transparent default user experience;
+- the fresh-thread workaround and its honest `unverified` freshness state are
+  documented as the current onboarding contract;
 - metrics remain explicitly `unavailable/not_exposed`, with no unsupported cost, model, auto-tuning, or enforcement claims;
 - the AF18 integration branch contains all accepted AF18 code and docs.
 
