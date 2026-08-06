@@ -7,8 +7,16 @@ import argparse
 import hashlib
 import json
 import sys
+from pathlib import Path
 from datetime import datetime
 from typing import Any
+
+try:
+    import yaml
+    from jsonschema import Draft202012Validator
+except ImportError:  # pragma: no cover - environments without optional validator fail closed
+    yaml = None
+    Draft202012Validator = None
 
 
 TOPOLOGY_TO_TOOL = {
@@ -39,6 +47,16 @@ ROLE_OPERATION_CAPABILITIES = {
     "measure": "measure",
 }
 FORBIDDEN_RECEIPT_KEYS = {"prompt", "body", "message", "messages", "content", "transcript", "tool_output", "raw_log"}
+ROLEHUB_TERMINAL_FAILURE = {"partial_hold", "rolled_back", "rollback_incomplete"}
+ROLEHUB_TERMINAL = ROLEHUB_TERMINAL_FAILURE | {"ready"}
+ROLEHUB_SCHEMA_VALIDATION_FAILURE = "ROLEHUB_SCHEMA_VALIDATION_FAILED"
+PROJECT_BINDING_KINDS = {
+    "local_folder_project",
+    "git_repository_project",
+    "git_worktree_project",
+    "fork_inherited_context",
+    "projectless_fresh_context",
+}
 
 
 def fail(message: str) -> None:
@@ -242,12 +260,7 @@ def project_role_operation(root: dict[str, Any]) -> dict[str, Any]:
             creation_boundary, boundary_reasons = validate_creation_boundary(receipt.get("creation_boundary"))
             reasons.extend(boundary_reasons)
             if creation_boundary is None:
-                creation_boundary = {
-                    "creation_boundary_state": "same_project_creation_boundary_unverified",
-                    "freshness_forensic_evidence": "unavailable",
-                }
-            # Generic JSON input has no trusted scheduler verifier.  Creation
-            # can never become dry-run-ready in this adapter.
+                creation_boundary = {"creation_boundary_state": "same_project_creation_boundary_unverified", "freshness_forensic_evidence": "unavailable"}
             reasons.append("generic creation projection lacks a trusted scheduler verifier")
     if action == "create" and status == "supported":
         decision = "hold_required"
@@ -273,12 +286,8 @@ def project_role_operation(root: dict[str, Any]) -> dict[str, Any]:
             "tool_call_proposed": "not_available",
             "native_ids_are_metadata_only": True,
             "adapter_metadata": native_metadata,
-            "creation_boundary_state": (
-                creation_boundary["creation_boundary_state"] if creation_boundary else "not_available"
-            ),
-            "freshness_forensic_evidence": (
-                creation_boundary["freshness_forensic_evidence"] if creation_boundary else "not_available"
-            ),
+            "creation_boundary_state": creation_boundary["creation_boundary_state"] if creation_boundary else "not_available",
+            "freshness_forensic_evidence": creation_boundary["freshness_forensic_evidence"] if creation_boundary else "not_available",
         },
         "attention": reasons,
         "next_action": "Keep the portable Core route unchanged; obtain supported capability evidence before separately authorized execution.",
@@ -290,62 +299,253 @@ def project_role_operation(root: dict[str, Any]) -> dict[str, Any]:
 
 
 def validate_creation_boundary(value: Any) -> tuple[dict[str, Any] | None, list[str]]:
-    """Validate durable evidence for one same-project create_thread boundary.
-
-    This is projection-only: the adapter never verifies GitHub references or
-    performs a host call.  Freshness remains explicitly forensic-unavailable.
-    """
     if not isinstance(value, dict):
         return None, ["same-project creation boundary evidence is required"]
-    allowed_fields = {
-        "terminal_receipt_ref", "architect_acceptance_ref", "source", "digest", "opaque_identity_ref",
-        "readback_identity_ref", "verification_source", "create_count", "primitive", "predecessor_present",
-        "fork_source_present", "project_id", "cwd", "binding_project_id", "binding_cwd", "transcript_read",
-        "history_read", "turn_read", "projectless", "child_worktree", "retry", "dispatch",
-    }
-    unexpected = sorted(set(value) - allowed_fields)
+    allowed = {"terminal_receipt_ref", "architect_acceptance_ref", "source", "digest", "opaque_identity_ref", "readback_identity_ref", "verification_source", "create_count", "primitive", "predecessor_present", "fork_source_present", "project_id", "cwd", "binding_project_id", "binding_cwd", "transcript_read", "history_read", "turn_read", "projectless", "child_worktree", "retry", "dispatch"}
+    unexpected = sorted(set(value) - allowed)
     if unexpected:
-        return {
-            "creation_boundary_state": "creation_boundary_proof_untrusted",
-            "freshness_forensic_evidence": "unavailable",
-        }, [f"creation boundary contains untrusted fields: {', '.join(unexpected)}"]
-    required_refs = (
-        "terminal_receipt_ref", "architect_acceptance_ref", "source", "digest", "opaque_identity_ref", "readback_identity_ref",
-    )
+        return {"creation_boundary_state": "creation_boundary_proof_untrusted", "freshness_forensic_evidence": "unavailable"}, [f"creation boundary contains untrusted fields: {', '.join(unexpected)}"]
     reasons: list[str] = []
-    for field in required_refs:
-        if not isinstance(value.get(field), str) or not value[field]:
-            reasons.append(f"creation boundary is missing {field}")
-    if value.get("verification_source") != "durable_scheduler_reference":
-        reasons.append("creation boundary verification_source must be durable_scheduler_reference")
-    if value.get("digest") and (not isinstance(value["digest"], str) or not value["digest"].startswith("sha256:")):
-        reasons.append("creation boundary digest must be a sha256 digest")
-    if value.get("create_count") != 1:
-        reasons.append("creation boundary create_count must equal 1")
-    if value.get("primitive") != "create_thread":
-        reasons.append("creation boundary primitive must be create_thread")
+    for field in ("terminal_receipt_ref", "architect_acceptance_ref", "source", "digest", "opaque_identity_ref", "readback_identity_ref"):
+        if not isinstance(value.get(field), str) or not value[field]: reasons.append(f"creation boundary is missing {field}")
+    if value.get("verification_source") != "durable_scheduler_reference": reasons.append("creation boundary verification_source must be durable_scheduler_reference")
+    if value.get("digest") and (not isinstance(value["digest"], str) or not value["digest"].startswith("sha256:")): reasons.append("creation boundary digest must be a sha256 digest")
+    if value.get("create_count") != 1: reasons.append("creation boundary create_count must equal 1")
+    if value.get("primitive") != "create_thread": reasons.append("creation boundary primitive must be create_thread")
     for field in ("predecessor_present", "fork_source_present", "transcript_read", "history_read", "turn_read", "projectless", "child_worktree", "retry", "dispatch"):
-        if value.get(field) is not False:
-            reasons.append(f"creation boundary {field} must be false")
-    if not isinstance(value.get("project_id"), str) or not value["project_id"]:
-        reasons.append("creation boundary project_id is required")
-    if not isinstance(value.get("cwd"), str) or not value["cwd"]:
-        reasons.append("creation boundary cwd is required")
-    if value.get("binding_project_id") != value.get("project_id"):
-        reasons.append("creation boundary project binding project_id does not match")
-    if value.get("binding_cwd") != value.get("cwd"):
-        reasons.append("creation boundary project binding cwd does not match")
-    if value.get("readback_identity_ref") != value.get("opaque_identity_ref"):
-        reasons.append("creation boundary readback identity does not correlate to opaque identity")
-    if reasons:
-        return None, reasons
+        if value.get(field) is not False: reasons.append(f"creation boundary {field} must be false")
+    for field in ("project_id", "cwd"):
+        if not isinstance(value.get(field), str) or not value[field]: reasons.append(f"creation boundary {field} is required")
+    if value.get("binding_project_id") != value.get("project_id"): reasons.append("creation boundary project binding project_id does not match")
+    if value.get("binding_cwd") != value.get("cwd"): reasons.append("creation boundary project binding cwd does not match")
+    if value.get("readback_identity_ref") != value.get("opaque_identity_ref"): reasons.append("creation boundary readback identity does not correlate to opaque identity")
+    if reasons: return None, reasons
+    return {"creation_boundary_state": "same_project_creation_boundary_unverified", "freshness_forensic_evidence": "unavailable"}, ["durable creation receipt refs are caller-supplied; no trusted scheduler verifier is available"]
+
+
+def project_binding_classification(root: dict[str, Any]) -> dict[str, Any]:
+    """Classify a host-reported project/thread binding without calling the host."""
+    observation = root.get("project_binding_observation")
+    if not isinstance(observation, dict):
+        fail("project_binding_observation must be an object")
+    kind = observation.get("project_kind")
+    context = observation.get("context_mode")
+    identity = observation.get("identity")
+    target = observation.get("target")
+    runtime_proof = observation.get("runtime_owned_proof") is True
+    reasons: list[str] = []
+    if kind not in PROJECT_BINDING_KINDS:
+        reasons.append("project_kind is missing or unknown")
+    if context not in {"fresh", "fork", "projectless"}:
+        reasons.append("context_mode must be fresh, fork, or projectless")
+    if not isinstance(identity, dict) or not isinstance(target, dict):
+        reasons.append("exact project identity, root, and cwd are required")
+        identity = identity if isinstance(identity, dict) else {}
+        target = target if isinstance(target, dict) else {}
+    for field in ("project_id", "project_root", "cwd"):
+        if not isinstance(identity.get(field), str) or not identity[field]:
+            reasons.append(f"identity.{field} is missing")
+        if not isinstance(target.get(field), str) or not target[field]:
+            reasons.append(f"target.{field} is missing")
+        elif isinstance(identity.get(field), str) and identity[field] != target[field]:
+            reasons.append(f"target {field} does not match selected project")
+    if observation.get("fresh_context") is not True:
+        reasons.append("fresh_context proof is absent")
+    if context == "fork" or kind == "fork_inherited_context":
+        state, reason = "held_inherited_context_rejected", "fork inherits predecessor history"
+    elif context == "projectless" or kind == "projectless_fresh_context":
+        state, reason = "held_projectless_fallback_rejected", "projectless fresh context loses selected project binding"
+    elif reasons:
+        state, reason = "held_project_binding_mismatch", "exact project identity/root/cwd/freshness proof is incomplete"
+    elif kind == "local_folder_project" and not runtime_proof:
+        state, reason = "held_same_project_fresh_unavailable", "non-Git local-folder API support is not runtime-proven; Human UI fallback required"
+    elif not runtime_proof:
+        state, reason = "held_same_project_fresh_unavailable", "runtime-owned create proof is unavailable"
+    else:
+        # A caller-supplied boolean is not trusted host readback.
+        state, reason = "held_runtime_proof_unverified", "runtime_owned_proof is caller-supplied; trusted host readback is required"
     return {
-        "creation_boundary_state": "same_project_creation_boundary_unverified",
-        "freshness_forensic_evidence": "unavailable",
-    }, ["durable creation receipt refs are caller-supplied; no trusted scheduler verifier is available"]
+        "adapter": "codex",
+        "state": state,
+        "project_kind": kind if kind in PROJECT_BINDING_KINDS else "unknown",
+        "context_mode": context if context in {"fresh", "fork", "projectless"} else "unknown",
+        "runtime_owned_proof": runtime_proof,
+        "attention": reasons + [reason],
+        "human_ui_fallback_required": state == "held_same_project_fresh_unavailable" and kind == "local_folder_project",
+        "mutation_performed": False,
+        "dispatch_performed": False,
+        "next_action": "Use the supported Human UI path; do not fall back to fork or projectless." if state == "held_same_project_fresh_unavailable" else "Keep the request held until a trusted host adapter supplies readback; this classifier performed no call.",
+    }
+
+
+def project_rolehub(root: dict[str, Any]) -> dict[str, Any]:
+    """Validate a portable RoleHub projection without invoking a native API."""
+    if root.get("contract_version") != "AF18-rolehub-adapter-v1":
+        return {"adapter": "codex", "state": "partial_hold", "attention": ["unsupported or missing RoleHub contract_version"], "native_io_performed": False, "mutation_performed": False, "dispatch_performed": False, "next_action": "Hold until the exact portable contract version is supplied."}
+    if yaml is None or Draft202012Validator is None:
+        return {"adapter": "codex", "state": "partial_hold", "attention": ["portable RoleHub schema validator is unavailable"], "native_io_performed": False, "mutation_performed": False, "dispatch_performed": False, "next_action": "Install the pinned schema validator before projection."}
+    try:
+        schema_path = Path(__file__).resolve().parents[1] / "schemas" / "rolehub-adapter-execution.schema.yaml"
+        schema = yaml.safe_load(schema_path.read_text(encoding="utf-8"))
+        validation_errors = sorted(Draft202012Validator(schema).iter_errors(root), key=lambda error: list(error.path))
+    except Exception:
+        validation_errors = [None]
+    if validation_errors:
+        return {"adapter": "codex", "state": "partial_hold", "attention": [ROLEHUB_SCHEMA_VALIDATION_FAILURE], "native_io_performed": False, "mutation_performed": False, "dispatch_performed": False, "next_action": "Hold until the portable RoleHub request matches its schema."}
+    project_id = root.get("project_id")
+    identity = root.get("rolehub_identity")
+    operations = root.get("operations")
+    if not isinstance(project_id, str) or not project_id or not isinstance(identity, dict) or not isinstance(operations, list):
+        fail("rolehub projection requires project_id, rolehub_identity and operations")
+    logical_id = identity.get("logical_id")
+    if not isinstance(logical_id, str) or not logical_id:
+        fail("rolehub_identity.logical_id is required")
+    attention: list[str] = []
+    allowed_root = {"contract_version", "project_id", "rolehub_identity", "capabilities", "capability_evidence", "role_matches", "operations", "rollback"}
+    for key in root:
+        if key not in allowed_root:
+            attention.append(f"unknown RoleHub field: {key}")
+    allowed_identity = {"logical_id", "role_conversations"}
+    allowed_capabilities = {"create", "link", "navigate"}
+    allowed_evidence = {"trusted", "producer", "runtime_id", "project_id", "logical_rolehub_id"}
+    for key in identity:
+        if key not in allowed_identity:
+            attention.append(f"unknown rolehub_identity field: {key}")
+    capabilities = root.get("capabilities", {})
+    if not isinstance(capabilities, dict):
+        capabilities = {}
+    evidence = root.get("capability_evidence")
+    trusted_capabilities = isinstance(evidence, dict) and evidence.get("trusted") is True and isinstance(evidence.get("producer"), str) and isinstance(evidence.get("runtime_id"), str) and evidence.get("project_id") == project_id and evidence.get("logical_rolehub_id") == logical_id
+    seen_keys: set[str] = set()
+    receipts: list[dict[str, Any]] = []
+    applied: list[dict[str, Any]] = []
+    if isinstance(capabilities, dict):
+        attention.extend(f"unknown capabilities field: {key}" for key in capabilities if key not in allowed_capabilities)
+    if isinstance(evidence, dict):
+        attention.extend(f"unknown capability_evidence field: {key}" for key in evidence if key not in allowed_evidence)
+    role_matches = root.get("role_matches")
+    if role_matches is not None:
+        if not isinstance(role_matches, list):
+            attention.append("role_matches must be an array")
+        else:
+            for role in ("Coordinator", "Architect"):
+                matches = [item for item in role_matches if isinstance(item, dict) and item.get("role") == role and item.get("project_id") == project_id]
+                healthy = [item for item in matches if item.get("active") is True and item.get("legacy") is not True]
+                if len(matches) > 1 or any(item.get("legacy") is True for item in matches):
+                    attention.append(f"duplicate or legacy {role} match requires hold")
+                elif len(healthy) == 0:
+                    attention.append(f"no reusable {role}; creation must remain a plan")
+    terminal_seen = False
+    ready_seen = False
+    expected_sequence = 0
+    for index, operation in enumerate(operations):
+        if not isinstance(operation, dict):
+            attention.append(f"operation {index} is not an object")
+            continue
+        action = operation.get("action")
+        allowed_operation = {"operation_id", "action", "idempotency_key", "role", "target_ref", "preimage", "receipt"}
+        attention.extend(f"unknown operation field: {key}" for key in operation if key not in allowed_operation)
+        if not isinstance(operation.get("operation_id"), str) or not operation.get("operation_id"):
+            attention.append(f"operation {index} is missing operation_id")
+        if not isinstance(action, str) or not action:
+            attention.append(f"operation {index} is missing action")
+        key = operation.get("idempotency_key")
+        if not isinstance(key, str) or not key:
+            attention.append(f"operation {index} is missing idempotency_key")
+        elif key in seen_keys:
+            attention.append(f"duplicate idempotency_key: {key}")
+        else:
+            seen_keys.add(key)
+        forbidden = forbidden_paths(operation)
+        if forbidden:
+            attention.append(f"privacy violation at {forbidden[0]}")
+        if action not in {"create", "reuse", "link", "navigate"}:
+            attention.append(f"unsupported rolehub action: {action}")
+            continue
+        if operation.get("role") in {"Implementer", "Reviewer", "Tester", "Harvester"} and action in {"create", "reuse", "link"}:
+            attention.append("Work roles are transient and cannot be persisted in RoleHub")
+        if action in {"create", "link", "navigate"} and capabilities.get(action) not in {"supported"}:
+            attention.append(f"capability unavailable for {action}")
+        elif action in {"create", "link", "navigate"} and not trusted_capabilities:
+            attention.append(f"trusted capability evidence unavailable for {action}")
+        preimage = operation.get("preimage")
+        receipt = operation.get("receipt")
+        if action in {"link", "navigate"} and not isinstance(preimage, dict):
+            attention.append(f"missing preimage for {operation.get('operation_id', index)}")
+        if not isinstance(receipt, dict):
+            attention.append(f"missing receipt for {operation.get('operation_id', index)}")
+            continue
+        allowed_receipt = {"operation_id", "idempotency_key", "operation_fingerprint", "opaque_ref", "readback", "sequence", "status", "project_id", "logical_rolehub_id"}
+        attention.extend(f"unknown receipt field: {key}" for key in receipt if key not in allowed_receipt)
+        fingerprint_payload = {key: value for key, value in operation.items() if key != "receipt"}
+        fingerprint = f"sha256:{hashlib.sha256(json.dumps(fingerprint_payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()}"
+        if receipt.get("project_id") != project_id or receipt.get("logical_rolehub_id") != logical_id:
+            attention.append(f"cross-project or identity-mismatched receipt for {operation.get('operation_id', index)}")
+        if receipt.get("operation_id") != operation.get("operation_id") or receipt.get("idempotency_key") != key or receipt.get("operation_fingerprint") != fingerprint or not isinstance(receipt.get("opaque_ref"), str) or not isinstance(receipt.get("readback"), dict):
+            attention.append(f"receipt binding/readback mismatch for {operation.get('operation_id', index)}")
+        if receipt.get("sequence") != expected_sequence:
+            attention.append(f"out-of-order receipt for {operation.get('operation_id', index)}")
+        expected_sequence += 1
+        if terminal_seen:
+            attention.append("receipt appears after terminal receipt")
+        status = receipt.get("status")
+        if status in ROLEHUB_TERMINAL:
+            terminal_seen = True
+            if status == "ready":
+                ready_seen = True
+        elif status not in {"applied", "ready"}:
+            attention.append(f"invalid receipt status for {operation.get('operation_id', index)}")
+        if status == "applied":
+            applied.append(operation)
+        receipts.append(receipt)
+    if any(receipt.get("status") == "failed" for receipt in receipts):
+        attention.append("operation failure requires partial_hold and reverse rollback")
+    rollback = root.get("rollback", {})
+    if not isinstance(rollback, dict):
+        rollback = {}
+    rollback_receipt = rollback.get("receipt")
+    allowed_rollback = {"status", "receipt", "reversed_operation_ids"}
+    attention.extend(f"unknown rollback field: {key}" for key in rollback if key not in allowed_rollback)
+    if isinstance(rollback_receipt, dict):
+        allowed_rollback_receipt = {"status", "reversed_operation_ids"}
+        attention.extend(f"unknown rollback receipt field: {key}" for key in rollback_receipt if key not in allowed_rollback_receipt)
+    rollback_forbidden = forbidden_paths(rollback)
+    if rollback_forbidden:
+        attention.append(f"privacy violation at {rollback_forbidden[0]}")
+    applied_ids = [op.get("operation_id") for op in applied]
+    rollback_valid = not rollback_forbidden and isinstance(rollback_receipt, dict) and rollback_receipt.get("status") == "complete" and rollback_receipt.get("reversed_operation_ids") == list(reversed(applied_ids)) and all(isinstance(op.get("preimage"), dict) or op.get("action") == "create" for op in applied)
+    if rollback.get("status") == "failed" or (rollback.get("status") in {"required", "complete"} and not rollback_valid):
+        attention.append("rollback receipt missing or failed")
+        rollback_state = "rollback_incomplete"
+    elif rollback_valid:
+        rollback_state = "rolled_back"
+    else:
+        rollback_state = "not_attempted"
+    state = "ready" if not attention and (ready_seen or not terminal_seen) else "partial_hold"
+    if rollback_state in {"rolled_back", "rollback_incomplete"}:
+        state = rollback_state
+    return {
+        "adapter": "codex",
+        "contract_version": root.get("contract_version", "not_available"),
+        "project_id": project_id,
+        "rolehub_identity": {"logical_id": logical_id},
+        "state": state,
+        "operations": [{"operation_id": op.get("operation_id", "not_available"), "action": op.get("action"), "status": "applied" if op in applied else "held"} for op in operations if isinstance(op, dict)],
+        "applied_operations": [op.get("operation_id", "not_available") for op in applied],
+        "rollback": {"status": rollback_state, "applied_only": True, "delete_or_archive": False},
+        "attention": attention,
+        "native_io_performed": False,
+        "mutation_performed": False,
+        "dispatch_performed": False,
+        "next_action": "Hold for an independently authorized adapter execution receipt." if state == "partial_hold" else "Portable projection is ready; no native call is proposed.",
+    }
 
 
 def project(root: dict[str, Any]) -> dict[str, Any]:
+    if "project_binding_observation" in root:
+        return project_binding_classification(root)
+    if "rolehub_identity" in root:
+        return project_rolehub(root)
     if "role_operation" in root:
         return project_role_operation(root)
     portable = require_object(root, "portable_plan")

@@ -80,28 +80,14 @@ def adapter_context() -> dict:
 
 def creation_boundary(**overrides: object) -> dict:
     value = {
-        "terminal_receipt_ref": "https://github.com/farmerhunter/agent-foundry/issues/517#issuecomment-5201685599",
-        "architect_acceptance_ref": "https://github.com/farmerhunter/agent-foundry/issues/517#issuecomment-5201685599",
-        "source": "durable:github:farmerhunter/agent-foundry:issue:517",
-        "digest": "sha256:517-boundary-fixture",
-        "opaque_identity_ref": "native:opaque-thread-517",
-        "readback_identity_ref": "native:opaque-thread-517",
-        "verification_source": "durable_scheduler_reference",
-        "create_count": 1,
-        "primitive": "create_thread",
-        "predecessor_present": False,
-        "fork_source_present": False,
-        "project_id": "local-eb6e22ec0d00ef785d687022be1b433d",
-        "cwd": "/Users/jinghuliu/Desktop/Code/Personal Projects/agent-foundry",
-        "binding_project_id": "local-eb6e22ec0d00ef785d687022be1b433d",
-        "binding_cwd": "/Users/jinghuliu/Desktop/Code/Personal Projects/agent-foundry",
-        "transcript_read": False,
-        "history_read": False,
-        "turn_read": False,
-        "projectless": False,
-        "child_worktree": False,
-        "retry": False,
-        "dispatch": False,
+        "terminal_receipt_ref": "durable:terminal:517", "architect_acceptance_ref": "durable:architect:517",
+        "source": "durable:github:issue:517", "digest": "sha256:517-fixture",
+        "opaque_identity_ref": "native:opaque-517", "readback_identity_ref": "native:opaque-517",
+        "verification_source": "durable_scheduler_reference", "create_count": 1, "primitive": "create_thread",
+        "predecessor_present": False, "fork_source_present": False, "project_id": "local-fixture",
+        "cwd": "/tmp/fixture", "binding_project_id": "local-fixture", "binding_cwd": "/tmp/fixture",
+        "transcript_read": False, "history_read": False, "turn_read": False, "projectless": False,
+        "child_worktree": False, "retry": False, "dispatch": False,
     }
     value.update(overrides)
     return value
@@ -113,6 +99,19 @@ def input_for(portable_plan: dict, observation: dict | None = None, adapter_enve
         "schema_observation": schemas() if observation is None else observation,
         "adapter_context": adapter_context(),
         "adapter_envelopes": envelopes() if adapter_envelopes is None else adapter_envelopes,
+    }
+
+
+def binding(kind: str = "local_folder_project", context: str = "fresh", *, runtime: bool = False) -> dict:
+    return {
+        "project_binding_observation": {
+            "project_kind": kind,
+            "context_mode": context,
+            "identity": {"project_id": "git-seres", "project_root": "/projects/git.seres.cn", "cwd": "/projects/git.seres.cn"},
+            "target": {"project_id": "git-seres", "project_root": "/projects/git.seres.cn", "cwd": "/projects/git.seres.cn"},
+            "fresh_context": True,
+            "runtime_owned_proof": runtime,
+        }
     }
 
 
@@ -147,6 +146,32 @@ def expect(name: str, condition: bool, detail: object, errors: list[str]) -> Non
 
 def main() -> int:
     errors: list[str] = []
+    code, output = run(binding())
+    expect("non-git-invalid-arguments-hold", code == 0 and output["state"] == "held_same_project_fresh_unavailable" and output["human_ui_fallback_required"] is True and output["mutation_performed"] is False and output["dispatch_performed"] is False, output, errors)
+    for kind in ("git_repository_project", "git_worktree_project"):
+        code, output = run(binding(kind, runtime=True))
+        expect(f"{kind}-runtime-proof-unverified", code == 0 and output["state"] == "held_runtime_proof_unverified" and output["mutation_performed"] is False and output["dispatch_performed"] is False, output, errors)
+    code, output = run(binding("fork_inherited_context", "fork", runtime=True))
+    expect("fork-inherited-held", code == 0 and output["state"] == "held_inherited_context_rejected" and output["dispatch_performed"] is False, output, errors)
+    code, output = run(binding("projectless_fresh_context", "projectless", runtime=True))
+    expect("projectless-held", code == 0 and output["state"] == "held_projectless_fallback_rejected" and output["mutation_performed"] is False, output, errors)
+    mismatch = binding(runtime=True); mismatch["project_binding_observation"]["target"]["cwd"] = "/projects/git.seres.cn/worktree"
+    code, output = run(mismatch)
+    expect("child-root-mismatch-held", code == 0 and output["state"] == "held_project_binding_mismatch", output, errors)
+    for field in ("project_id", "project_root", "cwd"):
+        missing = binding(runtime=True); missing["project_binding_observation"]["identity"].pop(field)
+        code, output = run(missing)
+        expect(f"missing-{field}-held", code == 0 and output["state"] == "held_project_binding_mismatch", output, errors)
+    stale = binding(runtime=True); stale["project_binding_observation"]["fresh_context"] = False
+    code, output = run(stale)
+    expect("missing-freshness-held", code == 0 and output["state"] == "held_project_binding_mismatch", output, errors)
+    forged = binding(runtime=True); forged["project_binding_observation"]["runtime_owned_proof"] = False
+    code, output = run(forged)
+    expect("missing-runtime-proof-held", code == 0 and output["state"] == "held_same_project_fresh_unavailable", output, errors)
+    claimed_ready = binding("git_repository_project", runtime=True)
+    code, output = run(claimed_ready)
+    expect("forged-runtime-proof-never-ready", code == 0 and output["state"] == "held_runtime_proof_unverified" and output["mutation_performed"] is False and output["dispatch_performed"] is False, output, errors)
+
     base = input_for(portable("subagent"))
     code, output = run(base)
     expect("runtime-capture-unavailable", code == 0 and provenance_recovery(output, "unknown") and output["schema_provenance"]["evidence_ref_status"] == "unverified", output, errors)
@@ -210,20 +235,18 @@ def main() -> int:
                 "role_operation": {
                     "action": action,
                     "capability_receipt": {
-                    "capability": action,
+                        "capability": action,
                         "status": "supported",
                         "provenance": "observed",
                         "native_metadata": {"native_thread_id": f"codex-{action}-fixture"},
-                        **({"creation_boundary": creation_boundary()} if action == "create" else {}),
                     },
                 }
             }
         )
-        expected_decision = "hold_required" if action == "create" else "dry_run_ready"
         expect(
             f"role-operation-{action}-supported-dry-run",
             code == 0
-            and output["adapter_plan"]["adapter_decision"] == expected_decision
+            and output["adapter_plan"]["adapter_decision"] == "dry_run_ready"
             and output["adapter_plan"]["tool_call_proposed"] == "not_available"
             and output["adapter_plan"]["native_ids_are_metadata_only"] is True
             and output["mutation_performed"] is False
@@ -269,34 +292,134 @@ def main() -> int:
     code, output = run(private_operation)
     expect("role-operation-privacy-fails-closed", code == 0 and output["adapter_plan"]["adapter_decision"] == "hold_required", output, errors)
 
-    positive = {"role_operation": {"action": "create", "capability_receipt": {
+    def rolehub(ops, capabilities=None, rollback=None):
+        normalized = []
+        for sequence, original in enumerate(ops):
+            op = dict(original)
+            receipt = dict(op.get("receipt") or {})
+            payload = {key: value for key, value in op.items() if key != "receipt"}
+            fingerprint = f"sha256:{hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()}"
+            receipt.setdefault("project_id", "tiny-ipa")
+            receipt.setdefault("logical_rolehub_id", "tiny-ipa-rolehub")
+            receipt.setdefault("operation_id", op.get("operation_id"))
+            receipt.setdefault("idempotency_key", op.get("idempotency_key"))
+            receipt.setdefault("operation_fingerprint", fingerprint)
+            receipt.setdefault("opaque_ref", "opaque:fixture")
+            receipt.setdefault("readback", {"status": "observed"})
+            receipt.setdefault("sequence", sequence)
+            op["receipt"] = receipt
+            normalized.append(op)
+        return {
+            "contract_version": "AF18-rolehub-adapter-v1",
+            "project_id": "tiny-ipa",
+            "rolehub_identity": {"logical_id": "tiny-ipa-rolehub"},
+            "capabilities": capabilities or {"create": "supported", "link": "supported", "navigate": "supported"},
+            "capability_evidence": {"trusted": True, "producer": "fixture-adapter", "runtime_id": "fixture", "project_id": "tiny-ipa", "logical_rolehub_id": "tiny-ipa-rolehub"},
+            "operations": normalized,
+            **({"rollback": rollback} if rollback is not None else {}),
+        }
+
+    base_op = {"operation_id": "create-hub", "action": "create", "idempotency_key": "tiny-ipa:create-hub", "receipt": {"project_id": "tiny-ipa", "logical_rolehub_id": "tiny-ipa-rolehub", "status": "applied"}}
+    code, output = run(rolehub([base_op]))
+    expect("rolehub-fresh-ready-no-io", code == 0 and output["state"] == "ready" and output["native_io_performed"] is False, output, errors)
+    missing_version = rolehub([base_op]); missing_version.pop("contract_version")
+    code, output = run(missing_version)
+    expect("rolehub-missing-version-hold", code == 0 and output["state"] == "partial_hold", output, errors)
+    wrong_version = rolehub([base_op]); wrong_version["contract_version"] = "AF18-rolehub-adapter-v0"
+    code, output = run(wrong_version)
+    expect("rolehub-wrong-version-hold", code == 0 and output["state"] == "partial_hold", output, errors)
+    malformed = rolehub([{**base_op, "operation_id": ""}])
+    code, output = run(malformed)
+    expect("rolehub-missing-operation-id-hold", code == 0 and output["state"] == "partial_hold", output, errors)
+    unknown_root = rolehub([base_op]); unknown_root["secret_field"] = "x"
+    code, output = run(unknown_root)
+    expect("rolehub-unknown-root-field-hold", code == 0 and output["state"] == "partial_hold", output, errors)
+    unknown_op = rolehub([{**base_op, "unexpected": "x"}])
+    code, output = run(unknown_op)
+    expect("rolehub-unknown-operation-field-hold", code == 0 and output["state"] == "partial_hold", output, errors)
+    unknown_receipt = rolehub([{**base_op, "receipt": {"unexpected": "x"}}])
+    code, output = run(unknown_receipt)
+    expect("rolehub-unknown-receipt-field-hold", code == 0 and output["state"] == "partial_hold", output, errors)
+    malformed_nested = rolehub([base_op]); malformed_nested["role_matches"] = [{"role": "Architect", "project_id": "tiny-ipa"}]
+    code, output = run(malformed_nested)
+    expect("rolehub-malformed-role-match-hold", code == 0 and output["state"] == "partial_hold", output, errors)
+    duplicate = dict(base_op)
+    code, output = run(rolehub([base_op, duplicate]))
+    expect("rolehub-duplicate-idempotency-hold", code == 0 and output["state"] == "partial_hold", output, errors)
+    forged = dict(base_op)
+    forged["receipt"] = {"project_id": "other-project", "logical_rolehub_id": "tiny-ipa-rolehub", "status": "applied"}
+    code, output = run(rolehub([forged]))
+    expect("rolehub-cross-project-hold", code == 0 and output["state"] == "partial_hold", output, errors)
+    missing_preimage = dict(base_op)
+    missing_preimage.update({"operation_id": "link", "action": "link"})
+    code, output = run(rolehub([missing_preimage]))
+    expect("rolehub-missing-preimage-hold", code == 0 and output["state"] == "partial_hold", output, errors)
+    terminal = {"operation_id": "hold", "action": "navigate", "idempotency_key": "tiny-ipa:hold", "preimage": {}, "receipt": {"project_id": "tiny-ipa", "logical_rolehub_id": "tiny-ipa-rolehub", "status": "partial_hold"}}
+    late = dict(base_op)
+    code, output = run(rolehub([terminal, late]))
+    expect("rolehub-late-receipt-hold", code == 0 and output["state"] == "partial_hold", output, errors)
+    rollback = {"status": "failed"}
+    code, output = run(rolehub([base_op], rollback=rollback))
+    expect("rolehub-rollback-incomplete", code == 0 and output["state"] == "rollback_incomplete", output, errors)
+
+    raw_sentinel = "RAW_SCHEMA_SENTINEL_SHOULD_NOT_LEAK"
+    invalid_schema = rolehub([base_op])
+    invalid_schema["unexpected_private_field"] = raw_sentinel
+    code, output = run(invalid_schema)
+    expect(
+        "rolehub-schema-validation-redacts-input",
+        code == 0
+        and raw_sentinel not in json.dumps(output, sort_keys=True)
+        and output["attention"] == ["ROLEHUB_SCHEMA_VALIDATION_FAILED"],
+        output,
+        errors,
+    )
+    reuse = rolehub([base_op]); reuse["role_matches"] = [{"role": "Architect", "project_id": "tiny-ipa", "active": True, "legacy": False}, {"role": "Coordinator", "project_id": "tiny-ipa", "active": True, "legacy": False}]
+    code, output = run(reuse)
+    expect("rolehub-reuse-single-active", code == 0 and output["state"] == "ready", output, errors)
+    duplicate_match = rolehub([base_op]); duplicate_match["role_matches"] = [{"role": "Architect", "project_id": "tiny-ipa", "active": True}, {"role": "Architect", "project_id": "tiny-ipa", "active": True}]
+    code, output = run(duplicate_match)
+    expect("rolehub-duplicate-match-hold", code == 0 and output["state"] == "partial_hold", output, errors)
+    unavailable = rolehub([base_op], capabilities={"create": "unavailable", "link": "unavailable", "navigate": "unavailable"})
+    code, output = run(unavailable)
+    expect("rolehub-unavailable-capability-hold", code == 0 and output["state"] == "partial_hold", output, errors)
+    transient = dict(base_op); transient["role"] = "Implementer"
+    code, output = run(rolehub([transient]))
+    expect("rolehub-work-role-transient", code == 0 and output["state"] == "partial_hold", output, errors)
+    ready = dict(base_op); ready["receipt"] = {"status": "ready"}
+    code, output = run(rolehub([ready]))
+    expect("rolehub-ready-receipt-ready", code == 0 and output["state"] == "ready", output, errors)
+    after_ready = dict(base_op); after_ready["operation_id"] = "late"
+    code, output = run(rolehub([ready, after_ready]))
+    expect("rolehub-after-ready-hold", code == 0 and output["state"] == "partial_hold", output, errors)
+    first = dict(base_op); first["operation_id"] = "first"; first["preimage"] = {}
+    second = dict(base_op); second["operation_id"] = "second"; second["preimage"] = {}
+    code, output = run(rolehub([first, second], rollback={"status": "complete", "receipt": {"status": "complete", "reversed_operation_ids": ["first", "second"]}}))
+    expect("rolehub-rollback-forward-order-rejected", code == 0 and output["state"] == "rollback_incomplete", output, errors)
+    code, output = run(rolehub([first, second], rollback={"status": "complete", "receipt": {"status": "complete", "reversed_operation_ids": ["second", "first"]}}))
+    expect("rolehub-rollback-reverse-order-accepted", code == 0 and output["state"] == "rolled_back", output, errors)
+    private_rollback = {"status": "complete", "receipt": {"status": "complete", "reversed_operation_ids": ["second", "first"], "prompt": "SECRET"}}
+    code, output = run(rolehub([first, second], rollback=private_rollback))
+    expect("rolehub-rollback-privacy-hold", code == 0 and output["state"] == "partial_hold", output, errors)
+
+    create_case = {"role_operation": {"action": "create", "capability_receipt": {
         "capability": "create", "status": "supported", "provenance": "observed",
         "creation_boundary": creation_boundary(),
     }}}
-    code, output = run(positive)
-    expect("creation-boundary-positive-held-unverified", code == 0 and output["adapter_plan"]["adapter_decision"] == "hold_required" and output["adapter_plan"]["creation_boundary_state"] == "same_project_creation_boundary_unverified" and output["adapter_plan"]["freshness_forensic_evidence"] == "unavailable", output, errors)
-
-    negatives = {
-        "missing-acceptance": {"architect_acceptance_ref": ""},
-        "missing-digest": {"digest": ""},
-        "fork": {"fork_source_present": True},
-        "count-zero": {"create_count": 0},
-        "count-many": {"create_count": 2},
-        "identity-mismatch": {"binding_project_id": "other-project"},
-        "project-mismatch": {"binding_cwd": "/other/project"},
-        "transcript": {"transcript_read": True},
-        "history": {"history_read": True},
-        "readback-mismatch": {"readback_identity_ref": "native:other-thread"},
-        "forged-runtime-proof": {"runtime_owned_proof": True},
-    }
-    for name, override in negatives.items():
+    code, output = run(create_case)
+    expect("creation-boundary-positive-held-unverified", code == 0 and output["adapter_plan"]["adapter_decision"] == "hold_required" and output["adapter_plan"]["creation_boundary_state"] == "same_project_creation_boundary_unverified", output, errors)
+    for name, override in {
+        "missing-acceptance": {"architect_acceptance_ref": ""}, "fork": {"fork_source_present": True},
+        "count": {"create_count": 2}, "binding": {"binding_cwd": "/other"},
+        "history": {"history_read": True}, "readback": {"readback_identity_ref": "native:other"},
+        "forged-proof": {"runtime_owned_proof": True},
+    }.items():
         case = {"role_operation": {"action": "create", "capability_receipt": {
             "capability": "create", "status": "supported", "provenance": "observed",
             "creation_boundary": creation_boundary(**override),
         }}}
         code, output = run(case)
-        expected_state = "creation_boundary_proof_untrusted" if name == "forged-runtime-proof" else "same_project_creation_boundary_unverified"
-        expect(f"creation-boundary-{name}-held", code == 0 and output["adapter_plan"]["adapter_decision"] == "hold_required" and output["adapter_plan"]["creation_boundary_state"] == expected_state, output, errors)
+        expect(f"creation-boundary-{name}-held", code == 0 and output["adapter_plan"]["adapter_decision"] == "hold_required", output, errors)
 
     if errors:
         print("\n".join(errors), file=sys.stderr)

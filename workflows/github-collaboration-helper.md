@@ -156,29 +156,24 @@ It proposes no real tool call: all adapter output reports
 hooks, custom agents, policy records, runtime installation, and telemetry stay
 outside this pilot.
 
-### Same-project creation boundary
+### Codex project/thread binding classification
 
-The generic JSON planner always reports
-`creation_boundary_state:same_project_creation_boundary_unverified` and
-`hold_required`, even when a caller supplies a complete-looking host receipt.
-It has no trusted scheduler verifier, so terminal/Architect refs, source,
-digest, opaque identity, and `durable_scheduler_reference` are descriptive
-inputs only and never establish trust. A separately bounded, adapter-owned
-scheduler verifier is required before any future projection may use the
-`same_project_creation_boundary_verified` state. The intended trusted receipt
-would prove exactly one `create_thread` primitive, no predecessor/fork source,
-matching `project_id`/`cwd` binding, correlated post-create readback, and
-explicit false values for projectless, child-worktree, retry, dispatch,
-transcript, history, and turn reads. The adapter does not verify GitHub or
-call the host.
-
-Missing or inconsistent fields produce a hold. The result must never be
-labelled `same_project_fresh_host_path_verified` or
-`fresh_context_verified`, and it must not claim inherited history is absent.
-A future forensic upgrade requires host evidence such as `parentThreadId`,
-`forkSource`, and `contextInheritance`. Until then,
-`freshness_forensic_evidence` is `unavailable`, and onboarding must not create
-another duplicate thread solely because freshness cannot be observed.
+Before a host creates a successor thread, classify a metadata-only
+`project_binding_observation`. The classifier distinguishes `local_folder_project`,
+`git_repository_project`, `git_worktree_project`, `fork_inherited_context`, and
+`projectless_fresh_context`. A same-project fresh result is valid only when
+`project_id`, `project_root`, and `cwd` match exactly, `fresh_context` is true,
+and trusted host readback is present. Core never treats a caller-supplied
+`runtime_owned_proof: true` boolean as trusted and therefore never emits a
+ready result; only a future trusted host adapter may emit
+`same_project_fresh_verified`. Forks hold as
+`held_inherited_context_rejected`; projectless results hold as
+`held_projectless_fallback_rejected`; missing or mismatched identity holds as
+`held_project_binding_mismatch`. A non-Git local folder without runtime-owned
+proof holds as `held_same_project_fresh_unavailable` and explicitly requires a
+Human UI fallback. This is classification only: it makes no host call and must
+report both mutation and dispatch as false. Desktop UI success must never be
+used as evidence that the connector supports the same request.
 
 ## User-Facing Entry Points
 
