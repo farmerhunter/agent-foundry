@@ -219,10 +219,11 @@ def main() -> int:
                 }
             }
         )
+        expected_decision = "hold_required" if action == "create" else "dry_run_ready"
         expect(
             f"role-operation-{action}-supported-dry-run",
             code == 0
-            and output["adapter_plan"]["adapter_decision"] == "dry_run_ready"
+            and output["adapter_plan"]["adapter_decision"] == expected_decision
             and output["adapter_plan"]["tool_call_proposed"] == "not_available"
             and output["adapter_plan"]["native_ids_are_metadata_only"] is True
             and output["mutation_performed"] is False
@@ -273,7 +274,7 @@ def main() -> int:
         "creation_boundary": creation_boundary(),
     }}}
     code, output = run(positive)
-    expect("creation-boundary-positive", code == 0 and output["adapter_plan"]["creation_boundary_state"] == "same_project_creation_boundary_verified" and output["adapter_plan"]["freshness_forensic_evidence"] == "unavailable", output, errors)
+    expect("creation-boundary-positive-held-unverified", code == 0 and output["adapter_plan"]["adapter_decision"] == "hold_required" and output["adapter_plan"]["creation_boundary_state"] == "same_project_creation_boundary_unverified" and output["adapter_plan"]["freshness_forensic_evidence"] == "unavailable", output, errors)
 
     negatives = {
         "missing-acceptance": {"architect_acceptance_ref": ""},
