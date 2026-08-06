@@ -85,6 +85,7 @@ def creation_boundary(**overrides: object) -> dict:
         "source": "durable:github:farmerhunter/agent-foundry:issue:517",
         "digest": "sha256:517-boundary-fixture",
         "opaque_identity_ref": "native:opaque-thread-517",
+        "readback_identity_ref": "native:opaque-thread-517",
         "verification_source": "durable_scheduler_reference",
         "create_count": 1,
         "primitive": "create_thread",
@@ -284,6 +285,7 @@ def main() -> int:
         "project-mismatch": {"binding_cwd": "/other/project"},
         "transcript": {"transcript_read": True},
         "history": {"history_read": True},
+        "readback-mismatch": {"readback_identity_ref": "native:other-thread"},
     }
     for name, override in negatives.items():
         case = {"role_operation": {"action": "create", "capability_receipt": {

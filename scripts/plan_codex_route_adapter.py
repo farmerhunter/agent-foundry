@@ -288,7 +288,7 @@ def validate_creation_boundary(value: Any) -> tuple[dict[str, Any] | None, list[
     if not isinstance(value, dict):
         return None, ["same-project creation boundary evidence is required"]
     required_refs = (
-        "terminal_receipt_ref", "architect_acceptance_ref", "source", "digest", "opaque_identity_ref",
+        "terminal_receipt_ref", "architect_acceptance_ref", "source", "digest", "opaque_identity_ref", "readback_identity_ref",
     )
     reasons: list[str] = []
     for field in required_refs:
@@ -313,6 +313,8 @@ def validate_creation_boundary(value: Any) -> tuple[dict[str, Any] | None, list[
         reasons.append("creation boundary project binding project_id does not match")
     if value.get("binding_cwd") != value.get("cwd"):
         reasons.append("creation boundary project binding cwd does not match")
+    if value.get("readback_identity_ref") != value.get("opaque_identity_ref"):
+        reasons.append("creation boundary readback identity does not correlate to opaque identity")
     if reasons:
         return None, reasons
     return {
