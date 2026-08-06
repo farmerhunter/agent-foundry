@@ -163,7 +163,10 @@ Before a host creates a successor thread, classify a metadata-only
 `git_repository_project`, `git_worktree_project`, `fork_inherited_context`, and
 `projectless_fresh_context`. A same-project fresh result is valid only when
 `project_id`, `project_root`, and `cwd` match exactly, `fresh_context` is true,
-and runtime-owned creation proof is present. Forks hold as
+and trusted host readback is present. Core never treats a caller-supplied
+`runtime_owned_proof: true` boolean as trusted and therefore never emits a
+ready result; only a future trusted host adapter may emit
+`same_project_fresh_verified`. Forks hold as
 `held_inherited_context_rejected`; projectless results hold as
 `held_projectless_fallback_rejected`; missing or mismatched identity holds as
 `held_project_binding_mismatch`. A non-Git local folder without runtime-owned

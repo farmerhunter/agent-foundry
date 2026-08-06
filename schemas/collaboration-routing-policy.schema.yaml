@@ -67,7 +67,7 @@ objects:
       - "project_kind distinguishes local_folder_project, git_repository_project, git_worktree_project, fork_inherited_context, and projectless_fresh_context"
       - "same-project fresh requires exact project_id, project_root, cwd, fresh_context=true, and runtime-owned proof"
       - "fork and projectless contexts are held and are never reported as same-project fresh"
-      - "a non-Git local folder without runtime-owned proof is held as held_same_project_fresh_unavailable and requires Human UI fallback"
+      - "caller-supplied runtime_owned_proof is never trusted by Core; without trusted host readback every same-project fresh classification remains held_runtime_proof_unverified or held_same_project_fresh_unavailable"
   OverrideGrant:
     required: [active, scope, expires_after_work_unit, reset_required]
     rules:

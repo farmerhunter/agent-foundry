@@ -135,7 +135,7 @@ def main() -> int:
     expect("non-git-invalid-arguments-hold", code == 0 and output["state"] == "held_same_project_fresh_unavailable" and output["human_ui_fallback_required"] is True and output["mutation_performed"] is False and output["dispatch_performed"] is False, output, errors)
     for kind in ("git_repository_project", "git_worktree_project"):
         code, output = run(binding(kind, runtime=True))
-        expect(f"{kind}-fresh-ready", code == 0 and output["state"] == "same_project_fresh_ready" and output["mutation_performed"] is False, output, errors)
+        expect(f"{kind}-runtime-proof-unverified", code == 0 and output["state"] == "held_runtime_proof_unverified" and output["mutation_performed"] is False and output["dispatch_performed"] is False, output, errors)
     code, output = run(binding("fork_inherited_context", "fork", runtime=True))
     expect("fork-inherited-held", code == 0 and output["state"] == "held_inherited_context_rejected" and output["dispatch_performed"] is False, output, errors)
     code, output = run(binding("projectless_fresh_context", "projectless", runtime=True))
@@ -153,6 +153,9 @@ def main() -> int:
     forged = binding(runtime=True); forged["project_binding_observation"]["runtime_owned_proof"] = False
     code, output = run(forged)
     expect("missing-runtime-proof-held", code == 0 and output["state"] == "held_same_project_fresh_unavailable", output, errors)
+    claimed_ready = binding("git_repository_project", runtime=True)
+    code, output = run(claimed_ready)
+    expect("forged-runtime-proof-never-ready", code == 0 and output["state"] == "held_runtime_proof_unverified" and output["mutation_performed"] is False and output["dispatch_performed"] is False, output, errors)
 
     base = input_for(portable("subagent"))
     code, output = run(base)

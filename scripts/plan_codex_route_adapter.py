@@ -326,7 +326,8 @@ def project_binding_classification(root: dict[str, Any]) -> dict[str, Any]:
     elif not runtime_proof:
         state, reason = "held_same_project_fresh_unavailable", "runtime-owned create proof is unavailable"
     else:
-        state, reason = "same_project_fresh_ready", "metadata proves fresh context and exact selected project binding"
+        # A caller-supplied boolean is not trusted host readback.
+        state, reason = "held_runtime_proof_unverified", "runtime_owned_proof is caller-supplied; trusted host readback is required"
     return {
         "adapter": "codex",
         "state": state,
@@ -337,7 +338,7 @@ def project_binding_classification(root: dict[str, Any]) -> dict[str, Any]:
         "human_ui_fallback_required": state == "held_same_project_fresh_unavailable" and kind == "local_folder_project",
         "mutation_performed": False,
         "dispatch_performed": False,
-        "next_action": "Use the supported Human UI path; do not fall back to fork or projectless." if state == "held_same_project_fresh_unavailable" else "Keep the request held until exact binding evidence is available." if state != "same_project_fresh_ready" else "A separately authorized host apply may proceed; this classification performed no call.",
+        "next_action": "Use the supported Human UI path; do not fall back to fork or projectless." if state == "held_same_project_fresh_unavailable" else "Keep the request held until a trusted host adapter supplies readback; this classifier performed no call.",
     }
 
 
