@@ -1,0 +1,248 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://agent-foundry.local/schemas/bounded-collaboration-onboarding.schema.yaml"
+title: Bounded Collaboration Onboarding Plan
+description: >-
+  Portable metadata-only planning contract, not authority for native threads,
+  transcript access, Vault writes, or runtime activation.
+type: object
+additionalProperties: false
+oneOf:
+  - required: [onboarding_version, request, runtime_capabilities, role_hub, current_thread, existing_roles, repository_state]
+    not: {required: [state]}
+  - $ref: "#/$defs/PlanResult"
+properties:
+  onboarding_version:
+    const: bounded-collaboration-onboarding-v1
+  request:
+    type: object
+    additionalProperties: false
+    required: [project_identity, onboarding_key, apply_authorized]
+    properties:
+      project_identity:
+        type: object
+        additionalProperties: false
+        required: [project_id, repository, integration_branch]
+        properties:
+          project_id: {type: string, minLength: 1}
+          repository: {type: string, pattern: "^[^/]+/[^/]+$"}
+          integration_branch: {type: string, minLength: 1}
+      onboarding_key: {type: string, minLength: 1}
+      apply_authorized: {type: boolean}
+      role_display_names:
+        type: object
+        additionalProperties: false
+        properties:
+          Coordinator: {type: string, minLength: 1}
+          Architect: {type: string, minLength: 1}
+  runtime_capabilities:
+    type: object
+    additionalProperties: false
+    required: [role_binding, projections, operations]
+    properties:
+      role_binding:
+        type: object
+        additionalProperties: false
+        required: [status]
+        properties:
+          status: {enum: [supported, unavailable, unknown]}
+      projections:
+        type: object
+        additionalProperties: false
+        required: [role_hub, current_thread, scheduler, transient_template]
+        properties:
+          role_hub: {$ref: "#/$defs/Capability"}
+          current_thread: {$ref: "#/$defs/Capability"}
+          scheduler: {$ref: "#/$defs/SchedulerProjection"}
+          transient_template: {$ref: "#/$defs/TransientProjection"}
+      operations:
+        type: object
+        additionalProperties: false
+        required: [discover, create, rename, link, navigate]
+        properties:
+          discover: {$ref: "#/$defs/Capability"}
+          create: {$ref: "#/$defs/Capability"}
+          rename: {$ref: "#/$defs/Capability"}
+          link: {$ref: "#/$defs/Capability"}
+          navigate: {$ref: "#/$defs/Capability"}
+  role_hub:
+    type: object
+    additionalProperties: false
+    required: [status]
+    properties:
+      status: {enum: [missing, active, held, ambiguous]}
+      role_hub_ref: {type: string, minLength: 1}
+  current_thread:
+    type: object
+    additionalProperties: false
+    required: [eligible, current_thread_ref, name]
+    properties:
+      eligible: {type: boolean}
+      current_thread_ref: {type: string, minLength: 1}
+      name: {type: string, minLength: 1}
+  existing_roles:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      required: [project_id, role, role_ref, durable_anchor, state, legacy]
+      properties:
+        project_id: {type: string, minLength: 1}
+        role: {enum: [Coordinator, Architect, Implementer, Reviewer, Tester, Harvester]}
+        role_ref: {type: string, minLength: 1}
+        durable_anchor: {type: string, minLength: 1}
+        state: {enum: [active, held, historical_reference]}
+        legacy: {type: boolean}
+        display_name: {type: string, minLength: 1}
+        linked_to_role_hub: {type: boolean}
+  repository_state:
+    type: object
+    additionalProperties: false
+    required: [dirty, dirty_preserved]
+    properties:
+      dirty: {type: boolean}
+      dirty_preserved: {type: boolean}
+  operation_receipts:
+    type: array
+    items: {$ref: "#/$defs/OperationReceipt"}
+  rollback_receipts:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      required: [source_idempotency_key, status, receipt_ref, source_operation_fingerprint, rollback_fingerprint]
+      properties:
+        source_idempotency_key: {type: string, minLength: 1}
+        status: {enum: [applied, failed]}
+        receipt_ref: {type: string, minLength: 1}
+        source_operation_fingerprint: {type: string, minLength: 1}
+        rollback_fingerprint: {type: string, minLength: 1}
+  plan_result:
+    $ref: "#/$defs/PlanResult"
+  read_only: {const: true}
+  mutation_performed: {const: false}
+  dispatch_performed: {const: false}
+  state: {enum: [preflight, plan_ready, applying, ready, partial_hold, rollback_planned, rolled_back, rollback_incomplete]}
+  transition_history: {type: array}
+  stop_conditions: {type: array}
+  operations: {type: array}
+  rollback_operations: {type: array}
+  summary: {type: object}
+$defs:
+  Capability:
+    type: object
+    additionalProperties: false
+    required: [status]
+    properties:
+      status: {enum: [supported, unavailable, unknown]}
+  SchedulerProjection:
+    type: object
+    additionalProperties: false
+    required: [status, binding_ref, binding_status]
+    properties:
+      status: {enum: [supported, unavailable, unknown]}
+      binding_ref: {type: string, minLength: 1}
+      binding_status: {enum: [bound, unavailable]}
+  TransientProjection:
+    type: object
+    additionalProperties: false
+    required: [status, template_refs]
+    properties:
+      status: {enum: [supported, unavailable, unknown]}
+      template_refs:
+        type: object
+        additionalProperties: false
+        required: [Implementer, Reviewer, Tester, Harvester]
+        properties:
+          Implementer: {type: string, minLength: 1}
+          Reviewer: {type: string, minLength: 1}
+          Tester: {type: string, minLength: 1}
+          Harvester: {type: string, minLength: 1}
+  PlanResult:
+    type: object
+    additionalProperties: false
+    required: [onboarding_version, read_only, mutation_performed, dispatch_performed, state, transition_history, stop_conditions, operations, summary]
+    properties:
+      onboarding_version: {const: bounded-collaboration-onboarding-v1}
+      read_only: {const: true}
+      mutation_performed: {const: false}
+      dispatch_performed: {const: false}
+      state: {enum: [preflight, plan_ready, applying, ready, partial_hold, rollback_planned, rolled_back, rollback_incomplete]}
+      transition_history:
+        type: array
+        minItems: 1
+        items: {type: string}
+      operations:
+        type: array
+        items: {$ref: "#/$defs/Operation"}
+      rollback_operations:
+        type: array
+        items: {$ref: "#/$defs/RollbackOperation"}
+      summary:
+        $ref: "#/$defs/OnboardingSummary"
+      stop_conditions:
+        type: array
+        items: {type: string, minLength: 1}
+  Operation:
+    type: object
+    additionalProperties: false
+    required: [kind, subject, idempotency_key, preimage, desired_state, operation_fingerprint]
+    properties:
+      kind: {type: string, minLength: 1}
+      subject: {type: string, minLength: 1}
+      idempotency_key: {type: string, minLength: 1}
+      preimage: {type: object}
+      desired_state: {type: object}
+      depends_on:
+        type: array
+        items: {type: string, minLength: 1}
+      operation_fingerprint: {type: string, minLength: 1}
+  RollbackOperation:
+    type: object
+    additionalProperties: false
+    required: [kind, subject, source_idempotency_key, source_operation_fingerprint, preimage, automatic, never_delete_or_archive, rollback_fingerprint]
+    properties:
+      kind: {enum: [mark_setup_incomplete, restore_preimage]}
+      subject: {type: string, minLength: 1}
+      source_idempotency_key: {type: string, minLength: 1}
+      source_operation_fingerprint: {type: string, minLength: 1}
+      preimage: {type: object}
+      automatic: {const: false}
+      never_delete_or_archive: {const: true}
+      rollback_fingerprint: {type: string, minLength: 1}
+  OnboardingSummary:
+    type: object
+    additionalProperties: false
+    required: [project_identity, capability, reused, created, unchanged, held, active_navigation, historical_references, dirty_state, next_human_action]
+    properties:
+      project_identity: {type: object}
+      capability: {enum: [complete, partial, unavailable, privacy_held]}
+      reused: {type: array}
+      created: {type: array}
+      unchanged: {type: array}
+      held: {type: array}
+      active_navigation: {type: object}
+      historical_references: {type: array}
+      dirty_state: {type: object}
+      next_human_action: {type: string, minLength: 1}
+      projections: {type: object}
+  OperationReceipt:
+    type: object
+    additionalProperties: false
+    required: [idempotency_key, status]
+    properties:
+      idempotency_key: {type: string, minLength: 1}
+      status: {enum: [applied, failed, not_attempted]}
+      receipt_ref: {type: string, minLength: 1}
+      operation_fingerprint: {type: string, minLength: 1}
+      result_ref: {type: string, minLength: 1}
+    allOf:
+      - if:
+          properties:
+            status: {enum: [applied, failed]}
+        then:
+          required: [receipt_ref, operation_fingerprint]
+      - if:
+          properties:
+            status: {const: applied}
+        then:
+          required: [result_ref]
