@@ -172,12 +172,13 @@ Current canonical path:
 | W10 provisional-policy evidence | [#471](https://github.com/farmerhunter/agent-foundry/issues/471) | local deterministic/reference only | W10 local deterministic/reference-only evidence; it is not trusted live evidence or a formal Harvest. |
 | Provisional-policy no-change hold | [#472](https://github.com/farmerhunter/agent-foundry/issues/472) (CLOSED) | static/read-only | No-change hold retains provisional policy-v0 and forbids parameter divergence or final freeze without a new Human HDC; it does not prove a new policy or activation. |
 | Limited real-mode rollout | [#462](https://github.com/farmerhunter/agent-foundry/issues/462) | AF19 candidate / held | Full trusted-metrics real-mode rollout is no longer an AF18 MVP gate. The bounded collaboration controls are usable through the existing collaboration practice; #462 moves to AF19 for trusted observation, calibration, and higher-order rollout evidence. |
-| Parent Epic/readiness | #418 / #426 / #427 | AF18 transparent integration | #426 and #427 are complete and closed with evidence; #418 remains the Epic authority for the final readiness audit. Trusted runtime and production gates move to AF19. |
+| Parent Epic/readiness | #418 / #426 / #427 | AF18 default availability | #426/#427 are complete; PR #519 merged the accepted integration head into `main` as `7096fb54c121826eb61f1ebdd2eaf01f4c20f9fb`. #418 is ready for final closure. Trusted runtime and production gates remain AF19. |
 
 ### AF18 Current Closure State
 
-The AF18 implementation and adopter gates are now complete on the integration
-branch. #426 records the Human-approved canonical practice/Vault application
+The AF18 implementation and adopter gates are now complete on `main`. PR #519
+merged the exact accepted integration head after independent Reviewer, Tester,
+and Architect acceptance. #426 records the Human-approved canonical practice/Vault application
 and selected adapter publication; #427 records adopter acceptance; #497 and
 #502 record the bounded onboarding planner and portable RoleHub projection;
 #517 records the real-host fresh-thread/project-binding evidence. These issues
@@ -190,21 +191,22 @@ holds on ambiguity or partial failure. Native apply remains separately
 controlled, and freshness forensic evidence remains `unverified`; neither is
 silently presented as stronger than the host can prove.
 
-AF18's remaining action is a final Epic/readiness audit in #418 and a roadmap
-readback. No new implementation is required to use the bounded path through
-the existing multi-agent-collaboration practice.
+AF18's remaining action is the final Epic closure/readback in #418. No new
+implementation is required to use the bounded path through the existing
+multi-agent-collaboration practice.
 
 Trusted runtime observation, P3/P4 evidence, normal-policy calibration/freeze,
-native successor/runtime activation, and main/release are AF19 enhancement
-gates. They must not block the AF18 bounded collaboration path.
+native successor/runtime activation, and production activation are AF19
+enhancement gates. They must not block the AF18 bounded collaboration path;
+the AF18 source integration into `main` is already complete.
 
 Until these gates are explicitly accepted:
 
 - Do not resume #435's old pre-reset implementation route.
 - Do not treat #442 values as normal Coordinator/session policy.
-- Do not release #426/#427 or main/release without their Human gates.
-- Do not activate runtime/config/hooks, generated publish, external execution,
-  final AF18 readiness, final policy freeze, auto-tuning, or activation.
+- Do not activate runtime/config/hooks, generated publish beyond the approved
+  adapters, external execution, final policy freeze, auto-tuning, or production
+  activation from this source merge.
 
 ### AF18 Cleanup Rules
 
@@ -227,6 +229,8 @@ AF18 is complete when:
 - the bounded collaboration control path is integrated into the existing multi-agent-collaboration practice;
 - a Human approves the canonical practice application and the selected adapters are published;
 - one adopter dogfood/readback confirms the transparent default user experience;
+- the accepted integration head is merged into `main` and the selected default
+  adapter outputs are read back consistently;
 - the fresh-thread workaround and its honest `unverified` freshness state are
   documented as the current onboarding contract;
 - metrics remain explicitly `unavailable/not_exposed`, with no unsupported cost, model, auto-tuning, or enforcement claims;
@@ -243,7 +247,10 @@ The explicit readiness matrix is:
 | #493 | AF-19 | Active | Ready |
 | #494 | AF-19 | Active | Blocked |
 
-AF18 completion does not imply trusted runtime metrics, normal policy freeze, native successor activation, Vault migration, production/main release, or V2 local-first orchestration completion. Those belong to AF19 or later independent gates.
+AF18 completion does not imply trusted runtime metrics, normal policy freeze,
+native successor activation, Vault migration, production/runtime activation, or
+V2 local-first orchestration completion. Those belong to AF19 or later
+independent gates; `main` source integration is an AF18 gate and is complete.
 
 ## AF19: Adaptive and Observed Collaboration
 
@@ -254,6 +261,6 @@ AF19 scope:
 - a trusted runtime-owned producer for context age, token consumption, and effective model/reasoning mapping;
 - calibration evidence and a Human-approved normal policy freeze;
 - native successor/runtime activation and full real-mode rollout evidence for [#462](https://github.com/farmerhunter/agent-foundry/issues/462);
-- production activation, generated publish beyond the AF18 adopter path, and final main/release readiness.
+- production activation and any broader generated publish or release program.
 
 AF19 does not include the deferred selected-Vault SQLite/shadow lane in [#492](https://github.com/farmerhunter/agent-foundry/issues/492); that remains an optional, separately reopened storage-architecture effort.
