@@ -50,6 +50,13 @@ FORBIDDEN_RECEIPT_KEYS = {"prompt", "body", "message", "messages", "content", "t
 ROLEHUB_TERMINAL_FAILURE = {"partial_hold", "rolled_back", "rollback_incomplete"}
 ROLEHUB_TERMINAL = ROLEHUB_TERMINAL_FAILURE | {"ready"}
 ROLEHUB_SCHEMA_VALIDATION_FAILURE = "ROLEHUB_SCHEMA_VALIDATION_FAILED"
+PROJECT_BINDING_KINDS = {
+    "local_folder_project",
+    "git_repository_project",
+    "git_worktree_project",
+    "fork_inherited_context",
+    "projectless_fresh_context",
+}
 
 
 def fail(message: str) -> None:
@@ -280,6 +287,60 @@ def project_role_operation(root: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def project_binding_classification(root: dict[str, Any]) -> dict[str, Any]:
+    """Classify a host-reported project/thread binding without calling the host."""
+    observation = root.get("project_binding_observation")
+    if not isinstance(observation, dict):
+        fail("project_binding_observation must be an object")
+    kind = observation.get("project_kind")
+    context = observation.get("context_mode")
+    identity = observation.get("identity")
+    target = observation.get("target")
+    runtime_proof = observation.get("runtime_owned_proof") is True
+    reasons: list[str] = []
+    if kind not in PROJECT_BINDING_KINDS:
+        reasons.append("project_kind is missing or unknown")
+    if context not in {"fresh", "fork", "projectless"}:
+        reasons.append("context_mode must be fresh, fork, or projectless")
+    if not isinstance(identity, dict) or not isinstance(target, dict):
+        reasons.append("exact project identity, root, and cwd are required")
+        identity = identity if isinstance(identity, dict) else {}
+        target = target if isinstance(target, dict) else {}
+    for field in ("project_id", "project_root", "cwd"):
+        if not isinstance(identity.get(field), str) or not identity[field]:
+            reasons.append(f"identity.{field} is missing")
+        if not isinstance(target.get(field), str) or not target[field]:
+            reasons.append(f"target.{field} is missing")
+        elif isinstance(identity.get(field), str) and identity[field] != target[field]:
+            reasons.append(f"target {field} does not match selected project")
+    if observation.get("fresh_context") is not True:
+        reasons.append("fresh_context proof is absent")
+    if context == "fork" or kind == "fork_inherited_context":
+        state, reason = "held_inherited_context_rejected", "fork inherits predecessor history"
+    elif context == "projectless" or kind == "projectless_fresh_context":
+        state, reason = "held_projectless_fallback_rejected", "projectless fresh context loses selected project binding"
+    elif reasons:
+        state, reason = "held_project_binding_mismatch", "exact project identity/root/cwd/freshness proof is incomplete"
+    elif kind == "local_folder_project" and not runtime_proof:
+        state, reason = "held_same_project_fresh_unavailable", "non-Git local-folder API support is not runtime-proven; Human UI fallback required"
+    elif not runtime_proof:
+        state, reason = "held_same_project_fresh_unavailable", "runtime-owned create proof is unavailable"
+    else:
+        state, reason = "same_project_fresh_ready", "metadata proves fresh context and exact selected project binding"
+    return {
+        "adapter": "codex",
+        "state": state,
+        "project_kind": kind if kind in PROJECT_BINDING_KINDS else "unknown",
+        "context_mode": context if context in {"fresh", "fork", "projectless"} else "unknown",
+        "runtime_owned_proof": runtime_proof,
+        "attention": reasons + [reason],
+        "human_ui_fallback_required": state == "held_same_project_fresh_unavailable" and kind == "local_folder_project",
+        "mutation_performed": False,
+        "dispatch_performed": False,
+        "next_action": "Use the supported Human UI path; do not fall back to fork or projectless." if state == "held_same_project_fresh_unavailable" else "Keep the request held until exact binding evidence is available." if state != "same_project_fresh_ready" else "A separately authorized host apply may proceed; this classification performed no call.",
+    }
+
+
 def project_rolehub(root: dict[str, Any]) -> dict[str, Any]:
     """Validate a portable RoleHub projection without invoking a native API."""
     if root.get("contract_version") != "AF18-rolehub-adapter-v1":
@@ -444,6 +505,8 @@ def project_rolehub(root: dict[str, Any]) -> dict[str, Any]:
 
 
 def project(root: dict[str, Any]) -> dict[str, Any]:
+    if "project_binding_observation" in root:
+        return project_binding_classification(root)
     if "rolehub_identity" in root:
         return project_rolehub(root)
     if "role_operation" in root:
