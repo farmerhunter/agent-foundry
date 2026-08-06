@@ -61,6 +61,14 @@ class CodexHostRoleHubAdapter:
             raise ValueError("schema_drift")
         if not isinstance(plan.get("operations"), list):
             raise ValueError("schema_drift")
+        if set(plan) - {"contract_version", "project_id", "project_root", "logical_rolehub_id", "operations"}:
+            raise ValueError("schema_drift")
+        allowed = {"operation_id", "action", "idempotency_key", "role", "title", "target_ref", "preimage"}
+        for op in plan["operations"]:
+            if not isinstance(op, dict) or set(op) - allowed:
+                raise ValueError("schema_drift")
+            if any(k in op for k in PRIVATE):
+                raise ValueError("privacy_boundary")
 
     def apply(self, plan: dict[str, Any]) -> dict[str, Any]:
         try:
