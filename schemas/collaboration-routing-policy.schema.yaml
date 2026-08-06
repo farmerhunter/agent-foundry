@@ -24,6 +24,13 @@ objects:
     rules:
       - "role specialization, continuity, and independence are separate inputs"
       - "specialization value, project continuity relevance, and independent-review value are not inferred from role label or thread age alone"
+  CreationBoundaryEvidence:
+    required: [terminal_receipt_ref, architect_acceptance_ref, source, digest, opaque_identity_ref, verification_source, create_count, primitive, project_id, cwd, binding_project_id, binding_cwd]
+    rules:
+      - "same_project_creation_boundary_verified requires one create_thread primitive, a new opaque identity, correlated post-create readback, and matching project_id/cwd binding"
+      - "predecessor, fork source, projectless, child worktree, retry, dispatch, transcript, history, and turn reads must all be explicitly false"
+      - "verification_source is durable_scheduler_reference and refs/digest are durable evidence inputs; the projection never verifies them or dispatches"
+      - "freshness_forensic_evidence remains unavailable unless a future host receipt supplies parentThreadId, forkSource, and contextInheritance evidence"
   RuntimeCapabilities:
     required: [observed_at, mechanisms]
     rules:

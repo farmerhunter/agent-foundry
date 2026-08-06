@@ -156,6 +156,28 @@ It proposes no real tool call: all adapter output reports
 hooks, custom agents, policy records, runtime installation, and telemetry stay
 outside this pilot.
 
+### Same-project creation boundary
+
+When a host dogfood has produced a durable terminal receipt, the Codex
+projection may report `creation_boundary_state:
+same_project_creation_boundary_verified`. This is narrower than fresh-context
+proof: the receipt must name the terminal and Architect acceptance records,
+source and digest, a new opaque identity, and the
+`durable_scheduler_reference` verification source. It must also prove exactly
+one `create_thread` primitive, no predecessor/fork source, matching
+`project_id`/`cwd` binding, correlated post-create readback, and explicit
+false values for projectless, child-worktree, retry, dispatch, transcript,
+history, and turn reads. The adapter only projects this evidence; it does not
+verify GitHub or call the host.
+
+Missing or inconsistent fields produce a hold. The result must never be
+labelled `same_project_fresh_host_path_verified` or
+`fresh_context_verified`, and it must not claim inherited history is absent.
+A future forensic upgrade requires host evidence such as `parentThreadId`,
+`forkSource`, and `contextInheritance`. Until then,
+`freshness_forensic_evidence` is `unavailable`, and onboarding must not create
+another duplicate thread solely because freshness cannot be observed.
+
 ## User-Facing Entry Points
 
 Agents should expose these as natural-language workflows rather than requiring

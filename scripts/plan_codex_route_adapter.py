@@ -219,6 +219,7 @@ def project_role_operation(root: dict[str, Any]) -> dict[str, Any]:
     provenance = "unavailable"
     native_metadata: dict[str, Any] = {}
     reasons: list[str] = []
+    creation_boundary: dict[str, Any] | None = None
     if forbidden:
         reasons.append("privacy-safe receipt contains forbidden raw content")
     if capability is None:
@@ -237,6 +238,9 @@ def project_role_operation(root: dict[str, Any]) -> dict[str, Any]:
             reasons.append("capability receipt has an unknown status")
         if provenance not in {"observed", "estimated", "unavailable"}:
             reasons.append("capability receipt has an unknown provenance")
+        if action == "create" and status == "supported" and provenance == "observed":
+            creation_boundary, boundary_reasons = validate_creation_boundary(receipt.get("creation_boundary"))
+            reasons.extend(boundary_reasons)
     if status in {"unsupported", "not_available", "unknown"} or provenance == "unavailable":
         reasons.append("capability is unavailable or unsupported")
         decision = "hold_required"
@@ -259,6 +263,12 @@ def project_role_operation(root: dict[str, Any]) -> dict[str, Any]:
             "tool_call_proposed": "not_available",
             "native_ids_are_metadata_only": True,
             "adapter_metadata": native_metadata,
+            "creation_boundary_state": (
+                creation_boundary["creation_boundary_state"] if creation_boundary else "not_available"
+            ),
+            "freshness_forensic_evidence": (
+                creation_boundary["freshness_forensic_evidence"] if creation_boundary else "not_available"
+            ),
         },
         "attention": reasons,
         "next_action": "Keep the portable Core route unchanged; obtain supported capability evidence before separately authorized execution.",
@@ -267,6 +277,48 @@ def project_role_operation(root: dict[str, Any]) -> dict[str, Any]:
         "user_config_mutation_performed": False,
         "hook_or_custom_agent_mutation_performed": False,
     }
+
+
+def validate_creation_boundary(value: Any) -> tuple[dict[str, Any] | None, list[str]]:
+    """Validate durable evidence for one same-project create_thread boundary.
+
+    This is projection-only: the adapter never verifies GitHub references or
+    performs a host call.  Freshness remains explicitly forensic-unavailable.
+    """
+    if not isinstance(value, dict):
+        return None, ["same-project creation boundary evidence is required"]
+    required_refs = (
+        "terminal_receipt_ref", "architect_acceptance_ref", "source", "digest", "opaque_identity_ref",
+    )
+    reasons: list[str] = []
+    for field in required_refs:
+        if not isinstance(value.get(field), str) or not value[field]:
+            reasons.append(f"creation boundary is missing {field}")
+    if value.get("verification_source") != "durable_scheduler_reference":
+        reasons.append("creation boundary verification_source must be durable_scheduler_reference")
+    if value.get("digest") and (not isinstance(value["digest"], str) or not value["digest"].startswith("sha256:")):
+        reasons.append("creation boundary digest must be a sha256 digest")
+    if value.get("create_count") != 1:
+        reasons.append("creation boundary create_count must equal 1")
+    if value.get("primitive") != "create_thread":
+        reasons.append("creation boundary primitive must be create_thread")
+    for field in ("predecessor_present", "fork_source_present", "transcript_read", "history_read", "turn_read", "projectless", "child_worktree", "retry", "dispatch"):
+        if value.get(field) is not False:
+            reasons.append(f"creation boundary {field} must be false")
+    if not isinstance(value.get("project_id"), str) or not value["project_id"]:
+        reasons.append("creation boundary project_id is required")
+    if not isinstance(value.get("cwd"), str) or not value["cwd"]:
+        reasons.append("creation boundary cwd is required")
+    if value.get("binding_project_id") != value.get("project_id"):
+        reasons.append("creation boundary project binding project_id does not match")
+    if value.get("binding_cwd") != value.get("cwd"):
+        reasons.append("creation boundary project binding cwd does not match")
+    if reasons:
+        return None, reasons
+    return {
+        "creation_boundary_state": "same_project_creation_boundary_verified",
+        "freshness_forensic_evidence": "unavailable",
+    }, []
 
 
 def project(root: dict[str, Any]) -> dict[str, Any]:

@@ -78,6 +78,34 @@ def adapter_context() -> dict:
     }
 
 
+def creation_boundary(**overrides: object) -> dict:
+    value = {
+        "terminal_receipt_ref": "https://github.com/farmerhunter/agent-foundry/issues/517#issuecomment-5201685599",
+        "architect_acceptance_ref": "https://github.com/farmerhunter/agent-foundry/issues/517#issuecomment-5201685599",
+        "source": "durable:github:farmerhunter/agent-foundry:issue:517",
+        "digest": "sha256:517-boundary-fixture",
+        "opaque_identity_ref": "native:opaque-thread-517",
+        "verification_source": "durable_scheduler_reference",
+        "create_count": 1,
+        "primitive": "create_thread",
+        "predecessor_present": False,
+        "fork_source_present": False,
+        "project_id": "local-eb6e22ec0d00ef785d687022be1b433d",
+        "cwd": "/Users/jinghuliu/Desktop/Code/Personal Projects/agent-foundry",
+        "binding_project_id": "local-eb6e22ec0d00ef785d687022be1b433d",
+        "binding_cwd": "/Users/jinghuliu/Desktop/Code/Personal Projects/agent-foundry",
+        "transcript_read": False,
+        "history_read": False,
+        "turn_read": False,
+        "projectless": False,
+        "child_worktree": False,
+        "retry": False,
+        "dispatch": False,
+    }
+    value.update(overrides)
+    return value
+
+
 def input_for(portable_plan: dict, observation: dict | None = None, adapter_envelopes: dict | None = None) -> dict:
     return {
         "portable_plan": portable_plan,
@@ -181,10 +209,11 @@ def main() -> int:
                 "role_operation": {
                     "action": action,
                     "capability_receipt": {
-                        "capability": action,
+                    "capability": action,
                         "status": "supported",
                         "provenance": "observed",
                         "native_metadata": {"native_thread_id": f"codex-{action}-fixture"},
+                        **({"creation_boundary": creation_boundary()} if action == "create" else {}),
                     },
                 }
             }
@@ -237,6 +266,32 @@ def main() -> int:
     }
     code, output = run(private_operation)
     expect("role-operation-privacy-fails-closed", code == 0 and output["adapter_plan"]["adapter_decision"] == "hold_required", output, errors)
+
+    positive = {"role_operation": {"action": "create", "capability_receipt": {
+        "capability": "create", "status": "supported", "provenance": "observed",
+        "creation_boundary": creation_boundary(),
+    }}}
+    code, output = run(positive)
+    expect("creation-boundary-positive", code == 0 and output["adapter_plan"]["creation_boundary_state"] == "same_project_creation_boundary_verified" and output["adapter_plan"]["freshness_forensic_evidence"] == "unavailable", output, errors)
+
+    negatives = {
+        "missing-acceptance": {"architect_acceptance_ref": ""},
+        "missing-digest": {"digest": ""},
+        "fork": {"fork_source_present": True},
+        "count-zero": {"create_count": 0},
+        "count-many": {"create_count": 2},
+        "identity-mismatch": {"binding_project_id": "other-project"},
+        "project-mismatch": {"binding_cwd": "/other/project"},
+        "transcript": {"transcript_read": True},
+        "history": {"history_read": True},
+    }
+    for name, override in negatives.items():
+        case = {"role_operation": {"action": "create", "capability_receipt": {
+            "capability": "create", "status": "supported", "provenance": "observed",
+            "creation_boundary": creation_boundary(**override),
+        }}}
+        code, output = run(case)
+        expect(f"creation-boundary-{name}-held", code == 0 and output["adapter_plan"]["adapter_decision"] == "hold_required" and output["adapter_plan"]["creation_boundary_state"] == "not_available", output, errors)
 
     if errors:
         print("\n".join(errors), file=sys.stderr)
