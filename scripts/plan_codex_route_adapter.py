@@ -287,6 +287,18 @@ def validate_creation_boundary(value: Any) -> tuple[dict[str, Any] | None, list[
     """
     if not isinstance(value, dict):
         return None, ["same-project creation boundary evidence is required"]
+    allowed_fields = {
+        "terminal_receipt_ref", "architect_acceptance_ref", "source", "digest", "opaque_identity_ref",
+        "readback_identity_ref", "verification_source", "create_count", "primitive", "predecessor_present",
+        "fork_source_present", "project_id", "cwd", "binding_project_id", "binding_cwd", "transcript_read",
+        "history_read", "turn_read", "projectless", "child_worktree", "retry", "dispatch",
+    }
+    unexpected = sorted(set(value) - allowed_fields)
+    if unexpected:
+        return {
+            "creation_boundary_state": "creation_boundary_proof_untrusted",
+            "freshness_forensic_evidence": "unavailable",
+        }, [f"creation boundary contains untrusted fields: {', '.join(unexpected)}"]
     required_refs = (
         "terminal_receipt_ref", "architect_acceptance_ref", "source", "digest", "opaque_identity_ref", "readback_identity_ref",
     )

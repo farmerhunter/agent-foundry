@@ -286,6 +286,7 @@ def main() -> int:
         "transcript": {"transcript_read": True},
         "history": {"history_read": True},
         "readback-mismatch": {"readback_identity_ref": "native:other-thread"},
+        "forged-runtime-proof": {"runtime_owned_proof": True},
     }
     for name, override in negatives.items():
         case = {"role_operation": {"action": "create", "capability_receipt": {
@@ -293,7 +294,8 @@ def main() -> int:
             "creation_boundary": creation_boundary(**override),
         }}}
         code, output = run(case)
-        expect(f"creation-boundary-{name}-held", code == 0 and output["adapter_plan"]["adapter_decision"] == "hold_required" and output["adapter_plan"]["creation_boundary_state"] == "not_available", output, errors)
+        expected_state = "creation_boundary_proof_untrusted" if name == "forged-runtime-proof" else "not_available"
+        expect(f"creation-boundary-{name}-held", code == 0 and output["adapter_plan"]["adapter_decision"] == "hold_required" and output["adapter_plan"]["creation_boundary_state"] == expected_state, output, errors)
 
     if errors:
         print("\n".join(errors), file=sys.stderr)
