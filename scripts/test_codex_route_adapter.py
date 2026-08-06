@@ -78,6 +78,21 @@ def adapter_context() -> dict:
     }
 
 
+def creation_boundary(**overrides: object) -> dict:
+    value = {
+        "terminal_receipt_ref": "durable:terminal:517", "architect_acceptance_ref": "durable:architect:517",
+        "source": "durable:github:issue:517", "digest": "sha256:517-fixture",
+        "opaque_identity_ref": "native:opaque-517", "readback_identity_ref": "native:opaque-517",
+        "verification_source": "durable_scheduler_reference", "create_count": 1, "primitive": "create_thread",
+        "predecessor_present": False, "fork_source_present": False, "project_id": "local-fixture",
+        "cwd": "/tmp/fixture", "binding_project_id": "local-fixture", "binding_cwd": "/tmp/fixture",
+        "transcript_read": False, "history_read": False, "turn_read": False, "projectless": False,
+        "child_worktree": False, "retry": False, "dispatch": False,
+    }
+    value.update(overrides)
+    return value
+
+
 def input_for(portable_plan: dict, observation: dict | None = None, adapter_envelopes: dict | None = None) -> dict:
     return {
         "portable_plan": portable_plan,
@@ -224,14 +239,16 @@ def main() -> int:
                         "status": "supported",
                         "provenance": "observed",
                         "native_metadata": {"native_thread_id": f"codex-{action}-fixture"},
+                        **({"creation_boundary": creation_boundary()} if action == "create" else {}),
                     },
                 }
             }
         )
+        expected_decision = "hold_required" if action == "create" else "dry_run_ready"
         expect(
             f"role-operation-{action}-supported-dry-run",
             code == 0
-            and output["adapter_plan"]["adapter_decision"] == "dry_run_ready"
+            and output["adapter_plan"]["adapter_decision"] == expected_decision
             and output["adapter_plan"]["tool_call_proposed"] == "not_available"
             and output["adapter_plan"]["native_ids_are_metadata_only"] is True
             and output["mutation_performed"] is False
@@ -386,6 +403,25 @@ def main() -> int:
     private_rollback = {"status": "complete", "receipt": {"status": "complete", "reversed_operation_ids": ["second", "first"], "prompt": "SECRET"}}
     code, output = run(rolehub([first, second], rollback=private_rollback))
     expect("rolehub-rollback-privacy-hold", code == 0 and output["state"] == "partial_hold", output, errors)
+
+    create_case = {"role_operation": {"action": "create", "capability_receipt": {
+        "capability": "create", "status": "supported", "provenance": "observed",
+        "creation_boundary": creation_boundary(),
+    }}}
+    code, output = run(create_case)
+    expect("creation-boundary-positive-held-unverified", code == 0 and output["adapter_plan"]["adapter_decision"] == "hold_required" and output["adapter_plan"]["creation_boundary_state"] == "same_project_creation_boundary_unverified", output, errors)
+    for name, override in {
+        "missing-acceptance": {"architect_acceptance_ref": ""}, "fork": {"fork_source_present": True},
+        "count": {"create_count": 2}, "binding": {"binding_cwd": "/other"},
+        "history": {"history_read": True}, "readback": {"readback_identity_ref": "native:other"},
+        "forged-proof": {"runtime_owned_proof": True},
+    }.items():
+        case = {"role_operation": {"action": "create", "capability_receipt": {
+            "capability": "create", "status": "supported", "provenance": "observed",
+            "creation_boundary": creation_boundary(**override),
+        }}}
+        code, output = run(case)
+        expect(f"creation-boundary-{name}-held", code == 0 and output["adapter_plan"]["adapter_decision"] == "hold_required", output, errors)
 
     if errors:
         print("\n".join(errors), file=sys.stderr)
