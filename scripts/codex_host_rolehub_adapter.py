@@ -27,6 +27,10 @@ class CodexHostThreadConnector(Protocol):
     def set_thread_name(self, id: str, title: str) -> ThreadMetadata: ...
     def navigate_to_thread(self, id: str) -> Any: ...
 
+class AdapterHold(Exception):
+    def __init__(self, reason: str):
+        self.reason = reason
+
 def _safe(value: Any) -> Any:
     if isinstance(value, dict):
         return {k: _safe(v) for k, v in value.items() if k not in PRIVATE}
@@ -96,6 +100,8 @@ class CodexHostRoleHubAdapter:
                     self._preimages[key] = md
                     md = self.host.set_thread_name(md.id, title)
                     md = self._read(md.id, cwd)
+                    if md.name != title:
+                        raise AdapterHold("readback_name_mismatch")
                     receipt = self._receipt(plan, op, "applied", readback={"digest": digest({"cwd": md.cwd, "name": md.name}), "name": md.name})
                 elif action == "reuse":
                     matches = [m for m in self.host.list_threads(cwd) if isinstance(m, ThreadMetadata) and m.cwd == cwd and (not role or m.name == title or role in m.name)]
@@ -109,6 +115,8 @@ class CodexHostRoleHubAdapter:
                         raise RuntimeError("held_runtime_transport_unobservable")
                     before = self._read(ident, cwd); self._preimages[key] = before
                     after = self.host.set_thread_name(ident, title); after = self._read(ident, cwd)
+                    if after.name != title:
+                        raise AdapterHold("readback_name_mismatch")
                     receipt = self._receipt(plan, op, "applied", preimage={"name": before.name}, readback={"digest": digest({"cwd": after.cwd, "name": after.name}), "name": after.name})
                 elif action == "link":
                     receipt = self._receipt(plan, op, "applied", native_link=False, logical_link=True, target_ref="opaque")
@@ -126,6 +134,8 @@ class CodexHostRoleHubAdapter:
                     raise RuntimeError("held_runtime_transport_unobservable")
                 self._receipts[key] = receipt; applied.append(receipt)
             return {"status": "ready", "project_id": plan["project_id"], "logical_rolehub_id": plan["logical_rolehub_id"], "operations": applied}
+        except AdapterHold as hold:
+            return {"status": "partial_hold", "reason": hold.reason, "operations": applied}
         except Exception:
             return {"status": "setup_incomplete", "reason": "held_runtime_transport_unobservable", "operations": applied}
 

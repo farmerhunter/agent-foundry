@@ -51,6 +51,20 @@ class AdapterTests(unittest.TestCase):
             def create_thread(self, cwd): return {"id": "leak", "cwd": cwd}
         r = apply_rolehub(plan(op("c", "create", title="A")), Bad())
         self.assertEqual(r["status"], "setup_incomplete"); self.assertNotIn("leak", str(r))
+    def test_create_external_rename_never_ready(self):
+        class Renaming(FakeHost):
+            def set_thread_name(self, id, title):
+                return super().set_thread_name(id, "external")
+        r = apply_rolehub(plan(op("c", "create", title="requested")), Renaming())
+        self.assertEqual(r["status"], "partial_hold")
+        self.assertEqual(r["reason"], "readback_name_mismatch")
+    def test_name_external_rename_never_ready(self):
+        class Renaming(FakeHost):
+            def set_thread_name(self, id, title):
+                return super().set_thread_name(id, "external")
+        h = Renaming([ThreadMetadata("a", "/p/tiny-ipa", "old")])
+        r = apply_rolehub(plan(op("n", "name", title="requested", target_ref="a")), h)
+        self.assertEqual(r["status"], "partial_hold")
     def test_no_turns_or_forbidden_operations(self):
         h = FakeHost([ThreadMetadata("a", "/p/tiny-ipa", "A")]); apply_rolehub(plan(op("n", "navigate", target_ref="a")), h)
         self.assertFalse(any(len(x) > 2 and x[0] == "read" and x[2] for x in h.calls))
