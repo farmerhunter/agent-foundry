@@ -9,6 +9,38 @@ properties:
   project_id: {type: string, minLength: 1}
   logical_rolehub_id: {type: string, minLength: 1}
   runtime_id: {type: string, minLength: 1}
+  protocol_contract:
+    type: object
+    additionalProperties: false
+    required: [cli_version, protocol_variant, start_method, start_request, start_response, read_method, read_request]
+    properties:
+      cli_version: {type: string, const: codex-cli 0.133.0}
+      protocol_variant: {type: string, const: v2}
+      start_method: {type: string, const: thread/start}
+      start_request:
+        type: object
+        additionalProperties: false
+        required: [required_fields, optional_fields]
+        properties:
+          required_fields: {type: array, const: [cwd]}
+          optional_fields: {type: array, items: {type: string}, uniqueItems: true}
+      start_response:
+        type: object
+        additionalProperties: false
+        required: [required_fields, extraction_path]
+        properties:
+          required_fields: {type: array, const: [approvalPolicy, approvalsReviewer, cwd, model, modelProvider, sandbox, thread]}
+          extraction_path: {type: string, const: thread}
+          thread_required: {type: array, const: [id, cwd]}
+          thread_optional: {type: array, const: [name]}
+      read_method: {type: string, const: thread/read}
+      read_request:
+        type: object
+        additionalProperties: false
+        required: [required_fields, include_turns]
+        properties:
+          required_fields: {type: array, items: {type: string}, const: [threadId]}
+          include_turns: {type: boolean, const: false}
   capability_evidence:
     type: object
     additionalProperties: false
