@@ -27,6 +27,97 @@ ALLOWED_METHODS = {"initialize", "initialized", "thread/list", "thread/read", "t
 FORBIDDEN_METHODS = {"history", "turn/list", "thread/archive", "thread/delete", "turn/start", "shell", "filesystem", "config", "plugin", "mcp"}
 PRIVATE_KEYS = {"prompt", "body", "message", "messages", "content", "transcript", "turns", "tool_output", "raw_log"}
 
+# This is a static, checked-in description of the codex-cli 0.133.0 v2
+# app-server contract.  It is data for diagnosis, not a transport client.
+START_CONTRACT = {
+    "cli_version": "codex-cli 0.133.0",
+    "protocol_variant": "v2",
+    "start_method": "thread/start",
+    "start_request": {
+        "required": ["cwd"],
+        "optional": [
+            "approvalPolicy", "approvalsReviewer", "baseInstructions", "config",
+            "developerInstructions", "sandbox", "serviceName", "ephemeral",
+            "sessionStartSource", "personality", "model", "modelProvider",
+            "serviceTier", "threadSource",
+        ],
+    },
+    "start_response": {
+        "required": ["approvalPolicy", "approvalsReviewer", "cwd", "model", "modelProvider", "sandbox", "thread"],
+        "extract": "thread",
+        # The protocol requires id/cwd for correlation; name is optional and
+        # may be null in the upstream Thread object.
+        "thread_required": ["id", "cwd"],
+        "thread_optional": ["name"],
+    },
+    "read_method": "thread/read",
+    "read_request": {"required": ["threadId"], "optional": ["includeTurns"], "includeTurns": False},
+    "correlation": ["thread.id", "thread.cwd"],
+}
+
+
+def diagnose_thread_start_contract(sample: Any) -> dict[str, Any]:
+    """Validate a captured, metadata-only protocol sample without I/O.
+
+    The sample is intentionally a plain fixture: callers must provide the
+    static contract evidence and sanitized response objects.  No app-server,
+    filesystem, transcript, or raw error access occurs here.
+    """
+    safe = {"status": "held_start_contract_unresolved", "contract": "AF18-codex-rolehub-runner-v1"}
+    def hold(reason: str, status: str = "held_start_contract_unresolved") -> dict[str, Any]:
+        safe["status"], safe["reason"] = status, reason
+        return safe
+    if not isinstance(sample, dict):
+        return hold("sample_not_object")
+    if sample.get("cli_version") != START_CONTRACT["cli_version"] or sample.get("protocol_variant") != START_CONTRACT["protocol_variant"]:
+        return hold("version_or_protocol_mismatch")
+    if sample.get("start_method") != START_CONTRACT["start_method"] or sample.get("read_method") != START_CONTRACT["read_method"]:
+        return hold("method_mismatch")
+    request = sample.get("start_request")
+    if not isinstance(request, dict) or not isinstance(request.get("cwd"), str) or not request["cwd"]:
+        return hold("start_required_cwd_missing")
+    allowed_request = set(START_CONTRACT["start_request"]["required"] + START_CONTRACT["start_request"]["optional"])
+    if set(request) - allowed_request or any(not isinstance(k, str) for k in request):
+        return hold("start_request_unknown_field")
+    string_fields = allowed_request - {"config", "ephemeral"}
+    if any(field in request and not isinstance(request[field], str) for field in string_fields):
+        return hold("start_request_type_error")
+    if "config" in request and not isinstance(request["config"], dict):
+        return hold("start_request_type_error")
+    if "ephemeral" in request and not isinstance(request["ephemeral"], bool):
+        return hold("start_request_type_error")
+    response = sample.get("start_response")
+    if not isinstance(response, dict):
+        return hold("start_response_missing", "setup_incomplete")
+    if response.get("protocol_error") is True or "error" in response:
+        return hold("protocol_error", "setup_incomplete")
+    allowed_response = set(START_CONTRACT["start_response"]["required"] + ["serviceTier", "instructionSources", "reasoningEffort"])
+    if set(response) - allowed_response:
+        return hold("start_response_unknown_field", "setup_incomplete")
+    required = START_CONTRACT["start_response"]["required"]
+    if any(field not in response for field in required):
+        return hold("start_response_required_missing", "setup_incomplete")
+    thread = response.get("thread")
+    if not isinstance(thread, dict) or not isinstance(thread.get("id"), str) or not thread["id"]:
+        return hold("nested_thread_id_missing", "setup_incomplete")
+    if not isinstance(thread.get("cwd"), str) or ("name" in thread and thread["name"] is not None and not isinstance(thread["name"], str)):
+        return hold("nested_thread_metadata_type_error", "setup_incomplete")
+    if not isinstance(thread.get("cwd"), str) or thread["cwd"] != request["cwd"]:
+        return hold("foreign_cwd", "setup_incomplete")
+    read = sample.get("readback")
+    if not isinstance(read, dict) or not isinstance(read.get("thread"), dict):
+        return hold("readback_missing", "setup_incomplete")
+    read_thread = read["thread"]
+    if read_thread.get("id") != thread["id"] or read_thread.get("cwd") != request["cwd"]:
+        return hold("readback_correlation_mismatch", "setup_incomplete")
+    safe.update({"status": "ready", "method": START_CONTRACT["start_method"], "response_path": "thread", "opaque_ref": "native:" + digest(thread["id"])[8:32]})
+    return safe
+
+
+# Short alias for callers that use the contract's noun rather than the RPC
+# method name.
+diagnose_start_contract = diagnose_thread_start_contract
+
 
 class RunnerHold(Exception):
     def __init__(self, status: str, reason: str):

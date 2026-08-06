@@ -2,7 +2,7 @@
 import copy
 import unittest
 
-from codex_rolehub_runner import CodexRoleHubRunner
+from codex_rolehub_runner import CodexRoleHubRunner, START_CONTRACT, diagnose_thread_start_contract
 
 
 class FakeRPC:
@@ -45,6 +45,47 @@ def op(action="create", key="k1", role="Coordinator", **kwargs):
 
 
 class RunnerTests(unittest.TestCase):
+    def start_sample(self):
+        thread = {"id": "t1", "cwd": "/tmp/tiny-ipa", "name": "Coordinator"}
+        response = {field: ("x" if field not in {"cwd", "thread"} else ("/tmp/tiny-ipa" if field == "cwd" else thread)) for field in START_CONTRACT["start_response"]["required"]}
+        return {"cli_version": "codex-cli 0.133.0", "protocol_variant": "v2", "start_method": "thread/start", "read_method": "thread/read", "start_request": {"cwd": "/tmp/tiny-ipa"}, "start_response": response, "readback": {"thread": copy.deepcopy(thread)}}
+
+    def test_static_start_contract_valid_and_privacy_safe(self):
+        sample = self.start_sample(); sample["start_response"]["turns"] = [{"prompt": "secret"}]
+        result = diagnose_thread_start_contract(sample)
+        self.assertEqual(result["status"], "setup_incomplete")
+        self.assertNotIn("secret", str(result))
+
+    def test_static_start_contract_valid(self):
+        self.assertEqual(diagnose_thread_start_contract(self.start_sample())["status"], "ready")
+
+    def test_static_contract_missing_required_and_unknown_type(self):
+        sample = self.start_sample(); del sample["start_request"]["cwd"]
+        self.assertEqual(diagnose_thread_start_contract(sample)["reason"], "start_required_cwd_missing")
+        sample = self.start_sample(); sample["start_request"]["cwd"] = 7
+        self.assertEqual(diagnose_thread_start_contract(sample)["reason"], "start_required_cwd_missing")
+        sample = self.start_sample(); sample["start_request"]["unexpected"] = True
+        self.assertEqual(diagnose_thread_start_contract(sample)["reason"], "start_request_unknown_field")
+
+    def test_static_contract_protocol_and_response_failures(self):
+        sample = self.start_sample(); sample["protocol_variant"] = "v1"
+        self.assertEqual(diagnose_thread_start_contract(sample)["reason"], "version_or_protocol_mismatch")
+        sample = self.start_sample(); sample["start_response"] = {"error": {"message": "secret"}}
+        result = diagnose_thread_start_contract(sample)
+        self.assertEqual(result["reason"], "protocol_error"); self.assertNotIn("secret", str(result))
+        sample = self.start_sample(); del sample["start_response"]["thread"]
+        self.assertEqual(diagnose_thread_start_contract(sample)["reason"], "start_response_required_missing")
+        sample = self.start_sample(); sample["start_response"]["thread"]["id"] = None
+        self.assertEqual(diagnose_thread_start_contract(sample)["reason"], "nested_thread_id_missing")
+
+    def test_static_contract_correlation_and_readback(self):
+        sample = self.start_sample(); sample["start_response"]["thread"]["cwd"] = "/foreign"
+        self.assertEqual(diagnose_thread_start_contract(sample)["reason"], "foreign_cwd")
+        sample = self.start_sample(); sample["readback"]["thread"]["id"] = "other"
+        self.assertEqual(diagnose_thread_start_contract(sample)["reason"], "readback_correlation_mismatch")
+        sample = self.start_sample(); sample.pop("readback")
+        self.assertEqual(diagnose_thread_start_contract(sample)["reason"], "readback_missing")
+
     def test_preflight_and_create_name_readback(self):
         rpc = FakeRPC(); runner = CodexRoleHubRunner(rpc, runtime_id="rt-1")
         self.assertEqual(runner.preflight()["status"], "ready")
