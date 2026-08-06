@@ -158,17 +158,19 @@ outside this pilot.
 
 ### Same-project creation boundary
 
-When a host dogfood has produced a durable terminal receipt, the Codex
-projection may report `creation_boundary_state:
-same_project_creation_boundary_verified`. This is narrower than fresh-context
-proof: the receipt must name the terminal and Architect acceptance records,
-source and digest, a new opaque identity, and the
-`durable_scheduler_reference` verification source. It must also prove exactly
-one `create_thread` primitive, no predecessor/fork source, matching
-`project_id`/`cwd` binding, correlated post-create readback, and explicit
-false values for projectless, child-worktree, retry, dispatch, transcript,
-history, and turn reads. The adapter only projects this evidence; it does not
-verify GitHub or call the host.
+The generic JSON planner always reports
+`creation_boundary_state:same_project_creation_boundary_unverified` and
+`hold_required`, even when a caller supplies a complete-looking host receipt.
+It has no trusted scheduler verifier, so terminal/Architect refs, source,
+digest, opaque identity, and `durable_scheduler_reference` are descriptive
+inputs only and never establish trust. A separately bounded, adapter-owned
+scheduler verifier is required before any future projection may use the
+`same_project_creation_boundary_verified` state. The intended trusted receipt
+would prove exactly one `create_thread` primitive, no predecessor/fork source,
+matching `project_id`/`cwd` binding, correlated post-create readback, and
+explicit false values for projectless, child-worktree, retry, dispatch,
+transcript, history, and turn reads. The adapter does not verify GitHub or
+call the host.
 
 Missing or inconsistent fields produce a hold. The result must never be
 labelled `same_project_fresh_host_path_verified` or
