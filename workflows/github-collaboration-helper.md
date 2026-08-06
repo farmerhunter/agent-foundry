@@ -156,6 +156,25 @@ It proposes no real tool call: all adapter output reports
 hooks, custom agents, policy records, runtime installation, and telemetry stay
 outside this pilot.
 
+### Codex project/thread binding classification
+
+Before a host creates a successor thread, classify a metadata-only
+`project_binding_observation`. The classifier distinguishes `local_folder_project`,
+`git_repository_project`, `git_worktree_project`, `fork_inherited_context`, and
+`projectless_fresh_context`. A same-project fresh result is valid only when
+`project_id`, `project_root`, and `cwd` match exactly, `fresh_context` is true,
+and trusted host readback is present. Core never treats a caller-supplied
+`runtime_owned_proof: true` boolean as trusted and therefore never emits a
+ready result; only a future trusted host adapter may emit
+`same_project_fresh_verified`. Forks hold as
+`held_inherited_context_rejected`; projectless results hold as
+`held_projectless_fallback_rejected`; missing or mismatched identity holds as
+`held_project_binding_mismatch`. A non-Git local folder without runtime-owned
+proof holds as `held_same_project_fresh_unavailable` and explicitly requires a
+Human UI fallback. This is classification only: it makes no host call and must
+report both mutation and dispatch as false. Desktop UI success must never be
+used as evidence that the connector supports the same request.
+
 ## User-Facing Entry Points
 
 Agents should expose these as natural-language workflows rather than requiring

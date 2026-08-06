@@ -61,6 +61,13 @@ objects:
       - "invalid input, failed write, failed validation/readback, or fingerprint mismatch preserves the prior effective state and shows one recovery action"
       - "read-only inspection and dry-run preview perform no writes"
       - "new Agent Foundry role task creation prefers project-scoped Codex tasks under local-eb6e22ec0d00ef785d687022be1b433d when creating a new role task"
+  ProjectBindingObservation:
+    required: [project_kind, context_mode, identity, target, fresh_context, runtime_owned_proof]
+    rules:
+      - "project_kind distinguishes local_folder_project, git_repository_project, git_worktree_project, fork_inherited_context, and projectless_fresh_context"
+      - "same-project fresh requires exact project_id, project_root, cwd, fresh_context=true, and runtime-owned proof"
+      - "fork and projectless contexts are held and are never reported as same-project fresh"
+      - "caller-supplied runtime_owned_proof is never trusted by Core; without trusted host readback every same-project fresh classification remains held_runtime_proof_unverified or held_same_project_fresh_unavailable"
   OverrideGrant:
     required: [active, scope, expires_after_work_unit, reset_required]
     rules:
