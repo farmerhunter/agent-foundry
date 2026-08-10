@@ -1,0 +1,14 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://agent-foundry.local/schemas/local-collaboration-control-plane.schema.yaml
+title: LocalCollaborationControlPlane-v1
+type: object
+additionalProperties: false
+required: [version, project_id, kind, occurred_at, timestamp_provenance, payload]
+properties:
+  version: {const: LocalCollaborationControlPlane-v1}
+  project_id: {type: string, format: uuid}
+  kind:
+    enum: [control_plane_initialized, work_registered, execution_run_registered, dispatch_claim_registered, transition_recorded, control_hold_recorded, control_disabled, logical_successor_recorded, work_summary_recorded, attention_summary_recorded, terminal_handoff_recorded]
+  occurred_at: {type: string, format: date-time}
+  timestamp_provenance: {enum: [explicit, estimated, unavailable, not_exposed]}
+  payload: {type: object, additionalProperties: false}
