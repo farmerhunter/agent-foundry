@@ -6027,6 +6027,30 @@ def cmd_operational_cockpit(args: argparse.Namespace) -> None:
 
 
 def cmd_foundry_board(args: argparse.Namespace) -> None:
+    if getattr(args, "ledger_backend", None) == "sqlite":
+        if getattr(args, "ledger_root", None):
+            fail("ambiguous_backend", "--ledger-backend sqlite is mutually exclusive with --ledger-root")
+        if not getattr(args, "projects_root", None) or not getattr(args, "project_id", None):
+            fail("sqlite_arguments_required", "SQLite Board requires --projects-root and --project-id")
+        if sqlite_read_events is None:
+            fail("sqlite_backend_unavailable", "SQLite adapter is unavailable")
+        try:
+            repo, _repo_source = resolve_repo(args)
+            events = sqlite_read_events(args.projects_root, args.project_id)
+            accepted_replay = replay_local_ledger(events)
+            board = build_foundry_board(
+                repo, [], [], {"source": "skipped", "status": "skipped", "item_count": 0}, {},
+                getattr(args, "name", "Foundry Board"),
+                {"mode": "sqlite", "project_id": args.project_id, "ledger_backend": "sqlite"},
+                accepted_replay=accepted_replay,
+                candidate_events=[],
+            )
+            board["storage"] = "sqlite"
+            board["project_id"] = args.project_id
+            print_json_or_text(board, args.json)
+        except Exception as exc:
+            fail("sqlite_read_failed", str(exc), 6)
+        return
     repo, repo_source = resolve_repo(args)
     if args.board_items_json:
         issues = normalize_board_items(load_json(args.board_items_json))
@@ -6702,6 +6726,9 @@ def build_parser() -> argparse.ArgumentParser:
     board.add_argument("--project-items-json", help="Fixture Project item list or gh project item-list JSON.")
     board.add_argument("--local-git-json", help="Fixture local git state for branch/readiness display.")
     board.add_argument("--ledger-root", help="Accepted local ledger root. Defaults to usage/local/collaboration-ledger.")
+    board.add_argument("--ledger-backend", choices=("jsonl", "sqlite"), help="Invocation-scoped backend selector.")
+    board.add_argument("--projects-root", help="SQLite projects root (required for --ledger-backend sqlite).")
+    board.add_argument("--project-id", help="Opaque SQLite project id (required for --ledger-backend sqlite).")
     board.add_argument("--candidate-events-json", help="Read-only candidate event list or backfill preview output for board display.")
     board.add_argument("--issues", help="Comma-separated explicit issue numbers for bounded live board report.")
     board.add_argument("--stage", help="Stage value or label for bounded live issue report.")

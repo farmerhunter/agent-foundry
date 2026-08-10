@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -44,6 +46,11 @@ def main() -> int:
         malformed = accepted_backfill(root, "repo", "farmerhunter/agent-foundry", [event("bad", owner="x"), {"event_type": "evidence", "payload": {}}])
         assert malformed["status"] == "hold"
         assert len(read_events(root, pid)) == 2
+        fresh_root = Path(tmp) / "fresh"
+        malformed_fresh = accepted_backfill(fresh_root, "repo", "new-project", [{"event_type": "evidence", "payload": {}}])
+        assert malformed_fresh["status"] == "hold" and not fresh_root.exists()
+        board = subprocess.run([sys.executable, "scripts/github_collaboration_helper.py", "foundry-board", "--ledger-backend", "sqlite", "--projects-root", str(root), "--project-id", pid, "--json"], text=True, capture_output=True, check=False)
+        assert board.returncode == 0 and '"storage": "sqlite"' in board.stdout and '"accepted_count": 1' in board.stdout, (board.returncode, board.stdout, board.stderr)
         print(json.dumps({"status": "ok", "project_id": pid, "events": 2}))
     return 0
 

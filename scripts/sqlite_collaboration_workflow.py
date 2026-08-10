@@ -100,6 +100,22 @@ def _compact(event: Mapping[str, Any], project_id: str) -> dict[str, Any]:
     }
 
 
+def _validate_legacy_batch(events: Iterable[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
+    values = list(events)
+    if not values:
+        raise ValueError("at least one event is required")
+    for event in values:
+        if not isinstance(event, Mapping) or not str(event.get("event_id") or ""):
+            raise ValueError("event_id is required")
+        if not isinstance(event.get("payload", {}), Mapping):
+            raise ValueError("event payload must be an object")
+        json.dumps(event, ensure_ascii=False, allow_nan=False)
+        text = json.dumps(event, ensure_ascii=False).lower()
+        if any(token in text for token in ("transcript", "tool_output", "raw_transcript", "prompt", "secret", "native_history")):
+            raise ValueError("privacy-forbidden payload")
+    return values
+
+
 def _receipt(ledger: LocalCollaborationLedger, *, operation: str, count: int, mutation: bool) -> dict[str, Any]:
     return {"status": "ok", "operation": operation, "project_id": ledger.project_id, "event_count": count, "mutation_performed": mutation, "receipt": {"path": str(ledger.path), "metadata": ledger.metadata()}}
 
@@ -122,6 +138,10 @@ def fresh_onboarding(projects_root: str | os.PathLike[str], binding_type: str, b
 def accepted_backfill(projects_root: str | os.PathLike[str], binding_type: str, binding_value: str, events: Iterable[Mapping[str, Any]], *, accepted: bool = True) -> dict[str, Any]:
     if not accepted:
         return _hold("backfill_not_accepted", detail="explicit accepted=True is required")
+    try:
+        validated_events = _validate_legacy_batch(events)
+    except Exception as exc:
+        return _hold("backfill_validation_failed", detail=str(exc))
     root = _root(projects_root); found = discover(root, binding_type, binding_value)
     if found["status"] == "zero_match":
         try:
@@ -133,7 +153,7 @@ def accepted_backfill(projects_root: str | os.PathLike[str], binding_type: str, 
         except Exception as exc: return _hold("authority_open_failed", detail=str(exc))
     else: return found
     try:
-        batch = [_compact(event, ledger.project_id) for event in events]
+        batch = [_compact(event, ledger.project_id) for event in validated_events]
         rows = ledger.accept_compact_events(batch)
         return {**_receipt(ledger, operation="accepted_backfill", count=len(rows), mutation=bool(rows)), "logical_event_ids": [str(e.get("event_id")) for e in batch], "jsonl_fallback": False}
     except Exception as exc:
@@ -169,6 +189,8 @@ def read_events(projects_root: str | os.PathLike[str], project_id: str) -> list[
                 item = dict(helper); item["event_id"] = payload.get("logical_event_id", item.get("event_id")); item["validation_status"] = "valid"
             else:
                 item = {"event_id": payload.get("logical_event_id", event.event_id), "event_type": event.event_type, "payload": payload, "occurred_at": event.created_at}
+            work_item = item.get("work_item") if isinstance(item.get("work_item"), dict) else {}
+            item.setdefault("work_item_key", str(work_item.get("id") or f"{work_item.get('repo', 'unknown')}#{work_item.get('type', 'issue')}:{work_item.get('number', 'unknown')}"))
             result.append(item)
         return result
     finally: ledger.close()
