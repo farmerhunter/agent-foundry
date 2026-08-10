@@ -2248,9 +2248,15 @@ def cmd_local_ledger_migration_apply(args: argparse.Namespace) -> None:
         if getattr(args, "ledger_root", None): fail("ambiguous_backend", "SQLite mode is mutually exclusive with --ledger-root")
         preview = load_json(args.candidate_events_json)
         decisions = load_json(args.decision_json)
-        candidates = preview if isinstance(preview, list) else preview.get("candidate_imported_events", [])
-        accepted = {str(item.get("event_id")): item for item in (decisions.get("decisions", []) if isinstance(decisions, dict) else []) if item.get("decision") == "accept"}
-        events = [item for item in candidates if str(item.get("event_id")) in accepted]
+        candidates, candidate_errors = candidate_events_from_backfill_preview(preview)
+        parsed_decisions, decision_errors = migration_apply_decisions(decisions)
+        if candidate_errors or decision_errors or not parsed_decisions:
+            fail("sqlite_migration_invalid", "; ".join(candidate_errors + decision_errors + ([] if parsed_decisions else ["at least one migration decision is required"])))
+        by_id = {str(item["event_id"]): item for item in candidates}
+        missing = sorted(set(parsed_decisions) - set(by_id))
+        if missing:
+            fail("sqlite_migration_invalid", f"decision references missing candidate event {missing[0]}")
+        events = [migration_decision_event_from_review_decision(by_id[event_id], parsed_decisions[event_id]) for event_id in sorted(parsed_decisions)]
         if not args.projects_root or not args.project_id:
             fail("sqlite_arguments_required", "SQLite migration requires --projects-root and --project-id")
         result = sqlite_accepted_backfill_existing(args.projects_root, args.project_id, events)
@@ -2547,9 +2553,10 @@ def cmd_local_ledger_action_apply(args: argparse.Namespace) -> None:
     if getattr(args, "ledger_backend", None) == "sqlite":
         if getattr(args, "ledger_root", None): fail("ambiguous_backend", "SQLite mode is mutually exclusive with --ledger-root")
         actions = load_json(args.action_json)
-        values = actions if isinstance(actions, list) else actions.get("actions", [])
-        action_types = {"assignment": "assignment", "handoff": "dispatch", "blocked": "blocked", "unblocked": "unblocked", "review_result": "review", "architect_acceptance": "acceptance", "human_approval": "human_approval", "local_done": "closure", "closure": "closure", "supersession": "supersession", "recovery": "recovery"}
-        values = [{**item, "event_id": str(item.get("event_id") or item.get("action_id") or item.get("id") or ""), "event_type": action_types.get(str(item.get("action_type") or "evidence"), "evidence"), "payload": item.get("payload", {})} for item in values]
+        values, action_errors = normalize_local_action_collection(actions)
+        if action_errors or not values:
+            fail("sqlite_action_invalid", "; ".join(action_errors + ([] if values else ["at least one approved local action is required"])))
+        values = [local_action_event(item) for item in values]
         result = sqlite_local_action_batch(args.projects_root, args.project_id, values)
         print_json_or_text(result, args.json)
         if result.get("status") == "hold": raise SystemExit(6)

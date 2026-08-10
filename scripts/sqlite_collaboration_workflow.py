@@ -190,7 +190,7 @@ def accepted_backfill(projects_root: str | os.PathLike[str], binding_type: str, 
         batch = [_compact(event, ledger.project_id) for event in validated_events]
         before = len(ledger.list_events())
         rows = ledger.accept_compact_events(batch)
-        appended = sum(1 for row in rows if row.sequence > before)
+        appended = len(ledger.list_events()) - before
         return {**_receipt(ledger, operation="accepted_backfill", count=len(rows), mutation=bool(appended)), "appended_count": appended, "duplicate_count": len(rows) - appended, "logical_event_ids": [str(e.get("event_id")) for e in validated_events], "jsonl_fallback": False}
     except Exception as exc:
         return _hold("backfill_failed", detail=str(exc))
@@ -210,7 +210,8 @@ def local_action_batch(projects_root: str | os.PathLike[str], project_id: str, e
         before = len(ledger.list_events())
         batch = [_compact(event, ledger.project_id) for event in validated_events]
         rows = ledger.accept_compact_events(batch)
-        appended = sum(1 for row in rows if row.sequence > before)
+        after = len(ledger.list_events())
+        appended = after - before
         return {**_receipt(ledger, operation="local_action", count=len(rows), mutation=bool(appended)), "appended_count": appended, "duplicate_count": len(rows) - appended, "logical_event_ids": [str(e.get("event_id")) for e in validated_events], "jsonl_fallback": False}
     except Exception as exc: return _hold("local_action_failed", detail=str(exc))
     finally: ledger.close()
@@ -230,7 +231,7 @@ def accepted_backfill_existing(projects_root: str | os.PathLike[str], project_id
     try:
         before = len(ledger.list_events())
         rows = ledger.accept_compact_events([_compact(event, ledger.project_id) for event in validated_events])
-        appended = sum(1 for row in rows if row.sequence > before)
+        appended = len(ledger.list_events()) - before
         return {**_receipt(ledger, operation="accepted_backfill", count=len(rows), mutation=bool(appended)), "appended_count": appended, "duplicate_count": len(rows) - appended, "logical_event_ids": [str(e.get("event_id")) for e in validated_events], "jsonl_fallback": False}
     except Exception as exc:
         return _hold("backfill_failed", detail=str(exc))
