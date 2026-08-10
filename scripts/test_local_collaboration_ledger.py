@@ -127,5 +127,20 @@ class LedgerTests(unittest.TestCase):
         with self.assertRaises(LedgerIntegrityError):
             LocalCollaborationLedger(self.ledger.project_id, projects_root=self.tmp.name)
 
+    def test_existing_rw_never_recreates_or_changes_identity(self):
+        path = self.ledger.path
+        project_id = self.ledger.project_id
+        self.ledger.close()
+        opened = LocalCollaborationLedger.open_existing(path, expected_project_id=project_id)
+        opened.append_event("restart", {"ok": True})
+        opened.close()
+        reopened = LocalCollaborationLedger.open_existing(path, expected_project_id=project_id)
+        try:
+            self.assertEqual(reopened.project_id, project_id)
+        finally:
+            reopened.close()
+        with self.assertRaises(LedgerIntegrityError):
+            LocalCollaborationLedger.open_existing(Path(self.tmp.name) / "missing" / "collaboration.db", expected_project_id=project_id)
+
 
 if __name__ == "__main__": unittest.main()

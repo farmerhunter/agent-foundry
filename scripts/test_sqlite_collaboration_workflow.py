@@ -52,6 +52,7 @@ def main() -> int:
         assert len(read_events(root, pid)) == 4
         malformed = accepted_backfill(root, "repo", "farmerhunter/agent-foundry", [event("bad", owner="x"), {"event_type": "evidence", "payload": {}}])
         assert malformed["status"] == "hold"
+        assert "detail" not in malformed
         assert len(read_events(root, pid)) == 4
         fresh_root = Path(tmp) / "fresh"
         malformed_fresh = accepted_backfill(fresh_root, "repo", "new-project", [{"event_type": "evidence", "payload": {}}])

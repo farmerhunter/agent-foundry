@@ -13,8 +13,12 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from local_collaboration_ledger import (
+    LedgerBackupError,
+    LedgerBusyError,
     LedgerConflictError,
     LedgerError,
+    LedgerIdentityError,
+    LedgerIntegrityError,
     LocalCollaborationLedger,
     _canonical,
     _contains_forbidden,
@@ -47,7 +51,22 @@ def _root(projects_root: str | os.PathLike[str] | None) -> Path:
 
 
 def _hold(reason: str, *, detail: str | None = None, mutation_performed: bool = False) -> dict[str, Any]:
-    return {"status": "hold", "reason": reason, "detail": detail, "mutation_performed": mutation_performed}
+    # Durable receipts contain classification only.  Exception text and
+    # payloads can contain paths, SQL, or user data and are deliberately not
+    # persisted or returned.
+    return {"status": "hold", "reason": reason, "mutation_performed": mutation_performed}
+
+
+def _hold_for(exc: BaseException, fallback: str) -> dict[str, Any]:
+    if isinstance(exc, LedgerBusyError): reason = "busy"
+    elif isinstance(exc, LedgerConflictError): reason = "conflict"
+    elif isinstance(exc, LedgerIdentityError): reason = "identity"
+    elif isinstance(exc, LedgerIntegrityError): reason = "integrity"
+    elif isinstance(exc, PermissionError): reason = "permission"
+    elif isinstance(exc, LedgerBackupError): reason = "backup"
+    elif isinstance(exc, ValueError): reason = fallback
+    else: reason = fallback
+    return _hold(reason)
 
 
 def discover(projects_root: str | os.PathLike[str], binding_type: str, binding_value: str) -> dict[str, Any]:
@@ -56,7 +75,7 @@ def discover(projects_root: str | os.PathLike[str], binding_type: str, binding_v
     try:
         matches = LocalCollaborationLedger.discover_by_binding(root, binding_type, binding_value)
     except Exception as exc:  # corruption, permission, schema, or ambiguity is a hold
-        return _hold("discovery_failed", detail=str(exc))
+        return _hold_for(exc, "discovery_failed")
     if len(matches) > 1:
         return _hold("binding_ambiguous", detail="multiple matching SQLite authorities")
     if not matches:
@@ -70,7 +89,7 @@ def discover(projects_root: str | os.PathLike[str], binding_type: str, binding_v
         ledger.close()
         return {"status": "reused", "project_id": project_id, "receipt": receipt}
     except Exception as exc:
-        return _hold("authority_open_failed", detail=str(exc))
+        return _hold_for(exc, "authority_open_failed")
 
 
 def _open_existing(projects_root: Path, project_id: str, *, writable: bool = False) -> LocalCollaborationLedger:
@@ -81,11 +100,7 @@ def _open_existing(projects_root: Path, project_id: str, *, writable: bool = Fal
         raise FileNotFoundError("existing SQLite authority is required")
     if not writable:
         return LocalCollaborationLedger(db_path=path, create=False)
-    probe = LocalCollaborationLedger(db_path=path, create=False)
-    if probe.project_id != project_id:
-        probe.close(); raise ValueError("project identity mismatch")
-    probe.close()
-    return LocalCollaborationLedger(db_path=path, create=True)
+    return LocalCollaborationLedger.open_existing(path, expected_project_id=project_id)
 
 
 def _create(projects_root: Path, binding_type: str, binding_value: str) -> tuple[LocalCollaborationLedger, dict[str, Any]]:
@@ -166,7 +181,7 @@ def fresh_onboarding(projects_root: str | os.PathLike[str], binding_type: str, b
         ledger.close()
         return {"status": "created", "project_id": receipt["project_id"], "mutation_performed": True, "receipt": receipt, "jsonl_fallback": False}
     except Exception as exc:
-        return _hold("onboarding_failed", detail=str(exc))
+        return _hold_for(exc, "onboarding_failed")
 
 
 def accepted_backfill(projects_root: str | os.PathLike[str], binding_type: str, binding_value: str, events: Iterable[Mapping[str, Any]], *, accepted: bool = True) -> dict[str, Any]:
@@ -175,16 +190,16 @@ def accepted_backfill(projects_root: str | os.PathLike[str], binding_type: str, 
     try:
         validated_events = _validate_legacy_batch(events)
     except Exception as exc:
-        return _hold("backfill_validation_failed", detail=str(exc))
+        return _hold_for(exc, "backfill_validation_failed")
     root = _root(projects_root); found = discover(root, binding_type, binding_value)
     if found["status"] == "zero_match":
         try:
             ledger, _ = _create(root, binding_type, binding_value)
         except Exception as exc:
-            return _hold("onboarding_failed", detail=str(exc))
+            return _hold_for(exc, "onboarding_failed")
     elif found["status"] == "reused":
         try: ledger = _open_existing(root, found["project_id"], writable=True)
-        except Exception as exc: return _hold("authority_open_failed", detail=str(exc))
+        except Exception as exc: return _hold_for(exc, "authority_open_failed")
     else: return found
     try:
         batch = [_compact(event, ledger.project_id) for event in validated_events]
@@ -193,7 +208,7 @@ def accepted_backfill(projects_root: str | os.PathLike[str], binding_type: str, 
         appended = len(ledger.list_events()) - before
         return {**_receipt(ledger, operation="accepted_backfill", count=len(rows), mutation=bool(appended)), "appended_count": appended, "duplicate_count": len(rows) - appended, "logical_event_ids": [str(e.get("event_id")) for e in validated_events], "jsonl_fallback": False}
     except Exception as exc:
-        return _hold("backfill_failed", detail=str(exc))
+        return _hold_for(exc, "backfill_failed")
     finally:
         ledger.close()
 
@@ -203,9 +218,9 @@ def local_action_batch(projects_root: str | os.PathLike[str], project_id: str, e
     try:
         validated_events = _validate_legacy_batch(events)
     except Exception as exc:
-        return _hold("local_action_validation_failed", detail=str(exc))
+        return _hold_for(exc, "local_action_validation_failed")
     try: ledger = _open_existing(root, project_id, writable=True)
-    except Exception as exc: return _hold("authority_open_failed", detail=str(exc))
+    except Exception as exc: return _hold_for(exc, "authority_open_failed")
     try:
         before = len(ledger.list_events())
         batch = [_compact(event, ledger.project_id) for event in validated_events]
@@ -213,7 +228,7 @@ def local_action_batch(projects_root: str | os.PathLike[str], project_id: str, e
         after = len(ledger.list_events())
         appended = after - before
         return {**_receipt(ledger, operation="local_action", count=len(rows), mutation=bool(appended)), "appended_count": appended, "duplicate_count": len(rows) - appended, "logical_event_ids": [str(e.get("event_id")) for e in validated_events], "jsonl_fallback": False}
-    except Exception as exc: return _hold("local_action_failed", detail=str(exc))
+    except Exception as exc: return _hold_for(exc, "local_action_failed")
     finally: ledger.close()
 
 
@@ -227,14 +242,14 @@ def accepted_backfill_existing(projects_root: str | os.PathLike[str], project_id
         validated_events = _validate_legacy_batch(events)
         ledger = _open_existing(root, project_id, writable=True)
     except Exception as exc:
-        return _hold("authority_open_failed", detail=str(exc))
+        return _hold_for(exc, "authority_open_failed")
     try:
         before = len(ledger.list_events())
         rows = ledger.accept_compact_events([_compact(event, ledger.project_id) for event in validated_events])
         appended = len(ledger.list_events()) - before
         return {**_receipt(ledger, operation="accepted_backfill", count=len(rows), mutation=bool(appended)), "appended_count": appended, "duplicate_count": len(rows) - appended, "logical_event_ids": [str(e.get("event_id")) for e in validated_events], "jsonl_fallback": False}
     except Exception as exc:
-        return _hold("backfill_failed", detail=str(exc))
+        return _hold_for(exc, "backfill_failed")
     finally:
         ledger.close()
 
