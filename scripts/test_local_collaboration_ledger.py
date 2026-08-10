@@ -1,5 +1,6 @@
 import os
 import math
+import json
 import stat
 import sqlite3
 import subprocess
@@ -10,7 +11,7 @@ import time
 import unittest
 from pathlib import Path
 
-from local_collaboration_ledger import LedgerBusyError, LedgerConflictError, LedgerIntegrityError, LedgerPermissionError, LedgerSchemaError, LocalCollaborationLedger
+from local_collaboration_ledger import LedgerBackupError, LedgerBusyError, LedgerConflictError, LedgerIntegrityError, LedgerPermissionError, LedgerSchemaError, LocalCollaborationLedger
 
 
 class LedgerTests(unittest.TestCase):
@@ -122,6 +123,33 @@ class LedgerTests(unittest.TestCase):
         self.ledger._conn.execute("UPDATE events SET payload='{}' WHERE sequence=1")
         with self.assertRaises(LedgerIntegrityError): self.ledger.verify()
 
+    def test_backup_receipt_tamper_is_backup_hold(self):
+        self.ledger.append_event("x", {"a": 1})
+        backup = Path(self.tmp.name) / "tamper-backup.db"
+        self.ledger.backup(backup)
+        receipt = Path(str(backup) + ".receipt.json")
+        receipt.write_text("not-json")
+        with self.assertRaises(LedgerBackupError):
+            LocalCollaborationLedger.restore(backup, Path(self.tmp.name) / "tamper-restore" / "collaboration.db", expected_project_id=self.ledger.project_id)
+
+    def test_subprocess_crash_rolls_back_uncommitted_batch(self):
+        path = str(self.ledger.path)
+        self.ledger.close()
+        code = (
+            "import os,sqlite3,sys; "
+            "c=sqlite3.connect(sys.argv[1],isolation_level=None); c.execute('BEGIN IMMEDIATE'); "
+            "c.execute(\"INSERT INTO events VALUES(1,'66666666-6666-6666-6666-666666666666','crash','{}','', '', '', 'now', NULL, NULL, '" + self.ledger.project_id + "')\"); "
+            "c.execute(\"INSERT INTO events VALUES(2,'77777777-7777-7777-7777-777777777777','crash','{}','', '', '', 'now', NULL, NULL, '" + self.ledger.project_id + "')\"); "
+            "os.kill(os.getpid(),9)"
+        )
+        result = subprocess.run([sys.executable, "-c", code, path], env={**os.environ, "PYTHONPATH": "scripts"}, capture_output=True)
+        self.assertNotEqual(result.returncode, 0)
+        reopened = LocalCollaborationLedger.open_existing(path, expected_project_id=self.ledger.project_id)
+        try:
+            self.assertEqual(reopened.list_events(), [])
+        finally:
+            reopened.close()
+
     def test_backup_snapshot_remains_coherent_during_append(self):
         self.ledger.append_event("before", {"n": 0})
         backup = Path(self.tmp.name) / "concurrent-backup.db"
@@ -143,7 +171,11 @@ class LedgerTests(unittest.TestCase):
         restored = LocalCollaborationLedger.restore(backup, restored_path, expected_project_id=self.ledger.project_id)
         try:
             self.assertTrue(restored.verify())
-            self.assertGreaterEqual(len(restored.list_events()), 1)
+            receipt = json.loads(Path(str(backup) + ".receipt.json").read_text())
+            events = restored.list_events()
+            head = events[-1].event_hash if events else "0" * 64
+            self.assertEqual(len(events), receipt["generation"])
+            self.assertEqual(head, receipt["source_head"])
         finally:
             restored.close()
 

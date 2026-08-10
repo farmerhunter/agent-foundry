@@ -485,15 +485,18 @@ class LocalCollaborationLedger:
         staged = stage_dir / f".restore-{uuid.uuid4().hex}.db"
         try:
             receipt_path = source.with_name(source.name + ".receipt.json")
-            if not receipt_path.is_file(): raise LedgerIntegrityError("backup receipt missing")
-            receipt = json.loads(receipt_path.read_text())
-            if receipt.get("sha256") != hashlib.sha256(source.read_bytes()).hexdigest() or receipt.get("project_id") != expected_project_id or receipt.get("schema_version") != SCHEMA_VERSION: raise LedgerIntegrityError("backup receipt mismatch")
+            if not receipt_path.is_file(): raise LedgerBackupError("backup receipt missing")
+            try:
+                receipt = json.loads(receipt_path.read_text())
+            except (OSError, ValueError):
+                raise LedgerBackupError("backup receipt unreadable") from None
+            if receipt.get("sha256") != hashlib.sha256(source.read_bytes()).hexdigest() or receipt.get("project_id") != expected_project_id or receipt.get("schema_version") != SCHEMA_VERSION: raise LedgerBackupError("backup receipt mismatch")
             shutil.copyfile(source, staged); os.chmod(staged, 0o600)
             restored = cls(db_path=staged, create=False, _snapshot=True)
             if restored.project_id != expected_project_id or restored.metadata().get("schema_version") != SCHEMA_VERSION:
                 restored.close(); raise LedgerIntegrityError("restore identity/schema receipt mismatch")
             restored.integrity_check(); generation = restored._conn.execute("SELECT COALESCE(MAX(sequence),0) FROM events").fetchone()[0]; head = restored._conn.execute("SELECT event_hash FROM events ORDER BY sequence DESC LIMIT 1").fetchone(); restored.close()
-            if generation != receipt.get("generation") or (head[0] if head else GENESIS) != receipt.get("source_head"): raise LedgerIntegrityError("backup generation/head mismatch")
+            if generation != receipt.get("generation") or (head[0] if head else GENESIS) != receipt.get("source_head"): raise LedgerBackupError("backup generation/head mismatch")
             os.rename(staged, dest)
             return cls(db_path=dest, create=False, _snapshot=True)
         finally:
