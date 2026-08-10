@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any
 
 try:
-    from sqlite_collaboration_workflow import read_events as sqlite_read_events, fresh_onboarding as sqlite_fresh_onboarding, accepted_backfill as sqlite_accepted_backfill, local_action_batch as sqlite_local_action_batch
+    from sqlite_collaboration_workflow import read_events as sqlite_read_events, fresh_onboarding as sqlite_fresh_onboarding, accepted_backfill as sqlite_accepted_backfill, accepted_backfill_existing as sqlite_accepted_backfill_existing, local_action_batch as sqlite_local_action_batch
 except ImportError:  # pragma: no cover - direct package imports may omit scripts/
     sqlite_read_events = None
 
@@ -2251,7 +2251,9 @@ def cmd_local_ledger_migration_apply(args: argparse.Namespace) -> None:
         candidates = preview if isinstance(preview, list) else preview.get("candidate_imported_events", [])
         accepted = {str(item.get("event_id")): item for item in (decisions.get("decisions", []) if isinstance(decisions, dict) else []) if item.get("decision") == "accept"}
         events = [item for item in candidates if str(item.get("event_id")) in accepted]
-        result = sqlite_accepted_backfill(args.projects_root, "project", args.project_id, events, accepted=True)
+        if not args.projects_root or not args.project_id:
+            fail("sqlite_arguments_required", "SQLite migration requires --projects-root and --project-id")
+        result = sqlite_accepted_backfill_existing(args.projects_root, args.project_id, events)
         print_json_or_text(result, args.json)
         if result.get("status") == "hold": raise SystemExit(6)
         return

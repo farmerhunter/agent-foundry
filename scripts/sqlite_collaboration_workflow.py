@@ -220,6 +220,24 @@ def append_event(projects_root: str | os.PathLike[str], project_id: str, event: 
     return local_action_batch(projects_root, project_id, [event])
 
 
+def accepted_backfill_existing(projects_root: str | os.PathLike[str], project_id: str, events: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
+    root = _root(projects_root)
+    try:
+        validated_events = _validate_legacy_batch(events)
+        ledger = _open_existing(root, project_id, writable=True)
+    except Exception as exc:
+        return _hold("authority_open_failed", detail=str(exc))
+    try:
+        before = len(ledger.list_events())
+        rows = ledger.accept_compact_events([_compact(event, ledger.project_id) for event in validated_events])
+        appended = sum(1 for row in rows if row.sequence > before)
+        return {**_receipt(ledger, operation="accepted_backfill", count=len(rows), mutation=bool(appended)), "appended_count": appended, "duplicate_count": len(rows) - appended, "logical_event_ids": [str(e.get("event_id")) for e in validated_events], "jsonl_fallback": False}
+    except Exception as exc:
+        return _hold("backfill_failed", detail=str(exc))
+    finally:
+        ledger.close()
+
+
 def read_events(projects_root: str | os.PathLike[str], project_id: str) -> list[dict[str, Any]]:
     ledger = _open_existing(_root(projects_root), project_id)
     try:
@@ -238,4 +256,4 @@ def read_events(projects_root: str | os.PathLike[str], project_id: str) -> list[
     finally: ledger.close()
 
 
-__all__ = ["ADAPTER_NAMESPACE", "ADAPTER_VERSION", "SQLiteWorkflowError", "logical_event_uuid", "discover", "fresh_onboarding", "accepted_backfill", "local_action_batch", "append_event", "read_events"]
+__all__ = ["ADAPTER_NAMESPACE", "ADAPTER_VERSION", "SQLiteWorkflowError", "logical_event_uuid", "discover", "fresh_onboarding", "accepted_backfill", "accepted_backfill_existing", "local_action_batch", "append_event", "read_events"]

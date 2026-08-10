@@ -15,6 +15,7 @@ from sqlite_collaboration_workflow import (
     local_action_batch,
     logical_event_uuid,
     read_events,
+    accepted_backfill_existing,
 )
 
 
@@ -42,10 +43,14 @@ def main() -> int:
         assert divergent["status"] == "hold"
         action = local_action_batch(root, pid, [event("action-1", "human_approval")])
         assert action["status"] == "ok"
-        assert len(read_events(root, pid)) == 2
+        existing_migration = accepted_backfill_existing(root, pid, [event("migration-1")])
+        assert existing_migration["status"] == "ok" and len(list(root.rglob("collaboration.db"))) == 1
+        missing_migration = accepted_backfill_existing(root, "00000000-0000-0000-0000-000000000000", [event("migration-missing")])
+        assert missing_migration["status"] == "hold" and len(list(root.rglob("collaboration.db"))) == 1
+        assert len(read_events(root, pid)) == 3
         malformed = accepted_backfill(root, "repo", "farmerhunter/agent-foundry", [event("bad", owner="x"), {"event_type": "evidence", "payload": {}}])
         assert malformed["status"] == "hold"
-        assert len(read_events(root, pid)) == 2
+        assert len(read_events(root, pid)) == 3
         fresh_root = Path(tmp) / "fresh"
         malformed_fresh = accepted_backfill(fresh_root, "repo", "new-project", [{"event_type": "evidence", "payload": {}}])
         assert malformed_fresh["status"] == "hold" and not fresh_root.exists()
