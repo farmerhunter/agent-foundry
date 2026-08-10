@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import re
 import shutil
@@ -52,7 +53,25 @@ class LedgerEvent:
 
 
 def _canonical(value: Any) -> str:
-    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    _validate_json(value)
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
+
+
+def _validate_json(value: Any) -> None:
+    if value is None or isinstance(value, (str, bool, int)):
+        return
+    if isinstance(value, float):
+        if not math.isfinite(value): raise ValueError("non-finite JSON number")
+        return
+    if isinstance(value, Mapping):
+        for key, item in value.items():
+            if not isinstance(key, str): raise ValueError("JSON object keys must be strings")
+            _validate_json(item)
+        return
+    if isinstance(value, (list, tuple)):
+        for item in value: _validate_json(item)
+        return
+    raise ValueError("payload contains a non-JSON value")
 
 
 def _hash(value: Any) -> str:
@@ -263,6 +282,29 @@ class LocalCollaborationLedger:
 
     def load_projection(self,name):
         r=self._conn.execute("SELECT * FROM projections WHERE name=?",(name,)).fetchone(); return None if r is None else {"name":r["name"],"sequence":r["sequence"],"payload":json.loads(r["payload"]),"payload_hash":r["payload_hash"]}
+
+    def rebuild_projection(self, name, reducer=None):
+        events = self.list_events()
+        payload = reducer(events) if reducer is not None else {"events": [event.payload for event in events]}
+        if not isinstance(payload, Mapping): raise ValueError("projection reducer must return a mapping")
+        self.checkpoint_projection(name, events[-1].sequence if events else 0, payload)
+        return self.load_projection(name)
+
+    def delete_projection(self, name):
+        self._conn.execute("BEGIN IMMEDIATE")
+        try:
+            removed = self._conn.execute("DELETE FROM projections WHERE name=?", (name,)).rowcount > 0
+            self._conn.execute("COMMIT"); return removed
+        except Exception:
+            self._conn.execute("ROLLBACK"); raise
+
+    def verify_projection(self, name):
+        projection = self.load_projection(name)
+        if projection is None: return False
+        if projection["payload_hash"] != _hash(projection["payload"]): raise LedgerIntegrityError("projection hash invalid")
+        max_sequence = self._conn.execute("SELECT COALESCE(MAX(sequence),0) FROM events").fetchone()[0]
+        if projection["sequence"] > max_sequence: raise LedgerIntegrityError("projection sequence invalid")
+        return True
 
     def backup(self, destination):
         dest=Path(destination).expanduser()

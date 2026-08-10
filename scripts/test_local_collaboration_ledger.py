@@ -1,4 +1,5 @@
 import os
+import math
 import stat
 import tempfile
 import unittest
@@ -31,6 +32,10 @@ class LedgerTests(unittest.TestCase):
         self.ledger.append_event("work.accepted", {"id": 1})
         self.ledger.checkpoint_projection("board", 1, {"open": 1})
         self.assertEqual(self.ledger.load_projection("board")["sequence"], 1)
+        self.assertTrue(self.ledger.verify_projection("board"))
+        self.ledger.rebuild_projection("board", lambda events: {"count": len(events)})
+        self.assertEqual(self.ledger.load_projection("board")["payload"], {"count": 1})
+        self.assertTrue(self.ledger.delete_projection("board")); self.assertFalse(self.ledger.verify_projection("board"))
 
     def test_append_sequence_chain_and_idempotency(self):
         event_id = "11111111-1111-1111-1111-111111111111"
@@ -67,6 +72,11 @@ class LedgerTests(unittest.TestCase):
         self.ledger.append_event("x", {"meta": {"labels": ["safe"], "source": "local"}})
         with self.assertRaises(ValueError): self.ledger.append_batch([{"event_type": "ok", "payload": {}}, {"event_type": "bad", "payload": {"prompt": "x"}}])
         self.assertEqual(len(self.ledger.list_events()), 1)
+
+    def test_strict_json_payloads(self):
+        with self.assertRaises(ValueError): self.ledger.append_event("x", {1: "non-string-key"})
+        with self.assertRaises(ValueError): self.ledger.append_event("x", {"value": math.nan})
+        with self.assertRaises(ValueError): self.ledger.append_event("x", {"value": math.inf})
 
     def test_tamper_and_backup(self):
         self.ledger.append_event("x", {"a": 1})
