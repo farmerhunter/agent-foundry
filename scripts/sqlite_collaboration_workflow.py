@@ -16,6 +16,10 @@ from local_collaboration_ledger import (
     LedgerConflictError,
     LedgerError,
     LocalCollaborationLedger,
+    _canonical,
+    _contains_forbidden,
+    _json_depth,
+    _TYPE,
 )
 
 ADAPTER_VERSION = "orch-02-2.v1"
@@ -104,15 +108,34 @@ def _validate_legacy_batch(events: Iterable[Mapping[str, Any]]) -> list[Mapping[
     values = list(events)
     if not values:
         raise ValueError("at least one event is required")
+    if len(values) > 100:
+        raise ValueError("batch exceeds 100 events")
+    total_size = 0
     for event in values:
         if not isinstance(event, Mapping) or not str(event.get("event_id") or ""):
             raise ValueError("event_id is required")
+        event_type = str(event.get("event_type") or "evidence")
+        if not _TYPE.fullmatch(event_type):
+            raise ValueError("invalid event_type")
         if not isinstance(event.get("payload", {}), Mapping):
             raise ValueError("event payload must be an object")
-        json.dumps(event, ensure_ascii=False, allow_nan=False)
-        text = json.dumps(event, ensure_ascii=False).lower()
-        if any(token in text for token in ("transcript", "tool_output", "raw_transcript", "prompt", "secret", "native_history")):
+        payload = dict(event.get("payload") or {})
+        compact = dict(payload)
+        compact["logical_event_id"] = str(event["event_id"])
+        compact["helper_event"] = dict(event)
+        if _contains_forbidden(compact):
             raise ValueError("privacy-forbidden payload")
+        _json_depth(compact)
+        encoded = _canonical(compact).encode()
+        if len(encoded) > 64 * 1024:
+            raise ValueError("payload exceeds 64 KiB")
+        total_size += len(encoded)
+        for field in ("actor_role",):
+            value = event.get(field)
+            if value is not None and (not isinstance(value, str) or not value or len(value) > 256 or any(token in value.lower() for token in ("transcript", "raw_transcript", "tool_output", "prompt", "secret", "native_history"))):
+                raise ValueError(f"invalid {field}")
+    if total_size > 1024 * 1024:
+        raise ValueError("batch exceeds 1 MiB")
     return values
 
 
