@@ -1,12 +1,28 @@
-# Roadmap Milestones V2
+# ORCH Roadmap Milestones (historical V2 mapping)
 
-Status: active capability roadmap
+Status: active capability roadmap; the active milestone taxonomy is ORCH-01/02/03
 Updated: 2026-07-09
-Scope: V2 local-first orchestration, Foundry Board, Local Collaboration Ledger, GitHub Project remote sync/apply, migration from existing GitHub-first projects, mixed-state recovery, end-to-end operational UX, dogfood adoption, and runtime/pack enablement.
+Scope: ORCH-01 local-first orchestration and Foundry Board, ORCH-02 SQLite Local Ledger Foundation, and ORCH-03 Local Collaboration Authority and Selective Sync. The rows below preserve historical V2 design/implementation evidence without using V2.0/V2.1 as active milestone names.
 
-## V2 Goal
+## Active ORCH sequence
 
-V2 makes Agent Foundry a usable local-first orchestration system, not only a
+| Milestone | Records | Status |
+| --- | --- | --- |
+| ORCH-01 — Local-First Orchestration and Foundry Board | #292 and its historical children | Completed; formerly called V2.0 |
+| ORCH-02 — SQLite Local Ledger Foundation | #525–#530 | Next active milestone; #526 architecture gate first |
+| ORCH-03 — Local Collaboration Authority and Selective Sync | #400, #401, #522, #404, #405, #403, #521, #402, #406 | Planned/held until ORCH-02 final readiness; formerly called V2.1 |
+
+ORCH-01, ORCH-02, and ORCH-03 jointly target a `v2.0.0` candidate. A separate final-readiness/Human gate decides whether to release it. `v2.0.1` is reserved for compatible fixes after release.
+
+Dependency order:
+
+`ORCH-01 -> ORCH-02 design -> SQLite LedgerStore -> onboarding/integration -> reliability/recovery -> adopter dogfood/final readiness -> ORCH-03 #522 -> #404 -> #405 -> #403 -> #521 -> #402 -> #406`
+
+ORCH-02 boundaries: SQLite is the only operational ledger backend; new and existing projects onboard directly to SQLite; no JSONL user-data migration, dual-write, or compatibility backend; JSONL export is optional and non-authoritative; no raw transcript/tool output; ORCH-03 owns multi-machine convergence; AF19 remains separate.
+
+## Product goal
+
+The ORCH sequence makes Agent Foundry a usable local-first orchestration system, not only a
 read-only reporting layer.
 
 The user value is simple: a user should be able to see what work is happening, who owns it, what evidence supports it, what is blocked, what changed, and what should happen next without reconstructing state from scattered GitHub comments, Project columns, and Codex thread history.
@@ -15,7 +31,7 @@ GitHub Project remains useful, but it becomes a remote sync and collaboration
 surface. The durable orchestration record should live locally first, then sync
 outward in a controlled way.
 
-V2 is not complete until users can operate the workflow end to end:
+The candidate is not ready until users can operate the workflow end to end:
 
 - start a new local-first collaboration flow;
 - migrate an existing GitHub-first project into reviewed local ledger state;
