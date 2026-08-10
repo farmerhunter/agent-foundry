@@ -185,6 +185,19 @@ class LedgerTests(unittest.TestCase):
         finally:
             os.chmod(directory, 0o700)
 
+    def test_discovery_preserves_truncated_database_integrity_hold(self):
+        self.ledger.close()
+        source = Path(self.tmp.name) / self.ledger.project_id / "collaboration.db"
+        corrupt_root = Path(self.tmp.name) / "corrupt-root" / self.ledger.project_id
+        corrupt_root.mkdir(parents=True)
+        os.chmod(corrupt_root, 0o700)
+        corrupt = corrupt_root / "collaboration.db"
+        data = source.read_bytes()
+        corrupt.write_bytes(data[:64])
+        os.chmod(corrupt, 0o600)
+        with self.assertRaises(LedgerIntegrityError):
+            LocalCollaborationLedger.discover_by_binding(Path(self.tmp.name) / "corrupt-root", "repo", "missing")
+
     def test_existing_rw_never_recreates_or_changes_identity(self):
         path = self.ledger.path
         project_id = self.ledger.project_id

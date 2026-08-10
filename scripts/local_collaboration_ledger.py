@@ -521,6 +521,8 @@ class LocalCollaborationLedger:
                 raise LedgerSchemaError("candidate schema hold")
             if any(isinstance(exc, LedgerIntegrityError) for exc in holds):
                 raise LedgerIntegrityError("candidate integrity hold")
+            if any(isinstance(exc, sqlite3.DatabaseError) for exc in holds):
+                raise LedgerIntegrityError("candidate integrity hold")
             raise LedgerConflictError("candidate conflict hold")
         return matches
 
