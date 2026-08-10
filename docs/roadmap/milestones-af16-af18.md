@@ -264,3 +264,24 @@ AF19 scope:
 - production activation and any broader generated publish or release program.
 
 AF19 does not include the deferred selected-Vault SQLite/shadow lane in [#492](https://github.com/farmerhunter/agent-foundry/issues/492); that remains an optional, separately reopened storage-architecture effort.
+
+### V2.1 Compatibility Boundary
+
+AF18 defines portable collaboration-control semantics; it does not require
+GitHub to remain the permanent storage mechanism for every transition. The AF18
+default on `main` continues to use GitHub durable anchors for Base projects.
+
+V2.1 may provide a different persistence and scheduling adapter for projects
+that explicitly enable Local Orchestration:
+
+- AF18 `Work`, dispatch, hold, successor, summary, and terminal-handoff events
+  become replayable Local Collaboration Ledger events;
+- GitHub Issue/PR is used for externally shared evidence and selected
+  materialization rather than every local lifecycle transition;
+- GitHub Project is an optional projection;
+- raw thread history, tool output, and private runtime observations do not move
+  into the ledger by default.
+
+This does not move AF19 capabilities into V2.1. Trusted runtime metrics,
+adaptive policy, native successor, and runtime/production activation remain
+AF19 even when V2.1 supplies the local scheduler and operational event source.

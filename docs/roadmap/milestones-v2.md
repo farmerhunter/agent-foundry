@@ -1,8 +1,12 @@
 # Roadmap Milestones V2
 
 Status: active capability roadmap
-Updated: 2026-07-09
-Scope: V2 local-first orchestration, Foundry Board, Local Collaboration Ledger, GitHub Project remote sync/apply, migration from existing GitHub-first projects, mixed-state recovery, end-to-end operational UX, dogfood adoption, and runtime/pack enablement.
+Updated: 2026-08-10
+Scope: V2.0 local-first orchestration, Foundry Board, Local Collaboration
+Ledger, GitHub Project remote sync/apply, migration from existing GitHub-first
+projects, mixed-state recovery, end-to-end operational UX, dogfood adoption,
+and runtime/pack enablement; plus the V2.1 local-authority and selective-sync
+upgrade built on the completed V2.0 and AF18 foundations.
 
 ## V2 Goal
 
@@ -72,15 +76,19 @@ runtime action belongs to the Local Orchestration layer.
 
 ## Branch Policy
 
-V2 work uses `codex/v2-local-first-orchestration` as its integration branch.
+V2.0 used `codex/v2-local-first-orchestration` as its integration branch.
+V2.1 uses `codex/v2.1-cache-sync-integration`.
 
 Branch rules:
 
-- V2 child branches should target `codex/v2-local-first-orchestration`.
-- V2-only changes should not target `main` while V2 is incomplete.
+- V2.0 remediation branches target `codex/v2-local-first-orchestration` only
+  when an explicit issue contract reopens that release line.
+- V2.1 task branches target `codex/v2.1-cache-sync-integration`.
 - `main` remains the V1.x maintenance line and default target for backward-compatible harvest-driven Core updates.
-- V2 should regularly forward-merge from `main` to absorb V1.x maintenance and harvest improvements.
-- Do not merge V2 back to `main` until V2 readiness is accepted and a final human-gated integration decision approves it.
+- V2.1 should regularly forward-merge from `main` to absorb completed V2.0,
+  AF18, maintenance, and harvest improvements.
+- Do not merge V2.1 back to `main` until V2.1 readiness is accepted and a
+  final Human-gated integration decision approves it.
 
 Release rules:
 
@@ -116,7 +124,7 @@ complete the user-facing capability.
 | V2-13 Operational UX Contract And Management Surface | #378 | Implement stable operational ViewModels and a management surface for board, item detail, migration review, apply review, sync plan, conflicts, health, and cross-environment/version coordination. | Completed implementation |
 | V2-14 Real-Project Dogfood And UX Conclusion | #374 | Run the complete workflow on a real project, document practical friction, and decide whether the experience is good enough for adoption. | Completed dogfood |
 | V2-15 Runtime / Skill / Capability Pack Enablement | #375 | Harvest and publish layer-aware V2 practices, Skills, and packs without making Local Orchestration behavior the default for Base workflows. | Completed enablement |
-| V2-16 Final V2 Integration And Release Gate | #376 | Verify full V2 usability, dogfood conclusions, docs, enablement, and decide on merge-back to `main` plus `v2.0.0` release. | Active final readiness gate |
+| V2-16 Final V2 Integration And Release Gate | #376 / PR #399 | Verify full V2 usability, dogfood conclusions, docs, enablement, and decide on merge-back to `main` plus `v2.0.0` release. | Completed source integration |
 
 ## V2 Capability Phases
 
@@ -687,3 +695,97 @@ It should verify:
 - V2 branch is ready for a separate Human-gated merge-back/release decision.
 
 V2 release should remain separate from memory-system implementation.
+
+## V2.1 Local Collaboration Authority And Selective Sync
+
+V2.1 consumes two completed foundations:
+
+- V2.0 owns Local Collaboration Ledger storage/replay, existing-project
+  backfill and acceptance, ledger-backed Board/Cockpit views, local action
+  apply, mixed-state recovery, and controlled Project mirror behavior.
+- AF18 owns portable bounded-collaboration semantics: `Work`,
+  `ExecutionRun`, `DispatchClaim`, `TransitionReceipt`, root budgets,
+  duplicate prevention, hold/disable, successor packets, `WorkSummary`,
+  `AttentionSummary`, and privacy-safe terminal handoff.
+
+V2.1 must not create a competing third scheduler. For a project that explicitly
+enables Local Orchestration:
+
+- the local ledger is the operational authority for Work lifecycle and local
+  collaboration scheduling;
+- GitHub Issue/PR remains external evidence and the authority for native remote
+  facts such as PR review, CI, merge, and externally shared approvals;
+- GitHub Project is an optional planning projection, not a runtime dependency;
+- AF19 runtime observations may annotate Work later, but do not own scheduling
+  or block V2.1.
+
+Base projects remain GitHub-first and still receive AF18 Bounded Collaboration.
+V2.1 local authority starts only after explicit project onboarding or an
+accepted capability marker.
+
+### Existing-Project Onboarding And Upgrade
+
+V2.0 already completed the historical migration foundation. V2.1 extends it
+without rescanning or rewriting accepted history:
+
+- a project with no local ledger runs V2.0 backfill/review/apply, then the V2.1
+  control-plane initialization;
+- an existing V2.0 project runs only an idempotent schema/control-plane upgrade;
+- an AF18-active project imports compact Work and durable-anchor state, never
+  native thread transcripts or raw tool output;
+- later schema changes append migration or compensating events rather than
+  silently rebuilding accepted history.
+
+### V2.1 Event Materialization Policy
+
+Every collaboration transition is classified as one of:
+
+- `local_only`: ordinary queue, lifecycle, duplicate-prevention, hold,
+  successor, summary, and non-material local state;
+- `must_publish`: externally shared Human approval, PR acceptance/merge
+  evidence, cross-person handoff, release decision, or another contractually
+  required durable remote fact;
+- `optional_sync`: convenience projection to Issue comments, labels, or
+  GitHub Project fields.
+
+Materialization is batched and idempotent. Remote success requires exact
+readback. Missing, stale, conflicting, privacy-held, or unavailable evidence
+stays explicit and cannot be upgraded from caller claims.
+
+### Corrected Implementation Sequence
+
+1. #401: accept the corrected authority, onboarding, privacy, failure-state,
+   telemetry, and dogfood contract.
+2. #522 AF18-to-ledger bridge: map bounded collaboration controls into immutable,
+   replayable local events with compatibility and negative tests.
+3. #404: derive the local Work scheduler and local-intent/remote-confirmation
+   state machine from those events.
+4. #405: add compact, rebuildable GitHub evidence caching with freshness and no
+   raw transcript/comment-history default.
+5. #403: add selective GitHub Issue/PR materialization with outbox, batching,
+   idempotency, exact readback, conflict, and compensation.
+6. #521 optional Project projection: add allowlisted Project sync without
+   making Project an onboarding or runtime dependency.
+7. #402: add the portable shared-event transport interface and Git adapter for
+   multi-machine convergence after the single-machine loop is accepted.
+8. #406: run Human dogfood covering first onboarding, V2.0 upgrade, offline
+   local Work, reconnect/materialization, disabled Project access, and an
+   intentional multi-machine semantic conflict.
+
+The dogfood records observed GitHub read/write counts, cache hit/miss counts,
+materialized versus local-only transitions, retries, conflicts, and Human
+attention. It does not claim billing-grade savings or trusted context metrics.
+
+### Human Gates
+
+Separate Human approval remains required for:
+
+- enabling local-ledger scheduler authority in a real adopter project;
+- the first live Issue/PR materialization policy and any broadened automatic
+  publication rule;
+- any real GitHub Project mutation or Project schema expansion;
+- the shared-event remote/privacy/retention choice for multi-machine use;
+- final V2.1 integration into `main` and any release.
+
+Trusted context/token metrics, policy tuning/freeze, native successor, and
+runtime/production activation remain AF19 and are not V2.1 dependencies.
