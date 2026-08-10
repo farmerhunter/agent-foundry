@@ -37,6 +37,22 @@ class LedgerPermissionError(LedgerError):
     pass
 
 
+class LedgerBusyError(LedgerError):
+    pass
+
+
+class LedgerSchemaError(LedgerError):
+    pass
+
+
+class LedgerIdentityError(LedgerError):
+    pass
+
+
+class LedgerBackupError(LedgerError):
+    pass
+
+
 @dataclass(frozen=True)
 class LedgerEvent:
     sequence: int
@@ -137,15 +153,66 @@ class LocalCollaborationLedger:
             self._read_only_validate(allow_snapshot=_snapshot)
             self.verify()
             return
-        self._conn = sqlite3.connect(self.path, timeout=5, isolation_level=None)
-        self._conn.row_factory = sqlite3.Row
-        self._configure()
-        self._init_schema()
-        self.verify()
+        try:
+            self._conn = sqlite3.connect(self.path, timeout=5, isolation_level=None)
+            self._conn.row_factory = sqlite3.Row
+            self._configure()
+            self._init_schema()
+            self.verify()
+        except sqlite3.OperationalError as exc:
+            if getattr(self, "_conn", None) is not None:
+                self._conn.close()
+            if "locked" in str(exc).lower() or "busy" in str(exc).lower():
+                raise LedgerBusyError("database busy") from None
+            raise LedgerSchemaError("database schema or capability failure") from None
 
     @classmethod
     def create_project(cls, *, projects_root=None, project_id=None):
         return cls(project_id, projects_root=projects_root)
+
+    @classmethod
+    def open_existing(cls, db_path: str | Path, *, expected_project_id: str | None = None):
+        """Open an existing authority for writes without ever creating it.
+
+        The URI ``mode=rw`` is intentional: a missing or mistyped path is a
+        hold, never an opportunity to create a second authority.
+        """
+        path = Path(db_path).expanduser()
+        if path.is_symlink() or not path.is_file():
+            raise LedgerIntegrityError("existing regular database is required")
+        obj = cls.__new__(cls)
+        obj.path = path
+        obj.directory = path.parent
+        obj.project_id = expected_project_id
+        obj._assert_private()
+        try:
+            obj._conn = sqlite3.connect(f"file:{path}?mode=rw", uri=True, timeout=5, isolation_level=None)
+            obj._conn.row_factory = sqlite3.Row
+            obj._configure()
+            obj._read_existing_identity(expected_project_id)
+            obj.verify()
+            return obj
+        except sqlite3.DatabaseError as exc:
+            if getattr(obj, "_conn", None) is not None:
+                obj._conn.close()
+            if "locked" in str(exc).lower() or "busy" in str(exc).lower():
+                raise LedgerBusyError("database busy") from None
+            raise LedgerIntegrityError("existing database cannot be opened") from None
+        except Exception:
+            if getattr(obj, "_conn", None) is not None:
+                obj._conn.close()
+            raise
+
+    def _read_existing_identity(self, expected_project_id):
+        metadata = self.metadata()
+        if metadata.get("schema_version") != SCHEMA_VERSION:
+            raise LedgerSchemaError("schema version mismatch")
+        stored = metadata.get("project_id")
+        if not stored:
+            raise LedgerIdentityError("project identity is missing")
+        if expected_project_id is not None and stored != expected_project_id:
+            raise LedgerIdentityError("project identity mismatch")
+        self.project_id = stored
 
     def close(self):
         self._conn.close()
@@ -178,9 +245,9 @@ class LocalCollaborationLedger:
         self._conn.execute("PRAGMA busy_timeout=5000"); self._conn.execute("PRAGMA wal_autocheckpoint=1000")
         tables = {r[0] for r in self._conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         if not {"ledger_metadata", "events", "project_bindings"}.issubset(tables):
-            raise LedgerIntegrityError("candidate schema is incomplete")
+            raise LedgerSchemaError("candidate schema is incomplete")
         metadata = {r["key"]: r["value"] for r in self._conn.execute("SELECT key,value FROM ledger_metadata")}
-        if metadata.get("schema_version") != SCHEMA_VERSION: raise LedgerIntegrityError("candidate schema version mismatch")
+        if metadata.get("schema_version") != SCHEMA_VERSION: raise LedgerSchemaError("candidate schema version mismatch")
         if self.project_id and metadata.get("project_id") != self.project_id: raise LedgerIntegrityError("candidate project mismatch")
         self.project_id = metadata.get("project_id")
         self._pragma_receipt = {k: str(self._conn.execute(f"PRAGMA {k}").fetchone()[0]).lower() for k in ("journal_mode","synchronous","foreign_keys","trusted_schema","busy_timeout","wal_autocheckpoint")}
@@ -195,8 +262,9 @@ class LocalCollaborationLedger:
         return dict(self._pragma_receipt)
 
     def _init_schema(self):
-        c = self._conn; c.execute("BEGIN IMMEDIATE")
+        c = self._conn
         try:
+            c.execute("BEGIN IMMEDIATE")
             statements = [
                 "CREATE TABLE IF NOT EXISTS ledger_metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
                 "CREATE TABLE IF NOT EXISTS project_bindings (binding_id INTEGER PRIMARY KEY, binding_type TEXT NOT NULL, binding_value TEXT NOT NULL, active INTEGER NOT NULL, bound_at TEXT NOT NULL, decision_receipt TEXT NOT NULL)",
@@ -252,6 +320,11 @@ class LocalCollaborationLedger:
         c = self._conn; c.execute("BEGIN IMMEDIATE")
         try:
             c.execute("INSERT OR IGNORE INTO holds VALUES(?,?,?,?,?)", (event_id, reason, payload_hash, identity_hash, _now())); c.execute("COMMIT")
+        except sqlite3.OperationalError as exc:
+            if c.in_transaction: c.execute("ROLLBACK")
+            if "locked" in str(exc).lower() or "busy" in str(exc).lower():
+                raise LedgerBusyError("database busy") from None
+            raise LedgerSchemaError("database write failed") from None
         except Exception: c.execute("ROLLBACK"); raise
 
     def _validate(self, event_type, payload, event_id, actor, source, root):
@@ -291,8 +364,9 @@ class LocalCollaborationLedger:
             normalized.append((eid,item["event_type"],item["payload"],item.get("actor"),item.get("source"),root))
         if sum(len(_canonical(item["payload"]).encode()) for item in events) > 1024 * 1024: raise ValueError("batch exceeds 1 MiB")
         if not normalized: return []
-        c = self._conn; c.execute("BEGIN IMMEDIATE")
+        c = self._conn
         try:
+            c.execute("BEGIN IMMEDIATE")
             result=[]; last=c.execute("SELECT sequence,event_hash FROM events ORDER BY sequence DESC LIMIT 1").fetchone(); seq,previous=(last["sequence"],last["event_hash"]) if last else (0,GENESIS)
             for eid,etype,payload,actor,source,root in normalized:
                 ph=_hash(payload); ih=self._identity_hash(ph,etype,actor,source,root)
@@ -314,6 +388,11 @@ class LocalCollaborationLedger:
                     if ih != old: self._record_hold(eid,"divergent_duplicate",ph,ih); break
                 if c.execute("SELECT 1 FROM holds WHERE event_id=?",(eid,)).fetchone(): break
             raise
+        except sqlite3.OperationalError as exc:
+            if c.in_transaction: c.execute("ROLLBACK")
+            if "locked" in str(exc).lower() or "busy" in str(exc).lower():
+                raise LedgerBusyError("database busy") from None
+            raise LedgerSchemaError("database write failed") from None
         except Exception: c.execute("ROLLBACK"); raise
 
     def _row(self,row):
@@ -406,15 +485,18 @@ class LocalCollaborationLedger:
         staged = stage_dir / f".restore-{uuid.uuid4().hex}.db"
         try:
             receipt_path = source.with_name(source.name + ".receipt.json")
-            if not receipt_path.is_file(): raise LedgerIntegrityError("backup receipt missing")
-            receipt = json.loads(receipt_path.read_text())
-            if receipt.get("sha256") != hashlib.sha256(source.read_bytes()).hexdigest() or receipt.get("project_id") != expected_project_id or receipt.get("schema_version") != SCHEMA_VERSION: raise LedgerIntegrityError("backup receipt mismatch")
+            if not receipt_path.is_file(): raise LedgerBackupError("backup receipt missing")
+            try:
+                receipt = json.loads(receipt_path.read_text())
+            except (OSError, ValueError):
+                raise LedgerBackupError("backup receipt unreadable") from None
+            if receipt.get("sha256") != hashlib.sha256(source.read_bytes()).hexdigest() or receipt.get("project_id") != expected_project_id or receipt.get("schema_version") != SCHEMA_VERSION: raise LedgerBackupError("backup receipt mismatch")
             shutil.copyfile(source, staged); os.chmod(staged, 0o600)
             restored = cls(db_path=staged, create=False, _snapshot=True)
             if restored.project_id != expected_project_id or restored.metadata().get("schema_version") != SCHEMA_VERSION:
                 restored.close(); raise LedgerIntegrityError("restore identity/schema receipt mismatch")
             restored.integrity_check(); generation = restored._conn.execute("SELECT COALESCE(MAX(sequence),0) FROM events").fetchone()[0]; head = restored._conn.execute("SELECT event_hash FROM events ORDER BY sequence DESC LIMIT 1").fetchone(); restored.close()
-            if generation != receipt.get("generation") or (head[0] if head else GENESIS) != receipt.get("source_head"): raise LedgerIntegrityError("backup generation/head mismatch")
+            if generation != receipt.get("generation") or (head[0] if head else GENESIS) != receipt.get("source_head"): raise LedgerBackupError("backup generation/head mismatch")
             os.rename(staged, dest)
             return cls(db_path=dest, create=False, _snapshot=True)
         finally:
@@ -433,9 +515,18 @@ class LocalCollaborationLedger:
                 if found: matches.append(ledger.project_id)
                 ledger.close()
             except (LedgerError, sqlite3.DatabaseError) as exc:
-                holds.append({"path": str(db), "reason": str(exc)})
+                holds.append(exc)
         if len(matches) > 1: raise LedgerConflictError("binding resolves to multiple projects")
-        if holds: raise LedgerConflictError(f"candidate holds require review: {holds}")
+        if holds:
+            if any(isinstance(exc, LedgerPermissionError) for exc in holds):
+                raise LedgerPermissionError("candidate permission hold")
+            if any(isinstance(exc, LedgerSchemaError) for exc in holds):
+                raise LedgerSchemaError("candidate schema hold")
+            if any(isinstance(exc, LedgerIntegrityError) for exc in holds):
+                raise LedgerIntegrityError("candidate integrity hold")
+            if any(isinstance(exc, sqlite3.DatabaseError) for exc in holds):
+                raise LedgerIntegrityError("candidate integrity hold")
+            raise LedgerConflictError("candidate conflict hold")
         return matches
 
     def integrity_check_path(self,path):
@@ -446,4 +537,4 @@ class LocalCollaborationLedger:
         self.integrity_check_path(self.path); self.verify(); return "ok"
 
 
-__all__=["LocalCollaborationLedger","LedgerEvent","LedgerError","LedgerIntegrityError","LedgerConflictError","LedgerPermissionError"]
+__all__=["LocalCollaborationLedger","LedgerEvent","LedgerError","LedgerIntegrityError","LedgerConflictError","LedgerPermissionError","LedgerBusyError","LedgerSchemaError","LedgerIdentityError","LedgerBackupError"]
