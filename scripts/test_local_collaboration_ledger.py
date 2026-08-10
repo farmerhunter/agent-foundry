@@ -35,6 +35,11 @@ class LedgerTests(unittest.TestCase):
         with self.assertRaises(LedgerConflictError): self.ledger.append_event("x", {"a": 2}, event_id=event_id)
         self.assertEqual(len(self.ledger.list_events()), 1)
         self.assertEqual(self.ledger.append_event("x", {"a": 1}, event_id=event_id).sequence, 1)
+        self.ledger.close()
+        reopened = LocalCollaborationLedger(self.ledger.project_id, projects_root=self.tmp.name)
+        with self.assertRaises(LedgerConflictError): reopened.append_event("x", {"a": 2}, event_id=event_id)
+        self.assertEqual(reopened._conn.execute("SELECT COUNT(*) FROM holds WHERE event_id=?", (event_id,)).fetchone()[0], 1)
+        reopened.close()
 
     def test_privacy_and_batch_rollback(self):
         with self.assertRaises(ValueError): self.ledger.append_event("x", {"raw_transcript": "secret"})

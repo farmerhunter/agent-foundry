@@ -241,6 +241,23 @@ class LocalCollaborationLedger:
             c.execute("COMMIT")
             self._enforce_sidecar_modes()
             return result
+        except LedgerConflictError:
+            # The event batch must roll back, but the conflict is durable evidence.
+            # Record it in a separate transaction so reopening remains fail-closed.
+            c.execute("ROLLBACK")
+            for eid, _etype, payload, _actor, _source in normalized:
+                existing = c.execute("SELECT payload_hash FROM events WHERE event_id=?", (eid,)).fetchone()
+                if existing and existing["payload_hash"] != _hash(payload):
+                    c.execute("BEGIN IMMEDIATE")
+                    try:
+                        c.execute("INSERT OR IGNORE INTO holds VALUES(?,?,?,?)",
+                                  (eid, "divergent_duplicate", _hash(payload), _now()))
+                        c.execute("COMMIT")
+                    except Exception:
+                        c.execute("ROLLBACK")
+                        raise
+                    break
+            raise
         except Exception:
             c.execute("ROLLBACK")
             raise
