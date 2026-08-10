@@ -1,31 +1,27 @@
-"""Project-local, privacy-safe SQLite collaboration ledger.
-
-This module deliberately contains no GitHub, adapter, runtime, or Vault routing.
-It provides only the durable local ledger primitives used by later orchestration.
-"""
+"""Project-local SQLite collaboration authority (no transport or runtime routing)."""
 from __future__ import annotations
 
 import hashlib
 import json
 import os
-import secrets
+import re
 import shutil
 import sqlite3
 import stat
-import tempfile
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
-
 SCHEMA_VERSION = "1.0.0"
 GENESIS = "0" * 64
+_TYPE = re.compile(r"^[a-z][a-z0-9_.-]{0,127}$")
+_FORBIDDEN = {"transcript", "raw_transcript", "tool_output", "prompt", "secret", "native_history"}
 
 
 class LedgerError(RuntimeError):
-    """Base error; callers must treat errors as fail-closed."""
+    pass
 
 
 class LedgerIntegrityError(LedgerError):
@@ -52,6 +48,7 @@ class LedgerEvent:
     created_at: str
     actor: str | None
     source: str | None
+    root: str
 
 
 def _canonical(value: Any) -> str:
@@ -59,7 +56,7 @@ def _canonical(value: Any) -> str:
 
 
 def _hash(value: Any) -> str:
-    return hashlib.sha256(_canonical(value).encode("utf-8")).hexdigest()
+    return hashlib.sha256(_canonical(value).encode()).hexdigest()
 
 
 def _now() -> str:
@@ -67,11 +64,10 @@ def _now() -> str:
 
 
 def _contains_forbidden(value: Any) -> bool:
-    forbidden = {"transcript", "raw_transcript", "tool_output", "prompt", "secret", "native_history"}
     if isinstance(value, Mapping):
-        return any(key in forbidden or _contains_forbidden(item) for key, item in value.items())
+        return any(str(k).lower() in _FORBIDDEN or _contains_forbidden(v) for k, v in value.items())
     if isinstance(value, (list, tuple)):
-        return any(_contains_forbidden(item) for item in value)
+        return any(_contains_forbidden(v) for v in value)
     return False
 
 
@@ -80,227 +76,229 @@ def _mode(path: Path) -> int:
 
 
 class LocalCollaborationLedger:
-    """Own one project-local collaboration.db and its rebuildable metadata."""
-
     def __init__(self, project_id: str | None = None, *, projects_root: str | Path | None = None,
                  db_path: str | Path | None = None, create: bool = True):
         if db_path is not None and project_id is not None:
             raise ValueError("provide project_id or db_path, not both")
         if db_path is None:
-            project_id = project_id or str(uuid.uuid4())
-            try:
-                project_id = str(uuid.UUID(project_id))
-            except ValueError as exc:
-                raise ValueError("project_id must be an opaque UUID") from exc
-            root = Path(projects_root or (Path.home() / ".agent-foundry" / "projects"))
-            self.project_id = project_id
-            self.directory = root / project_id
-            self.path = self.directory / "collaboration.db"
+            project_id = str(uuid.UUID(project_id or str(uuid.uuid4())))
+            root = Path(projects_root or Path.home() / ".agent-foundry" / "projects")
+            self.project_id, self.directory, self.path = project_id, root / project_id, root / project_id / "collaboration.db"
         else:
-            self.path = Path(db_path).expanduser()
-            self.directory = self.path.parent
-            self.project_id = project_id
+            self.path = Path(db_path).expanduser(); self.directory = self.path.parent; self.project_id = project_id
         if create:
-            existed_directory = self.directory.exists()
-            self.directory.mkdir(parents=True, exist_ok=True)
-            if not existed_directory:
-                os.chmod(self.directory, 0o700)
-            if not self.path.exists():
-                self.path.touch(mode=0o600)
-            elif _mode(self.path) != 0o600:
-                raise LedgerPermissionError(f"database must be 0600: {self.path}")
+            existed = self.directory.exists(); self.directory.mkdir(parents=True, exist_ok=True)
+            if not existed: os.chmod(self.directory, 0o700)
+            if not self.path.exists(): self.path.touch(mode=0o600)
         self._assert_private()
-        self._conn = sqlite3.connect(self.path, timeout=5.0, isolation_level=None)
+        self._conn = sqlite3.connect(self.path, timeout=5, isolation_level=None)
         self._conn.row_factory = sqlite3.Row
         self._configure()
         self._init_schema()
         self.verify()
 
     @classmethod
-    def create_project(cls, *, projects_root: str | Path | None = None, project_id: str | None = None) -> "LocalCollaborationLedger":
+    def create_project(cls, *, projects_root=None, project_id=None):
         return cls(project_id, projects_root=projects_root)
 
-    def close(self) -> None:
+    def close(self):
         self._conn.close()
 
-    def _assert_private(self) -> None:
+    def _assert_private(self):
         if not self.directory.exists() or _mode(self.directory) != 0o700:
             raise LedgerPermissionError(f"project directory must be 0700: {self.directory}")
         if self.path.exists() and _mode(self.path) != 0o600:
             raise LedgerPermissionError(f"database must be 0600: {self.path}")
 
-    def _configure(self) -> None:
+    def _enforce_sidecar_modes(self):
+        for suffix in ("-wal", "-shm"):
+            p = Path(str(self.path) + suffix)
+            if p.exists() and _mode(p) != 0o600: raise LedgerPermissionError(f"sidecar must be 0600: {p}")
+
+    def _configure(self):
         c = self._conn
-        c.execute("PRAGMA journal_mode=WAL")
-        c.execute("PRAGMA synchronous=FULL")
-        c.execute("PRAGMA foreign_keys=ON")
-        c.execute("PRAGMA trusted_schema=OFF")
-        c.execute("PRAGMA busy_timeout=5000")
-        c.execute("PRAGMA wal_autocheckpoint=1000")
-        checks = {"foreign_keys": "1", "trusted_schema": "0", "busy_timeout": "5000"}
-        for key, expected in checks.items():
-            if str(c.execute(f"PRAGMA {key}").fetchone()[0]) != expected:
-                raise LedgerIntegrityError(f"required pragma not active: {key}")
+        c.execute("PRAGMA journal_mode=WAL"); c.execute("PRAGMA synchronous=FULL")
+        c.execute("PRAGMA foreign_keys=ON"); c.execute("PRAGMA trusted_schema=OFF")
+        c.execute("PRAGMA busy_timeout=5000"); c.execute("PRAGMA wal_autocheckpoint=1000")
+        expected = {"journal_mode": "wal", "synchronous": "2", "foreign_keys": "1", "trusted_schema": "0", "busy_timeout": "5000", "wal_autocheckpoint": "1000"}
+        actual = {k: str(c.execute(f"PRAGMA {k}").fetchone()[0]).lower() for k in expected}
+        if actual != expected: raise LedgerPermissionError(f"pragma capability mismatch: {actual}")
+        self._pragma_receipt = actual
         self._enforce_sidecar_modes()
 
-    def _enforce_sidecar_modes(self) -> None:
-        """Keep SQLite's mutable sidecars within the same private directory policy."""
-        for suffix in ("-wal", "-shm"):
-            sidecar = Path(str(self.path) + suffix)
-            if sidecar.exists():
-                os.chmod(sidecar, 0o600)
+    def pragma_receipt(self):
+        return dict(self._pragma_receipt)
 
-    def _init_schema(self) -> None:
-        self._conn.executescript("""
-            CREATE TABLE IF NOT EXISTS ledger_metadata (
-              key TEXT PRIMARY KEY, value TEXT NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS events (
-              sequence INTEGER PRIMARY KEY,
-              event_id TEXT NOT NULL UNIQUE,
-              event_type TEXT NOT NULL,
-              payload TEXT NOT NULL,
-              payload_hash TEXT NOT NULL,
-              previous_hash TEXT NOT NULL,
-              event_hash TEXT NOT NULL UNIQUE,
-              created_at TEXT NOT NULL,
-              actor TEXT,
-              source TEXT
-            );
-            CREATE TABLE IF NOT EXISTS holds (
-              event_id TEXT PRIMARY KEY, reason TEXT NOT NULL, payload_hash TEXT,
-              observed_at TEXT NOT NULL
-            );
-            CREATE INDEX IF NOT EXISTS events_type_idx ON events(event_type);
-        """)
-        row = self._conn.execute("SELECT value FROM ledger_metadata WHERE key='schema_version'").fetchone()
-        if row is None:
-            pid = self.project_id or str(uuid.uuid4())
-            self.project_id = pid
-            self._conn.execute("INSERT INTO ledger_metadata(key,value) VALUES('schema_version',?)", (SCHEMA_VERSION,))
-            self._conn.execute("INSERT INTO ledger_metadata(key,value) VALUES('project_id',?)", (pid,))
-        elif row[0] != SCHEMA_VERSION:
-            raise LedgerIntegrityError(f"unsupported schema version: {row[0]}")
-        stored = self._conn.execute("SELECT value FROM ledger_metadata WHERE key='project_id'").fetchone()[0]
-        if self.project_id and stored != self.project_id:
-            raise LedgerIntegrityError("project identity mismatch")
-        self.project_id = stored
+    def _init_schema(self):
+        c = self._conn; c.execute("BEGIN IMMEDIATE")
+        try:
+            statements = [
+                "CREATE TABLE IF NOT EXISTS ledger_metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
+                "CREATE TABLE IF NOT EXISTS project_bindings (binding_type TEXT NOT NULL, binding_value TEXT NOT NULL, bound_at TEXT NOT NULL, PRIMARY KEY(binding_type,binding_value))",
+                "CREATE TABLE IF NOT EXISTS events (sequence INTEGER PRIMARY KEY,event_id TEXT NOT NULL UNIQUE,event_type TEXT NOT NULL,payload TEXT NOT NULL,payload_hash TEXT NOT NULL,previous_hash TEXT NOT NULL,event_hash TEXT NOT NULL UNIQUE,created_at TEXT NOT NULL,actor TEXT,source TEXT,root TEXT NOT NULL)",
+                "CREATE TABLE IF NOT EXISTS holds (event_id TEXT PRIMARY KEY,reason TEXT NOT NULL,payload_hash TEXT,identity_hash TEXT,observed_at TEXT NOT NULL)",
+                "CREATE TABLE IF NOT EXISTS projections (name TEXT PRIMARY KEY,sequence INTEGER NOT NULL,payload TEXT NOT NULL,payload_hash TEXT NOT NULL,updated_at TEXT NOT NULL)",
+                "CREATE INDEX IF NOT EXISTS events_type_idx ON events(event_type)",
+            ]
+            for statement in statements: c.execute(statement)
+            row = c.execute("SELECT value FROM ledger_metadata WHERE key='schema_version'").fetchone()
+            if row is None:
+                pid = self.project_id or str(uuid.uuid4()); self.project_id = pid
+                c.execute("INSERT INTO ledger_metadata VALUES('schema_version',?)", (SCHEMA_VERSION,))
+                c.execute("INSERT INTO ledger_metadata VALUES('project_id',?)", (pid,))
+            elif row[0] != SCHEMA_VERSION: raise LedgerIntegrityError(f"unsupported schema version: {row[0]}")
+            stored = c.execute("SELECT value FROM ledger_metadata WHERE key='project_id'").fetchone()[0]
+            if self.project_id and stored != self.project_id: raise LedgerIntegrityError("project identity mismatch")
+            self.project_id = stored; c.execute("COMMIT")
+        except Exception:
+            c.execute("ROLLBACK"); raise
 
-    def metadata(self) -> dict[str, str]:
+    def metadata(self):
         return {r["key"]: r["value"] for r in self._conn.execute("SELECT key,value FROM ledger_metadata")}
 
-    def _event_hash(self, sequence: int, event_id: str, event_type: str, payload_hash: str,
-                    previous_hash: str, created_at: str, actor: str | None, source: str | None) -> str:
-        return _hash([sequence, event_id, event_type, payload_hash, previous_hash, created_at, actor, source])
-
-    def _validate_event(self, event_type: str, payload: Mapping[str, Any], event_id: str | None) -> str:
-        if not isinstance(event_type, str) or not event_type or len(event_type) > 128:
-            raise ValueError("event_type must be a non-empty bounded string")
-        if not isinstance(payload, Mapping):
-            raise ValueError("payload must be a mapping")
-        if event_id is None:
-            event_id = str(uuid.uuid4())
-        try:
-            uuid.UUID(event_id)
-        except ValueError as exc:
-            raise ValueError("event_id must be a UUID") from exc
-        encoded = _canonical(payload)
-        if len(encoded.encode("utf-8")) > 64 * 1024:
-            raise ValueError("payload exceeds 64 KiB")
-        if _contains_forbidden(payload):
-            raise ValueError("privacy-forbidden payload field")
-        return event_id
-
-    def append_event(self, event_type: str, payload: Mapping[str, Any], *, event_id: str | None = None,
-                     actor: str | None = None, source: str | None = None) -> LedgerEvent:
-        return self.append_batch([{"event_type": event_type, "payload": payload, "event_id": event_id,
-                                   "actor": actor, "source": source}])[0]
-
-    def append_batch(self, events: Iterable[Mapping[str, Any]]) -> list[LedgerEvent]:
-        items = list(events)
-        if not items:
-            return []
-        normalized = []
-        for item in items:
-            eid = self._validate_event(item.get("event_type"), item.get("payload"), item.get("event_id"))
-            normalized.append((eid, item["event_type"], item["payload"], item.get("actor"), item.get("source")))
-        c = self._conn
+    def bind_project(self, binding_type: str, binding_value: str, *, rebind=False):
+        if not binding_type or not binding_value: raise ValueError("binding type/value required")
+        c = self._conn; rows = c.execute("SELECT binding_value FROM project_bindings WHERE binding_type=?", (binding_type,)).fetchall()
+        if any(r[0] == binding_value for r in rows): return binding_value
+        if rows and not rebind:
+            self._record_hold("binding:" + binding_type, "ambiguous_binding", _hash(binding_value)); raise LedgerConflictError("binding requires explicit rebind")
         c.execute("BEGIN IMMEDIATE")
         try:
-            result = []
-            last = c.execute("SELECT sequence,event_hash FROM events ORDER BY sequence DESC LIMIT 1").fetchone()
-            seq, previous = (last["sequence"], last["event_hash"]) if last else (0, GENESIS)
-            for eid, etype, payload, actor, source in normalized:
-                ph = _hash(payload)
-                existing = c.execute("SELECT * FROM events WHERE event_id=?", (eid,)).fetchone()
+            if rebind: c.execute("DELETE FROM project_bindings WHERE binding_type=?", (binding_type,))
+            c.execute("INSERT INTO project_bindings VALUES(?,?,?)", (binding_type, binding_value, _now())); c.execute("COMMIT")
+        except Exception: c.execute("ROLLBACK"); raise
+        return binding_value
+
+    def resolve_binding(self, binding_type: str) -> str:
+        rows = self._conn.execute("SELECT binding_value FROM project_bindings WHERE binding_type=?", (binding_type,)).fetchall()
+        if len(rows) != 1: raise LedgerConflictError("binding resolution is not exactly one")
+        return rows[0][0]
+
+    def _record_hold(self, event_id, reason, payload_hash, identity_hash=None):
+        c = self._conn; c.execute("BEGIN IMMEDIATE")
+        try:
+            c.execute("INSERT OR IGNORE INTO holds VALUES(?,?,?,?,?)", (event_id, reason, payload_hash, identity_hash, _now())); c.execute("COMMIT")
+        except Exception: c.execute("ROLLBACK"); raise
+
+    def _validate(self, event_type, payload, event_id, actor, source, root):
+        if not isinstance(event_type, str) or not _TYPE.fullmatch(event_type): raise ValueError("invalid event_type")
+        if not isinstance(payload, Mapping) or _contains_forbidden(payload): raise ValueError("privacy-forbidden payload")
+        if event_id is None: event_id = str(uuid.uuid4())
+        uuid.UUID(event_id)
+        for value, label in ((actor, "actor"), (source, "source")):
+            if value is not None and (not isinstance(value, str) or not value or len(value) > 256 or any(token in value.lower() for token in _FORBIDDEN)): raise ValueError(f"invalid {label}")
+        root = root or self.project_id
+        if root != self.project_id: raise LedgerConflictError("event root does not match project")
+        if len(_canonical(payload).encode()) > 64 * 1024: raise ValueError("payload exceeds 64 KiB")
+        return event_id, root
+
+    def _identity_hash(self, payload_hash, event_type, actor, source, root): return _hash([payload_hash, event_type, actor, source, root])
+
+    def _event_hash(self, seq, eid, etype, ph, previous, created, actor, source, root): return _hash([seq,eid,etype,ph,previous,created,actor,source,root])
+
+    def append_event(self, event_type, payload, *, event_id=None, actor=None, source=None, root=None):
+        return self.append_batch([{"event_type":event_type,"payload":payload,"event_id":event_id,"actor":actor,"source":source,"root":root}])[0]
+
+    def append_batch(self, events: Iterable[Mapping[str, Any]]):
+        normalized = []
+        for item in events:
+            eid, root = self._validate(item.get("event_type"), item.get("payload"), item.get("event_id"), item.get("actor"), item.get("source"), item.get("root"))
+            normalized.append((eid,item["event_type"],item["payload"],item.get("actor"),item.get("source"),root))
+        if not normalized: return []
+        c = self._conn; c.execute("BEGIN IMMEDIATE")
+        try:
+            result=[]; last=c.execute("SELECT sequence,event_hash FROM events ORDER BY sequence DESC LIMIT 1").fetchone(); seq,previous=(last["sequence"],last["event_hash"]) if last else (0,GENESIS)
+            for eid,etype,payload,actor,source,root in normalized:
+                ph=_hash(payload); ih=self._identity_hash(ph,etype,actor,source,root)
+                if c.execute("SELECT 1 FROM holds WHERE event_id=?",(eid,)).fetchone(): raise LedgerConflictError(f"event is held: {eid}")
+                existing=c.execute("SELECT * FROM events WHERE event_id=?",(eid,)).fetchone()
                 if existing:
-                    if existing["payload_hash"] != ph:
-                        c.execute("INSERT OR REPLACE INTO holds VALUES(?,?,?,?)", (eid, "divergent_duplicate", ph, _now()))
-                        raise LedgerConflictError(f"divergent duplicate held: {eid}")
-                    result.append(self._row_event(existing)); continue
-                if c.execute("SELECT 1 FROM holds WHERE event_id=?", (eid,)).fetchone():
-                    raise LedgerConflictError(f"event is held: {eid}")
-                seq += 1; created = _now()
-                eh = self._event_hash(seq, eid, etype, ph, previous, created, actor, source)
-                c.execute("INSERT INTO events VALUES(?,?,?,?,?,?,?,?,?,?)",
-                          (seq, eid, etype, _canonical(payload), ph, previous, eh, created, actor, source))
-                row = c.execute("SELECT * FROM events WHERE sequence=?", (seq,)).fetchone()
-                result.append(self._row_event(row)); previous = eh
-            c.execute("COMMIT")
-            self._enforce_sidecar_modes()
-            return result
+                    oldih=self._identity_hash(existing["payload_hash"],existing["event_type"],existing["actor"],existing["source"],existing["root"])
+                    if oldih != ih: raise LedgerConflictError(f"divergent duplicate held: {eid}")
+                    result.append(self._row(existing)); continue
+                seq += 1; created=_now(); eh=self._event_hash(seq,eid,etype,ph,previous,created,actor,source,root)
+                c.execute("INSERT INTO events VALUES(?,?,?,?,?,?,?,?,?,?,?)",(seq,eid,etype,_canonical(payload),ph,previous,eh,created,actor,source,root)); result.append(self._row(c.execute("SELECT * FROM events WHERE sequence=?",(seq,)).fetchone())); previous=eh
+            c.execute("COMMIT"); self._enforce_sidecar_modes(); return result
         except LedgerConflictError:
-            # The event batch must roll back, but the conflict is durable evidence.
-            # Record it in a separate transaction so reopening remains fail-closed.
             c.execute("ROLLBACK")
-            for eid, _etype, payload, _actor, _source in normalized:
-                existing = c.execute("SELECT payload_hash FROM events WHERE event_id=?", (eid,)).fetchone()
-                if existing and existing["payload_hash"] != _hash(payload):
-                    c.execute("BEGIN IMMEDIATE")
-                    try:
-                        c.execute("INSERT OR IGNORE INTO holds VALUES(?,?,?,?)",
-                                  (eid, "divergent_duplicate", _hash(payload), _now()))
-                        c.execute("COMMIT")
-                    except Exception:
-                        c.execute("ROLLBACK")
-                        raise
-                    break
+            for eid,etype,payload,actor,source,root in normalized:
+                row=c.execute("SELECT * FROM events WHERE event_id=?",(eid,)).fetchone()
+                if row:
+                    ph=_hash(payload); ih=self._identity_hash(ph,etype,actor,source,root); old=self._identity_hash(row["payload_hash"],row["event_type"],row["actor"],row["source"],row["root"])
+                    if ih != old: self._record_hold(eid,"divergent_duplicate",ph,ih); break
+                if c.execute("SELECT 1 FROM holds WHERE event_id=?",(eid,)).fetchone(): break
             raise
-        except Exception:
-            c.execute("ROLLBACK")
-            raise
+        except Exception: c.execute("ROLLBACK"); raise
 
-    def _row_event(self, row: sqlite3.Row) -> LedgerEvent:
-        return LedgerEvent(row["sequence"], row["event_id"], row["event_type"], json.loads(row["payload"]),
-                            row["payload_hash"], row["previous_hash"], row["event_hash"], row["created_at"], row["actor"], row["source"])
+    def _row(self,row):
+        return LedgerEvent(row["sequence"],row["event_id"],row["event_type"],json.loads(row["payload"]),row["payload_hash"],row["previous_hash"],row["event_hash"],row["created_at"],row["actor"],row["source"],row["root"])
 
-    def list_events(self, *, event_type: str | None = None) -> list[LedgerEvent]:
-        q = "SELECT * FROM events"; args: tuple[Any, ...] = ()
-        if event_type is not None: q += " WHERE event_type=?"; args = (event_type,)
-        q += " ORDER BY sequence"
-        return [self._row_event(r) for r in self._conn.execute(q, args)]
+    def list_events(self, *, event_type=None):
+        q="SELECT * FROM events"; args=()
+        if event_type is not None: q += " WHERE event_type=?"; args=(event_type,)
+        return [self._row(r) for r in self._conn.execute(q+" ORDER BY sequence",args)]
 
-    def verify(self) -> bool:
-        previous = GENESIS; expected = 1
-        for row in self._conn.execute("SELECT * FROM events ORDER BY sequence"):
-            if row["sequence"] != expected or row["previous_hash"] != previous or row["payload_hash"] != _hash(json.loads(row["payload"])):
-                raise LedgerIntegrityError("ledger sequence or payload chain is invalid")
-            actual = self._event_hash(row["sequence"], row["event_id"], row["event_type"], row["payload_hash"], row["previous_hash"], row["created_at"], row["actor"], row["source"])
-            if actual != row["event_hash"]: raise LedgerIntegrityError("ledger hash chain is invalid")
-            previous = actual; expected += 1
+    def verify(self):
+        previous=GENESIS; expected=1
+        for r in self._conn.execute("SELECT * FROM events ORDER BY sequence"):
+            if r["sequence"]!=expected or r["previous_hash"]!=previous or r["payload_hash"]!=_hash(json.loads(r["payload"])): raise LedgerIntegrityError("sequence or payload chain invalid")
+            if self._event_hash(r["sequence"],r["event_id"],r["event_type"],r["payload_hash"],r["previous_hash"],r["created_at"],r["actor"],r["source"],r["root"])!=r["event_hash"]: raise LedgerIntegrityError("hash chain invalid")
+            previous=r["event_hash"]; expected+=1
         return True
 
-    def backup(self, destination: str | Path) -> Path:
-        dest = Path(destination); dest.parent.mkdir(parents=True, exist_ok=True); os.chmod(dest.parent, 0o700)
-        if dest.exists(): os.chmod(dest, 0o600)
-        with sqlite3.connect(dest) as target:
-            self._conn.backup(target)
-        os.chmod(dest, 0o600); return dest
+    def checkpoint_projection(self, name, sequence, payload):
+        if not name or sequence < 0 or not isinstance(payload, Mapping) or _contains_forbidden(payload): raise ValueError("invalid projection")
+        if sequence > (self._conn.execute("SELECT COALESCE(MAX(sequence),0) FROM events").fetchone()[0]): raise LedgerConflictError("projection exceeds ledger")
+        self._conn.execute("BEGIN IMMEDIATE")
+        try:
+            self._conn.execute("INSERT OR REPLACE INTO projections VALUES(?,?,?,?,?)",(name,sequence,_canonical(payload),_hash(payload),_now())); self._conn.execute("COMMIT")
+        except Exception: self._conn.execute("ROLLBACK"); raise
 
-    def integrity_check(self) -> str:
-        result = self._conn.execute("PRAGMA integrity_check").fetchone()[0]
-        if result != "ok": raise LedgerIntegrityError(result)
-        self.verify(); return result
+    def load_projection(self,name):
+        r=self._conn.execute("SELECT * FROM projections WHERE name=?",(name,)).fetchone(); return None if r is None else {"name":r["name"],"sequence":r["sequence"],"payload":json.loads(r["payload"]),"payload_hash":r["payload_hash"]}
+
+    def backup(self, destination):
+        dest=Path(destination).expanduser()
+        if dest.exists(): raise LedgerConflictError("backup destination must be fresh")
+        dest.parent.mkdir(parents=True,exist_ok=True)
+        tmp=dest.with_name(f".{dest.name}.staging-{uuid.uuid4().hex}")
+        try:
+            with sqlite3.connect(tmp) as target: self._conn.backup(target)
+            os.chmod(tmp,0o600); self._enforce_sidecar_modes(); self.integrity_check_path(tmp)
+            receipt={"schema_version":SCHEMA_VERSION,"project_id":self.project_id,"integrity":"ok","sha256":hashlib.sha256(tmp.read_bytes()).hexdigest()}
+            receipt_path=dest.with_name(dest.name+".receipt.json")
+            if receipt_path.exists(): raise LedgerConflictError("backup receipt destination must be fresh")
+            os.rename(tmp,dest); receipt_path.write_text(_canonical(receipt)+"\n"); os.chmod(receipt_path,0o600)
+            return dest
+        finally:
+            if tmp.exists(): tmp.unlink()
+
+    @classmethod
+    def restore(cls, backup, destination):
+        """Restore only into a fresh target, validating identity before publish."""
+        source, dest = Path(backup).expanduser(), Path(destination).expanduser()
+        if not source.is_file() or dest.exists(): raise LedgerConflictError("restore requires a fresh target")
+        if _mode(source) != 0o600: raise LedgerPermissionError("backup must be 0600")
+        parent_existed = dest.parent.exists(); dest.parent.mkdir(parents=True, exist_ok=True)
+        if parent_existed and _mode(dest.parent) != 0o700: raise LedgerPermissionError("restore directory must be 0700")
+        if not parent_existed: os.chmod(dest.parent, 0o700)
+        staged = dest.with_name(f".{dest.name}.restore-{uuid.uuid4().hex}")
+        try:
+            shutil.copyfile(source, staged); os.chmod(staged, 0o600)
+            restored = cls(db_path=staged, create=False)
+            if restored.project_id != restored.metadata().get("project_id") or restored.metadata().get("schema_version") != SCHEMA_VERSION:
+                restored.close(); raise LedgerIntegrityError("restore identity/schema receipt mismatch")
+            restored.integrity_check(); restored.close(); os.rename(staged, dest)
+            return cls(db_path=dest, create=False)
+        finally:
+            if staged.exists(): staged.unlink()
+
+    def integrity_check_path(self,path):
+        with sqlite3.connect(path) as c:
+            if c.execute("PRAGMA integrity_check").fetchone()[0] != "ok": raise LedgerIntegrityError("backup integrity failure")
+
+    def integrity_check(self):
+        self.integrity_check_path(self.path); self.verify(); return "ok"
 
 
-__all__ = ["LocalCollaborationLedger", "LedgerEvent", "LedgerError", "LedgerIntegrityError", "LedgerConflictError", "LedgerPermissionError"]
+__all__=["LocalCollaborationLedger","LedgerEvent","LedgerError","LedgerIntegrityError","LedgerConflictError","LedgerPermissionError"]

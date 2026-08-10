@@ -20,6 +20,17 @@ class LedgerTests(unittest.TestCase):
         self.assertEqual(stat.S_IMODE(self.ledger.path.stat().st_mode), 0o600)
         self.assertEqual(self.ledger._conn.execute("PRAGMA journal_mode").fetchone()[0], "wal")
         self.assertEqual(self.ledger._conn.execute("PRAGMA synchronous").fetchone()[0], 2)
+        self.assertEqual(self.ledger.pragma_receipt(), {"journal_mode": "wal", "synchronous": "2", "foreign_keys": "1", "trusted_schema": "0", "busy_timeout": "5000", "wal_autocheckpoint": "1000"})
+
+    def test_binding_and_projection_checkpoint(self):
+        self.ledger.bind_project("path", "/tmp/project")
+        self.assertEqual(self.ledger.resolve_binding("path"), "/tmp/project")
+        with self.assertRaises(LedgerConflictError): self.ledger.bind_project("path", "/tmp/other")
+        self.ledger.bind_project("path", "/tmp/other", rebind=True)
+        self.assertEqual(self.ledger.resolve_binding("path"), "/tmp/other")
+        self.ledger.append_event("work.accepted", {"id": 1})
+        self.ledger.checkpoint_projection("board", 1, {"open": 1})
+        self.assertEqual(self.ledger.load_projection("board")["sequence"], 1)
 
     def test_append_sequence_chain_and_idempotency(self):
         event_id = "11111111-1111-1111-1111-111111111111"
@@ -34,12 +45,19 @@ class LedgerTests(unittest.TestCase):
         self.ledger.append_event("x", {"a": 1}, event_id=event_id)
         with self.assertRaises(LedgerConflictError): self.ledger.append_event("x", {"a": 2}, event_id=event_id)
         self.assertEqual(len(self.ledger.list_events()), 1)
-        self.assertEqual(self.ledger.append_event("x", {"a": 1}, event_id=event_id).sequence, 1)
+        with self.assertRaises(LedgerConflictError): self.ledger.append_event("x", {"a": 1}, event_id=event_id)
         self.ledger.close()
         reopened = LocalCollaborationLedger(self.ledger.project_id, projects_root=self.tmp.name)
         with self.assertRaises(LedgerConflictError): reopened.append_event("x", {"a": 2}, event_id=event_id)
         self.assertEqual(reopened._conn.execute("SELECT COUNT(*) FROM holds WHERE event_id=?", (event_id,)).fetchone()[0], 1)
         reopened.close()
+
+    def test_duplicate_identity_includes_event_fields_and_root(self):
+        event_id = "33333333-3333-3333-3333-333333333333"
+        self.ledger.append_event("x", {"a": 1}, event_id=event_id, actor="a", source="local")
+        with self.assertRaises(LedgerConflictError): self.ledger.append_event("x", {"a": 1}, event_id=event_id, actor="b", source="local")
+        with self.assertRaises(ValueError): self.ledger.append_event("x", {"a": 1}, event_id="44444444-4444-4444-4444-444444444444", source="tool_output")
+        with self.assertRaises(LedgerConflictError): self.ledger.append_event("x", {"a": 1}, root=str(__import__('uuid').uuid4()))
 
     def test_privacy_and_batch_rollback(self):
         with self.assertRaises(ValueError): self.ledger.append_event("x", {"raw_transcript": "secret"})
@@ -55,6 +73,12 @@ class LedgerTests(unittest.TestCase):
         backup = Path(self.tmp.name) / "backup.db"
         self.ledger.backup(backup)
         self.assertEqual(stat.S_IMODE(backup.stat().st_mode), 0o600)
+        self.assertTrue((Path(str(backup) + ".receipt.json")).exists())
+        with self.assertRaises(LedgerConflictError): self.ledger.backup(backup)
+        restored_path = Path(self.tmp.name) / "restored" / "collaboration.db"
+        restored = LocalCollaborationLedger.restore(backup, restored_path)
+        self.assertEqual(restored.project_id, self.ledger.project_id)
+        restored.close()
         self.ledger._conn.execute("UPDATE events SET payload='{}' WHERE sequence=1")
         with self.assertRaises(LedgerIntegrityError): self.ledger.verify()
 

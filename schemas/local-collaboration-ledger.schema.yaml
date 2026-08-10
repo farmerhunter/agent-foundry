@@ -18,14 +18,23 @@ storage:
 identity:
   project_id: opaque_uuid
   bindings_non_authoritative: [path, remote, thread, issue]
+  resolution: exactly_one_or_hold
 events:
   append_only: true
   sequence: monotonic_committed_integer
   idempotency: event_id_and_payload_hash
   divergent_duplicate: hold
+  identity: [payload_hash, event_type, actor, source, root]
+  root: project_id
   integrity: internal_sha256_hash_chain
   transaction: BEGIN_IMMEDIATE
 privacy:
   allowed: [event_id, event_type, payload, actor, created_at, source]
   forbidden: [raw_transcript, tool_output, prompt, secret, native_history]
 failure_policy: fail_closed
+projections:
+  authority: rebuildable_non_authoritative
+  checkpoint: sequence_and_payload_hash
+backup:
+  restore: staged_fresh_target_only
+  overwrite_existing: forbidden
