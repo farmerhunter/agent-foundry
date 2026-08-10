@@ -1,0 +1,31 @@
+schema_version: "1.0.0"
+title: Local Collaboration Ledger
+description: Project-local SQLite authority for compact, privacy-safe collaboration events.
+authority:
+  backend: sqlite
+  database: collaboration.db
+  jsonl: forbidden
+  raw_transcript: forbidden
+storage:
+  directory_mode: "0700"
+  file_mode: "0600"
+  journal_mode: WAL
+  synchronous: FULL
+  foreign_keys: true
+  trusted_schema: false
+  busy_timeout_ms: 5000
+  wal_autocheckpoint: 1000
+identity:
+  project_id: opaque_uuid
+  bindings_non_authoritative: [path, remote, thread, issue]
+events:
+  append_only: true
+  sequence: monotonic_committed_integer
+  idempotency: event_id_and_payload_hash
+  divergent_duplicate: hold
+  integrity: internal_sha256_hash_chain
+  transaction: BEGIN_IMMEDIATE
+privacy:
+  allowed: [event_id, event_type, payload, actor, created_at, source]
+  forbidden: [raw_transcript, tool_output, prompt, secret, native_history]
+failure_policy: fail_closed
