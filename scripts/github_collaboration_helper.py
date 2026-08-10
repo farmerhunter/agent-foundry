@@ -19,6 +19,11 @@ import time
 from pathlib import Path
 from typing import Any
 
+try:
+    from sqlite_collaboration_workflow import read_events as sqlite_read_events
+except ImportError:  # pragma: no cover - direct package imports may omit scripts/
+    sqlite_read_events = None
+
 
 FORBIDDEN_ACTIONS = {
     "agent-comment",
@@ -2713,6 +2718,21 @@ def cmd_ledger_dogfood(args: argparse.Namespace) -> None:
 
 
 def cmd_local_ledger_report(args: argparse.Namespace) -> None:
+    if getattr(args, "ledger_backend", None) == "sqlite":
+        if getattr(args, "ledger_root", None):
+            fail("ambiguous_backend", "--ledger-backend sqlite is mutually exclusive with --ledger-root")
+        if not getattr(args, "projects_root", None) or not getattr(args, "project_id", None):
+            fail("sqlite_arguments_required", "SQLite report requires --projects-root and --project-id")
+        if sqlite_read_events is None:
+            fail("sqlite_backend_unavailable", "SQLite adapter is unavailable")
+        try:
+            events = sqlite_read_events(args.projects_root, args.project_id)
+            replay = replay_local_ledger(events)
+            payload = {"schema_version": 1, "command": "local-ledger-report", "mode": "read_only", "storage": "sqlite", "project_id": args.project_id, "mutation_performed": False, "events": len(events), **replay}
+            print_json_or_text(payload, args.json)
+        except Exception as exc:
+            fail("sqlite_read_failed", str(exc), 6)
+        return
     print_json_or_text(build_local_ledger_report(local_ledger_root(args)), args.json)
 
 
@@ -6805,6 +6825,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     ledger_report = sub.add_parser("local-ledger-report")
     ledger_report.add_argument("--ledger-root", help="Local ledger root. Defaults to usage/local/collaboration-ledger.")
+    ledger_report.add_argument("--ledger-backend", choices=("jsonl", "sqlite"), help="Invocation-scoped backend selector.")
+    ledger_report.add_argument("--projects-root", help="SQLite projects root (required for --ledger-backend sqlite).")
+    ledger_report.add_argument("--project-id", help="Opaque SQLite project id (required for --ledger-backend sqlite).")
     ledger_report.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON for local-ledger-report.")
     ledger_report.set_defaults(func=cmd_local_ledger_report)
 
