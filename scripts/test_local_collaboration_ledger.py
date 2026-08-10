@@ -5,6 +5,7 @@ import stat
 import sqlite3
 import subprocess
 import sys
+import signal
 import tempfile
 import threading
 import time
@@ -134,19 +135,26 @@ class LedgerTests(unittest.TestCase):
 
     def test_subprocess_crash_rolls_back_uncommitted_batch(self):
         path = str(self.ledger.path)
+        prior = self.ledger.append_event("prior", {"ok": True}, event_id="99999999-9999-9999-9999-999999999999")
+        prior_head = prior.event_hash
         self.ledger.close()
         code = (
-            "import os,sqlite3,sys; "
-            "c=sqlite3.connect(sys.argv[1],isolation_level=None); c.execute('BEGIN IMMEDIATE'); "
-            "c.execute(\"INSERT INTO events VALUES(1,'66666666-6666-6666-6666-666666666666','crash','{}','', '', '', 'now', NULL, NULL, '" + self.ledger.project_id + "')\"); "
-            "c.execute(\"INSERT INTO events VALUES(2,'77777777-7777-7777-7777-777777777777','crash','{}','', '', '', 'now', NULL, NULL, '" + self.ledger.project_id + "')\"); "
-            "os.kill(os.getpid(),9)"
+            "import os,signal,sys; from local_collaboration_ledger import LocalCollaborationLedger; "
+            "l=LocalCollaborationLedger.open_existing(sys.argv[1], expected_project_id=sys.argv[2]); "
+            "l._conn.create_function('crash_now',0,lambda: os.kill(os.getpid(),signal.SIGKILL)); "
+            "l._conn.execute(\"CREATE TEMP TRIGGER kill_after_first AFTER INSERT ON events BEGIN SELECT crash_now(); END\"); "
+            "l.append_batch([{'event_type':'crash.one','payload':{'n':1},'event_id':'66666666-6666-6666-6666-666666666666'}, {'event_type':'crash.two','payload':{'n':2},'event_id':'77777777-7777-7777-7777-777777777777'}])"
         )
-        result = subprocess.run([sys.executable, "-c", code, path], env={**os.environ, "PYTHONPATH": "scripts"}, capture_output=True)
-        self.assertNotEqual(result.returncode, 0)
+        result = subprocess.run([sys.executable, "-c", code, path, self.ledger.project_id], env={**os.environ, "PYTHONPATH": "scripts"}, capture_output=True)
+        self.assertEqual(result.returncode, -signal.SIGKILL)
         reopened = LocalCollaborationLedger.open_existing(path, expected_project_id=self.ledger.project_id)
         try:
-            self.assertEqual(reopened.list_events(), [])
+            events = reopened.list_events()
+            self.assertEqual(len(events), 1)
+            self.assertEqual(events[0].event_hash, prior_head)
+            self.assertTrue(reopened.verify())
+            self.assertEqual(reopened._conn.execute("SELECT COUNT(*) FROM holds").fetchone()[0], 0)
+            self.assertEqual(reopened._conn.execute("SELECT COUNT(*) FROM projections").fetchone()[0], 0)
         finally:
             reopened.close()
 
