@@ -65,6 +65,14 @@ def main() -> int:
         assert oversized["status"] == "hold" and not oversized_root.exists()
         board = subprocess.run([sys.executable, "scripts/github_collaboration_helper.py", "foundry-board", "--ledger-backend", "sqlite", "--projects-root", str(root), "--project-id", pid, "--json"], text=True, capture_output=True, check=False)
         assert board.returncode == 0 and '"storage": "sqlite"' in board.stdout and '"accepted_count": 1' in board.stdout, (board.returncode, board.stdout, board.stderr)
+        authority = root / pid / "collaboration.db"
+        authority.write_bytes(authority.read_bytes()[:64])
+        before_mtime = authority.stat().st_mtime_ns
+        sidecars_before = {suffix: Path(str(authority) + suffix).exists() for suffix in ("-wal", "-shm")}
+        corrupt_action = local_action_batch(root, pid, [event("corrupt-existing")])
+        assert corrupt_action["status"] == "hold" and corrupt_action["reason"] == "integrity"
+        assert authority.stat().st_mtime_ns == before_mtime
+        assert sidecars_before == {suffix: Path(str(authority) + suffix).exists() for suffix in ("-wal", "-shm")}
         print(json.dumps({"status": "ok", "project_id": pid, "events": 2}))
     return 0
 

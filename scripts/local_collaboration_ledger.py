@@ -192,7 +192,7 @@ class LocalCollaborationLedger:
             obj._read_existing_identity(expected_project_id)
             obj.verify()
             return obj
-        except sqlite3.OperationalError as exc:
+        except sqlite3.DatabaseError as exc:
             if getattr(obj, "_conn", None) is not None:
                 obj._conn.close()
             if "locked" in str(exc).lower() or "busy" in str(exc).lower():
