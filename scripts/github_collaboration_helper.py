@@ -19,6 +19,11 @@ import time
 from pathlib import Path
 from typing import Any
 
+try:
+    from sqlite_collaboration_workflow import read_events as sqlite_read_events, fresh_onboarding as sqlite_fresh_onboarding, accepted_backfill as sqlite_accepted_backfill, accepted_backfill_existing as sqlite_accepted_backfill_existing, local_action_batch as sqlite_local_action_batch
+except ImportError:  # pragma: no cover - direct package imports may omit scripts/
+    sqlite_read_events = None
+
 
 FORBIDDEN_ACTIONS = {
     "agent-comment",
@@ -2230,7 +2235,34 @@ def cmd_local_ledger_append(args: argparse.Namespace) -> None:
         raise SystemExit(6)
 
 
+def cmd_sqlite_fresh_onboarding(args: argparse.Namespace) -> None:
+    if getattr(args, "ledger_root", None):
+        fail("ambiguous_backend", "SQLite onboarding is mutually exclusive with --ledger-root")
+    result = sqlite_fresh_onboarding(args.projects_root, args.binding_type, args.binding_value)
+    print_json_or_text(result, args.json)
+    if result.get("status") == "hold": raise SystemExit(6)
+
+
 def cmd_local_ledger_migration_apply(args: argparse.Namespace) -> None:
+    if getattr(args, "ledger_backend", None) == "sqlite":
+        if getattr(args, "ledger_root", None): fail("ambiguous_backend", "SQLite mode is mutually exclusive with --ledger-root")
+        preview = load_json(args.candidate_events_json)
+        decisions = load_json(args.decision_json)
+        candidates, candidate_errors = candidate_events_from_backfill_preview(preview)
+        parsed_decisions, decision_errors = migration_apply_decisions(decisions)
+        if candidate_errors or decision_errors or not parsed_decisions:
+            fail("sqlite_migration_invalid", "; ".join(candidate_errors + decision_errors + ([] if parsed_decisions else ["at least one migration decision is required"])))
+        by_id = {str(item["event_id"]): item for item in candidates}
+        missing = sorted(set(parsed_decisions) - set(by_id))
+        if missing:
+            fail("sqlite_migration_invalid", f"decision references missing candidate event {missing[0]}")
+        events = [migration_decision_event_from_review_decision(by_id[event_id], parsed_decisions[event_id]) for event_id in sorted(parsed_decisions)]
+        if not args.projects_root or not args.project_id:
+            fail("sqlite_arguments_required", "SQLite migration requires --projects-root and --project-id")
+        result = sqlite_accepted_backfill_existing(args.projects_root, args.project_id, events)
+        print_json_or_text(result, args.json)
+        if result.get("status") == "hold": raise SystemExit(6)
+        return
     preview_doc = load_json(args.candidate_events_json)
     decision_doc = load_json(args.decision_json)
     result = build_local_ledger_migration_apply_from_decision_json(local_ledger_root(args), preview_doc, decision_doc)
@@ -2518,6 +2550,17 @@ def build_local_ledger_action_apply(root: Path, action_doc: Any) -> dict[str, An
 
 
 def cmd_local_ledger_action_apply(args: argparse.Namespace) -> None:
+    if getattr(args, "ledger_backend", None) == "sqlite":
+        if getattr(args, "ledger_root", None): fail("ambiguous_backend", "SQLite mode is mutually exclusive with --ledger-root")
+        actions = load_json(args.action_json)
+        values, action_errors = normalize_local_action_collection(actions)
+        if action_errors or not values:
+            fail("sqlite_action_invalid", "; ".join(action_errors + ([] if values else ["at least one approved local action is required"])))
+        values = [local_action_event(item) for item in values]
+        result = sqlite_local_action_batch(args.projects_root, args.project_id, values)
+        print_json_or_text(result, args.json)
+        if result.get("status") == "hold": raise SystemExit(6)
+        return
     result = build_local_ledger_action_apply(local_ledger_root(args), load_json(args.action_json))
     print_json_or_text(result, args.json)
     if result["status"] == "invalid":
@@ -2713,6 +2756,21 @@ def cmd_ledger_dogfood(args: argparse.Namespace) -> None:
 
 
 def cmd_local_ledger_report(args: argparse.Namespace) -> None:
+    if getattr(args, "ledger_backend", None) == "sqlite":
+        if getattr(args, "ledger_root", None):
+            fail("ambiguous_backend", "--ledger-backend sqlite is mutually exclusive with --ledger-root")
+        if not getattr(args, "projects_root", None) or not getattr(args, "project_id", None):
+            fail("sqlite_arguments_required", "SQLite report requires --projects-root and --project-id")
+        if sqlite_read_events is None:
+            fail("sqlite_backend_unavailable", "SQLite adapter is unavailable")
+        try:
+            events = sqlite_read_events(args.projects_root, args.project_id)
+            replay = replay_local_ledger(events)
+            payload = {"schema_version": 1, "command": "local-ledger-report", "mode": "read_only", "storage": "sqlite", "project_id": args.project_id, "mutation_performed": False, "events": len(events), **replay}
+            print_json_or_text(payload, args.json)
+        except Exception as exc:
+            fail("sqlite_read_failed", str(exc), 6)
+        return
     print_json_or_text(build_local_ledger_report(local_ledger_root(args)), args.json)
 
 
@@ -6007,6 +6065,30 @@ def cmd_operational_cockpit(args: argparse.Namespace) -> None:
 
 
 def cmd_foundry_board(args: argparse.Namespace) -> None:
+    if getattr(args, "ledger_backend", None) == "sqlite":
+        if getattr(args, "ledger_root", None):
+            fail("ambiguous_backend", "--ledger-backend sqlite is mutually exclusive with --ledger-root")
+        if not getattr(args, "projects_root", None) or not getattr(args, "project_id", None):
+            fail("sqlite_arguments_required", "SQLite Board requires --projects-root and --project-id")
+        if sqlite_read_events is None:
+            fail("sqlite_backend_unavailable", "SQLite adapter is unavailable")
+        try:
+            repo, _repo_source = resolve_repo(args)
+            events = sqlite_read_events(args.projects_root, args.project_id)
+            accepted_replay = replay_local_ledger(events)
+            board = build_foundry_board(
+                repo, [], [], {"source": "skipped", "status": "skipped", "item_count": 0}, {},
+                getattr(args, "name", "Foundry Board"),
+                {"mode": "sqlite", "project_id": args.project_id, "ledger_backend": "sqlite"},
+                accepted_replay=accepted_replay,
+                candidate_events=[],
+            )
+            board["storage"] = "sqlite"
+            board["project_id"] = args.project_id
+            print_json_or_text(board, args.json)
+        except Exception as exc:
+            fail("sqlite_read_failed", str(exc), 6)
+        return
     repo, repo_source = resolve_repo(args)
     if args.board_items_json:
         issues = normalize_board_items(load_json(args.board_items_json))
@@ -6682,6 +6764,9 @@ def build_parser() -> argparse.ArgumentParser:
     board.add_argument("--project-items-json", help="Fixture Project item list or gh project item-list JSON.")
     board.add_argument("--local-git-json", help="Fixture local git state for branch/readiness display.")
     board.add_argument("--ledger-root", help="Accepted local ledger root. Defaults to usage/local/collaboration-ledger.")
+    board.add_argument("--ledger-backend", choices=("jsonl", "sqlite"), help="Invocation-scoped backend selector.")
+    board.add_argument("--projects-root", help="SQLite projects root (required for --ledger-backend sqlite).")
+    board.add_argument("--project-id", help="Opaque SQLite project id (required for --ledger-backend sqlite).")
     board.add_argument("--candidate-events-json", help="Read-only candidate event list or backfill preview output for board display.")
     board.add_argument("--issues", help="Comma-separated explicit issue numbers for bounded live board report.")
     board.add_argument("--stage", help="Stage value or label for bounded live issue report.")
@@ -6772,6 +6857,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     migration_apply = sub.add_parser("local-ledger-migration-apply")
     migration_apply.add_argument("--ledger-root", help="Local ledger root. Defaults to usage/local/collaboration-ledger.")
+    migration_apply.add_argument("--ledger-backend", choices=("jsonl", "sqlite"), help="Invocation-scoped backend selector.")
+    migration_apply.add_argument("--projects-root", help="SQLite projects root.")
+    migration_apply.add_argument("--project-id", help="Existing SQLite project id.")
     migration_apply.add_argument("--candidate-events-json", required=True, help="Backfill preview output or candidate event list to review/apply.")
     migration_apply.add_argument("--decision-json", required=True, help="Migration decision JSON with accept/reject/skip event ids.")
     migration_apply.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON for local-ledger-migration-apply.")
@@ -6779,6 +6867,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     action_apply = sub.add_parser("local-ledger-action-apply")
     action_apply.add_argument("--ledger-root", help="Local ledger root. Defaults to usage/local/collaboration-ledger.")
+    action_apply.add_argument("--ledger-backend", choices=("jsonl", "sqlite"), help="Invocation-scoped backend selector.")
+    action_apply.add_argument("--projects-root", help="SQLite projects root.")
+    action_apply.add_argument("--project-id", help="Existing SQLite project id.")
     action_apply.add_argument("--action-json", required=True, help="Approved local orchestration action object, list, or object with actions.")
     action_apply.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON for local-ledger-action-apply.")
     action_apply.set_defaults(func=cmd_local_ledger_action_apply)
@@ -6805,8 +6896,19 @@ def build_parser() -> argparse.ArgumentParser:
 
     ledger_report = sub.add_parser("local-ledger-report")
     ledger_report.add_argument("--ledger-root", help="Local ledger root. Defaults to usage/local/collaboration-ledger.")
+    ledger_report.add_argument("--ledger-backend", choices=("jsonl", "sqlite"), help="Invocation-scoped backend selector.")
+    ledger_report.add_argument("--projects-root", help="SQLite projects root (required for --ledger-backend sqlite).")
+    ledger_report.add_argument("--project-id", help="Opaque SQLite project id (required for --ledger-backend sqlite).")
     ledger_report.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON for local-ledger-report.")
     ledger_report.set_defaults(func=cmd_local_ledger_report)
+
+    onboarding = sub.add_parser("sqlite-fresh-onboarding")
+    onboarding.add_argument("--projects-root", required=True)
+    onboarding.add_argument("--binding-type", required=True)
+    onboarding.add_argument("--binding-value", required=True)
+    onboarding.add_argument("--ledger-root")
+    onboarding.add_argument("--json", action="store_true", default=argparse.SUPPRESS)
+    onboarding.set_defaults(func=cmd_sqlite_fresh_onboarding)
 
     backfill = sub.add_parser("local-ledger-backfill-preview")
     backfill.add_argument("--ledger-root", help="Optional accepted local ledger root for read-only comparison.")
