@@ -74,7 +74,18 @@ def discover(projects_root: str | os.PathLike[str], binding_type: str, binding_v
 
 
 def _open_existing(projects_root: Path, project_id: str, *, writable: bool = False) -> LocalCollaborationLedger:
-    return LocalCollaborationLedger(db_path=projects_root / project_id / "collaboration.db", create=writable)
+    if not project_id:
+        raise ValueError("project_id is required")
+    path = projects_root / project_id / "collaboration.db"
+    if not path.is_file() or path.is_symlink() or path.parent.name != project_id:
+        raise FileNotFoundError("existing SQLite authority is required")
+    if not writable:
+        return LocalCollaborationLedger(db_path=path, create=False)
+    probe = LocalCollaborationLedger(db_path=path, create=False)
+    if probe.project_id != project_id:
+        probe.close(); raise ValueError("project identity mismatch")
+    probe.close()
+    return LocalCollaborationLedger(db_path=path, create=True)
 
 
 def _create(projects_root: Path, binding_type: str, binding_value: str) -> tuple[LocalCollaborationLedger, dict[str, Any]]:
@@ -177,8 +188,10 @@ def accepted_backfill(projects_root: str | os.PathLike[str], binding_type: str, 
     else: return found
     try:
         batch = [_compact(event, ledger.project_id) for event in validated_events]
+        before = len(ledger.list_events())
         rows = ledger.accept_compact_events(batch)
-        return {**_receipt(ledger, operation="accepted_backfill", count=len(rows), mutation=bool(rows)), "logical_event_ids": [str(e.get("event_id")) for e in batch], "jsonl_fallback": False}
+        appended = sum(1 for row in rows if row.sequence > before)
+        return {**_receipt(ledger, operation="accepted_backfill", count=len(rows), mutation=bool(appended)), "appended_count": appended, "duplicate_count": len(rows) - appended, "logical_event_ids": [str(e.get("event_id")) for e in validated_events], "jsonl_fallback": False}
     except Exception as exc:
         return _hold("backfill_failed", detail=str(exc))
     finally:
@@ -187,12 +200,18 @@ def accepted_backfill(projects_root: str | os.PathLike[str], binding_type: str, 
 
 def local_action_batch(projects_root: str | os.PathLike[str], project_id: str, events: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
     root = _root(projects_root)
+    try:
+        validated_events = _validate_legacy_batch(events)
+    except Exception as exc:
+        return _hold("local_action_validation_failed", detail=str(exc))
     try: ledger = _open_existing(root, project_id, writable=True)
     except Exception as exc: return _hold("authority_open_failed", detail=str(exc))
     try:
-        batch = [_compact(event, ledger.project_id) for event in events]
+        before = len(ledger.list_events())
+        batch = [_compact(event, ledger.project_id) for event in validated_events]
         rows = ledger.accept_compact_events(batch)
-        return {**_receipt(ledger, operation="local_action", count=len(rows), mutation=bool(rows)), "jsonl_fallback": False}
+        appended = sum(1 for row in rows if row.sequence > before)
+        return {**_receipt(ledger, operation="local_action", count=len(rows), mutation=bool(appended)), "appended_count": appended, "duplicate_count": len(rows) - appended, "logical_event_ids": [str(e.get("event_id")) for e in validated_events], "jsonl_fallback": False}
     except Exception as exc: return _hold("local_action_failed", detail=str(exc))
     finally: ledger.close()
 
