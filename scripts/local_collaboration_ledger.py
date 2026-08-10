@@ -362,8 +362,9 @@ class LocalCollaborationLedger:
         tmp=self.directory / f".backup-staging-{uuid.uuid4().hex}.db"
         try:
             with sqlite3.connect(tmp) as target:
-                target.execute("PRAGMA journal_mode=DELETE")
+                target.execute("PRAGMA journal_mode=WAL")
                 self._conn.backup(target)
+                target.execute("PRAGMA wal_checkpoint(TRUNCATE)")
             os.chmod(tmp,0o600); self._enforce_sidecar_modes()
             for suffix in ("-wal", "-shm"):
                 sidecar = Path(str(tmp) + suffix)
