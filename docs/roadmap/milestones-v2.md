@@ -1,22 +1,23 @@
 # ORCH Roadmap Milestones (historical V2 mapping)
 
-Status: active capability roadmap; the active milestone taxonomy is ORCH-01/02/03
+Status: active capability roadmap; the active milestone taxonomy is ORCH-01/02/03/04
 Updated: 2026-07-09
-Scope: ORCH-01 local-first orchestration and Foundry Board, ORCH-02 SQLite Local Ledger Foundation, and ORCH-03 Local Collaboration Authority and Selective Sync. The rows below preserve historical V2 design/implementation evidence without using V2.0/V2.1 as active milestone names.
+Scope: ORCH-01 local-first orchestration and Foundry Board, ORCH-02 SQLite Local Ledger Foundation, ORCH-03 Distributed Authority and Selective Sync, and ORCH-04 Integrated Collaboration Lifecycle and Product Experience. The rows below preserve historical V2 design/implementation evidence without using V2.0/V2.1 as active milestone names.
 
 ## Active ORCH sequence
 
 | Milestone | Records | Status |
 | --- | --- | --- |
 | ORCH-01 — Local-First Orchestration and Foundry Board | #292 and its historical children | Completed; formerly called V2.0 |
-| ORCH-02 — SQLite Local Ledger Foundation | #525–#530 | Next active milestone; #526 architecture gate first |
-| ORCH-03 — Local Collaboration Authority and Selective Sync | #400, #401, #522, #404, #405, #403, #521, #402, #406 | Planned/held until ORCH-02 final readiness; formerly called V2.1 |
+| ORCH-02 — SQLite Local Ledger Foundation | #525–#530 | Completed technical/adopter readiness; final release remains separately gated |
+| ORCH-03 — Distributed Authority and Selective Sync | #400, #401, #522, #404, #405, #403, #521, #402, #406 | Planned/held; original order retained; formerly called V2.1 |
+| ORCH-04 — Integrated Collaboration Lifecycle and Product Experience | #538, #539–#543, #536 as ORCH-04-5 | Planned; ORCH-04-0 design first |
 
-ORCH-01, ORCH-02, and ORCH-03 jointly target a `v2.0.0` candidate. A separate final-readiness/Human gate decides whether to release it. `v2.0.1` is reserved for compatible fixes after release.
+ORCH-01, ORCH-02, ORCH-03, and ORCH-04 jointly target a `v2.0.0` candidate. A separate final-readiness/Human gate decides whether to release it. `v2.0.1` is reserved for compatible fixes after release.
 
 Dependency order:
 
-`ORCH-01 -> ORCH-02 design -> SQLite LedgerStore -> onboarding/integration -> reliability/recovery -> adopter dogfood/final readiness -> ORCH-03 #522 -> #404 -> #405 -> #403 -> #521 -> #402 -> #406`
+`ORCH-01 -> ORCH-02 -> ORCH-03 (#522 -> #404 -> #405 -> #403 -> #521 -> #402 -> #406) -> ORCH-04 (#539 -> #540 -> #541 -> #542 -> #543 -> #536)`
 
 ORCH-02 boundaries: SQLite is the only operational ledger backend; new and existing projects onboard directly to SQLite; no JSONL user-data migration, dual-write, or compatibility backend; JSONL export is optional and non-authoritative; no raw transcript/tool output; ORCH-03 owns multi-machine convergence; AF19 remains separate.
 
