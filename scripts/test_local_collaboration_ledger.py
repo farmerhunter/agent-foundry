@@ -86,7 +86,7 @@ class LedgerTests(unittest.TestCase):
         self.assertTrue((Path(str(backup) + ".receipt.json")).exists())
         with self.assertRaises(LedgerConflictError): self.ledger.backup(backup)
         restored_path = Path(self.tmp.name) / "restored" / "collaboration.db"
-        restored = LocalCollaborationLedger.restore(backup, restored_path)
+        restored = LocalCollaborationLedger.restore(backup, restored_path, expected_project_id=self.ledger.project_id)
         self.assertEqual(restored.project_id, self.ledger.project_id)
         restored.close()
         self.ledger._conn.execute("UPDATE events SET payload='{}' WHERE sequence=1")
@@ -97,6 +97,14 @@ class LedgerTests(unittest.TestCase):
         os.chmod(Path(self.tmp.name) / self.ledger.project_id, 0o755)
         with self.assertRaises(Exception):
             LocalCollaborationLedger(self.ledger.project_id, projects_root=self.tmp.name)
+
+    def test_registry_discovery_and_input_caps(self):
+        self.ledger.bind_project("path", "/tmp/discover")
+        self.assertEqual(LocalCollaborationLedger.discover_by_binding(self.tmp.name, "path", "/tmp/discover"), [self.ledger.project_id])
+        with self.assertRaises(ValueError): self.ledger.append_batch([{"event_type": "x", "payload": {}, "unknown": 1}])
+        nested = value = {}
+        for _ in range(14): value["x"] = {}; value = value["x"]
+        with self.assertRaises(ValueError): self.ledger.append_event("x", nested)
         os.chmod(Path(self.tmp.name) / self.ledger.project_id, 0o700)
         reopened = LocalCollaborationLedger(self.ledger.project_id, projects_root=self.tmp.name)
         reopened._conn.execute("UPDATE ledger_metadata SET value='9.9.9' WHERE key='schema_version'")

@@ -90,6 +90,14 @@ def _contains_forbidden(value: Any) -> bool:
     return False
 
 
+def _json_depth(value, depth=0):
+    if depth > 12: raise ValueError("JSON nesting exceeds 12 levels")
+    if isinstance(value, Mapping):
+        for item in value.values(): _json_depth(item, depth + 1)
+    elif isinstance(value, (list, tuple)):
+        for item in value: _json_depth(item, depth + 1)
+
+
 def _mode(path: Path) -> int:
     return stat.S_IMODE(path.stat().st_mode)
 
@@ -109,6 +117,8 @@ class LocalCollaborationLedger:
             existed = self.directory.exists(); self.directory.mkdir(parents=True, exist_ok=True)
             if not existed: os.chmod(self.directory, 0o700)
             if not self.path.exists(): self.path.touch(mode=0o600)
+        elif not self.path.exists() or self.path.is_symlink() or not self.path.is_file():
+            raise LedgerIntegrityError("read-only discovery requires an existing regular database")
         self._assert_private()
         self._conn = sqlite3.connect(self.path, timeout=5, isolation_level=None)
         self._conn.row_factory = sqlite3.Row
@@ -153,7 +163,8 @@ class LocalCollaborationLedger:
         try:
             statements = [
                 "CREATE TABLE IF NOT EXISTS ledger_metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
-                "CREATE TABLE IF NOT EXISTS project_bindings (binding_type TEXT NOT NULL, binding_value TEXT NOT NULL, bound_at TEXT NOT NULL, PRIMARY KEY(binding_type,binding_value))",
+                "CREATE TABLE IF NOT EXISTS project_bindings (binding_id INTEGER PRIMARY KEY, binding_type TEXT NOT NULL, binding_value TEXT NOT NULL, active INTEGER NOT NULL, bound_at TEXT NOT NULL, decision_receipt TEXT NOT NULL)",
+                "CREATE TABLE IF NOT EXISTS binding_decisions (decision_id TEXT PRIMARY KEY, binding_type TEXT NOT NULL, old_value TEXT, new_value TEXT NOT NULL, decided_at TEXT NOT NULL)",
                 "CREATE TABLE IF NOT EXISTS events (sequence INTEGER PRIMARY KEY,event_id TEXT NOT NULL UNIQUE,event_type TEXT NOT NULL,payload TEXT NOT NULL,payload_hash TEXT NOT NULL,previous_hash TEXT NOT NULL,event_hash TEXT NOT NULL UNIQUE,created_at TEXT NOT NULL,actor TEXT,source TEXT,root TEXT NOT NULL)",
                 "CREATE TABLE IF NOT EXISTS holds (event_id TEXT PRIMARY KEY,reason TEXT NOT NULL,payload_hash TEXT,identity_hash TEXT,observed_at TEXT NOT NULL)",
                 "CREATE TABLE IF NOT EXISTS projections (name TEXT PRIMARY KEY,sequence INTEGER NOT NULL,payload TEXT NOT NULL,payload_hash TEXT NOT NULL,updated_at TEXT NOT NULL)",
@@ -177,19 +188,21 @@ class LocalCollaborationLedger:
 
     def bind_project(self, binding_type: str, binding_value: str, *, rebind=False):
         if not binding_type or not binding_value: raise ValueError("binding type/value required")
-        c = self._conn; rows = c.execute("SELECT binding_value FROM project_bindings WHERE binding_type=?", (binding_type,)).fetchall()
+        c = self._conn; rows = c.execute("SELECT binding_value FROM project_bindings WHERE binding_type=? AND active=1", (binding_type,)).fetchall()
         if any(r[0] == binding_value for r in rows): return binding_value
         if rows and not rebind:
             self._record_hold("binding:" + binding_type, "ambiguous_binding", _hash(binding_value)); raise LedgerConflictError("binding requires explicit rebind")
         c.execute("BEGIN IMMEDIATE")
         try:
-            if rebind: c.execute("DELETE FROM project_bindings WHERE binding_type=?", (binding_type,))
-            c.execute("INSERT INTO project_bindings VALUES(?,?,?)", (binding_type, binding_value, _now())); c.execute("COMMIT")
+            old = rows[0][0] if rows else None; decision = str(uuid.uuid4()); now = _now()
+            if rebind: c.execute("UPDATE project_bindings SET active=0 WHERE binding_type=? AND active=1", (binding_type,))
+            c.execute("INSERT INTO project_bindings(binding_type,binding_value,active,bound_at,decision_receipt) VALUES(?,?,?,?,?)", (binding_type, binding_value, 1, now, decision))
+            c.execute("INSERT INTO binding_decisions VALUES(?,?,?,?,?)", (decision, binding_type, old, binding_value, now)); c.execute("COMMIT")
         except Exception: c.execute("ROLLBACK"); raise
         return binding_value
 
     def resolve_binding(self, binding_type: str) -> str:
-        rows = self._conn.execute("SELECT binding_value FROM project_bindings WHERE binding_type=?", (binding_type,)).fetchall()
+        rows = self._conn.execute("SELECT binding_value FROM project_bindings WHERE binding_type=? AND active=1", (binding_type,)).fetchall()
         if len(rows) != 1: raise LedgerConflictError("binding resolution is not exactly one")
         return rows[0][0]
 
@@ -226,10 +239,15 @@ class LocalCollaborationLedger:
         return self.append_batch(events)
 
     def append_batch(self, events: Iterable[Mapping[str, Any]]):
+        events = list(events)
+        if len(events) > 100: raise ValueError("batch exceeds 100 events")
         normalized = []
         for item in events:
+            if not isinstance(item, Mapping) or set(item) - {"event_type","payload","event_id","actor","source","root"}: raise ValueError("unknown event input key")
             eid, root = self._validate(item.get("event_type"), item.get("payload"), item.get("event_id"), item.get("actor"), item.get("source"), item.get("root"))
+            _json_depth(item["payload"])
             normalized.append((eid,item["event_type"],item["payload"],item.get("actor"),item.get("source"),root))
+        if sum(len(_canonical(item["payload"]).encode()) for item in events) > 1024 * 1024: raise ValueError("batch exceeds 1 MiB")
         if not normalized: return []
         c = self._conn; c.execute("BEGIN IMMEDIATE")
         try:
@@ -314,7 +332,8 @@ class LocalCollaborationLedger:
         try:
             with sqlite3.connect(tmp) as target: self._conn.backup(target)
             os.chmod(tmp,0o600); self._enforce_sidecar_modes(); self.integrity_check_path(tmp)
-            receipt={"schema_version":SCHEMA_VERSION,"project_id":self.project_id,"integrity":"ok","sha256":hashlib.sha256(tmp.read_bytes()).hexdigest()}
+            self.verify(); source_head = self._conn.execute("SELECT event_hash FROM events ORDER BY sequence DESC LIMIT 1").fetchone(); generation = self._conn.execute("SELECT COALESCE(MAX(sequence),0) FROM events").fetchone()[0]
+            receipt={"schema_version":SCHEMA_VERSION,"project_id":self.project_id,"integrity":"ok","sha256":hashlib.sha256(tmp.read_bytes()).hexdigest(),"generation":generation,"source_head":source_head[0] if source_head else GENESIS}
             receipt_path=dest.with_name(dest.name+".receipt.json")
             if receipt_path.exists(): raise LedgerConflictError("backup receipt destination must be fresh")
             os.rename(tmp,dest); receipt_path.write_text(_canonical(receipt)+"\n"); os.chmod(receipt_path,0o600)
@@ -323,24 +342,47 @@ class LocalCollaborationLedger:
             if tmp.exists(): tmp.unlink()
 
     @classmethod
-    def restore(cls, backup, destination):
+    def restore(cls, backup, destination, *, expected_project_id=None):
         """Restore only into a fresh target, validating identity before publish."""
         source, dest = Path(backup).expanduser(), Path(destination).expanduser()
-        if not source.is_file() or dest.exists(): raise LedgerConflictError("restore requires a fresh target")
+        if not source.is_file() or dest.exists() or expected_project_id is None: raise LedgerConflictError("restore requires fresh target and expected project identity")
         if _mode(source) != 0o600: raise LedgerPermissionError("backup must be 0600")
         parent_existed = dest.parent.exists(); dest.parent.mkdir(parents=True, exist_ok=True)
         if parent_existed and _mode(dest.parent) != 0o700: raise LedgerPermissionError("restore directory must be 0700")
         if not parent_existed: os.chmod(dest.parent, 0o700)
         staged = dest.with_name(f".{dest.name}.restore-{uuid.uuid4().hex}")
         try:
+            receipt_path = source.with_name(source.name + ".receipt.json")
+            if not receipt_path.is_file(): raise LedgerIntegrityError("backup receipt missing")
+            receipt = json.loads(receipt_path.read_text())
+            if receipt.get("sha256") != hashlib.sha256(source.read_bytes()).hexdigest() or receipt.get("project_id") != expected_project_id or receipt.get("schema_version") != SCHEMA_VERSION: raise LedgerIntegrityError("backup receipt mismatch")
             shutil.copyfile(source, staged); os.chmod(staged, 0o600)
             restored = cls(db_path=staged, create=False)
-            if restored.project_id != restored.metadata().get("project_id") or restored.metadata().get("schema_version") != SCHEMA_VERSION:
+            if restored.project_id != expected_project_id or restored.metadata().get("schema_version") != SCHEMA_VERSION:
                 restored.close(); raise LedgerIntegrityError("restore identity/schema receipt mismatch")
-            restored.integrity_check(); restored.close(); os.rename(staged, dest)
+            restored.integrity_check(); generation = restored._conn.execute("SELECT COALESCE(MAX(sequence),0) FROM events").fetchone()[0]; head = restored._conn.execute("SELECT event_hash FROM events ORDER BY sequence DESC LIMIT 1").fetchone(); restored.close()
+            if generation != receipt.get("generation") or (head[0] if head else GENESIS) != receipt.get("source_head"): raise LedgerIntegrityError("backup generation/head mismatch")
+            os.rename(staged, dest)
             return cls(db_path=dest, create=False)
         finally:
             if staged.exists(): staged.unlink()
+
+    @classmethod
+    def discover_by_binding(cls, projects_root, binding_type, binding_value):
+        root = Path(projects_root).expanduser(); matches = []
+        if not root.exists(): return matches
+        for directory in root.iterdir():
+            db = directory / "collaboration.db"
+            if not directory.is_dir() or db.is_symlink() or not db.is_file(): continue
+            try:
+                ledger = cls(db_path=db, create=False)
+                found = ledger._conn.execute("SELECT 1 FROM project_bindings WHERE binding_type=? AND binding_value=? AND active=1", (binding_type, binding_value)).fetchone()
+                if found: matches.append(ledger.project_id)
+                ledger.close()
+            except LedgerError:
+                continue
+        if len(matches) > 1: raise LedgerConflictError("binding resolves to multiple projects")
+        return matches
 
     def integrity_check_path(self,path):
         with sqlite3.connect(path) as c:
