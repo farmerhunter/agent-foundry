@@ -23,6 +23,21 @@ class LedgerTests(unittest.TestCase):
         self.assertEqual(self.ledger._conn.execute("PRAGMA synchronous").fetchone()[0], 2)
         self.assertEqual(self.ledger.pragma_receipt(), {"journal_mode": "wal", "synchronous": "2", "foreign_keys": "1", "trusted_schema": "0", "busy_timeout": "5000", "wal_autocheckpoint": "1000"})
 
+    def test_fresh_close_read_only_probe_preserves_wal_and_mtime(self):
+        path = self.ledger.path
+        self.ledger.close()
+        sidecars = [Path(str(path) + suffix) for suffix in ("-wal", "-shm")]
+        self.assertFalse(any(sidecar.exists() for sidecar in sidecars))
+        self.assertEqual(path.read_bytes()[18:20], b"\x02\x02")
+        before = path.stat().st_mtime_ns
+        reopened = LocalCollaborationLedger(self.ledger.project_id, projects_root=self.tmp.name, create=False)
+        try:
+            self.assertEqual(reopened.pragma_receipt()["journal_mode"], "wal")
+            self.assertEqual(path.stat().st_mtime_ns, before)
+            self.assertFalse(any(sidecar.exists() for sidecar in sidecars))
+        finally:
+            reopened.close()
+
     def test_binding_and_projection_checkpoint(self):
         self.ledger.bind_project("path", "/tmp/project")
         self.assertEqual(self.ledger.resolve_binding("path"), "/tmp/project")

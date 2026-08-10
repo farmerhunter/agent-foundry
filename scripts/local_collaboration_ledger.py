@@ -102,6 +102,13 @@ def _mode(path: Path) -> int:
     return stat.S_IMODE(path.stat().st_mode)
 
 
+def _persists_wal(path: Path) -> bool:
+    # SQLite stores the journal format in the immutable database header.
+    with path.open("rb") as handle:
+        header = handle.read(20)
+    return len(header) >= 20 and header[18:20] == b"\x02\x02"
+
+
 class LocalCollaborationLedger:
     def __init__(self, project_id: str | None = None, *, projects_root: str | Path | None = None,
                  db_path: str | Path | None = None, create: bool = True, _snapshot: bool = False):
@@ -121,8 +128,10 @@ class LocalCollaborationLedger:
             raise LedgerIntegrityError("read-only discovery requires an existing regular database")
         self._assert_private()
         if not create:
-            immutable = not any(Path(str(self.path) + suffix).exists() for suffix in ("-wal", "-shm"))
-            uri = f"file:{self.path}?mode=ro" + ("&immutable=1" if immutable else "")
+            sidecars = any(Path(str(self.path) + suffix).exists() for suffix in ("-wal", "-shm"))
+            # Immutable mode is required when no sidecars exist: a regular
+            # read-only connection may create -shm during verification.
+            uri = f"file:{self.path}?mode=ro" + ("&immutable=1" if not sidecars else "")
             self._conn = sqlite3.connect(uri, uri=True, timeout=5, isolation_level=None)
             self._conn.row_factory = sqlite3.Row
             self._read_only_validate(allow_snapshot=_snapshot)
@@ -176,6 +185,8 @@ class LocalCollaborationLedger:
         self.project_id = metadata.get("project_id")
         self._pragma_receipt = {k: str(self._conn.execute(f"PRAGMA {k}").fetchone()[0]).lower() for k in ("journal_mode","synchronous","foreign_keys","trusted_schema","busy_timeout","wal_autocheckpoint")}
         expected = {"journal_mode": "wal", "synchronous": "2", "foreign_keys": "1", "trusted_schema": "0", "busy_timeout": "5000", "wal_autocheckpoint": "1000"}
+        if self._pragma_receipt.get("journal_mode") == "delete" and not any(sidecars.values()) and _persists_wal(self.path):
+            self._pragma_receipt["journal_mode"] = "wal"
         if self._pragma_receipt != expected and not (allow_snapshot and self._pragma_receipt.get("journal_mode") == "delete"): raise LedgerPermissionError(f"read-only pragma capability mismatch: {self._pragma_receipt}")
         if not allow_snapshot and self.directory.name != self.project_id: raise LedgerIntegrityError("candidate directory/project mismatch")
         if sidecars != {suffix: Path(str(self.path) + suffix).exists() for suffix in ("-wal", "-shm")}: raise LedgerIntegrityError("read-only verification mutated sidecars")
