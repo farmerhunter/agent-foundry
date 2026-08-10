@@ -5,6 +5,7 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -120,6 +121,31 @@ class LedgerTests(unittest.TestCase):
         restored.close()
         self.ledger._conn.execute("UPDATE events SET payload='{}' WHERE sequence=1")
         with self.assertRaises(LedgerIntegrityError): self.ledger.verify()
+
+    def test_backup_snapshot_remains_coherent_during_append(self):
+        self.ledger.append_event("before", {"n": 0})
+        backup = Path(self.tmp.name) / "concurrent-backup.db"
+        done = threading.Event()
+
+        def append_during_backup():
+            writer = LocalCollaborationLedger.open_existing(self.ledger.path, expected_project_id=self.ledger.project_id)
+            try:
+                writer.append_event("during", {"n": 1})
+            finally:
+                writer.close(); done.set()
+
+        worker = threading.Thread(target=append_during_backup)
+        worker.start()
+        self.ledger.backup(backup)
+        worker.join(timeout=5)
+        self.assertTrue(done.is_set())
+        restored_path = Path(self.tmp.name) / "snapshot" / "collaboration.db"
+        restored = LocalCollaborationLedger.restore(backup, restored_path, expected_project_id=self.ledger.project_id)
+        try:
+            self.assertTrue(restored.verify())
+            self.assertGreaterEqual(len(restored.list_events()), 1)
+        finally:
+            restored.close()
 
     def test_permission_and_schema_fail_closed(self):
         self.ledger.close()
