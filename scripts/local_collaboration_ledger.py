@@ -199,6 +199,13 @@ class LocalCollaborationLedger:
     def append_event(self, event_type, payload, *, event_id=None, actor=None, source=None, root=None):
         return self.append_batch([{"event_type":event_type,"payload":payload,"event_id":event_id,"actor":actor,"source":source,"root":root}])[0]
 
+    def accept_compact_event(self, event_type, payload, *, event_id=None, actor=None, source=None, root=None):
+        """Commit one privacy-safe compact onboarding event through the same authority."""
+        return self.append_event(event_type, payload, event_id=event_id, actor=actor, source=source, root=root)
+
+    def accept_compact_events(self, events):
+        return self.append_batch(events)
+
     def append_batch(self, events: Iterable[Mapping[str, Any]]):
         normalized = []
         for item in events:
