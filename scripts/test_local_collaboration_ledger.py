@@ -43,8 +43,12 @@ class LedgerTests(unittest.TestCase):
 
     def test_privacy_and_batch_rollback(self):
         with self.assertRaises(ValueError): self.ledger.append_event("x", {"raw_transcript": "secret"})
+        for field in ("prompt", "tool_output", "raw_transcript", "secret", "native_history"):
+            with self.assertRaises(ValueError):
+                self.ledger.append_event("x", {"meta": {"items": [{field: "secret"}]}})
+        self.ledger.append_event("x", {"meta": {"labels": ["safe"], "source": "local"}})
         with self.assertRaises(ValueError): self.ledger.append_batch([{"event_type": "ok", "payload": {}}, {"event_type": "bad", "payload": {"prompt": "x"}}])
-        self.assertEqual(self.ledger.list_events(), [])
+        self.assertEqual(len(self.ledger.list_events()), 1)
 
     def test_tamper_and_backup(self):
         self.ledger.append_event("x", {"a": 1})

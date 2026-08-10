@@ -66,6 +66,15 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="microseconds")
 
 
+def _contains_forbidden(value: Any) -> bool:
+    forbidden = {"transcript", "raw_transcript", "tool_output", "prompt", "secret", "native_history"}
+    if isinstance(value, Mapping):
+        return any(key in forbidden or _contains_forbidden(item) for key, item in value.items())
+    if isinstance(value, (list, tuple)):
+        return any(_contains_forbidden(item) for item in value)
+    return False
+
+
 def _mode(path: Path) -> int:
     return stat.S_IMODE(path.stat().st_mode)
 
@@ -198,8 +207,7 @@ class LocalCollaborationLedger:
         encoded = _canonical(payload)
         if len(encoded.encode("utf-8")) > 64 * 1024:
             raise ValueError("payload exceeds 64 KiB")
-        forbidden = {"transcript", "raw_transcript", "tool_output", "prompt", "secret", "native_history"}
-        if forbidden.intersection(payload):
+        if _contains_forbidden(payload):
             raise ValueError("privacy-forbidden payload field")
         return event_id
 
