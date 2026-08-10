@@ -9,6 +9,7 @@ generated output, private state, or memory-system records.
 from __future__ import annotations
 
 import argparse
+import datetime as datetime_module
 import html
 import json
 import os
@@ -2293,6 +2294,32 @@ LOCAL_ACTION_REQUIRED_GATES = {
 }
 
 
+def sqlite_action_timestamp_valid(value: Any) -> bool:
+    """Accept only the stable UTC whole-second timestamp used by SQLite actions."""
+    if not isinstance(value, str) or value != value.strip():
+        return False
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", value):
+        return False
+    try:
+        datetime_module.datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ")
+    except ValueError:
+        return False
+    return True
+
+
+def fail_sqlite_action_timestamp(args: argparse.Namespace) -> None:
+    payload = {
+        "status": "hold",
+        "error": "sqlite_action_timestamp_invalid",
+        "mutation_performed": False,
+    }
+    if getattr(args, "json", False):
+        print_json_or_text(payload, True)
+    else:
+        print("sqlite_action_timestamp_invalid: explicit UTC whole-second timestamp required", file=sys.stderr)
+    raise SystemExit(6)
+
+
 def normalize_local_action_collection(data: Any) -> tuple[list[dict[str, Any]], list[str]]:
     if isinstance(data, dict) and "actions" in data:
         data = data["actions"]
@@ -2556,6 +2583,8 @@ def cmd_local_ledger_action_apply(args: argparse.Namespace) -> None:
         values, action_errors = normalize_local_action_collection(actions)
         if action_errors or not values:
             fail("sqlite_action_invalid", "; ".join(action_errors + ([] if values else ["at least one approved local action is required"])))
+        if any(not sqlite_action_timestamp_valid(item.get("occurred_at")) for item in values):
+            fail_sqlite_action_timestamp(args)
         values = [local_action_event(item) for item in values]
         result = sqlite_local_action_batch(args.projects_root, args.project_id, values)
         print_json_or_text(result, args.json)
