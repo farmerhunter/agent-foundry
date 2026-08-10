@@ -262,8 +262,9 @@ class LocalCollaborationLedger:
         return dict(self._pragma_receipt)
 
     def _init_schema(self):
-        c = self._conn; c.execute("BEGIN IMMEDIATE")
+        c = self._conn
         try:
+            c.execute("BEGIN IMMEDIATE")
             statements = [
                 "CREATE TABLE IF NOT EXISTS ledger_metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
                 "CREATE TABLE IF NOT EXISTS project_bindings (binding_id INTEGER PRIMARY KEY, binding_type TEXT NOT NULL, binding_value TEXT NOT NULL, active INTEGER NOT NULL, bound_at TEXT NOT NULL, decision_receipt TEXT NOT NULL)",
@@ -363,8 +364,9 @@ class LocalCollaborationLedger:
             normalized.append((eid,item["event_type"],item["payload"],item.get("actor"),item.get("source"),root))
         if sum(len(_canonical(item["payload"]).encode()) for item in events) > 1024 * 1024: raise ValueError("batch exceeds 1 MiB")
         if not normalized: return []
-        c = self._conn; c.execute("BEGIN IMMEDIATE")
+        c = self._conn
         try:
+            c.execute("BEGIN IMMEDIATE")
             result=[]; last=c.execute("SELECT sequence,event_hash FROM events ORDER BY sequence DESC LIMIT 1").fetchone(); seq,previous=(last["sequence"],last["event_hash"]) if last else (0,GENESIS)
             for eid,etype,payload,actor,source,root in normalized:
                 ph=_hash(payload); ih=self._identity_hash(ph,etype,actor,source,root)

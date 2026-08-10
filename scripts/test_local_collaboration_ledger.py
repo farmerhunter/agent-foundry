@@ -1,11 +1,15 @@
 import os
 import math
 import stat
+import sqlite3
+import subprocess
+import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
-from local_collaboration_ledger import LedgerConflictError, LedgerIntegrityError, LocalCollaborationLedger
+from local_collaboration_ledger import LedgerBusyError, LedgerConflictError, LedgerIntegrityError, LedgerSchemaError, LocalCollaborationLedger
 
 
 class LedgerTests(unittest.TestCase):
@@ -37,6 +41,16 @@ class LedgerTests(unittest.TestCase):
             self.assertFalse(any(sidecar.exists() for sidecar in sidecars))
         finally:
             reopened.close()
+
+    def test_read_only_probe_has_independent_no_mutation_receipt(self):
+        path = self.ledger.path
+        self.ledger.close()
+        sidecars = {suffix: Path(str(path) + suffix) for suffix in ("-wal", "-shm")}
+        before = {"db": path.stat().st_mtime_ns, **{suffix: (p.exists(), p.stat().st_mtime_ns if p.exists() else None) for suffix, p in sidecars.items()}}
+        reopened = LocalCollaborationLedger(db_path=path, create=False)
+        reopened.close()
+        after = {"db": path.stat().st_mtime_ns, **{suffix: (p.exists(), p.stat().st_mtime_ns if p.exists() else None) for suffix, p in sidecars.items()}}
+        self.assertEqual(before, after)
 
     def test_binding_and_projection_checkpoint(self):
         self.ledger.bind_project("path", "/tmp/project")
@@ -141,6 +155,42 @@ class LedgerTests(unittest.TestCase):
             reopened.close()
         with self.assertRaises(LedgerIntegrityError):
             LocalCollaborationLedger.open_existing(Path(self.tmp.name) / "missing" / "collaboration.db", expected_project_id=project_id)
+
+    def test_restart_replay_and_post_commit_retry_are_deterministic(self):
+        event_id = "55555555-5555-5555-5555-555555555555"
+        first = self.ledger.append_event("restart", {"n": 1}, event_id=event_id)
+        self.ledger.close()
+        reopened = LocalCollaborationLedger.open_existing(Path(self.tmp.name) / self.ledger.project_id / "collaboration.db", expected_project_id=self.ledger.project_id)
+        try:
+            self.assertEqual(reopened.append_event("restart", {"n": 1}, event_id=event_id), first)
+            self.assertTrue(reopened.verify())
+        finally:
+            reopened.close()
+
+    def test_precommit_invalid_batch_rolls_back_without_partial_event(self):
+        with self.assertRaises(ValueError):
+            self.ledger.append_batch([{"event_type": "ok", "payload": {"a": 1}}, {"event_type": "bad", "payload": {"prompt": "x"}}])
+        self.assertEqual(self.ledger.list_events(), [])
+
+    def test_busy_writer_is_bounded_and_classified(self):
+        lock = sqlite3.connect(self.ledger.path, timeout=0, isolation_level=None)
+        lock.execute("BEGIN IMMEDIATE")
+        writer = LocalCollaborationLedger.open_existing(self.ledger.path, expected_project_id=self.ledger.project_id)
+        started = time.monotonic()
+        try:
+            with self.assertRaises(LedgerBusyError):
+                writer.append_event("busy", {"ok": True})
+        finally:
+            writer.close()
+            lock.execute("ROLLBACK"); lock.close()
+        self.assertLess(time.monotonic() - started, 8)
+
+    def test_subprocess_missing_authority_does_not_create(self):
+        missing = Path(self.tmp.name) / "missing.db"
+        code = "from local_collaboration_ledger import LocalCollaborationLedger; LocalCollaborationLedger.open_existing(%r, expected_project_id='00000000-0000-0000-0000-000000000000')" % str(missing)
+        result = subprocess.run([sys.executable, "-c", code], env={**os.environ, "PYTHONPATH": "scripts"}, capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(missing.exists())
 
 
 if __name__ == "__main__": unittest.main()

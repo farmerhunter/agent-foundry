@@ -19,6 +19,8 @@ from local_collaboration_ledger import (
     LedgerError,
     LedgerIdentityError,
     LedgerIntegrityError,
+    LedgerPermissionError,
+    LedgerSchemaError,
     LocalCollaborationLedger,
     _canonical,
     _contains_forbidden,
@@ -61,8 +63,9 @@ def _hold_for(exc: BaseException, fallback: str) -> dict[str, Any]:
     if isinstance(exc, LedgerBusyError): reason = "busy"
     elif isinstance(exc, LedgerConflictError): reason = "conflict"
     elif isinstance(exc, LedgerIdentityError): reason = "identity"
+    elif isinstance(exc, LedgerSchemaError): reason = "schema"
+    elif isinstance(exc, LedgerPermissionError) or isinstance(exc, PermissionError): reason = "permission"
     elif isinstance(exc, LedgerIntegrityError): reason = "integrity"
-    elif isinstance(exc, PermissionError): reason = "permission"
     elif isinstance(exc, LedgerBackupError): reason = "backup"
     elif isinstance(exc, ValueError): reason = fallback
     else: reason = fallback
