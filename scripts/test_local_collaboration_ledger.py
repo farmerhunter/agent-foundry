@@ -10,7 +10,7 @@ import time
 import unittest
 from pathlib import Path
 
-from local_collaboration_ledger import LedgerBusyError, LedgerConflictError, LedgerIntegrityError, LedgerSchemaError, LocalCollaborationLedger
+from local_collaboration_ledger import LedgerBusyError, LedgerConflictError, LedgerIntegrityError, LedgerPermissionError, LedgerSchemaError, LocalCollaborationLedger
 
 
 class LedgerTests(unittest.TestCase):
@@ -166,6 +166,24 @@ class LedgerTests(unittest.TestCase):
         reopened.close()
         with self.assertRaises(LedgerIntegrityError):
             LocalCollaborationLedger(self.ledger.project_id, projects_root=self.tmp.name)
+
+    def test_discovery_preserves_schema_and_permission_holds(self):
+        self.ledger.bind_project("repo", "schema-case")
+        self.ledger.close()
+        db = Path(self.tmp.name) / self.ledger.project_id / "collaboration.db"
+        with sqlite3.connect(db) as conn:
+            conn.execute("UPDATE ledger_metadata SET value='9.9.9' WHERE key='schema_version'")
+        with self.assertRaises(LedgerSchemaError):
+            LocalCollaborationLedger.discover_by_binding(self.tmp.name, "repo", "schema-case")
+        with sqlite3.connect(db) as conn:
+            conn.execute("UPDATE ledger_metadata SET value=? WHERE key='schema_version'", ("1.0.0",))
+        directory = db.parent
+        os.chmod(directory, 0o755)
+        try:
+            with self.assertRaises(LedgerPermissionError):
+                LocalCollaborationLedger.discover_by_binding(self.tmp.name, "repo", "schema-case")
+        finally:
+            os.chmod(directory, 0o700)
 
     def test_existing_rw_never_recreates_or_changes_identity(self):
         path = self.ledger.path

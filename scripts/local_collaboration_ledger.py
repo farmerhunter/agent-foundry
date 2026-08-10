@@ -245,9 +245,9 @@ class LocalCollaborationLedger:
         self._conn.execute("PRAGMA busy_timeout=5000"); self._conn.execute("PRAGMA wal_autocheckpoint=1000")
         tables = {r[0] for r in self._conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         if not {"ledger_metadata", "events", "project_bindings"}.issubset(tables):
-            raise LedgerIntegrityError("candidate schema is incomplete")
+            raise LedgerSchemaError("candidate schema is incomplete")
         metadata = {r["key"]: r["value"] for r in self._conn.execute("SELECT key,value FROM ledger_metadata")}
-        if metadata.get("schema_version") != SCHEMA_VERSION: raise LedgerIntegrityError("candidate schema version mismatch")
+        if metadata.get("schema_version") != SCHEMA_VERSION: raise LedgerSchemaError("candidate schema version mismatch")
         if self.project_id and metadata.get("project_id") != self.project_id: raise LedgerIntegrityError("candidate project mismatch")
         self.project_id = metadata.get("project_id")
         self._pragma_receipt = {k: str(self._conn.execute(f"PRAGMA {k}").fetchone()[0]).lower() for k in ("journal_mode","synchronous","foreign_keys","trusted_schema","busy_timeout","wal_autocheckpoint")}
@@ -512,9 +512,16 @@ class LocalCollaborationLedger:
                 if found: matches.append(ledger.project_id)
                 ledger.close()
             except (LedgerError, sqlite3.DatabaseError) as exc:
-                holds.append({"path": str(db), "reason": str(exc)})
+                holds.append(exc)
         if len(matches) > 1: raise LedgerConflictError("binding resolves to multiple projects")
-        if holds: raise LedgerConflictError(f"candidate holds require review: {holds}")
+        if holds:
+            if any(isinstance(exc, LedgerPermissionError) for exc in holds):
+                raise LedgerPermissionError("candidate permission hold")
+            if any(isinstance(exc, LedgerSchemaError) for exc in holds):
+                raise LedgerSchemaError("candidate schema hold")
+            if any(isinstance(exc, LedgerIntegrityError) for exc in holds):
+                raise LedgerIntegrityError("candidate integrity hold")
+            raise LedgerConflictError("candidate conflict hold")
         return matches
 
     def integrity_check_path(self,path):
