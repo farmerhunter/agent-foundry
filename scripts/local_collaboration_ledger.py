@@ -350,7 +350,7 @@ class LocalCollaborationLedger:
         dest=Path(destination).expanduser()
         if dest.exists(): raise LedgerConflictError("backup destination must be fresh")
         dest.parent.mkdir(parents=True,exist_ok=True)
-        tmp=dest.with_name(f".{dest.name}.staging-{uuid.uuid4().hex}")
+        tmp=self.directory / f".backup-staging-{uuid.uuid4().hex}.db"
         try:
             with sqlite3.connect(tmp) as target: self._conn.backup(target)
             os.chmod(tmp,0o600); self._enforce_sidecar_modes()
