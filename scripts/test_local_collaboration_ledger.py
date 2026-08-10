@@ -150,6 +150,26 @@ class LedgerTests(unittest.TestCase):
         finally:
             reopened.close()
 
+    def test_subprocess_post_commit_receipt_loss_is_idempotent(self):
+        path = str(self.ledger.path)
+        project_id = self.ledger.project_id
+        self.ledger.close()
+        code = (
+            "import os,sys; from local_collaboration_ledger import LocalCollaborationLedger; "
+            "l=LocalCollaborationLedger.open_existing(sys.argv[1], expected_project_id=sys.argv[2]); "
+            "l.append_event('receipt.loss', {'ok': True}, event_id='88888888-8888-8888-8888-888888888888'); os._exit(0)"
+        )
+        result = subprocess.run([sys.executable, "-c", code, path, project_id], env={**os.environ, "PYTHONPATH": "scripts"}, capture_output=True)
+        self.assertEqual(result.returncode, 0)
+        reopened = LocalCollaborationLedger.open_existing(path, expected_project_id=project_id)
+        try:
+            before = len(reopened.list_events())
+            same = reopened.append_event("receipt.loss", {"ok": True}, event_id="88888888-8888-8888-8888-888888888888")
+            self.assertEqual(len(reopened.list_events()), before)
+            self.assertEqual(same.event_id, "88888888-8888-8888-8888-888888888888")
+        finally:
+            reopened.close()
+
     def test_backup_snapshot_remains_coherent_during_append(self):
         self.ledger.append_event("before", {"n": 0})
         backup = Path(self.tmp.name) / "concurrent-backup.db"
