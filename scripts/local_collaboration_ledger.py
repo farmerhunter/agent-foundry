@@ -104,7 +104,7 @@ def _mode(path: Path) -> int:
 
 class LocalCollaborationLedger:
     def __init__(self, project_id: str | None = None, *, projects_root: str | Path | None = None,
-                 db_path: str | Path | None = None, create: bool = True):
+                 db_path: str | Path | None = None, create: bool = True, _snapshot: bool = False):
         if db_path is not None and project_id is not None:
             raise ValueError("provide project_id or db_path, not both")
         if db_path is None:
@@ -121,9 +121,11 @@ class LocalCollaborationLedger:
             raise LedgerIntegrityError("read-only discovery requires an existing regular database")
         self._assert_private()
         if not create:
-            self._conn = sqlite3.connect(f"file:{self.path}?mode=ro", uri=True, timeout=5, isolation_level=None)
+            immutable = not any(Path(str(self.path) + suffix).exists() for suffix in ("-wal", "-shm"))
+            uri = f"file:{self.path}?mode=ro" + ("&immutable=1" if immutable else "")
+            self._conn = sqlite3.connect(uri, uri=True, timeout=5, isolation_level=None)
             self._conn.row_factory = sqlite3.Row
-            self._read_only_validate()
+            self._read_only_validate(allow_snapshot=_snapshot)
             self.verify()
             return
         self._conn = sqlite3.connect(self.path, timeout=5, isolation_level=None)
@@ -161,7 +163,10 @@ class LocalCollaborationLedger:
         self._pragma_receipt = actual
         self._enforce_sidecar_modes()
 
-    def _read_only_validate(self):
+    def _read_only_validate(self, *, allow_snapshot=False):
+        sidecars = {suffix: Path(str(self.path) + suffix).exists() for suffix in ("-wal", "-shm")}
+        self._conn.execute("PRAGMA foreign_keys=ON"); self._conn.execute("PRAGMA trusted_schema=OFF")
+        self._conn.execute("PRAGMA busy_timeout=5000"); self._conn.execute("PRAGMA wal_autocheckpoint=1000")
         tables = {r[0] for r in self._conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         if not {"ledger_metadata", "events", "project_bindings"}.issubset(tables):
             raise LedgerIntegrityError("candidate schema is incomplete")
@@ -170,6 +175,10 @@ class LocalCollaborationLedger:
         if self.project_id and metadata.get("project_id") != self.project_id: raise LedgerIntegrityError("candidate project mismatch")
         self.project_id = metadata.get("project_id")
         self._pragma_receipt = {k: str(self._conn.execute(f"PRAGMA {k}").fetchone()[0]).lower() for k in ("journal_mode","synchronous","foreign_keys","trusted_schema","busy_timeout","wal_autocheckpoint")}
+        expected = {"journal_mode": "wal", "synchronous": "2", "foreign_keys": "1", "trusted_schema": "0", "busy_timeout": "5000", "wal_autocheckpoint": "1000"}
+        if self._pragma_receipt != expected and not (allow_snapshot and self._pragma_receipt.get("journal_mode") == "delete"): raise LedgerPermissionError(f"read-only pragma capability mismatch: {self._pragma_receipt}")
+        if not allow_snapshot and self.directory.name != self.project_id: raise LedgerIntegrityError("candidate directory/project mismatch")
+        if sidecars != {suffix: Path(str(self.path) + suffix).exists() for suffix in ("-wal", "-shm")}: raise LedgerIntegrityError("read-only verification mutated sidecars")
 
     def pragma_receipt(self):
         return dict(self._pragma_receipt)
@@ -352,9 +361,14 @@ class LocalCollaborationLedger:
         dest.parent.mkdir(parents=True,exist_ok=True)
         tmp=self.directory / f".backup-staging-{uuid.uuid4().hex}.db"
         try:
-            with sqlite3.connect(tmp) as target: self._conn.backup(target)
+            with sqlite3.connect(tmp) as target:
+                target.execute("PRAGMA journal_mode=DELETE")
+                self._conn.backup(target)
             os.chmod(tmp,0o600); self._enforce_sidecar_modes()
-            staged = type(self)(db_path=tmp, create=False)
+            for suffix in ("-wal", "-shm"):
+                sidecar = Path(str(tmp) + suffix)
+                if sidecar.exists(): sidecar.unlink()
+            staged = type(self)(db_path=tmp, create=False, _snapshot=True)
             staged.integrity_check(); source_head = staged._conn.execute("SELECT event_hash FROM events ORDER BY sequence DESC LIMIT 1").fetchone(); generation = staged._conn.execute("SELECT COALESCE(MAX(sequence),0) FROM events").fetchone()[0]; staged.close()
             receipt={"schema_version":SCHEMA_VERSION,"project_id":self.project_id,"integrity":"ok","sha256":hashlib.sha256(tmp.read_bytes()).hexdigest(),"generation":generation,"source_head":source_head[0] if source_head else GENESIS}
             receipt_path=dest.with_name(dest.name+".receipt.json")
@@ -373,20 +387,24 @@ class LocalCollaborationLedger:
         parent_existed = dest.parent.exists(); dest.parent.mkdir(parents=True, exist_ok=True)
         if parent_existed and _mode(dest.parent) != 0o700: raise LedgerPermissionError("restore directory must be 0700")
         if not parent_existed: os.chmod(dest.parent, 0o700)
-        staged = dest.with_name(f".{dest.name}.restore-{uuid.uuid4().hex}")
+        stage_dir = dest.parent / expected_project_id
+        existed_stage_dir = stage_dir.exists(); stage_dir.mkdir(parents=True, exist_ok=True)
+        if existed_stage_dir and _mode(stage_dir) != 0o700: raise LedgerPermissionError("restore staging directory must be 0700")
+        if not existed_stage_dir: os.chmod(stage_dir, 0o700)
+        staged = stage_dir / f".restore-{uuid.uuid4().hex}.db"
         try:
             receipt_path = source.with_name(source.name + ".receipt.json")
             if not receipt_path.is_file(): raise LedgerIntegrityError("backup receipt missing")
             receipt = json.loads(receipt_path.read_text())
             if receipt.get("sha256") != hashlib.sha256(source.read_bytes()).hexdigest() or receipt.get("project_id") != expected_project_id or receipt.get("schema_version") != SCHEMA_VERSION: raise LedgerIntegrityError("backup receipt mismatch")
             shutil.copyfile(source, staged); os.chmod(staged, 0o600)
-            restored = cls(db_path=staged, create=False)
+            restored = cls(db_path=staged, create=False, _snapshot=True)
             if restored.project_id != expected_project_id or restored.metadata().get("schema_version") != SCHEMA_VERSION:
                 restored.close(); raise LedgerIntegrityError("restore identity/schema receipt mismatch")
             restored.integrity_check(); generation = restored._conn.execute("SELECT COALESCE(MAX(sequence),0) FROM events").fetchone()[0]; head = restored._conn.execute("SELECT event_hash FROM events ORDER BY sequence DESC LIMIT 1").fetchone(); restored.close()
             if generation != receipt.get("generation") or (head[0] if head else GENESIS) != receipt.get("source_head"): raise LedgerIntegrityError("backup generation/head mismatch")
             os.rename(staged, dest)
-            return cls(db_path=dest, create=False)
+            return cls(db_path=dest, create=False, _snapshot=True)
         finally:
             if staged.exists(): staged.unlink()
 
