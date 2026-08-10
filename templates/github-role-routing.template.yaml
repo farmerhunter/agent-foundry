@@ -55,6 +55,40 @@ completion_handoff:
     - generated_note
     - portable_prompt
 
+work_terminal_learning_signal_handoff:
+  schema: "WorkTerminalLearningSignalHandoff-v1"
+  destination: "existing_work_issue_terminal_handoff_comment"
+  payload_policy: "metadata_only"
+  cardinality: "at_most_one_candidate_or_learning_signal_none"
+  candidate_disposition: "candidate_hold"
+  required_metadata:
+    - work_id
+    - run_id
+    - issue_url_anchor
+    - payload_hash
+    - retention
+    - visibility
+  forbidden_payload:
+    - native_thread_id
+    - raw_transcript
+    - prompt
+    - tool_output
+    - model_output
+    - identity
+    - secrets
+  dedupe_policy: "same_hash_already_recorded_key_conflict_held"
+  uncertain_write_policy: "readback_then_one_retry_else_held_write_outcome_unknown"
+  dispositions:
+    - retrieved_for_review
+    - dismissed
+    - superseded
+    - disposed
+  disposed_semantics: "logical_only_no_physical_delete"
+  fail_closed_on:
+    - missing_or_locked_issue
+    - permission_denied
+    - visibility_mismatch
+
 github:
   auth_check: "read target repository before mutation planning"
   retry_policy: "bounded_retry_for_transient_network_or_rate_limit_only"

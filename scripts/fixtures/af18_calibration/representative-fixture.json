@@ -1,0 +1,610 @@
+{
+  "collection_mode": "fixture",
+  "protocol_version": "af18-calibration-protocol-v1",
+  "samples": [
+    {
+      "anchors": {
+        "context": "https://github.com/farmerhunter/agent-foundry/issues/457#context",
+        "execution": "https://github.com/farmerhunter/agent-foundry/issues/457#fixture-A",
+        "work": "https://github.com/farmerhunter/agent-foundry/issues/457"
+      },
+      "attention": {
+        "acknowledgement": {
+          "availability": "unavailable",
+          "value": null
+        },
+        "category": null,
+        "outcome": "not_required",
+        "pairing": {
+          "evidence_anchor": null,
+          "pair_id": null
+        }
+      },
+      "execution_id": "fixture-run-A",
+      "policy_version": "normal-observation-v1",
+      "protocol_version": "af18-calibration-protocol-v1",
+      "provenance": {
+        "captured_at": "2026-07-29T08:00:00Z",
+        "collection_method": "fixture",
+        "evidence_anchor": "https://github.com/farmerhunter/agent-foundry/issues/457#fixture",
+        "observation_kind": "observed",
+        "source": "fixture"
+      },
+      "quality": {
+        "passed": true,
+        "reason": "test"
+      },
+      "remaining_budget": {
+        "unit": "tokens",
+        "value": 800
+      },
+      "resources": {
+        "cached_input_tokens": {
+          "availability": "observed",
+          "observation_id": "A-0-cached_input_tokens",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "source": "fixture",
+          "unit": "tokens",
+          "value": 20
+        },
+        "callback_count": {
+          "availability": "observed",
+          "observation_id": "A-0-callback_count",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "source": "fixture",
+          "unit": "count",
+          "value": 1
+        },
+        "compact_rehydration_count": {
+          "availability": "observed",
+          "observation_id": "A-0-compact_rehydration_count",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "source": "fixture",
+          "unit": "count",
+          "value": 1
+        },
+        "context_age_hours": {
+          "availability": "observed",
+          "observation_id": "A-0-context_age_hours",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "source": "fixture",
+          "unit": "hours",
+          "value": 1
+        },
+        "cumulative_resource_tokens": {
+          "availability": "observed",
+          "derived_total_component_ids": [
+            "A-0-input_tokens",
+            "A-0-output_tokens"
+          ],
+          "invocation_ids": [
+            "fixture-invocation-A"
+          ],
+          "observation_basis": "derived",
+          "observation_id": "A-0-cumulative_resource_tokens",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "source": "fixture",
+          "unit": "tokens",
+          "value": 140
+        },
+        "elapsed_seconds": {
+          "availability": "observed",
+          "observation_id": "A-0-elapsed_seconds",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "source": "fixture",
+          "unit": "seconds",
+          "value": 10
+        },
+        "full_rehydration_count": {
+          "availability": "observed",
+          "observation_id": "A-0-full_rehydration_count",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "source": "fixture",
+          "unit": "count",
+          "value": 0
+        },
+        "input_tokens": {
+          "availability": "observed",
+          "observation_id": "A-0-input_tokens",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "source": "fixture",
+          "unit": "tokens",
+          "value": 100
+        },
+        "output_tokens": {
+          "availability": "observed",
+          "observation_id": "A-0-output_tokens",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "source": "fixture",
+          "unit": "tokens",
+          "value": 40
+        },
+        "packet_bytes": {
+          "availability": "observed",
+          "observation_id": "A-0-packet_bytes",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "source": "fixture",
+          "unit": "bytes",
+          "value": 200
+        },
+        "reasoning_tokens": {
+          "availability": "observed",
+          "observation_id": "A-0-reasoning_tokens",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "source": "fixture",
+          "unit": "tokens",
+          "value": 30
+        },
+        "recovery_count": {
+          "availability": "observed",
+          "observation_id": "A-0-recovery_count",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "source": "fixture",
+          "unit": "count",
+          "value": 0
+        },
+        "retry_count": {
+          "availability": "observed",
+          "observation_id": "A-0-retry_count",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "source": "fixture",
+          "unit": "count",
+          "value": 0
+        },
+        "tool_output_bytes": {
+          "availability": "observed",
+          "observation_id": "A-0-tool_output_bytes",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "source": "fixture",
+          "unit": "bytes",
+          "value": 80
+        },
+        "total_context_tokens": {
+          "availability": "observed",
+          "observation_basis": "independent_observed",
+          "observation_id": "A-0-total_context_tokens",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "source": "fixture",
+          "unit": "tokens",
+          "value": 120
+        }
+      },
+      "root_budget": {
+        "unit": "tokens",
+        "value": 1000
+      },
+      "sample_id": "fixture-baseline-A",
+      "scenario": {
+        "actual_role_route": "Implementer",
+        "anchor_type": "issue",
+        "canonical_allowed_tools": [
+          "gh",
+          "python3"
+        ],
+        "complexity": "small",
+        "measurement_window": {
+          "definition": "execution-to-terminal",
+          "fixed_execution_window": true
+        },
+        "model_class": "standard",
+        "objective_or_acceptance_fixture_id": "fixture-single_session_baseline",
+        "quality_rubric_version": "v1",
+        "risk": "low",
+        "root_budget_unit": "tokens",
+        "route_family": "fixture-route-family-v1",
+        "scenario_id": "single_session_baseline",
+        "scenario_variant": "default"
+      },
+      "task_class": "single_session_baseline",
+      "terminal_state": "completed",
+      "variant": "A",
+      "variant_declaration": {
+        "route_kind": "observed_normal_route"
+      },
+      "work_id": "fixture-work"
+    },
+    {
+      "anchors": {
+        "context": "https://github.com/farmerhunter/agent-foundry/issues/457#context",
+        "execution": "https://github.com/farmerhunter/agent-foundry/issues/457#fixture-B",
+        "work": "https://github.com/farmerhunter/agent-foundry/issues/457"
+      },
+      "attention": {
+        "acknowledgement": {
+          "availability": "unavailable",
+          "value": null
+        },
+        "category": null,
+        "outcome": "not_required",
+        "pairing": {
+          "evidence_anchor": null,
+          "pair_id": null
+        }
+      },
+      "execution_id": "fixture-run-B",
+      "policy_version": "normal-observation-v1",
+      "protocol_version": "af18-calibration-protocol-v1",
+      "provenance": {
+        "captured_at": "2026-07-29T08:00:00Z",
+        "collection_method": "fixture",
+        "evidence_anchor": "https://github.com/farmerhunter/agent-foundry/issues/457#fixture",
+        "observation_kind": "counterfactual",
+        "source": "fixture-counterfactual"
+      },
+      "quality": {
+        "passed": true,
+        "reason": "test"
+      },
+      "remaining_budget": {
+        "unit": "tokens",
+        "value": 800
+      },
+      "resources": {
+        "cached_input_tokens": {
+          "availability": "estimated",
+          "observation_id": "B-0-cached_input_tokens",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "source": "fixture-counterfactual",
+          "unit": "tokens",
+          "value": 20
+        },
+        "callback_count": {
+          "availability": "estimated",
+          "observation_id": "B-0-callback_count",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "source": "fixture-counterfactual",
+          "unit": "count",
+          "value": 1
+        },
+        "compact_rehydration_count": {
+          "availability": "estimated",
+          "observation_id": "B-0-compact_rehydration_count",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "source": "fixture-counterfactual",
+          "unit": "count",
+          "value": 1
+        },
+        "context_age_hours": {
+          "availability": "estimated",
+          "observation_id": "B-0-context_age_hours",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "source": "fixture-counterfactual",
+          "unit": "hours",
+          "value": 1
+        },
+        "cumulative_resource_tokens": {
+          "availability": "estimated",
+          "derived_total_component_ids": [
+            "B-0-input_tokens",
+            "B-0-output_tokens"
+          ],
+          "invocation_ids": [
+            "fixture-invocation-B"
+          ],
+          "observation_basis": "derived",
+          "observation_id": "B-0-cumulative_resource_tokens",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "source": "fixture-counterfactual",
+          "unit": "tokens",
+          "value": 140
+        },
+        "elapsed_seconds": {
+          "availability": "estimated",
+          "observation_id": "B-0-elapsed_seconds",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "source": "fixture-counterfactual",
+          "unit": "seconds",
+          "value": 10
+        },
+        "full_rehydration_count": {
+          "availability": "estimated",
+          "observation_id": "B-0-full_rehydration_count",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "source": "fixture-counterfactual",
+          "unit": "count",
+          "value": 0
+        },
+        "input_tokens": {
+          "availability": "estimated",
+          "observation_id": "B-0-input_tokens",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "source": "fixture-counterfactual",
+          "unit": "tokens",
+          "value": 100
+        },
+        "output_tokens": {
+          "availability": "estimated",
+          "observation_id": "B-0-output_tokens",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "source": "fixture-counterfactual",
+          "unit": "tokens",
+          "value": 40
+        },
+        "packet_bytes": {
+          "availability": "estimated",
+          "observation_id": "B-0-packet_bytes",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "source": "fixture-counterfactual",
+          "unit": "bytes",
+          "value": 200
+        },
+        "reasoning_tokens": {
+          "availability": "estimated",
+          "observation_id": "B-0-reasoning_tokens",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "source": "fixture-counterfactual",
+          "unit": "tokens",
+          "value": 30
+        },
+        "recovery_count": {
+          "availability": "estimated",
+          "observation_id": "B-0-recovery_count",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "source": "fixture-counterfactual",
+          "unit": "count",
+          "value": 0
+        },
+        "retry_count": {
+          "availability": "estimated",
+          "observation_id": "B-0-retry_count",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "source": "fixture-counterfactual",
+          "unit": "count",
+          "value": 0
+        },
+        "tool_output_bytes": {
+          "availability": "estimated",
+          "observation_id": "B-0-tool_output_bytes",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "source": "fixture-counterfactual",
+          "unit": "bytes",
+          "value": 80
+        },
+        "total_context_tokens": {
+          "availability": "estimated",
+          "observation_basis": "independent_observed",
+          "observation_id": "B-0-total_context_tokens",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "source": "fixture-counterfactual",
+          "unit": "tokens",
+          "value": 120
+        }
+      },
+      "root_budget": {
+        "unit": "tokens",
+        "value": 1000
+      },
+      "sample_id": "fixture-baseline-B",
+      "scenario": {
+        "actual_role_route": "Implementer",
+        "anchor_type": "issue",
+        "canonical_allowed_tools": [
+          "gh",
+          "python3"
+        ],
+        "complexity": "small",
+        "measurement_window": {
+          "definition": "execution-to-terminal",
+          "fixed_execution_window": true
+        },
+        "model_class": "standard",
+        "objective_or_acceptance_fixture_id": "fixture-single_session_baseline",
+        "quality_rubric_version": "v1",
+        "risk": "low",
+        "root_budget_unit": "tokens",
+        "route_family": "fixture-route-family-v1",
+        "scenario_id": "single_session_baseline",
+        "scenario_variant": "default"
+      },
+      "task_class": "single_session_baseline",
+      "terminal_state": "completed",
+      "variant": "B",
+      "variant_declaration": {
+        "route_kind": "counterfactual"
+      },
+      "work_id": "fixture-work"
+    },
+    {
+      "anchors": {
+        "context": "https://github.com/farmerhunter/agent-foundry/issues/457#context",
+        "execution": "https://github.com/farmerhunter/agent-foundry/issues/457#fixture-C",
+        "work": "https://github.com/farmerhunter/agent-foundry/issues/457"
+      },
+      "attention": {
+        "acknowledgement": {
+          "availability": "unavailable",
+          "value": null
+        },
+        "category": null,
+        "outcome": "not_required",
+        "pairing": {
+          "evidence_anchor": null,
+          "pair_id": null
+        }
+      },
+      "execution_id": "fixture-run-C",
+      "policy_version": "normal-observation-v1",
+      "protocol_version": "af18-calibration-protocol-v1",
+      "provenance": {
+        "captured_at": "2026-07-29T08:00:00Z",
+        "collection_method": "fixture",
+        "evidence_anchor": "https://github.com/farmerhunter/agent-foundry/issues/457#fixture",
+        "observation_kind": "observed",
+        "source": "fixture"
+      },
+      "quality": {
+        "passed": true,
+        "reason": "test"
+      },
+      "remaining_budget": {
+        "unit": "tokens",
+        "value": 800
+      },
+      "resources": {
+        "cached_input_tokens": {
+          "availability": "observed",
+          "observation_id": "C-0-cached_input_tokens",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "source": "fixture",
+          "unit": "tokens",
+          "value": 20
+        },
+        "callback_count": {
+          "availability": "observed",
+          "observation_id": "C-0-callback_count",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "source": "fixture",
+          "unit": "count",
+          "value": 1
+        },
+        "compact_rehydration_count": {
+          "availability": "observed",
+          "observation_id": "C-0-compact_rehydration_count",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "source": "fixture",
+          "unit": "count",
+          "value": 1
+        },
+        "context_age_hours": {
+          "availability": "observed",
+          "observation_id": "C-0-context_age_hours",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "source": "fixture",
+          "unit": "hours",
+          "value": 1
+        },
+        "cumulative_resource_tokens": {
+          "availability": "observed",
+          "derived_total_component_ids": [
+            "C-0-input_tokens",
+            "C-0-output_tokens"
+          ],
+          "invocation_ids": [
+            "fixture-invocation-C"
+          ],
+          "observation_basis": "derived",
+          "observation_id": "C-0-cumulative_resource_tokens",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "source": "fixture",
+          "unit": "tokens",
+          "value": 140
+        },
+        "elapsed_seconds": {
+          "availability": "observed",
+          "observation_id": "C-0-elapsed_seconds",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "source": "fixture",
+          "unit": "seconds",
+          "value": 10
+        },
+        "full_rehydration_count": {
+          "availability": "observed",
+          "observation_id": "C-0-full_rehydration_count",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "source": "fixture",
+          "unit": "count",
+          "value": 0
+        },
+        "input_tokens": {
+          "availability": "observed",
+          "observation_id": "C-0-input_tokens",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "source": "fixture",
+          "unit": "tokens",
+          "value": 100
+        },
+        "output_tokens": {
+          "availability": "observed",
+          "observation_id": "C-0-output_tokens",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "source": "fixture",
+          "unit": "tokens",
+          "value": 40
+        },
+        "packet_bytes": {
+          "availability": "observed",
+          "observation_id": "C-0-packet_bytes",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "source": "fixture",
+          "unit": "bytes",
+          "value": 200
+        },
+        "reasoning_tokens": {
+          "availability": "observed",
+          "observation_id": "C-0-reasoning_tokens",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "source": "fixture",
+          "unit": "tokens",
+          "value": 30
+        },
+        "recovery_count": {
+          "availability": "observed",
+          "observation_id": "C-0-recovery_count",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "source": "fixture",
+          "unit": "count",
+          "value": 2
+        },
+        "retry_count": {
+          "availability": "observed",
+          "observation_id": "C-0-retry_count",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "source": "fixture",
+          "unit": "count",
+          "value": 0
+        },
+        "tool_output_bytes": {
+          "availability": "observed",
+          "observation_id": "C-0-tool_output_bytes",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "source": "fixture",
+          "unit": "bytes",
+          "value": 80
+        },
+        "total_context_tokens": {
+          "availability": "observed",
+          "observation_basis": "independent_observed",
+          "observation_id": "C-0-total_context_tokens",
+          "observed_at": "2026-07-29T08:00:00Z",
+          "source": "fixture",
+          "unit": "tokens",
+          "value": 120
+        }
+      },
+      "root_budget": {
+        "unit": "tokens",
+        "value": 1000
+      },
+      "sample_id": "fixture-baseline-C",
+      "scenario": {
+        "actual_role_route": "Implementer",
+        "anchor_type": "issue",
+        "canonical_allowed_tools": [
+          "gh",
+          "python3"
+        ],
+        "complexity": "small",
+        "measurement_window": {
+          "definition": "execution-to-terminal",
+          "fixed_execution_window": true
+        },
+        "model_class": "standard",
+        "objective_or_acceptance_fixture_id": "fixture-single_session_baseline",
+        "quality_rubric_version": "v1",
+        "risk": "low",
+        "root_budget_unit": "tokens",
+        "route_family": "fixture-route-family-v1",
+        "scenario_id": "single_session_baseline",
+        "scenario_variant": "default"
+      },
+      "task_class": "single_session_baseline",
+      "terminal_state": "completed",
+      "variant": "C",
+      "variant_declaration": {
+        "route_kind": "observed_normal_route"
+      },
+      "work_id": "fixture-work"
+    }
+  ],
+  "schema_version": 1
+}

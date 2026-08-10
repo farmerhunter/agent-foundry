@@ -31,6 +31,13 @@ Action = Literal["copy", "upsert-managed-block"]
 
 
 def copytree_contents(src: Path, dest: Path, apply: bool) -> list[tuple[Action, Path, Path]]:
+    copied = planned_tree_copies(src, dest)
+    if apply:
+        apply_copy_actions(copied)
+    return copied
+
+
+def planned_tree_copies(src: Path, dest: Path) -> list[tuple[Action, Path, Path]]:
     if not src.exists():
         raise SystemExit(f"Adapter source missing: {src}")
     copied: list[tuple[Action, Path, Path]] = []
@@ -40,10 +47,106 @@ def copytree_contents(src: Path, dest: Path, apply: bool) -> list[tuple[Action, 
         rel = path.relative_to(src)
         target = dest / rel
         copied.append(("copy", path, target))
-        if apply:
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(path, target)
     return copied
+
+
+def apply_copy_actions(copied: list[tuple[Action, Path, Path]]) -> None:
+    for _, source, target in copied:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, target)
+
+
+def semantic_manifest_routes(path: Path) -> list[dict[str, str]]:
+    routes: list[dict[str, str]] = []
+    current: dict[str, str] | None = None
+    in_routes = False
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.rstrip()
+        if line.startswith("routes:"):
+            in_routes = line.split(":", 1)[1].strip() != "[]"
+            continue
+        if in_routes and line and not line.startswith(" "):
+            break
+        if not in_routes:
+            continue
+        stripped = line.strip()
+        if stripped.startswith("- target:"):
+            if current:
+                routes.append(current)
+            current = {"target": stripped.split(":", 1)[1].strip().strip('"').strip("'")}
+        elif current is not None and ":" in stripped:
+            key, value = stripped.split(":", 1)
+            current[key] = value.strip().strip('"').strip("'")
+    if current:
+        routes.append(current)
+    return routes
+
+
+def safe_relative_path(value: str) -> Path | None:
+    path = Path(value)
+    if not value or path.is_absolute() or ".." in path.parts:
+        return None
+    return path
+
+
+def claude_reference_actions(adapter_root: Path, dest: Path) -> list[tuple[Action, Path, Path]]:
+    manifest = adapter_root / "semantic-reachability-manifest.yaml"
+    if not manifest.is_file():
+        return []
+
+    routes = [route for route in semantic_manifest_routes(manifest) if route.get("target") == "claude-code"]
+    actions: list[tuple[Action, Path, Path]] = []
+    router = adapter_root / "claude-code" / "CLAUDE.md"
+    router_text = router.read_text(encoding="utf-8") if router.is_file() else ""
+    for route in routes:
+        installed = safe_relative_path(route.get("installed_path", ""))
+        target_path = safe_relative_path(route.get("target_path", ""))
+        if installed is None or not str(installed).startswith("references/"):
+            raise SystemExit(
+                "Claude semantic packaging requires a target-local installed_path under references/: "
+                f"{route.get('practice_id', '<unknown>')}"
+            )
+        if target_path is None or target_path != Path("claude-code") / installed:
+            raise SystemExit(
+                "Claude semantic packaging requires target_path to match the generated reference source: "
+                f"{route.get('practice_id', '<unknown>')}"
+            )
+        source = adapter_root / target_path
+        if not source.is_file():
+            raise SystemExit(
+                "Claude semantic packaging source reference is missing: "
+                f"{route.get('target_path', '<unknown>')}"
+            )
+        text = source.read_text(encoding="utf-8")
+        if route.get("practice_id", "") not in text or route.get("source_sha256", "") not in text:
+            raise SystemExit(
+                "Claude semantic packaging source reference lacks declared provenance: "
+                f"{route.get('practice_id', '<unknown>')}"
+            )
+        if route.get("practice_id", "") not in router_text or str(installed) not in router_text:
+            raise SystemExit(
+                "Claude semantic router does not declare a readable target-local reference: "
+                f"{route.get('practice_id', '<unknown>')}"
+            )
+        actions.append(("copy", source, dest / "agent-foundry" / installed))
+    return actions
+
+
+def validate_claude_reference_plan(
+    adapter_root: Path, dest: Path, copied: list[tuple[Action, Path, Path]]
+) -> None:
+    expected = claude_reference_actions(adapter_root, dest)
+    planned = {(action, source.resolve(), target.resolve()) for action, source, target in copied}
+    missing = [
+        target
+        for action, source, target in expected
+        if (action, source.resolve(), target.resolve()) not in planned
+    ]
+    if missing:
+        raise SystemExit(
+            "Claude semantic packaging plan omits declared reference copies: "
+            + ", ".join(str(path) for path in missing)
+        )
 
 
 def log_adoption(path: Path, action: str) -> None:
@@ -152,6 +255,8 @@ def sync_claude(adapter_root: Path, dest: Path, apply: bool, backup: bool) -> li
     if not claude_md.exists():
         raise SystemExit(f"Adapter source missing: {claude_md}")
     managed_claude = dest / "agent-foundry" / "CLAUDE.md"
+    reference_actions = claude_reference_actions(adapter_root, dest)
+    validate_claude_reference_plan(adapter_root, dest, [("copy", claude_md, managed_claude), *reference_actions])
     copied.append(("copy", claude_md, managed_claude))
     if apply:
         managed_claude.parent.mkdir(parents=True, exist_ok=True)
@@ -163,6 +268,9 @@ def sync_claude(adapter_root: Path, dest: Path, apply: bool, backup: bool) -> li
     commands_src = src_root / "commands"
     commands_dest = dest / "commands" / "agent-foundry"
     copied.extend(copytree_contents(commands_src, commands_dest, apply))
+    copied.extend(reference_actions)
+    if apply:
+        apply_copy_actions(reference_actions)
     return copied
 
 

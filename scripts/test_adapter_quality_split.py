@@ -114,11 +114,13 @@ def main() -> int:
     errors: list[str] = []
     real_vault = configured_vault_root()
     adapters_before = digest_tree(ROOT / "adapters")
+    vault_before = digest_tree(real_vault)
 
     with tempfile.TemporaryDirectory(prefix="agent-foundry-adapter-quality-") as tmp:
         base = Path(tmp)
         temp_vault = base / "vault"
         generated = base / "generated-adapters"
+        id_only_generated = base / "id-only-generated-adapters"
         missing_generated = base / "missing-generated"
         shutil.copytree(real_vault, temp_vault)
         promote_asset_collab_002(temp_vault)
@@ -194,6 +196,204 @@ def main() -> int:
             ]
         )
         errors.extend(expect("selected-output-promoted-asset", selected_quality, True, "selected-output surface"))
+
+        semantic_manifest = generated / "semantic-reachability-manifest.yaml"
+        semantic_text = semantic_manifest.read_text(encoding="utf-8")
+        for expected in [
+            "authoritative_generated_root: true",
+            "asset_id: ASSET-ARCH-001",
+            "practice_id: ARCH-001",
+            "route_kind: reference_file",
+            "router_path: codex/skills/architecture-design/SKILL.md",
+            "target_path: codex/skills/architecture-design/references/ARCH-001.md",
+            "packaging: skill_reference",
+        ]:
+            if expected not in semantic_text:
+                errors.append(f"selected-output-semantic-reachability: manifest missing {expected}")
+
+        shutil.copytree(generated, id_only_generated)
+        id_only_skill = id_only_generated / "codex" / "skills" / "architecture-design" / "SKILL.md"
+        id_only_reference = id_only_generated / "codex" / "skills" / "architecture-design" / "references" / "ARCH-001.md"
+        id_only_skill.write_text(
+            id_only_skill.read_text(encoding="utf-8").replace(
+                "`codex/skills/architecture-design/references/ARCH-001.md`", "`ARCH-001`", 1
+            ),
+            encoding="utf-8",
+        )
+        id_only_reference.unlink()
+        id_only_quality = run(
+            [
+                str(QUALITY),
+                "--core-root",
+                str(ROOT),
+                "--vault-root",
+                str(temp_vault),
+                "--surface",
+                "selected-output",
+                "--generated-root",
+                str(id_only_generated),
+            ]
+        )
+        errors.extend(
+            expect(
+                "selected-output-id-only-architecture-design",
+                id_only_quality,
+                False,
+                "ID-only router has no readable reference route",
+            )
+        )
+        repaired_publish = run(
+            [
+                str(PUBLISH),
+                "--core-root",
+                str(ROOT),
+                "--vault-root",
+                str(temp_vault),
+                "--output-root",
+                str(id_only_generated),
+                "--apply",
+            ]
+        )
+        errors.extend(expect("selected-output-readable-route-regeneration", repaired_publish, True, "Adapter publish wrote"))
+        repaired_quality = run(
+            [
+                str(QUALITY),
+                "--core-root",
+                str(ROOT),
+                "--vault-root",
+                str(temp_vault),
+                "--surface",
+                "selected-output",
+                "--generated-root",
+                str(id_only_generated),
+            ]
+        )
+        errors.extend(expect("selected-output-readable-route-regenerated", repaired_quality, True, "selected-output surface"))
+
+        stale_semantic_text = semantic_text.replace("source_sha256: ", "source_sha256: stale-", 1)
+        semantic_manifest.write_text(stale_semantic_text, encoding="utf-8")
+        stale_provenance_quality = run(
+            [
+                str(QUALITY),
+                "--core-root",
+                str(ROOT),
+                "--vault-root",
+                str(temp_vault),
+                "--surface",
+                "selected-output",
+                "--generated-root",
+                str(generated),
+            ]
+        )
+        errors.extend(
+            expect(
+                "selected-output-stale-semantic-provenance",
+                stale_provenance_quality,
+                False,
+                "stale or missing provenance",
+            )
+        )
+        semantic_manifest.write_text(semantic_text, encoding="utf-8")
+
+        missing_condition_text = semantic_text.replace("condition: always_for_declared_asset", "condition: ", 1)
+        semantic_manifest.write_text(missing_condition_text, encoding="utf-8")
+        missing_condition_quality = run(
+            [
+                str(QUALITY),
+                "--core-root",
+                str(ROOT),
+                "--vault-root",
+                str(temp_vault),
+                "--surface",
+                "selected-output",
+                "--generated-root",
+                str(generated),
+            ]
+        )
+        errors.extend(
+            expect(
+                "selected-output-missing-semantic-condition",
+                missing_condition_quality,
+                False,
+                "missing conditional route",
+            )
+        )
+        semantic_manifest.write_text(semantic_text, encoding="utf-8")
+
+        out_of_root_text = semantic_text.replace("target_path: codex/skills/", "target_path: ../outside/", 1)
+        semantic_manifest.write_text(out_of_root_text, encoding="utf-8")
+        out_of_root_quality = run(
+            [
+                str(QUALITY),
+                "--core-root",
+                str(ROOT),
+                "--vault-root",
+                str(temp_vault),
+                "--surface",
+                "selected-output",
+                "--generated-root",
+                str(generated),
+            ]
+        )
+        errors.extend(
+            expect(
+                "selected-output-semantic-out-of-root-target",
+                out_of_root_quality,
+                False,
+                "missing or out-of-root readable target",
+            )
+        )
+        semantic_manifest.write_text(semantic_text, encoding="utf-8")
+
+        missing_packaging_text = semantic_text.replace("packaging: skill_reference", "packaging: omitted", 1)
+        semantic_manifest.write_text(missing_packaging_text, encoding="utf-8")
+        missing_packaging_quality = run(
+            [
+                str(QUALITY),
+                "--core-root",
+                str(ROOT),
+                "--vault-root",
+                str(temp_vault),
+                "--surface",
+                "selected-output",
+                "--generated-root",
+                str(generated),
+            ]
+        )
+        errors.extend(
+            expect(
+                "selected-output-semantic-packaging-omission",
+                missing_packaging_quality,
+                False,
+                "target-specific packaging omission",
+            )
+        )
+        semantic_manifest.write_text(semantic_text, encoding="utf-8")
+
+        dangling_mapping_text = semantic_text.replace("asset_id: ASSET-META-001", "asset_id: ASSET-NOT-REAL", 1)
+        semantic_manifest.write_text(dangling_mapping_text, encoding="utf-8")
+        dangling_mapping_quality = run(
+            [
+                str(QUALITY),
+                "--core-root",
+                str(ROOT),
+                "--vault-root",
+                str(temp_vault),
+                "--surface",
+                "selected-output",
+                "--generated-root",
+                str(generated),
+            ]
+        )
+        errors.extend(
+            expect(
+                "selected-output-semantic-dangling-mapping",
+                dangling_mapping_quality,
+                False,
+                "dangling mapping",
+            )
+        )
+        semantic_manifest.write_text(semantic_text, encoding="utf-8")
         collaboration_paths = [
             ("codex", generated / "codex" / "skills" / "agent-collaboration" / "SKILL.md"),
             ("hermes", generated / "hermes" / "skills" / "agent-collaboration" / "SKILL.md"),
@@ -330,6 +530,8 @@ def main() -> int:
 
     if digest_tree(ROOT / "adapters") != adapters_before:
         errors.append("core-adapters-mutated: regression fixture changed tracked Core adapters")
+    if digest_tree(real_vault) != vault_before:
+        errors.append("selected-vault-mutated: regression fixture changed the real selected Vault")
 
     if errors:
         print("Adapter quality split fixture failed:")

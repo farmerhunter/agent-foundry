@@ -1,0 +1,1 @@
+{"work_id":"AF18-469-readout","root_budget_tokens":100000,"profile":{"state":"inherits"},"requested_envelope":{"logical_model":{"state":"inherits"},"reasoning":{"state":"inherits"},"context_tokens":{"state":"inherits"}},"safety":{"allowlist_compliant":true,"risk_compliant":true,"privacy_compliant":true}}

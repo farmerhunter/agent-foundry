@@ -1,0 +1,18 @@
+# AF18 policy telemetry v1 is a static, provider-neutral receipt contract.
+schema_version: 1
+title: AF18 policy telemetry receipt
+required: [event_id, observed_at, policy, work, route, limits, lifecycle_action, outcome, observations, capability_validation, producer]
+rules:
+  - "normal profiles are economy, normal, and performance with their approved v0 limits; historic 12000 is never a normal-profile cap"
+  - "low_limit is an emergency-only #442 compatibility record, distinct from normal profiles"
+  - "Core stores logical model classes; native model IDs are adapter metadata"
+  - "effective_work_cap_tokens is min(root_budget_tokens, selected profile work_ceiling_tokens)"
+  - "only permitted Work-reasoned overrides are accepted with matching profile, classification, low risk, and reason"
+  - "context_age_hours and total_context_tokens are unavailable/not_exposed unless an external immutable trusted producer binding supplies matching producer_id, receipt_anchor, valid_from, and valid_until"
+  - "unavailable measurements use null and never zero"
+  - "unknown fields, duplicate event ids, stale or out-of-window events, mismatched route bindings, and forged provenance fail closed"
+  - "aggregation is deterministic and records no fixed reasoning multiplier or auto-tuning decision"
+forbidden:
+  - "prompt, messages, transcript, tool output, log, private payload, secret, or raw content"
+  - "self-attested runtime_owned provenance"
+  - "runtime, adapter production, config, dispatch, rollout, activation, or external action"

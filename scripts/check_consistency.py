@@ -12,6 +12,7 @@ import sys
 from pathlib import Path
 
 from foundry_config import CONFIG_PATH, parse_config
+import practice_catalog_snapshot as catalog
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -29,6 +30,29 @@ def configured_vault_root() -> Path:
 
 
 VAULT_ROOT = configured_vault_root()
+
+
+def validate_injected_pinned_catalog(pointer_capability: object, snapshot_capability: object) -> list[str]:
+    """Validate a complete synthetic catalog without touching VAULT_ROOT or disk."""
+    if not isinstance(pointer_capability, catalog.PointerStore):
+        return ["synthetic catalog unknown pointer capability"]
+    before = pointer_capability.read_calls
+    try:
+        view = catalog.pinned_catalog_view(pointer_capability, snapshot_capability)  # type: ignore[arg-type]
+    except catalog.ValidationFailure as exc:
+        return [f"synthetic catalog rejected: {exc}"]
+    errors: list[str] = []
+    if pointer_capability.read_calls - before != 1:
+        errors.append("synthetic catalog pointer resolved more than once")
+    receipt = view.get("receipt")
+    if not isinstance(receipt, catalog.PointerReceipt) or receipt.operation != "read":
+        errors.append("synthetic catalog missing read receipt")
+    if view.get("snapshot_hash") != receipt.snapshot_hash:
+        errors.append("synthetic catalog receipt hash mismatch")
+    records = view.get("records")
+    if not isinstance(records, list) or len(records) < 2:
+        errors.append("synthetic catalog must contain multiple records")
+    return errors
 
 
 def read(path: Path) -> str:
