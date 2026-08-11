@@ -54,3 +54,11 @@ properties:
       expected_remote_version: {type: string, minLength: 1}
       read_timestamp: {type: string, format: date-time}
       readback_nonce: {type: string, minLength: 1}
+allOf:
+  - if:
+      properties:
+        kind: {const: privacy_hold_recorded}
+    then:
+      properties:
+        payload:
+          required: [intent_id, attempt_sequence, desired_effect_digest, classification]

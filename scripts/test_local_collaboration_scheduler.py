@@ -194,6 +194,55 @@ def test_caller_project_binding_and_disabled_gate():
         else:
             raise AssertionError("disabled enable without gate must hold")
 
+def _remote_setup(root, expected):
+    pid = _setup(root)
+    sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "initialize", "occurred_at": "2026-08-11T00:00:01Z"})
+    intent = str(uuid.uuid4())
+    sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "intent", "intent_id": intent, "intent_kind": "issue", "desired_effect": {"kind": "issue"}, "occurred_at": "2026-08-11T00:00:02Z"})
+    sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "pending", "intent_id": intent, **expected, "occurred_at": "2026-08-11T00:00:03Z"})
+    return pid, intent
+
+
+def test_expected_version_binding_and_privacy_zero_mutation():
+    expected = {"expected_remote_kind": "issue", "expected_remote_ref": "opaque-1", "expected_remote_digest": "a" * 64, "expected_remote_version": "v1"}
+    with tempfile.TemporaryDirectory() as root:
+        pid, intent = _remote_setup(root, expected); path = Path(root) / pid / "collaboration.db"
+        ledger = LocalCollaborationLedger.open_existing(path, expected_project_id=pid); before = ledger.list_events(); head = before[-1].event_hash; ledger.close()
+        try:
+            sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "observe", "intent_id": intent, "observed_remote_state": "open", **{**expected, "expected_remote_version": "v2"}, "occurred_at": "2026-08-11T00:00:04Z"})
+        except sc.SchedulerHold as exc: assert str(exc) == "hold_readback_binding_conflict"
+        else: raise AssertionError("planner version mismatch must hold")
+        ledger = LocalCollaborationLedger.open_existing(path, expected_project_id=pid); after = ledger.list_events(); assert len(after) == len(before) and after[-1].event_hash == head; ledger.close()
+        result = sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "privacy_hold", "intent_id": intent, **expected, "occurred_at": "2026-08-11T00:00:04Z"})
+        assert result["mutation_performed"] and sc.replay_scheduler_state(root, pid)["remote_intent_state"] == "privacy_held"
+
+
+def test_privacy_binding_mismatch_is_preappend_hold():
+    expected = {"expected_remote_kind": "issue", "expected_remote_ref": "opaque-1", "expected_remote_digest": "a" * 64, "expected_remote_version": "v1"}
+    with tempfile.TemporaryDirectory() as root:
+        pid, intent = _remote_setup(root, expected); path = Path(root) / pid / "collaboration.db"
+        ledger = LocalCollaborationLedger.open_existing(path, expected_project_id=pid); before = ledger.list_events(); head = before[-1].event_hash; ledger.close()
+        for bad in ({"intent_id": str(uuid.uuid4())}, {"attempt_sequence": 2}, {"expected_remote_version": "v2"}, {"unknown": "x"}):
+            request = {"project_id": pid, "work_id": "w1", "operation": "privacy_hold", "intent_id": intent, **expected, "occurred_at": "2026-08-11T00:00:04Z", **bad}
+            try: sc.apply_scheduler_request(root, pid, request)
+            except sc.SchedulerHold: pass
+            else: raise AssertionError("invalid privacy payload must hold")
+            ledger = LocalCollaborationLedger.open_existing(path, expected_project_id=pid); after = ledger.list_events(); assert len(after) == len(before) and after[-1].event_hash == head; ledger.close()
+
+
+def test_adapter_version_mismatch_is_preappend_hold():
+    expected = {"expected_remote_kind": "issue", "expected_remote_ref": "opaque-1", "expected_remote_digest": "a" * 64, "expected_remote_version": "v1"}
+    with tempfile.TemporaryDirectory() as root:
+        pid, intent = _remote_setup(root, expected); path = Path(root) / pid / "collaboration.db"; desired = sc.replay_scheduler_state(root, pid)["desired_effect_digest"]
+        class Adapter:
+            def readback(self, request):
+                return {"project_id": pid, "intent_id": intent, "confirmed": True, "adapter_id": "adapter", "adapter_version": "1", "expected_remote_kind": "issue", "expected_remote_ref": "opaque-1", "expected_remote_digest": "a" * 64, "expected_remote_version": "v2", "readback_digest": "b" * 64, "opaque_receipt_ref": "receipt:1", "occurred_at": "2026-08-11T00:00:04Z", "read_timestamp": "2026-08-11T00:00:04Z", "readback_nonce": "nonce", "request_digest": request["request_digest"], "desired_effect_digest": desired}
+        ledger = LocalCollaborationLedger.open_existing(path, expected_project_id=pid); before = ledger.list_events(); head = before[-1].event_hash; ledger.close()
+        try: sc.apply_remote_readback(root, pid, intent, Adapter(), {"project_id": pid, "work_id": "w1", "operation": "readback", "intent_id": intent, "attempt_sequence": 1, "request_digest": "c" * 64, "occurred_at": "2026-08-11T00:00:04Z"})
+        except sc.SchedulerHold as exc: assert str(exc) == "hold_readback_binding_conflict"
+        else: raise AssertionError("adapter version mismatch must hold")
+        ledger = LocalCollaborationLedger.open_existing(path, expected_project_id=pid); after = ledger.list_events(); assert len(after) == len(before) and after[-1].event_hash == head; ledger.close()
+
 
 if __name__ == "__main__":
-    test_initialize_and_offline_transitions(); test_exact_retry_and_divergence_hold(); test_remote_never_confirmed_by_observation(); test_remote_predecessor_guards(); test_observation_and_terminal_use_current_attempt(); test_closed_payload_and_resume_gate(); test_caller_project_binding_and_disabled_gate(); print("ok")
+    test_initialize_and_offline_transitions(); test_exact_retry_and_divergence_hold(); test_remote_never_confirmed_by_observation(); test_remote_predecessor_guards(); test_observation_and_terminal_use_current_attempt(); test_closed_payload_and_resume_gate(); test_caller_project_binding_and_disabled_gate(); test_expected_version_binding_and_privacy_zero_mutation(); test_privacy_binding_mismatch_is_preappend_hold(); test_adapter_version_mismatch_is_preappend_hold(); print("ok")

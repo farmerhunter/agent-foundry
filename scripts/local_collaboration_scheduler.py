@@ -76,7 +76,7 @@ PAYLOAD_KEYS = {
     "remote_failure_recorded": COMMON_PAYLOAD_KEYS | {"desired_effect_digest", "expected_remote_kind", "expected_remote_ref", "expected_remote_digest", "expected_remote_version"},
     "remote_conflict_recorded": COMMON_PAYLOAD_KEYS | {"desired_effect_digest", "expected_remote_kind", "expected_remote_ref", "expected_remote_digest", "expected_remote_version"},
     "remote_intent_canceled": COMMON_PAYLOAD_KEYS | {"desired_effect_digest"},
-    "privacy_hold_recorded": COMMON_PAYLOAD_KEYS,
+    "privacy_hold_recorded": COMMON_PAYLOAD_KEYS | {"intent_id", "attempt_sequence", "desired_effect_digest", "expected_remote_kind", "expected_remote_ref", "expected_remote_digest", "expected_remote_version"},
 }
 
 
@@ -150,6 +150,21 @@ def _validate_payload(kind: str, payload: Mapping[str, Any]) -> None:
         try:
             uuid.UUID(str(payload.get("intent_id")))
         except (ValueError, TypeError, AttributeError):
+            raise SchedulerHold("hold_schema_or_version")
+    if kind == "privacy_hold_recorded":
+        try:
+            uuid.UUID(str(payload.get("intent_id")))
+        except (ValueError, TypeError, AttributeError):
+            raise SchedulerHold("hold_schema_or_version")
+        if not isinstance(payload.get("attempt_sequence"), int) or payload.get("attempt_sequence") < 1:
+            raise SchedulerHold("hold_schema_or_version")
+        if not isinstance(payload.get("desired_effect_digest"), str) or not re.fullmatch(r"[0-9a-f]{64}", payload["desired_effect_digest"]):
+            raise SchedulerHold("hold_schema_or_version")
+        for key in ("expected_remote_kind", "expected_remote_ref", "expected_remote_digest", "expected_remote_version"):
+            value = payload.get(key)
+            if value is not None and (not isinstance(value, str) or not value):
+                raise SchedulerHold("hold_schema_or_version")
+        if payload.get("expected_remote_digest") is not None and not re.fullmatch(r"[0-9a-f]{64}", payload["expected_remote_digest"]):
             raise SchedulerHold("hold_schema_or_version")
     if kind == "remote_confirmation_recorded" and any(not isinstance(payload.get(k), str) or not payload.get(k) for k in ("adapter_id", "adapter_version", "read_timestamp", "readback_nonce", "opaque_receipt_ref")):
         raise SchedulerHold("hold_schema_or_version")
@@ -270,8 +285,8 @@ def reduce_scheduler_state(control_state: Mapping[str, Any], scheduler_events: I
             elif attempt != current_attempt:
                 raise SchedulerHold("hold_transition_order")
             if p.get("desired_effect_digest") != state["desired_effect_digest"]: raise SchedulerHold("hold_readback_binding_conflict")
-            for key in ("expected_remote_kind", "expected_remote_ref", "expected_remote_digest"):
-                if key in p and state.get(key) is not None and p.get(key) != state[key]: raise SchedulerHold("hold_readback_binding_conflict")
+            for key in ("expected_remote_kind", "expected_remote_ref", "expected_remote_digest", "expected_remote_version"):
+                if state.get(key) is not None and p.get(key) != state[key]: raise SchedulerHold("hold_readback_binding_conflict")
             state["expected_remote_kind"] = p.get("expected_remote_kind", state["expected_remote_kind"]); state["expected_remote_ref"] = p.get("expected_remote_ref", state["expected_remote_ref"]); state["expected_remote_digest"] = p.get("expected_remote_digest", state["expected_remote_digest"]); state["expected_remote_version"] = p.get("expected_remote_version", state["expected_remote_version"])
             state["attempt_sequence"] = attempt
             next_remote = {"remote_materialization_pending": "pending_materialization", "remote_observation_recorded": "observed_unverified", "remote_confirmation_recorded": "confirmed", "remote_failure_recorded": ("readback_unavailable" if p.get("classification") == "hold_readback_unavailable" else "failed"), "remote_conflict_recorded": "conflict", "remote_intent_canceled": "canceled"}[kind]
@@ -279,6 +294,13 @@ def reduce_scheduler_state(control_state: Mapping[str, Any], scheduler_events: I
         elif kind == "privacy_hold_recorded":
             if state["intent_id"] is None or state["remote_intent_state"] not in REMOTE_PREDECESSORS[kind]:
                 raise SchedulerHold("hold_transition_order")
+            if p.get("intent_id") != state["intent_id"] or p.get("attempt_sequence") != state["attempt_sequence"]:
+                raise SchedulerHold("hold_readback_binding_conflict")
+            if p.get("desired_effect_digest") != state["desired_effect_digest"]:
+                raise SchedulerHold("hold_readback_binding_conflict")
+            for key in ("expected_remote_kind", "expected_remote_ref", "expected_remote_digest", "expected_remote_version"):
+                if (state.get(key) is None and p.get(key) is not None) or (state.get(key) is not None and p.get(key) != state[key]):
+                    raise SchedulerHold("hold_readback_binding_conflict")
             if p.get("classification") not in FAILURE_CODES: raise SchedulerHold("hold_schema_or_version")
             state["remote_intent_state"] = "privacy_held"; state["local_state"] = "hold"; state["holds"].append(p.get("classification", "hold_privacy"))
     return state
@@ -460,7 +482,7 @@ def apply_remote_readback(projects_root: str | Path, project_id: str, intent_id:
         if any(not response.get(k) for k in required): raise SchedulerHold("hold_readback_binding_conflict")
         if response["request_digest"] != request["request_digest"] or response["desired_effect_digest"] != sstate.get("desired_effect_digest"):
             raise SchedulerHold("hold_readback_binding_conflict")
-        for key in ("expected_remote_kind", "expected_remote_ref", "expected_remote_digest"):
+        for key in ("expected_remote_kind", "expected_remote_ref", "expected_remote_digest", "expected_remote_version"):
             if sstate.get(key) is not None and response[key] != sstate[key]: raise SchedulerHold("hold_readback_binding_conflict")
         payload = {"work_id": sstate["work_id"], "intent_id": intent_id, "desired_effect_digest": response["desired_effect_digest"], "attempt_sequence": int(request.get("attempt_sequence", sstate.get("attempt_sequence", 0))), "expected_remote_kind": response["expected_remote_kind"], "expected_remote_ref": response["expected_remote_ref"], "expected_remote_digest": response["expected_remote_digest"], "expected_remote_version": response["expected_remote_version"], "adapter_id": response["adapter_id"], "adapter_version": response["adapter_version"], "readback_digest": response["readback_digest"], "read_timestamp": _timestamp(response["read_timestamp"]), "readback_nonce": response["readback_nonce"], "request_digest": response["request_digest"], "opaque_receipt_ref": response["opaque_receipt_ref"], "classification": "confirmed", "next_action": "none"}
         event = _event(pid, "remote_confirmation_recorded", payload, _timestamp(response["occurred_at"]))
