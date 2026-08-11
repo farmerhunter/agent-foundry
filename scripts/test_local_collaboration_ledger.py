@@ -363,6 +363,26 @@ class LedgerTests(unittest.TestCase):
         self.assertEqual((restart.authority_generation, restart.authority_head), (unchanged.authority_generation, unchanged.authority_head))
         self.ledger = LocalCollaborationLedger.open_existing(self.ledger.path, expected_project_id=self.ledger.project_id)
 
+    def test_authority_snapshot_events_are_deeply_immutable_and_json_compatible(self):
+        event_id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+        original = {"nested": {"value": 1}, "items": [{"value": 2}]}
+        self.ledger.append_event("snapshot.immutable", original, event_id=event_id)
+        snapshot = LocalCollaborationLedger.authority_snapshot(self.ledger.path, expected_project_id=self.ledger.project_id)
+        payload = snapshot.events[0].payload
+        encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
+        with self.assertRaises(TypeError):
+            payload["new"] = True
+        with self.assertRaises(TypeError):
+            payload["nested"]["value"] = 9
+        with self.assertRaises(TypeError):
+            payload["items"][0]["value"] = 9
+        with self.assertRaises(TypeError):
+            payload["items"].append({"value": 3})
+        self.assertEqual(json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False), encoded)
+        future = LocalCollaborationLedger.authority_snapshot(self.ledger.path, expected_project_id=self.ledger.project_id)
+        self.assertEqual(future.events[0].payload, original)
+        self.assertEqual((future.authority_generation, future.authority_head), (snapshot.authority_generation, snapshot.authority_head))
+
     def test_authority_snapshot_maps_project_schema_integrity_and_permission_holds(self):
         with self.assertRaises(LedgerIdentityError):
             LocalCollaborationLedger.authority_snapshot(self.ledger.path, expected_project_id=str(__import__("uuid").uuid4()))

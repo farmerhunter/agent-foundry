@@ -53,6 +53,40 @@ class LedgerBackupError(LedgerError):
     pass
 
 
+class _FrozenDict(dict):
+    """JSON-compatible mapping whose values cannot be changed by a reader."""
+    def __init__(self, values=()):
+        dict.__init__(self)
+        for key, value in dict(values).items():
+            dict.__setitem__(self, key, value)
+
+    @staticmethod
+    def _immutable(*args, **kwargs):
+        raise TypeError("snapshot values are immutable")
+
+    __setitem__ = __delitem__ = clear = pop = popitem = setdefault = update = __ior__ = _immutable
+
+
+class _FrozenList(list):
+    """JSON-compatible array whose members cannot be changed by a reader."""
+    def __init__(self, values=()):
+        list.__init__(self, values)
+
+    @staticmethod
+    def _immutable(*args, **kwargs):
+        raise TypeError("snapshot values are immutable")
+
+    __setitem__ = __delitem__ = append = clear = extend = insert = pop = remove = reverse = sort = __iadd__ = __imul__ = _immutable
+
+
+def _freeze_snapshot_json(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return _FrozenDict({key: _freeze_snapshot_json(item) for key, item in value.items()})
+    if isinstance(value, (list, tuple)):
+        return _FrozenList(_freeze_snapshot_json(item) for item in value)
+    return value
+
+
 @dataclass(frozen=True)
 class LedgerEvent:
     sequence: int
@@ -331,7 +365,7 @@ class LocalCollaborationLedger:
                                   row["created_at"], row["actor"], row["source"], row["root"]])
                 if computed != row["event_hash"]:
                     raise LedgerIntegrityError("authority event hash is invalid")
-                event = LedgerEvent(sequence, event_id, event_type, payload, row["payload_hash"], row["previous_hash"], row["event_hash"], row["created_at"], row["actor"], row["source"], row["root"])
+                event = LedgerEvent(sequence, event_id, event_type, _freeze_snapshot_json(payload), row["payload_hash"], row["previous_hash"], row["event_hash"], row["created_at"], row["actor"], row["source"], row["root"])
             except LedgerError:
                 raise
             except (KeyError, TypeError, ValueError, json.JSONDecodeError):
