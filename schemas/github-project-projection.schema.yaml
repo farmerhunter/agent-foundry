@@ -1,0 +1,138 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://agent-foundry.local/schemas/github-project-projection.schema.yaml
+title: GitHubProjectProjection-v1
+oneOf:
+  - {$ref: '#/$defs/request'}
+  - {$ref: '#/$defs/result'}
+$defs:
+  digest: {type: string, pattern: '^[0-9a-f]{64}$'}
+  uuid: {type: string, format: uuid}
+  time: {type: string, pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$'}
+  request:
+    type: object
+    additionalProperties: false
+    required: [schema_version, operation, project_id, work_id, intent_id, attempt_sequence, scheduler_generation, scheduler_head, desired_effect_digest, repository_id, repository_locator_digest, auth_scope_digest, remote_project_digest, source_materialization, item_basis, policy_digest, occurred_at, gate, capability]
+    properties:
+      schema_version: {const: GitHubProjectProjection-v1}
+      operation: {enum: [project_item_add, project_field_set]}
+      project_id: {$ref: '#/$defs/uuid'}
+      work_id: {type: string, minLength: 1, maxLength: 256}
+      intent_id: {$ref: '#/$defs/uuid'}
+      attempt_sequence: {type: integer, minimum: 1}
+      scheduler_generation: {type: integer, minimum: 0}
+      scheduler_head: {$ref: '#/$defs/digest'}
+      desired_effect_digest: {$ref: '#/$defs/digest'}
+      repository_id: {$ref: '#/$defs/digest'}
+      repository_locator_digest: {$ref: '#/$defs/digest'}
+      auth_scope_digest: {$ref: '#/$defs/digest'}
+      remote_project_digest: {$ref: '#/$defs/digest'}
+      source_materialization:
+        type: object
+        additionalProperties: false
+        required: [schema_version, outcome, project_id, intent_id, attempt_sequence, desired_effect_digest, authoritative, confirmation_eligible, simulation_only, remote_mutation_performed]
+        properties:
+          schema_version: {const: GitHubMaterializationAdapter-v1}
+          operation: {enum: [issue_create, issue_comment, pull_request_comment]}
+          outcome: {enum: [materialization_plan_ready, materialization_duplicate, materialization_readback_verified]}
+          project_id: {$ref: '#/$defs/uuid'}
+          intent_id: {$ref: '#/$defs/uuid'}
+          attempt_sequence: {type: integer, minimum: 1}
+          desired_effect_digest: {$ref: '#/$defs/digest'}
+          authoritative: {const: false}
+          confirmation_eligible: {const: false}
+          simulation_only: {const: true}
+          remote_mutation_performed: {const: false}
+          readback_digest: {$ref: '#/$defs/digest'}
+          classification: {enum: [local_only, must_publish, optional_sync]}
+          idempotency_key: {$ref: '#/$defs/uuid'}
+          opaque_receipt_ref: {type: string, maxLength: 256}
+          confirmed: {const: true}
+          adapter_id: {type: string, minLength: 1}
+          adapter_version: {type: string, minLength: 1}
+          expected_remote_kind: {type: string, minLength: 1}
+          expected_remote_ref: {type: string, minLength: 1}
+          expected_remote_digest: {$ref: '#/$defs/digest'}
+          expected_remote_version: {type: string, minLength: 1}
+          request_digest: {$ref: '#/$defs/digest'}
+          occurred_at: {$ref: '#/$defs/time'}
+          read_timestamp: {$ref: '#/$defs/time'}
+          readback_nonce: {$ref: '#/$defs/time'}
+      item_basis:
+        type: object
+        additionalProperties: false
+        required: [item_digest, materialization_receipt_digest, cache_selector_digest]
+        properties:
+          item_digest: {$ref: '#/$defs/digest'}
+          materialization_receipt_digest: {$ref: '#/$defs/digest'}
+          cache_selector_digest: {$ref: '#/$defs/digest'}
+      policy_digest: {$ref: '#/$defs/digest'}
+      projection_mode: {enum: [enabled, disabled, local_only]}
+      occurred_at: {$ref: '#/$defs/time'}
+      readback_nonce: {$ref: '#/$defs/time'}
+      expected_remote_kind: {type: string, minLength: 1, maxLength: 64}
+      expected_remote_ref: {$ref: '#/$defs/digest'}
+      expected_remote_version: {$ref: '#/$defs/digest'}
+      expected_remote_digest: {$ref: '#/$defs/digest'}
+      field_digest: {$ref: '#/$defs/digest'}
+      option_or_value_digest: {$ref: '#/$defs/digest'}
+      readback_only: {const: true}
+      canceled: {const: true}
+      compensation: {const: true}
+      gate:
+        type: object
+        additionalProperties: false
+        required: [kind, production_eligibility, project_id, intent_id, attempt_sequence, operation, repository_id, remote_project_digest, desired_effect_digest]
+        properties:
+          kind: {const: fixture_only}
+          production_eligibility: {const: false}
+          project_id: {$ref: '#/$defs/uuid'}
+          intent_id: {$ref: '#/$defs/uuid'}
+          attempt_sequence: {type: integer, minimum: 1}
+          operation: {enum: [project_item_add, project_field_set]}
+          repository_id: {$ref: '#/$defs/digest'}
+          remote_project_digest: {$ref: '#/$defs/digest'}
+          desired_effect_digest: {$ref: '#/$defs/digest'}
+      capability:
+        type: object
+        additionalProperties: false
+        required: [trust_domain, production_eligibility, network_capability, supported_operations]
+        properties:
+          trust_domain: {const: same_process_reference}
+          production_eligibility: {const: false}
+          network_capability: {const: false}
+          supported_operations:
+            type: array
+            minItems: 1
+            uniqueItems: true
+            items: {enum: [project_item_add, project_field_set]}
+  result:
+    type: object
+    additionalProperties: false
+    required: [schema_version, operation, outcome, simulation_only, production_eligibility, network_capability, remote_mutation_performed, authoritative, confirmation_eligible]
+    properties:
+      schema_version: {const: GitHubProjectProjection-v1}
+      operation: {enum: [project_item_add, project_field_set]}
+      outcome: {enum: [project_projection_not_required, project_projection_plan_ready, project_projection_approval_required, project_projection_duplicate, project_projection_readback_verified, project_projection_recovery_readback_required, project_projection_canceled, hold_project_projection_conflict, hold_project_projection_readback_unavailable]}
+      simulation_only: {const: true}
+      production_eligibility: {const: false}
+      network_capability: {const: false}
+      remote_mutation_performed: {type: boolean}
+      authoritative: {const: false}
+      confirmation_eligible: {type: boolean}
+      project_id: {$ref: '#/$defs/uuid'}
+      intent_id: {$ref: '#/$defs/uuid'}
+      request_digest: {$ref: '#/$defs/digest'}
+      desired_effect_digest: {$ref: '#/$defs/digest'}
+      readback_digest: {$ref: '#/$defs/digest'}
+      readback_nonce: {$ref: '#/$defs/time'}
+      classification: {type: string, maxLength: 128}
+      confirmed: {const: true}
+      adapter_id: {type: string, maxLength: 128}
+      adapter_version: {type: string, maxLength: 128}
+      expected_remote_kind: {type: string, maxLength: 64}
+      expected_remote_ref: {$ref: '#/$defs/digest'}
+      expected_remote_version: {$ref: '#/$defs/digest'}
+      expected_remote_digest: {$ref: '#/$defs/digest'}
+      occurred_at: {$ref: '#/$defs/time'}
+      read_timestamp: {$ref: '#/$defs/time'}
+      opaque_receipt_ref: {type: string, maxLength: 256}
