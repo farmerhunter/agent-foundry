@@ -215,7 +215,52 @@ def _receipt(outcome: str, project_id: str, **extra: Any) -> dict[str, Any]:
         raise AssertionError(outcome)
     result = {"schema_version": VERSION, "outcome": outcome, "project_id": project_id, "flags": dict(FLAGS)}
     result.update({key: value for key, value in extra.items() if value is not None})
+    _validate_receipt(result)
     return result
+
+
+def _validate_receipt(value: Mapping[str, Any]) -> None:
+    """Runtime twin of the closed receipt schema; output never crosses states."""
+    if not isinstance(value, Mapping) or value.get("schema_version") != VERSION or value.get("outcome") not in OUTCOMES or value.get("flags") != FLAGS:
+        raise ReplicaHold("hold_schema", "schema_invalid")
+    _uuid(value.get("project_id"))
+    outcome = value["outcome"]
+    common = {"schema_version", "outcome", "project_id", "flags"}
+    authority = {"authority_generation", "authority_head"}
+    if ("authority_generation" in value) != ("authority_head" in value):
+        raise ReplicaHold("hold_schema", "schema_invalid")
+    if authority & set(value):
+        if not isinstance(value["authority_generation"], int) or isinstance(value["authority_generation"], bool) or value["authority_generation"] < 0:
+            raise ReplicaHold("hold_schema", "schema_invalid")
+        _hex(value["authority_head"])
+    layouts = {
+        "replica_export_ready": common | {"bundle_digest"},
+        "replica_import_candidate_ready": common | authority | {"bundle_digest", "candidate_identities", "authority_level", "owner_enrollment_verified", "import_authorized", "requires_owner_verification"},
+        "replica_converged": common | {"shared_view_digest", "converged_identities"},
+        "replica_duplicate": common | authority | {"bundle_digest", "duplicate_identities"},
+        "replica_offline": common | authority | {"reason_code"},
+            "hold_semantic_conflict": common | {"reason_code", "held_identities"},
+    }
+    generic_holds = {"hold_replica_identity", "hold_transport_integrity", "hold_missing_dependency", "hold_privacy", "hold_schema", "hold_recovery_readback"}
+    permitted = layouts.get(outcome, (common | {"reason_code"}) if outcome in generic_holds else set())
+    permitted_forms = {frozenset(permitted)}
+    if outcome == "hold_semantic_conflict" or outcome in generic_holds:
+        permitted_forms.add(frozenset(permitted | authority))
+    if frozenset(value) not in permitted_forms:
+        raise ReplicaHold("hold_schema", "schema_invalid")
+    for name in ("bundle_digest", "shared_view_digest"):
+        if name in value: _hex(value[name])
+    for name in ("candidate_identities", "converged_identities", "duplicate_identities", "held_identities"):
+        if name in value:
+            if not isinstance(value[name], list) or (name != "converged_identities" and not value[name]):
+                raise ReplicaHold("hold_schema", "schema_invalid")
+            for identity in value[name]: _identity_key(identity)
+    if outcome == "replica_import_candidate_ready":
+        if (value["authority_level"], value["owner_enrollment_verified"], value["import_authorized"], value["requires_owner_verification"]) != ("current_validation_only", False, False, True):
+            raise ReplicaHold("hold_schema", "schema_invalid")
+    reasons = {"replica_offline": "replica_offline", "hold_replica_identity": "replica_identity_invalid", "hold_transport_integrity": "transport_integrity_invalid", "hold_missing_dependency": "missing_dependency", "hold_semantic_conflict": "semantic_conflict", "hold_privacy": "privacy_rejected", "hold_schema": "schema_invalid", "hold_recovery_readback": "recovery_readback_required"}
+    if outcome in reasons and value.get("reason_code") != reasons[outcome]:
+        raise ReplicaHold("hold_schema", "schema_invalid")
 
 
 def _hold(exc: ReplicaHold, project_id: str | None = None, **extra: Any) -> dict[str, Any]:
@@ -285,9 +330,7 @@ def inspect_bundle(bundle: Any, enrollment_descriptor: Any) -> dict[str, Any]:
     """Return a current-validation audit; it is not enrollment authorization."""
     try:
         project_id, _identity_descriptor, _events = _inspect_current(bundle, enrollment_descriptor)
-        return {"schema_version": VERSION, "outcome": "replica_export_ready", "project_id": project_id,
-                "bundle_digest": bundle["bundle_digest"],
-                "flags": dict(FLAGS)}
+        return _receipt("replica_export_ready", project_id, bundle_digest=bundle["bundle_digest"])
     except ReplicaHold as exc:
         pid = bundle.get("project_id") if isinstance(bundle, Mapping) and isinstance(bundle.get("project_id"), str) else None
         return _hold(exc, pid)
@@ -334,7 +377,7 @@ def reduce_converged_view(valid_event_set: Any) -> dict[str, Any]:
     try:
         events = _validate_event_set(valid_event_set)
         if not events:
-            return _receipt("replica_converged", str(uuid.UUID(int=0)), shared_view_digest=_digest([]))
+            return _receipt("replica_converged", str(uuid.UUID(int=0)), shared_view_digest=_digest([]), converged_identities=[])
         project_ids = {event["project_id"] for event in events}
         if len(project_ids) != 1:
             raise ReplicaHold("hold_replica_identity", "replica_identity_invalid")

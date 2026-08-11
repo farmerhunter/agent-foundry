@@ -166,3 +166,52 @@ def test_public_fake_dependency_envelopes_remain_non_confirming():
     result = replica.reduce_converged_view([item])
     assert result["flags"] == {"simulation_only": True, "network_capability": False, "authoritative": False, "confirmation_eligible": False, "remote_mutation_performed": False}
     assert "confirmed" not in result and "remote" not in result
+
+
+def test_every_terminal_receipt_is_schema_closed_and_runtime_closed():
+    schema = yaml.safe_load((Path(__file__).parent.parent / "schemas" / "local-collaboration-replica.schema.yaml").read_text())
+    validator = Draft202012Validator(schema)
+    ident = identity("replica.a", 1, 1, "terminal")
+    common = {"schema_version": replica.VERSION, "project_id": P1, "flags": dict(replica.FLAGS)}
+    candidate = {**common, "outcome": "replica_import_candidate_ready", "authority_generation": 1, "authority_head": H,
+                 "bundle_digest": H, "candidate_identities": [ident], "authority_level": "current_validation_only",
+                 "owner_enrollment_verified": False, "import_authorized": False, "requires_owner_verification": True}
+    fixtures = [
+        {**common, "outcome": "replica_export_ready", "bundle_digest": H},
+        candidate,
+        {**common, "outcome": "replica_converged", "shared_view_digest": H, "converged_identities": [ident]},
+        {**common, "outcome": "replica_duplicate", "authority_generation": 1, "authority_head": H, "bundle_digest": H, "duplicate_identities": [ident]},
+        {**common, "outcome": "replica_offline", "authority_generation": 1, "authority_head": H, "reason_code": "replica_offline"},
+        {**common, "outcome": "hold_replica_identity", "reason_code": "replica_identity_invalid"},
+        {**common, "outcome": "hold_transport_integrity", "reason_code": "transport_integrity_invalid"},
+        {**common, "outcome": "hold_missing_dependency", "reason_code": "missing_dependency"},
+        {**common, "outcome": "hold_semantic_conflict", "reason_code": "semantic_conflict", "held_identities": [ident]},
+        {**common, "outcome": "hold_privacy", "reason_code": "privacy_rejected"},
+        {**common, "outcome": "hold_schema", "reason_code": "schema_invalid"},
+        {**common, "outcome": "hold_recovery_readback", "reason_code": "recovery_readback_required"},
+    ]
+    assert {value["outcome"] for value in fixtures} == replica.OUTCOMES
+    for value in fixtures:
+        validator.validate(value)
+        replica._validate_receipt(value)
+
+    invalid = [
+        {key: value for key, value in candidate.items() if key != "requires_owner_verification"},
+        {**candidate, "unknown": True},
+        {**candidate, "authority_generation": "1"},
+        {**fixtures[5], "authority_level": "current_validation_only"},
+        {**candidate, "held_identities": [ident]},
+    ]
+    for value in invalid:
+        assert list(validator.iter_errors(value))
+        with pytest.raises(replica.ReplicaHold):
+            replica._validate_receipt(value)
+
+
+def test_bundle_count_boundary_is_schema_and_runtime_hold_before_candidate_plan():
+    schema = yaml.safe_load((Path(__file__).parent.parent / "schemas" / "local-collaboration-replica.schema.yaml").read_text())
+    item = event(P1, "replica.a", 1, 1, "count")
+    bundle = replica.export_bundle(snapshot(), [item], enrollment(P1, "replica.a", 1), [identity("replica.a", 1, 1, "count")])
+    over_limit = copy.deepcopy(bundle); over_limit["events"] = [item] * 101
+    assert list(Draft202012Validator(schema).iter_errors(over_limit))
+    assert replica.plan_import(snapshot(), [], over_limit, enrollment(P1, "replica.a", 1)["enrollment_descriptor"])["outcome"] == "hold_schema"

@@ -109,7 +109,6 @@ $defs:
   receipt:
     type: object
     additionalProperties: false
-    required: [schema_version, outcome, project_id, flags]
     properties:
       schema_version: {const: LocalCollaborationReplica-v1}
       outcome:
@@ -129,7 +128,43 @@ $defs:
       owner_enrollment_verified: {const: false}
       import_authorized: {const: false}
       requires_owner_verification: {const: true}
-    allOf:
-      - if: {properties: {outcome: {const: replica_import_candidate_ready}}}
-        then:
-          required: [authority_level, owner_enrollment_verified, import_authorized, requires_owner_verification, candidate_identities]
+    dependentRequired:
+      authority_generation: [authority_head]
+      authority_head: [authority_generation]
+    oneOf:
+      - required: [schema_version, outcome, project_id, bundle_digest, flags]
+        properties: {outcome: {const: replica_export_ready}}
+        not: {anyOf: [{required: [authority_generation]}, {required: [shared_view_digest]}, {required: [candidate_identities]}, {required: [converged_identities]}, {required: [duplicate_identities]}, {required: [held_identities]}, {required: [reason_code]}, {required: [authority_level]}, {required: [owner_enrollment_verified]}, {required: [import_authorized]}, {required: [requires_owner_verification]}]}
+      - required: [schema_version, outcome, project_id, authority_generation, authority_head, bundle_digest, candidate_identities, authority_level, owner_enrollment_verified, import_authorized, requires_owner_verification, flags]
+        properties: {outcome: {const: replica_import_candidate_ready}, candidate_identities: {minItems: 1}}
+        not: {anyOf: [{required: [shared_view_digest]}, {required: [converged_identities]}, {required: [duplicate_identities]}, {required: [held_identities]}, {required: [reason_code]}]}
+      - required: [schema_version, outcome, project_id, shared_view_digest, converged_identities, flags]
+        properties: {outcome: {const: replica_converged}}
+        not: {anyOf: [{required: [authority_generation]}, {required: [bundle_digest]}, {required: [candidate_identities]}, {required: [duplicate_identities]}, {required: [held_identities]}, {required: [reason_code]}, {required: [authority_level]}, {required: [owner_enrollment_verified]}, {required: [import_authorized]}, {required: [requires_owner_verification]}]}
+      - required: [schema_version, outcome, project_id, authority_generation, authority_head, bundle_digest, duplicate_identities, flags]
+        properties: {outcome: {const: replica_duplicate}, duplicate_identities: {minItems: 1}}
+        not: {anyOf: [{required: [shared_view_digest]}, {required: [candidate_identities]}, {required: [converged_identities]}, {required: [held_identities]}, {required: [reason_code]}, {required: [authority_level]}, {required: [owner_enrollment_verified]}, {required: [import_authorized]}, {required: [requires_owner_verification]}]}
+      - required: [schema_version, outcome, project_id, authority_generation, authority_head, reason_code, flags]
+        properties: {outcome: {const: replica_offline}, reason_code: {const: replica_offline}}
+        not: {anyOf: [{required: [bundle_digest]}, {required: [shared_view_digest]}, {required: [candidate_identities]}, {required: [converged_identities]}, {required: [duplicate_identities]}, {required: [held_identities]}, {required: [authority_level]}, {required: [owner_enrollment_verified]}, {required: [import_authorized]}, {required: [requires_owner_verification]}]}
+      - required: [schema_version, outcome, project_id, reason_code, flags]
+        properties: {outcome: {const: hold_semantic_conflict}, reason_code: {const: semantic_conflict}, held_identities: {minItems: 1}}
+        not: {anyOf: [{required: [bundle_digest]}, {required: [shared_view_digest]}, {required: [candidate_identities]}, {required: [converged_identities]}, {required: [duplicate_identities]}, {required: [authority_level]}, {required: [owner_enrollment_verified]}, {required: [import_authorized]}, {required: [requires_owner_verification]}]}
+      - required: [schema_version, outcome, project_id, reason_code, flags]
+        properties: {outcome: {const: hold_replica_identity}, reason_code: {const: replica_identity_invalid}}
+        not: {anyOf: [{required: [bundle_digest]}, {required: [shared_view_digest]}, {required: [candidate_identities]}, {required: [converged_identities]}, {required: [duplicate_identities]}, {required: [held_identities]}, {required: [authority_level]}, {required: [owner_enrollment_verified]}, {required: [import_authorized]}, {required: [requires_owner_verification]}]}
+      - required: [schema_version, outcome, project_id, reason_code, flags]
+        properties: {outcome: {const: hold_transport_integrity}, reason_code: {const: transport_integrity_invalid}}
+        not: {anyOf: [{required: [bundle_digest]}, {required: [shared_view_digest]}, {required: [candidate_identities]}, {required: [converged_identities]}, {required: [duplicate_identities]}, {required: [held_identities]}, {required: [authority_level]}, {required: [owner_enrollment_verified]}, {required: [import_authorized]}, {required: [requires_owner_verification]}]}
+      - required: [schema_version, outcome, project_id, reason_code, flags]
+        properties: {outcome: {const: hold_missing_dependency}, reason_code: {const: missing_dependency}}
+        not: {anyOf: [{required: [bundle_digest]}, {required: [shared_view_digest]}, {required: [candidate_identities]}, {required: [converged_identities]}, {required: [duplicate_identities]}, {required: [held_identities]}, {required: [authority_level]}, {required: [owner_enrollment_verified]}, {required: [import_authorized]}, {required: [requires_owner_verification]}]}
+      - required: [schema_version, outcome, project_id, reason_code, flags]
+        properties: {outcome: {const: hold_privacy}, reason_code: {const: privacy_rejected}}
+        not: {anyOf: [{required: [bundle_digest]}, {required: [shared_view_digest]}, {required: [candidate_identities]}, {required: [converged_identities]}, {required: [duplicate_identities]}, {required: [held_identities]}, {required: [authority_level]}, {required: [owner_enrollment_verified]}, {required: [import_authorized]}, {required: [requires_owner_verification]}]}
+      - required: [schema_version, outcome, project_id, reason_code, flags]
+        properties: {outcome: {const: hold_schema}, reason_code: {const: schema_invalid}}
+        not: {anyOf: [{required: [bundle_digest]}, {required: [shared_view_digest]}, {required: [candidate_identities]}, {required: [converged_identities]}, {required: [duplicate_identities]}, {required: [held_identities]}, {required: [authority_level]}, {required: [owner_enrollment_verified]}, {required: [import_authorized]}, {required: [requires_owner_verification]}]}
+      - required: [schema_version, outcome, project_id, reason_code, flags]
+        properties: {outcome: {const: hold_recovery_readback}, reason_code: {const: recovery_readback_required}}
+        not: {anyOf: [{required: [bundle_digest]}, {required: [shared_view_digest]}, {required: [candidate_identities]}, {required: [converged_identities]}, {required: [duplicate_identities]}, {required: [held_identities]}, {required: [authority_level]}, {required: [owner_enrollment_verified]}, {required: [import_authorized]}, {required: [requires_owner_verification]}]}
