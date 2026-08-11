@@ -42,8 +42,27 @@ LOCAL_TRANSITIONS = {
 FAILURE_CODES = {"hold_scheduler_not_enabled", "hold_control_plane_unready", "hold_unknown_version_or_state",
     "hold_missing_work_root_owner", "hold_anchor_or_budget_conflict", "hold_duplicate_or_divergent",
     "hold_transition_order", "hold_terminal_or_disabled", "hold_stale_ledger_head", "hold_untrusted_readback",
-    "hold_readback_binding_conflict", "hold_readback_unavailable", "hold_privacy", "hold_ledger_busy",
-    "hold_ledger_integrity", "hold_ledger_permission", "hold_ledger_schema"}
+    "hold_readback_binding_conflict", "hold_readback_unavailable", "hold_privacy", "hold_schema_or_version",
+    "hold_resume_receipt_required", "hold_successor_readiness_required", "hold_disabled_enable_gate",
+    "hold_ledger_busy", "hold_ledger_integrity", "hold_ledger_permission", "hold_ledger_schema"}
+
+COMMON_PAYLOAD_KEYS = {"work_id", "run_id", "owner_role", "control_generation", "control_head",
+    "durable_anchor_digest", "budget_digest", "intent_id", "attempt_sequence", "classification",
+    "next_action", "explicit_sequence", "request_digest", "resume_receipt_ref", "resume_receipt_digest",
+    "resume_authority", "successor_readiness_ref", "successor_readiness_digest", "successor_id"}
+PAYLOAD_KEYS = {
+    "scheduler_initialized": COMMON_PAYLOAD_KEYS | {"enable_gate_ref", "enable_gate_digest", "enable_gate_authority"},
+    "scheduler_disabled": COMMON_PAYLOAD_KEYS,
+    "work_transition_recorded": COMMON_PAYLOAD_KEYS | {"transition_sequence", "from_state", "to_state"},
+    "remote_intent_recorded": COMMON_PAYLOAD_KEYS | {"intent_kind", "desired_effect_digest", "human_gate_class"},
+    "remote_materialization_pending": COMMON_PAYLOAD_KEYS | {"desired_effect_digest", "expected_remote_kind", "expected_remote_ref", "expected_remote_digest", "expected_remote_version"},
+    "remote_observation_recorded": COMMON_PAYLOAD_KEYS | {"desired_effect_digest", "expected_remote_kind", "expected_remote_ref", "expected_remote_digest", "expected_remote_version", "observed_remote_state"},
+    "remote_confirmation_recorded": COMMON_PAYLOAD_KEYS | {"desired_effect_digest", "expected_remote_kind", "expected_remote_ref", "expected_remote_digest", "expected_remote_version", "adapter_id", "adapter_version", "readback_digest", "read_timestamp", "readback_nonce", "opaque_receipt_ref"},
+    "remote_failure_recorded": COMMON_PAYLOAD_KEYS | {"desired_effect_digest", "expected_remote_kind", "expected_remote_ref", "expected_remote_digest", "expected_remote_version"},
+    "remote_conflict_recorded": COMMON_PAYLOAD_KEYS | {"desired_effect_digest", "expected_remote_kind", "expected_remote_ref", "expected_remote_digest", "expected_remote_version"},
+    "remote_intent_canceled": COMMON_PAYLOAD_KEYS | {"desired_effect_digest"},
+    "privacy_hold_recorded": COMMON_PAYLOAD_KEYS,
+}
 
 
 class SchedulerError(ValueError):
@@ -99,9 +118,31 @@ def _inner(envelope: Mapping[str, Any]) -> Mapping[str, Any]:
     return payload if isinstance(payload, Mapping) else {}
 
 
+def _validate_payload(kind: str, payload: Mapping[str, Any]) -> None:
+    allowed = PAYLOAD_KEYS.get(kind)
+    if allowed is None or not isinstance(payload, Mapping) or not set(payload).issubset(allowed):
+        raise SchedulerHold("hold_schema_or_version")
+    for key in ("transition_sequence", "attempt_sequence", "control_generation", "explicit_sequence"):
+        if key in payload and payload[key] is not None and (not isinstance(payload[key], int) or isinstance(payload[key], bool) or payload[key] < 0):
+            raise SchedulerHold("hold_schema_or_version")
+    for key in ("desired_effect_digest", "expected_remote_digest", "readback_digest", "request_digest", "durable_anchor_digest", "budget_digest", "resume_receipt_digest", "successor_readiness_digest", "enable_gate_digest"):
+        if key in payload and payload[key] is not None and (not isinstance(payload[key], str) or not re.fullmatch(r"[0-9a-f]{64}", payload[key])):
+            raise SchedulerHold("hold_schema_or_version")
+    if kind == "work_transition_recorded":
+        if not isinstance(payload.get("from_state"), str) or not isinstance(payload.get("to_state"), str):
+            raise SchedulerHold("hold_schema_or_version")
+    if kind in {"remote_intent_recorded", "remote_materialization_pending", "remote_observation_recorded", "remote_confirmation_recorded", "remote_failure_recorded", "remote_conflict_recorded", "remote_intent_canceled"}:
+        try:
+            uuid.UUID(str(payload.get("intent_id")))
+        except (ValueError, TypeError, AttributeError):
+            raise SchedulerHold("hold_schema_or_version")
+    if kind == "remote_confirmation_recorded" and any(not isinstance(payload.get(k), str) or not payload.get(k) for k in ("adapter_id", "adapter_version", "read_timestamp", "readback_nonce", "opaque_receipt_ref")):
+        raise SchedulerHold("hold_schema_or_version")
+
+
 def _event_identity(kind: str, pid: str, payload: Mapping[str, Any]) -> str:
     p = _inner(payload)
-    if kind == "scheduler_initialized": identity = f"init|{pid}"
+    if kind == "scheduler_initialized": identity = f"init|{pid}|{p.get('enable_gate_digest', 'initial')}"
     elif kind == "work_transition_recorded": identity = f"transition|{pid}|{p.get('work_id')}|{p.get('transition_sequence')}"
     elif kind == "remote_intent_recorded": identity = f"intent|{pid}|{p.get('intent_id')}"
     elif kind in {"remote_materialization_pending", "remote_observation_recorded", "remote_confirmation_recorded", "remote_failure_recorded", "remote_conflict_recorded", "remote_intent_canceled"}:
@@ -119,7 +160,7 @@ def _validate_envelope(envelope: Any) -> Mapping[str, Any]:
     _project(envelope["project_id"]); _timestamp(envelope["occurred_at"])
     if envelope["timestamp_provenance"] not in PROVENANCE or not isinstance(envelope["payload"], Mapping):
         raise SchedulerHold("hold_unknown_version_or_state")
-    _walk(envelope["payload"])
+    _walk(envelope["payload"]); _validate_payload(envelope["kind"], envelope["payload"])
     return envelope
 
 
@@ -161,23 +202,55 @@ def reduce_scheduler_state(control_state: Mapping[str, Any], scheduler_events: I
              "root_budget_tokens": work.get("root_budget_tokens"), "remaining_budget_tokens": work.get("remaining_budget_tokens"),
              "control_generation": None, "control_head": None, "durable_anchor_digest": work.get("durable_anchor_digest"),
              "budget_digest": _digest([work.get("root_budget_tokens"), work.get("remaining_budget_tokens")]),
-             "transition_sequence": 0, "intent_id": None, "attempt_sequence": 0, "holds": [], "events": 0, "identity_payloads": {}}
+             "transition_sequence": 0, "intent_id": None, "desired_effect_digest": None, "expected_remote_kind": None,
+             "expected_remote_ref": None, "expected_remote_digest": None, "expected_remote_version": None,
+             "attempt_sequence": 0, "holds": [], "events": 0, "identity_payloads": {}}
+    seen_project_id: str | None = None
     for event in scheduler_events:
         kind, env = _scheduler_event(event); p = _inner(env); state["events"] += 1
-        state["identity_payloads"][_event_identity(kind, str(env["project_id"]), env)] = _digest(env)
+        event_pid = str(env["project_id"])
+        if seen_project_id is None: seen_project_id = event_pid
+        elif event_pid != seen_project_id: raise SchedulerHold("hold_control_plane_unready")
+        event_id = _event_identity(kind, event_pid, env); event_digest = _digest(env)
+        prior = state["identity_payloads"].get(event_id)
+        if prior is not None and prior != event_digest: raise SchedulerHold("hold_duplicate_or_divergent")
+        state["identity_payloads"][event_id] = event_digest
         state["control_generation"] = p.get("control_generation", state["control_generation"]); state["control_head"] = p.get("control_head", state["control_head"])
-        if kind == "scheduler_initialized": state["scheduler_state"] = "enabled"
-        elif kind == "scheduler_disabled": state["scheduler_state"] = "disabled"; state["local_state"] = "disabled"
+        if kind == "scheduler_initialized":
+            if state["scheduler_state"] == "disabled":
+                if not all(p.get(k) for k in ("enable_gate_ref", "enable_gate_digest", "enable_gate_authority")): raise SchedulerHold("hold_disabled_enable_gate")
+                state["local_state"] = "registered"
+            elif state["scheduler_state"] != "not_enabled" or state["events"] != 1:
+                raise SchedulerHold("hold_transition_order")
+            state["scheduler_state"] = "enabled"
+        elif kind == "scheduler_disabled":
+            if state["scheduler_state"] != "enabled" or state["local_state"] in {"completed", "canceled", "disabled"}: raise SchedulerHold("hold_terminal_or_disabled")
+            state["scheduler_state"] = "disabled"; state["local_state"] = "disabled"
         elif kind == "work_transition_recorded":
-            state["local_state"] = p.get("to_state", "hold"); state["transition_sequence"] = p.get("transition_sequence", state["transition_sequence"])
-        elif kind == "remote_intent_recorded": state["intent_id"] = p.get("intent_id"); state["remote_intent_state"] = "accepted_local"; state["attempt_sequence"] = 0
-        elif kind == "remote_materialization_pending": state["remote_intent_state"] = "pending_materialization"; state["attempt_sequence"] = p.get("attempt_sequence", state["attempt_sequence"])
-        elif kind == "remote_observation_recorded": state["remote_intent_state"] = "observed_unverified"; state["attempt_sequence"] = p.get("attempt_sequence", state["attempt_sequence"])
-        elif kind == "remote_confirmation_recorded": state["remote_intent_state"] = "confirmed"; state["attempt_sequence"] = p.get("attempt_sequence", state["attempt_sequence"])
-        elif kind == "remote_failure_recorded": state["remote_intent_state"] = "failed"; state["attempt_sequence"] = p.get("attempt_sequence", state["attempt_sequence"])
-        elif kind == "remote_conflict_recorded": state["remote_intent_state"] = "conflict"; state["attempt_sequence"] = p.get("attempt_sequence", state["attempt_sequence"])
-        elif kind == "remote_intent_canceled": state["remote_intent_state"] = "canceled"; state["attempt_sequence"] = p.get("attempt_sequence", state["attempt_sequence"])
-        elif kind == "privacy_hold_recorded": state["remote_intent_state"] = "privacy_held"; state["local_state"] = "hold"; state["holds"].append(p.get("classification", "hold_privacy"))
+            if state["scheduler_state"] != "enabled" or state["local_state"] in {"completed", "canceled", "disabled"} or p.get("from_state") != state["local_state"] or p.get("transition_sequence") != state["transition_sequence"] + 1 or p.get("to_state") not in LOCAL_TRANSITIONS.get(state["local_state"], set()):
+                raise SchedulerHold("hold_transition_order")
+            if state["local_state"] == "hold" and p.get("to_state") == "queued" and not all(p.get(k) for k in ("resume_receipt_ref", "resume_receipt_digest", "resume_authority")):
+                raise SchedulerHold("hold_resume_receipt_required")
+            if state["local_state"] == "successor_required" and p.get("to_state") == "active" and not all(p.get(k) for k in ("successor_readiness_ref", "successor_readiness_digest", "successor_id")):
+                raise SchedulerHold("hold_successor_readiness_required")
+            state["local_state"] = p["to_state"]; state["transition_sequence"] = p["transition_sequence"]
+        elif kind == "remote_intent_recorded":
+            if state["scheduler_state"] != "enabled" or state["intent_id"] is not None or not p.get("desired_effect_digest"): raise SchedulerHold("hold_transition_order")
+            state["intent_id"] = p.get("intent_id"); state["desired_effect_digest"] = p.get("desired_effect_digest"); state["remote_intent_state"] = "accepted_local"; state["attempt_sequence"] = 0
+        elif kind in {"remote_materialization_pending", "remote_observation_recorded", "remote_confirmation_recorded", "remote_failure_recorded", "remote_conflict_recorded", "remote_intent_canceled"}:
+            if state["intent_id"] is None or p.get("intent_id") != state["intent_id"] or state["remote_intent_state"] in {"confirmed", "failed", "conflict", "canceled", "privacy_held"}:
+                raise SchedulerHold("hold_terminal_or_disabled")
+            attempt = p.get("attempt_sequence")
+            if not isinstance(attempt, int) or attempt != state["attempt_sequence"] + 1: raise SchedulerHold("hold_transition_order")
+            if p.get("desired_effect_digest") != state["desired_effect_digest"]: raise SchedulerHold("hold_readback_binding_conflict")
+            for key in ("expected_remote_kind", "expected_remote_ref", "expected_remote_digest"):
+                if key in p and state.get(key) is not None and p.get(key) != state[key]: raise SchedulerHold("hold_readback_binding_conflict")
+            state["expected_remote_kind"] = p.get("expected_remote_kind", state["expected_remote_kind"]); state["expected_remote_ref"] = p.get("expected_remote_ref", state["expected_remote_ref"]); state["expected_remote_digest"] = p.get("expected_remote_digest", state["expected_remote_digest"]); state["expected_remote_version"] = p.get("expected_remote_version", state["expected_remote_version"])
+            state["attempt_sequence"] = attempt
+            state["remote_intent_state"] = {"remote_materialization_pending": "pending_materialization", "remote_observation_recorded": "observed_unverified", "remote_confirmation_recorded": "confirmed", "remote_failure_recorded": "failed", "remote_conflict_recorded": "conflict", "remote_intent_canceled": "canceled"}[kind]
+        elif kind == "privacy_hold_recorded":
+            if p.get("classification") not in FAILURE_CODES: raise SchedulerHold("hold_schema_or_version")
+            state["remote_intent_state"] = "privacy_held"; state["local_state"] = "hold"; state["holds"].append(p.get("classification", "hold_privacy"))
     return state
 
 
@@ -191,17 +264,20 @@ def _scheduler_events(ledger: LocalCollaborationLedger) -> list[Any]:
 
 def replay_scheduler_state(projects_root: str | Path, project_id: str) -> dict[str, Any]:
     pid = _project(project_id); path = Path(projects_root).expanduser() / pid / "collaboration.db"
-    ledger = LocalCollaborationLedger(db_path=path, create=False)
+    ledger = LocalCollaborationLedger.open_existing(path, expected_project_id=pid)
     try:
         if ledger.project_id != pid: raise SchedulerHold("hold_control_plane_unready")
         cstate = control.reduce_control_events(_control_events(ledger)); return reduce_scheduler_state(cstate, _scheduler_events(ledger))
     finally: ledger.close()
 
 
-def _request_base(request: Mapping[str, Any], cstate: Mapping[str, Any], sstate: Mapping[str, Any]) -> tuple[str, str]:
-    if not isinstance(request, Mapping) or set(request) - {"project_id", "operation", "occurred_at", "timestamp_provenance", "work_id", "run_id", "owner_role", "control_generation", "control_head", "durable_anchor_digest", "root_budget_tokens", "remaining_budget_tokens", "from_state", "to_state", "transition_sequence", "intent_id", "intent_kind", "desired_effect", "desired_effect_digest", "human_gate_class", "attempt_sequence", "expected_remote_kind", "expected_remote_ref", "expected_remote_digest", "adapter_id", "adapter_version", "request_digest", "readback_digest", "observed_remote_state", "opaque_receipt_ref", "classification", "next_action", "explicit_sequence", "adapter", "readback"}:
+def _request_base(request: Mapping[str, Any], cstate: Mapping[str, Any], sstate: Mapping[str, Any], caller_project_id: str | None = None) -> tuple[str, str]:
+    allowed = {"project_id", "operation", "occurred_at", "timestamp_provenance", "work_id", "run_id", "owner_role", "control_generation", "control_head", "durable_anchor_digest", "root_budget_tokens", "remaining_budget_tokens", "from_state", "to_state", "transition_sequence", "intent_id", "intent_kind", "desired_effect", "desired_effect_digest", "human_gate_class", "attempt_sequence", "expected_remote_kind", "expected_remote_ref", "expected_remote_digest", "expected_remote_version", "adapter_id", "adapter_version", "request_digest", "readback_digest", "observed_remote_state", "opaque_receipt_ref", "classification", "next_action", "explicit_sequence", "adapter", "readback", "resume_receipt_ref", "resume_receipt_digest", "resume_authority", "successor_readiness_ref", "successor_readiness_digest", "successor_id", "enable_gate_ref", "enable_gate_digest", "enable_gate_authority", "readback_nonce", "read_timestamp", "remote_version", "nonce"}
+    if not isinstance(request, Mapping) or set(request) - allowed:
         raise SchedulerHold("hold_unknown_version_or_state")
     pid = _project(request.get("project_id")); _timestamp(request.get("occurred_at"))
+    if caller_project_id is not None and pid != caller_project_id:
+        raise SchedulerHold("hold_control_plane_unready")
     if request.get("timestamp_provenance", "explicit") != "explicit": raise SchedulerHold("hold_unknown_version_or_state")
     if not cstate.get("initialized"): raise SchedulerHold("hold_control_plane_unready")
     work = cstate.get("work") or {}
@@ -218,14 +294,22 @@ def _binding_payload(request: Mapping[str, Any], cstate: Mapping[str, Any], ssta
     return expected
 
 
-def plan_scheduler_request(request: Mapping[str, Any], control_state: Mapping[str, Any], scheduler_state: Mapping[str, Any] | None = None) -> dict[str, Any]:
+def plan_scheduler_request(request: Mapping[str, Any], control_state: Mapping[str, Any], scheduler_state: Mapping[str, Any] | None = None, caller_project_id: str | None = None) -> dict[str, Any]:
     sstate = scheduler_state or reduce_scheduler_state(control_state, [])
-    pid, work_id = _request_base(request, control_state, sstate); op = request.get("operation")
+    pid, work_id = _request_base(request, control_state, sstate, caller_project_id); op = request.get("operation")
     if not isinstance(op, str): raise SchedulerHold("hold_unknown_version_or_state")
     if sstate.get("scheduler_state") == "disabled" and op != "enable": raise SchedulerHold("hold_terminal_or_disabled")
+    if op == "enable":
+        if sstate.get("scheduler_state") != "disabled": raise SchedulerHold("hold_transition_order")
+        if not all(isinstance(request.get(k), str) and request.get(k) for k in ("enable_gate_ref", "enable_gate_digest", "enable_gate_authority")):
+            raise SchedulerHold("hold_disabled_enable_gate")
     base = _binding_payload(request, control_state, sstate); occurred = request["occurred_at"]; events: list[dict[str, Any]] = []
     if op in {"initialize", "enable"}:
-        candidate = _event(pid, "scheduler_initialized", {"work_id": work_id, **base}, occurred)
+        if op == "initialize" and sstate.get("scheduler_state") == "disabled":
+            raise SchedulerHold("hold_terminal_or_disabled")
+        init_payload = {"work_id": work_id, **base}
+        if op == "enable": init_payload.update({"enable_gate_ref": request["enable_gate_ref"], "enable_gate_digest": request["enable_gate_digest"], "enable_gate_authority": request["enable_gate_authority"]})
+        candidate = _event(pid, "scheduler_initialized", init_payload, occurred)
         prior = sstate.get("identity_payloads", {}).get(candidate["event_id"])
         if prior is not None:
             if prior != _digest(candidate["payload"]): raise SchedulerHold("hold_duplicate_or_divergent")
@@ -242,6 +326,8 @@ def plan_scheduler_request(request: Mapping[str, Any], control_state: Mapping[st
         # transition.  A changed payload at that identity is a conflict hold.
         if isinstance(seq, int):
             candidate_payload = {"work_id": work_id, "run_id": request.get("run_id"), "owner_role": control_state["work"].get("role"), **base, "transition_sequence": seq, "from_state": from_state, "to_state": to_state, "next_action": request.get("next_action", "")}
+            for key in ("resume_receipt_ref", "resume_receipt_digest", "resume_authority", "successor_readiness_ref", "successor_readiness_digest", "successor_id"):
+                if request.get(key) is not None: candidate_payload[key] = request[key]
             candidate = _event(pid, "work_transition_recorded", candidate_payload, occurred)
             prior = sstate.get("identity_payloads", {}).get(candidate["event_id"])
             if prior is not None:
@@ -250,7 +336,16 @@ def plan_scheduler_request(request: Mapping[str, Any], control_state: Mapping[st
         if from_state != sstate["local_state"] or from_state not in LOCAL_STATES or to_state not in LOCAL_STATES: raise SchedulerHold("hold_transition_order")
         if to_state not in LOCAL_TRANSITIONS.get(from_state, set()): raise SchedulerHold("hold_transition_order")
         if not isinstance(seq, int) or seq != sstate["transition_sequence"] + 1: raise SchedulerHold("hold_transition_order")
-        events.append(_event(pid, "work_transition_recorded", {"work_id": work_id, "run_id": request.get("run_id"), "owner_role": control_state["work"].get("role"), **base, "transition_sequence": seq, "from_state": from_state, "to_state": to_state, "next_action": request.get("next_action", "")}, occurred))
+        transition_payload = {"work_id": work_id, "run_id": request.get("run_id"), "owner_role": control_state["work"].get("role"), **base, "transition_sequence": seq, "from_state": from_state, "to_state": to_state, "next_action": request.get("next_action", "")}
+        if from_state == "hold" and to_state == "queued":
+            if not all(isinstance(request.get(k), str) and request.get(k) for k in ("resume_receipt_ref", "resume_receipt_digest", "resume_authority")):
+                raise SchedulerHold("hold_resume_receipt_required")
+            transition_payload.update({"resume_receipt_ref": request["resume_receipt_ref"], "resume_receipt_digest": request["resume_receipt_digest"], "resume_authority": request["resume_authority"]})
+        if from_state == "successor_required" and to_state == "active":
+            if not all(isinstance(request.get(k), str) and request.get(k) for k in ("successor_readiness_ref", "successor_readiness_digest", "successor_id")):
+                raise SchedulerHold("hold_successor_readiness_required")
+            transition_payload.update({"successor_readiness_ref": request["successor_readiness_ref"], "successor_readiness_digest": request["successor_readiness_digest"], "successor_id": request["successor_id"]})
+        events.append(_event(pid, "work_transition_recorded", transition_payload, occurred))
     elif op in {"intent", "request_remote"}:
         if sstate["scheduler_state"] != "enabled": raise SchedulerHold("hold_scheduler_not_enabled")
         iid = request.get("intent_id") or str(uuid.uuid4())
@@ -259,26 +354,28 @@ def plan_scheduler_request(request: Mapping[str, Any], control_state: Mapping[st
         effect = request.get("desired_effect_digest") or _digest(request.get("desired_effect", {})); events.append(_event(pid, "remote_intent_recorded", {"work_id": work_id, **base, "intent_id": iid, "intent_kind": request.get("intent_kind"), "desired_effect_digest": effect, "human_gate_class": request.get("human_gate_class", "none"), "next_action": "materialize_when_adapter_available"}, occurred))
     elif op == "pending":
         if not sstate.get("intent_id"): raise SchedulerHold("hold_missing_work_root_owner")
-        events.append(_event(pid, "remote_materialization_pending", {"work_id": work_id, **base, "intent_id": sstate["intent_id"], "attempt_sequence": request.get("attempt_sequence", 1), "expected_remote_kind": request.get("expected_remote_kind"), "expected_remote_ref": request.get("expected_remote_ref"), "expected_remote_digest": request.get("expected_remote_digest"), "next_action": "adapter_readback"}, occurred))
+        events.append(_event(pid, "remote_materialization_pending", {"work_id": work_id, **base, "intent_id": sstate["intent_id"], "desired_effect_digest": sstate.get("desired_effect_digest"), "attempt_sequence": request.get("attempt_sequence", sstate.get("attempt_sequence", 0) + 1), "expected_remote_kind": request.get("expected_remote_kind"), "expected_remote_ref": request.get("expected_remote_ref"), "expected_remote_digest": request.get("expected_remote_digest"), "expected_remote_version": request.get("expected_remote_version"), "next_action": "adapter_readback"}, occurred))
     elif op in {"observe", "remote_observation"}:
         if request.get("observed_remote_state") is None: raise SchedulerHold("hold_readback_unavailable")
-        events.append(_event(pid, "remote_observation_recorded", {"work_id": work_id, **base, "intent_id": request.get("intent_id", sstate.get("intent_id")), "attempt_sequence": request.get("attempt_sequence", 1), "observed_remote_state": request.get("observed_remote_state"), "classification": "observed_unverified", "next_action": "trusted_adapter_readback"}, occurred))
+        events.append(_event(pid, "remote_observation_recorded", {"work_id": work_id, **base, "intent_id": request.get("intent_id", sstate.get("intent_id")), "desired_effect_digest": sstate.get("desired_effect_digest"), "attempt_sequence": request.get("attempt_sequence", sstate.get("attempt_sequence", 0) + 1), "expected_remote_kind": request.get("expected_remote_kind", sstate.get("expected_remote_kind")), "expected_remote_ref": request.get("expected_remote_ref", sstate.get("expected_remote_ref")), "expected_remote_digest": request.get("expected_remote_digest", sstate.get("expected_remote_digest")), "expected_remote_version": request.get("expected_remote_version", sstate.get("expected_remote_version")), "observed_remote_state": request.get("observed_remote_state"), "classification": "observed_unverified", "next_action": "trusted_adapter_readback"}, occurred))
     elif op in {"cancel", "privacy_hold", "failure", "conflict"}:
         if op == "privacy_hold": kind, cls = "privacy_hold_recorded", "hold_privacy"
         elif op == "cancel": kind, cls = "remote_intent_canceled", "canceled"
         elif op == "failure": kind, cls = "remote_failure_recorded", request.get("classification", "hold_readback_unavailable")
         else: kind, cls = "remote_conflict_recorded", "hold_readback_binding_conflict"
         if cls not in FAILURE_CODES and op != "cancel": raise SchedulerHold("hold_unknown_version_or_state")
-        events.append(_event(pid, kind, {"work_id": work_id, **base, "intent_id": request.get("intent_id", sstate.get("intent_id")), "attempt_sequence": request.get("attempt_sequence", 1), "classification": cls, "next_action": request.get("next_action", "human_review")}, occurred))
+        events.append(_event(pid, kind, {"work_id": work_id, **base, "intent_id": request.get("intent_id", sstate.get("intent_id")), "desired_effect_digest": sstate.get("desired_effect_digest"), "attempt_sequence": request.get("attempt_sequence", sstate.get("attempt_sequence", 0) + 1), "expected_remote_kind": request.get("expected_remote_kind", sstate.get("expected_remote_kind")), "expected_remote_ref": request.get("expected_remote_ref", sstate.get("expected_remote_ref")), "expected_remote_digest": request.get("expected_remote_digest", sstate.get("expected_remote_digest")), "expected_remote_version": request.get("expected_remote_version", sstate.get("expected_remote_version")), "classification": cls, "next_action": request.get("next_action", "human_review")}, occurred))
     else: raise SchedulerHold("hold_unknown_version_or_state")
     return {"project_id": pid, "decision": "allow", "event_batch": events, "mutation_performed": False, "dispatch_performed": False}
 
 
 def apply_scheduler_request(projects_root: str | Path, project_id: str, request: Mapping[str, Any]) -> dict[str, Any]:
     pid = _project(project_id); path = Path(projects_root).expanduser() / pid / "collaboration.db"
+    if not isinstance(request, Mapping) or _project(request.get("project_id")) != pid:
+        raise SchedulerHold("hold_control_plane_unready")
     ledger = LocalCollaborationLedger.open_existing(path, expected_project_id=pid)
     try:
-        before = ledger.list_events(); cstate = control.reduce_control_events([e for e in before if e.event_type.startswith("control.")]); sstate = reduce_scheduler_state(cstate, [e for e in before if e.event_type.startswith("scheduler.")]); result = plan_scheduler_request(request, cstate, sstate); batch = result["event_batch"]
+        before = ledger.list_events(); cstate = control.reduce_control_events([e for e in before if e.event_type.startswith("control.")]); sstate = reduce_scheduler_state(cstate, [e for e in before if e.event_type.startswith("scheduler.")]); result = plan_scheduler_request(request, cstate, sstate, caller_project_id=pid); batch = result["event_batch"]
         if not batch: result["replay"] = sstate; return result
         # Recheck the source head immediately before the atomic LedgerStore append.
         current = ledger.list_events();
@@ -295,16 +392,23 @@ def apply_scheduler_request(projects_root: str | Path, project_id: str, request:
 def apply_remote_readback(projects_root: str | Path, project_id: str, intent_id: str, adapter: Any, request: Mapping[str, Any]) -> dict[str, Any]:
     if not hasattr(adapter, "readback") or not callable(adapter.readback): raise SchedulerHold("hold_untrusted_readback")
     if not isinstance(request, Mapping) or request.get("intent_id", intent_id) != intent_id or request.get("operation") not in {"confirm", "readback"}: raise SchedulerHold("hold_untrusted_readback")
-    pid = _project(project_id); path = Path(projects_root).expanduser() / pid / "collaboration.db"
-    ledger = LocalCollaborationLedger(db_path=path, create=False)
+    pid = _project(project_id)
+    if not isinstance(request, Mapping) or _project(request.get("project_id")) != pid: raise SchedulerHold("hold_control_plane_unready")
+    if not isinstance(request.get("request_digest"), str) or not re.fullmatch(r"[0-9a-f]{64}", request["request_digest"]): raise SchedulerHold("hold_readback_binding_conflict")
+    path = Path(projects_root).expanduser() / pid / "collaboration.db"
+    ledger = LocalCollaborationLedger.open_existing(path, expected_project_id=pid)
     try:
         all_events = ledger.list_events(); cstate = control.reduce_control_events([e for e in all_events if e.event_type.startswith("control.")]); sstate = reduce_scheduler_state(cstate, [e for e in all_events if e.event_type.startswith("scheduler.")]);
         if sstate.get("intent_id") != intent_id or sstate.get("remote_intent_state") not in {"accepted_local", "pending_materialization", "observed_unverified", "readback_unavailable"}: raise SchedulerHold("hold_readback_binding_conflict")
         response = adapter.readback(dict(request))
         if not isinstance(response, Mapping) or response.get("project_id") != pid or response.get("intent_id") != intent_id or response.get("confirmed") is not True: raise SchedulerHold("hold_untrusted_readback")
-        required = ("adapter_id", "adapter_version", "expected_remote_kind", "expected_remote_ref", "expected_remote_digest", "readback_digest", "opaque_receipt_ref", "occurred_at")
+        required = ("adapter_id", "adapter_version", "expected_remote_kind", "expected_remote_ref", "expected_remote_digest", "expected_remote_version", "readback_digest", "opaque_receipt_ref", "occurred_at", "read_timestamp", "readback_nonce", "request_digest", "desired_effect_digest")
         if any(not response.get(k) for k in required): raise SchedulerHold("hold_readback_binding_conflict")
-        payload = {"work_id": sstate["work_id"], "intent_id": intent_id, "attempt_sequence": int(request.get("attempt_sequence", sstate.get("attempt_sequence", 0) + 1)), "expected_remote_kind": response["expected_remote_kind"], "expected_remote_ref": response["expected_remote_ref"], "expected_remote_digest": response["expected_remote_digest"], "adapter_id": response["adapter_id"], "adapter_version": response["adapter_version"], "readback_digest": response["readback_digest"], "opaque_receipt_ref": response["opaque_receipt_ref"], "classification": "confirmed", "next_action": "none"}
+        if response["request_digest"] != request["request_digest"] or response["desired_effect_digest"] != sstate.get("desired_effect_digest"):
+            raise SchedulerHold("hold_readback_binding_conflict")
+        for key in ("expected_remote_kind", "expected_remote_ref", "expected_remote_digest"):
+            if sstate.get(key) is not None and response[key] != sstate[key]: raise SchedulerHold("hold_readback_binding_conflict")
+        payload = {"work_id": sstate["work_id"], "intent_id": intent_id, "desired_effect_digest": response["desired_effect_digest"], "attempt_sequence": int(request.get("attempt_sequence", sstate.get("attempt_sequence", 0) + 1)), "expected_remote_kind": response["expected_remote_kind"], "expected_remote_ref": response["expected_remote_ref"], "expected_remote_digest": response["expected_remote_digest"], "expected_remote_version": response["expected_remote_version"], "adapter_id": response["adapter_id"], "adapter_version": response["adapter_version"], "readback_digest": response["readback_digest"], "read_timestamp": _timestamp(response["read_timestamp"]), "readback_nonce": response["readback_nonce"], "request_digest": response["request_digest"], "opaque_receipt_ref": response["opaque_receipt_ref"], "classification": "confirmed", "next_action": "none"}
         event = _event(pid, "remote_confirmation_recorded", payload, _timestamp(response["occurred_at"]))
         before = ledger.list_events(); before_head = before[-1].event_hash if before else None
         ledger.close(); ledger = LocalCollaborationLedger.open_existing(path, expected_project_id=pid)

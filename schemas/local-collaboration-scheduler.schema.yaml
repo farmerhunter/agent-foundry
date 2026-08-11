@@ -42,3 +42,12 @@ properties:
       classification: {type: string}
       next_action: {type: string}
       explicit_sequence: {type: integer, minimum: 1}
+      resume_receipt_ref: {type: string, minLength: 1}
+      resume_receipt_digest: {type: string, pattern: '^[0-9a-f]{64}$'}
+      resume_authority: {type: string, minLength: 1}
+      successor_readiness_ref: {type: string, minLength: 1}
+      successor_readiness_digest: {type: string, pattern: '^[0-9a-f]{64}$'}
+      successor_id: {type: string, minLength: 1}
+      expected_remote_version: {type: string, minLength: 1}
+      read_timestamp: {type: string, format: date-time}
+      readback_nonce: {type: string, minLength: 1}

@@ -44,5 +44,44 @@ def test_remote_never_confirmed_by_observation():
         pid = _setup(root); sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "initialize", "occurred_at": "2026-08-11T00:00:01Z"}); result = sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "intent", "intent_id": str(uuid.uuid4()), "intent_kind": "issue", "desired_effect": {"kind": "issue"}, "occurred_at": "2026-08-11T00:00:02Z"}); assert result["mutation_performed"]; state = sc.replay_scheduler_state(root, pid); assert state["remote_intent_state"] == "accepted_local"
 
 
+def test_closed_payload_and_resume_gate():
+    with tempfile.TemporaryDirectory() as root:
+        pid = _setup(root)
+        try:
+            sc._validate_envelope({"version": sc.VERSION, "project_id": pid, "kind": "scheduler_initialized", "occurred_at": "2026-08-11T00:00:01Z", "timestamp_provenance": "explicit", "payload": {"work_id": "w1", "unknown": True}})
+        except sc.SchedulerHold as exc:
+            assert str(exc) == "hold_schema_or_version"
+        else:
+            raise AssertionError("unknown scheduler payload must hold")
+        sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "initialize", "occurred_at": "2026-08-11T00:00:01Z"})
+        for n, (a, b) in enumerate((("registered", "queued"), ("queued", "claimed"), ("claimed", "active"), ("active", "hold")), 1):
+            sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "transition", "from_state": a, "to_state": b, "transition_sequence": n, "occurred_at": f"2026-08-11T00:00:0{n+1}Z"})
+        try:
+            sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "transition", "from_state": "hold", "to_state": "queued", "transition_sequence": 5, "occurred_at": "2026-08-11T00:00:06Z"})
+        except sc.SchedulerHold as exc:
+            assert str(exc) == "hold_resume_receipt_required"
+        else:
+            raise AssertionError("resume without receipt must hold")
+
+
+def test_caller_project_binding_and_disabled_gate():
+    with tempfile.TemporaryDirectory() as root:
+        pid = _setup(root); other = str(uuid.uuid4())
+        try:
+            sc.apply_scheduler_request(root, pid, {"project_id": other, "work_id": "w1", "operation": "initialize", "occurred_at": "2026-08-11T00:00:01Z"})
+        except sc.SchedulerHold as exc:
+            assert str(exc) == "hold_control_plane_unready"
+        else:
+            raise AssertionError("caller/project mismatch must hold")
+        sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "initialize", "occurred_at": "2026-08-11T00:00:01Z"})
+        sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "disable", "occurred_at": "2026-08-11T00:00:02Z"})
+        try:
+            sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "enable", "occurred_at": "2026-08-11T00:00:03Z"})
+        except sc.SchedulerHold as exc:
+            assert str(exc) == "hold_disabled_enable_gate"
+        else:
+            raise AssertionError("disabled enable without gate must hold")
+
+
 if __name__ == "__main__":
-    test_initialize_and_offline_transitions(); test_exact_retry_and_divergence_hold(); test_remote_never_confirmed_by_observation(); print("ok")
+    test_initialize_and_offline_transitions(); test_exact_retry_and_divergence_hold(); test_remote_never_confirmed_by_observation(); test_closed_payload_and_resume_gate(); test_caller_project_binding_and_disabled_gate(); print("ok")
