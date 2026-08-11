@@ -22,6 +22,10 @@ KINDS = {"control_plane_initialized", "work_registered", "execution_run_register
 PROVENANCE = {"explicit", "estimated", "unavailable", "not_exposed"}
 FORBIDDEN = {"prompt", "transcript", "raw_transcript", "tool_output", "raw_tool_output", "secret", "native_history", "native_thread_id"}
 _RFC3339 = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:\d{2})$")
+_ENVELOPE_KEYS = {"version", "project_id", "kind", "occurred_at", "timestamp_provenance", "payload"}
+_PAYLOAD_KEYS = {"operation", "work_id", "role", "root_budget_tokens", "remaining_budget_tokens",
+                 "issue_anchor_digest", "durable_anchor_digest", "run_id", "state",
+                 "decision_boundary", "transition_semantics", "hold_codes"}
 
 class ControlPlaneError(ValueError): pass
 class ControlPlaneHold(ControlPlaneError): pass
@@ -55,7 +59,12 @@ def _digest(v: Any) -> str: return hashlib.sha256(_json(v).encode()).hexdigest()
 def _event_id(project_id: str, identity: str) -> str:
     return str(uuid.uuid5(NAMESPACE, f"{VERSION}|{project_id}|{identity}"))
 
+def _inner(payload: Mapping[str, Any]) -> Mapping[str, Any]:
+    value = payload.get("payload")
+    return value if isinstance(value, Mapping) else payload
+
 def _identity(kind: str, project_id: str, payload: Mapping[str, Any]) -> str:
+    payload = _inner(payload)
     work = payload.get("work_id", "none"); run = payload.get("run_id", "none")
     if kind == "control_plane_initialized": return f"init|{project_id}"
     if kind == "work_registered": return f"work|{work}"
@@ -68,8 +77,22 @@ def _payload_base(project_id: str, kind: str, payload: Mapping[str, Any], occurr
     _walk(payload)
     if provenance not in PROVENANCE: raise ControlPlaneError("hold_schema_or_version")
     if provenance in {"unavailable", "not_exposed"} and any(k in payload for k in ("value", "tokens", "observed_value", "numeric_value")): raise ControlPlaneError("hold_untrusted_observation")
-    out = dict(payload); out.update({"control_version": VERSION, "project_id": project_id, "kind": kind, "occurred_at": occurred_at, "timestamp_provenance": provenance})
-    return out
+    return {"version": VERSION, "project_id": project_id, "kind": kind,
+            "occurred_at": occurred_at, "timestamp_provenance": provenance,
+            "payload": dict(payload)}
+
+def _validate_envelope(envelope: Any) -> Mapping[str, Any]:
+    if not isinstance(envelope, Mapping) or set(envelope) != _ENVELOPE_KEYS:
+        raise ControlPlaneHold("hold_schema_or_version")
+    if envelope.get("version") != VERSION or envelope.get("kind") not in KINDS:
+        raise ControlPlaneHold("hold_schema_or_version")
+    _project(envelope.get("project_id")); _timestamp(envelope.get("occurred_at"))
+    if envelope.get("timestamp_provenance") not in PROVENANCE or not isinstance(envelope.get("payload"), Mapping):
+        raise ControlPlaneHold("hold_schema_or_version")
+    if set(envelope["payload"]) - _PAYLOAD_KEYS:
+        raise ControlPlaneHold("hold_schema_or_version")
+    _walk(envelope["payload"])
+    return envelope
 
 def _packet(request: Mapping[str, Any]) -> dict[str, Any]:
     if not isinstance(request, Mapping): raise ControlPlaneError("hold_schema_or_version")
@@ -112,14 +135,16 @@ def _control_events(request: Mapping[str, Any], project_id: str, result: Mapping
 def reduce_control_events(events: Iterable[Any]) -> dict[str, Any]:
     state = {"initialized": False, "work": {}, "claims": [], "active_runs": [], "holds": [], "disabled": False, "successors": [], "summaries": [], "attention": [], "terminal_handoff": None}
     for event in events:
-        payload = event.payload if hasattr(event, "payload") else event.get("payload", {})
+        envelope = event.payload if hasattr(event, "payload") else event.get("payload", {})
+        payload = _inner(envelope)
         event_type = event.event_type if hasattr(event, "event_type") else event.get("event_type", "")
         kind = payload.get("kind") or str(event_type).removeprefix("control.")
-        if payload.get("control_version") != VERSION: raise ControlPlaneHold("hold_schema_or_version")
+        _validate_envelope(envelope)
         if kind == "control_plane_initialized": state["initialized"] = True
         elif kind == "work_registered": state["work"] = dict(payload)
         elif kind == "dispatch_claim_registered":
-            if payload not in state["claims"]: state["claims"].append(dict(payload))
+            claim_state = dict(payload); claim_state["__occurred_at"] = envelope["occurred_at"]
+            if claim_state not in state["claims"]: state["claims"].append(claim_state)
         elif kind == "execution_run_registered":
             if payload.get("state") == "active" and payload not in state["active_runs"]: state["active_runs"].append(dict(payload))
         elif kind == "control_hold_recorded": state["holds"].append(dict(payload))
@@ -142,8 +167,15 @@ def plan_control_request(request: Mapping[str, Any], replay_state: Mapping[str, 
     if replay_state and any(request.get(k) for k in ("existing_dispatch_claims", "active_runs")): raise ControlPlaneHold("hold_untrusted_observation")
     claims, runs = _replay_lists(state)
     work = request["work"]; run = request["execution_run"]; claim = request["dispatch_claim"]
-    exact_claim = any(isinstance(c, Mapping) and all(c.get(k) == claim.get(k) for k in ("work_id", "decision_boundary", "transition_semantics")) for c in claims)
+    candidate_events = _control_events(request, parsed["project_id"])
+    candidate_claim = next((e for e in candidate_events if e["event_type"] == "control.dispatch_claim_registered"), None)
+    candidate_claim_payload = _inner(candidate_claim["payload"]) if candidate_claim else {}
+    candidate_occurred_at = candidate_claim["payload"]["occurred_at"] if candidate_claim else None
+    exact_claim = any(isinstance(c, Mapping) and all(c.get(k) == candidate_claim_payload.get(k) for k in ("work_id", "decision_boundary", "transition_semantics", "root_budget_tokens", "remaining_budget_tokens", "issue_anchor_digest", "durable_anchor_digest")) and c.get("__occurred_at") == candidate_occurred_at for c in claims)
     exact_run = any(isinstance(r, Mapping) and r.get("run_id") == run.get("run_id") and r.get("work_id") == work.get("work_id") for r in runs)
+    same_claim_identity = any(isinstance(c, Mapping) and all(c.get(k) == candidate_claim_payload.get(k) for k in ("work_id", "decision_boundary", "transition_semantics")) for c in claims)
+    if same_claim_identity and not exact_claim:
+        return {"project_id": parsed["project_id"], "decision": "hold_duplicate_or_divergent", "stop_conditions": ["hold_duplicate_or_divergent"], "event_batch": [], "mutation_performed": False, "dispatch_performed": False}
     if exact_claim and exact_run:
         return {"project_id": parsed["project_id"], "decision": "duplicate", "stop_conditions": [], "event_batch": [], "mutation_performed": False, "dispatch_performed": False}
     packet = dict(request); packet["existing_dispatch_claims"] = claims; packet["active_runs"] = runs

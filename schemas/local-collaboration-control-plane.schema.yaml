@@ -11,4 +11,19 @@ properties:
     enum: [control_plane_initialized, work_registered, execution_run_registered, dispatch_claim_registered, transition_recorded, control_hold_recorded, control_disabled, logical_successor_recorded, work_summary_recorded, attention_summary_recorded, terminal_handoff_recorded]
   occurred_at: {type: string, format: date-time}
   timestamp_provenance: {enum: [explicit, estimated, unavailable, not_exposed]}
-  payload: {type: object, additionalProperties: false}
+  payload:
+    type: object
+    additionalProperties: false
+    properties:
+      operation: {type: string}
+      work_id: {type: string}
+      role: {type: string}
+      root_budget_tokens: {type: integer}
+      remaining_budget_tokens: {type: integer}
+      issue_anchor_digest: {type: string, pattern: '^[0-9a-f]{64}$'}
+      durable_anchor_digest: {type: string, pattern: '^[0-9a-f]{64}$'}
+      run_id: {type: string}
+      state: {type: string}
+      decision_boundary: {type: string}
+      transition_semantics: {type: string}
+      hold_codes: {type: array, items: {type: string}}
