@@ -37,7 +37,7 @@ def event(project_id, rid, epoch, seq, seed, *, parents=(), work=None, decision=
     if decision:
         value.update(work_id=work, decision=decision)
     if resolution:
-        value.update(work_id=work, resolution=resolution, conflict_references=list(refs or ()), human_decision_receipt={"receipt_id": "human-1", "receipt_digest": H, "outcome": "enrollment_accepted"})
+        value.update(work_id=work, resolution=resolution, conflict_references=list(refs or ()), human_decision_receipt={"receipt_id": "human-1", "receipt_digest": H, "outcome": "human_decision_accepted"})
     digest_value = {key: value[key] for key in value}
     value["event_digest"] = replica._digest(digest_value)
     return value
@@ -79,11 +79,25 @@ def test_shuffled_duplicate_delivery_converges_to_one_digest_and_read_only_plan(
     assert one["outcome"] == two["outcome"] == "replica_converged"
     assert one["shared_view_digest"] == two["shared_view_digest"]
     bundle = replica.export_bundle(snapshot(), [first, second], enrollment(P1, "replica.b", 1), [identity("replica.b", 1, 1, "b")])
-    plan = replica.plan_import(snapshot(), [first], bundle)
+    inspection = replica.inspect_bundle(bundle, [enrollment(P1, "replica.b", 1)])
+    plan = replica.plan_import(snapshot(), [first], bundle, inspection)
     assert plan["outcome"] == "replica_import_plan_ready"
     assert plan["accepted_identities"] == [identity("replica.b", 1, 1, "b")]
-    duplicate = replica.plan_import(snapshot(), [first, second], bundle)
+    duplicate = replica.plan_import(snapshot(), [first, second], bundle, inspection)
     assert duplicate["outcome"] == "replica_duplicate"
+
+
+def test_import_requires_prior_verified_enrollment_context_not_self_issued_receipt():
+    item = event(P1, "replica.unapproved", 1, 1, "unapproved")
+    forged = enrollment(P1, "replica.unapproved", 1)
+    bundle = replica.export_bundle(snapshot(), [item], forged, [identity("replica.unapproved", 1, 1, "unapproved")])
+    assert replica.plan_import(snapshot(), [], bundle)["outcome"] == "hold_replica_identity"
+    assert replica.inspect_bundle(bundle, [enrollment(P1, "replica.approved", 1)])["outcome"] == "hold_replica_identity"
+    inspection = replica.inspect_bundle(bundle, [forged])
+    assert inspection["outcome"] == "replica_export_ready"
+    tampered = {**inspection, "enrollment_context_digest": "0" * 64}
+    assert replica.plan_import(snapshot(), [], bundle, tampered)["outcome"] == "hold_replica_identity"
+    assert replica.plan_import(snapshot(), [], bundle, inspection)["outcome"] == "replica_import_plan_ready"
 
 
 @pytest.mark.parametrize("mutate,outcome", [
@@ -108,12 +122,24 @@ def test_missing_parent_and_cycle_hold():
     assert replica.reduce_converged_view([left, right])["outcome"] == "hold_missing_dependency"
 
 
+def test_work_variant_schema_runtime_parity_requires_work_and_decision():
+    schema = yaml.safe_load((Path(__file__).parent.parent / "schemas" / "local-collaboration-replica.schema.yaml").read_text())
+    missing = event(P1, "replica.a", 1, 1, "missing", work="w", decision="accept")
+    missing.pop("work_id")
+    missing["event_digest"] = replica._digest({key: value for key, value in missing.items() if key != "event_digest"})
+    validator = Draft202012Validator({"$defs": schema["$defs"], "$ref": "#/$defs/event"})
+    assert list(validator.iter_errors(missing))
+    assert replica.reduce_converged_view([missing])["outcome"] == "hold_schema"
+
+
 def test_conflicting_work_decisions_need_explicit_human_compensation():
     accepted = event(P1, "replica.a", 1, 1, "a", work="work", decision="accept")
     rejected = event(P1, "replica.b", 1, 1, "b", work="work", decision="reject")
     held = replica.reduce_converged_view([accepted, rejected])
     assert held["outcome"] == "hold_semantic_conflict"
-    resolution = event(P1, "replica.c", 1, 1, "c", work="work", resolution="accept", refs=[identity("replica.a", 1, 1, "a"), identity("replica.b", 1, 1, "b")])
+    speculative = event(P1, "replica.c", 1, 1, "c", work="work", resolution="accept", refs=[identity("replica.a", 1, 1, "a"), identity("replica.b", 1, 1, "b")])
+    assert replica.reduce_converged_view([accepted, rejected, speculative])["outcome"] == "hold_semantic_conflict"
+    resolution = event(P1, "replica.c", 1, 1, "c", work="work", resolution="accept", parents=[identity("replica.a", 1, 1, "a"), identity("replica.b", 1, 1, "b")], refs=[identity("replica.a", 1, 1, "a"), identity("replica.b", 1, 1, "b")])
     assert replica.reduce_converged_view([accepted, rejected, resolution])["outcome"] == "replica_converged"
     bad = copy.deepcopy(resolution); bad["conflict_references"] = [identity("replica.a", 1, 1, "a")]; bad["event_digest"] = replica._digest({key: value for key, value in bad.items() if key != "event_digest"})
     assert replica.reduce_converged_view([accepted, rejected, bad])["outcome"] == "hold_semantic_conflict"
@@ -129,7 +155,8 @@ def test_privacy_json_size_and_offline_hold_without_hidden_retry_or_io(monkeypat
     assert result["outcome"] == "replica_offline"
     monkeypatch.setattr(socket, "socket", lambda *a, **k: pytest.fail("network call"))
     monkeypatch.setattr(subprocess, "run", lambda *a, **k: pytest.fail("process call"))
-    assert replica.FakeReplicaTransport().plan_delivery(snapshot(), [], bundle)["outcome"] == "replica_import_plan_ready"
+    inspection = replica.inspect_bundle(bundle, [enrollment(P1, "replica.a", 1)])
+    assert replica.FakeReplicaTransport().plan_delivery(snapshot(), [], bundle, inspection)["outcome"] == "replica_import_plan_ready"
 
 
 def test_public_fake_dependency_envelopes_remain_non_confirming():

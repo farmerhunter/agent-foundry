@@ -103,6 +103,14 @@ def _enrollment_receipt(value: Any) -> dict[str, str]:
     return {"receipt_id": _opaque(value["receipt_id"], identity=True), "receipt_digest": _hex(value["receipt_digest"], "hold_replica_identity", "replica_identity_invalid"), "outcome": "enrollment_accepted"}
 
 
+def _human_decision_receipt(value: Any) -> dict[str, str]:
+    if not isinstance(value, Mapping) or set(value) != {"receipt_id", "receipt_digest", "outcome"}:
+        raise ReplicaHold("hold_semantic_conflict", "semantic_conflict")
+    if value.get("outcome") != "human_decision_accepted":
+        raise ReplicaHold("hold_semantic_conflict", "semantic_conflict")
+    return {"receipt_id": _opaque(value["receipt_id"]), "receipt_digest": _hex(value["receipt_digest"], "hold_semantic_conflict", "semantic_conflict"), "outcome": "human_decision_accepted"}
+
+
 def _replica_identity(value: Any, project_id: str | None = None) -> dict[str, Any]:
     if not isinstance(value, Mapping) or set(value) != {"project_id", "replica_id", "replica_epoch", "enrollment_receipt"}:
         raise ReplicaHold("hold_replica_identity", "replica_identity_invalid")
@@ -142,7 +150,7 @@ def _event(value: Any, project_id: str | None = None) -> dict[str, Any]:
     elif typ == "work_resolution":
         if set(value) - {"project_id", "replica_id", "replica_epoch", "origin_sequence", "event_id", "event_type", "work_id", "resolution", "human_decision_receipt", "conflict_references", "causal_parents", "event_digest"} or not isinstance(value.get("work_id"), str) or value.get("resolution") not in {"accept", "reject", "hold"} or not isinstance(value.get("conflict_references"), list) or not value["conflict_references"] or len(value["conflict_references"]) > MAX_PARENTS:
             raise ReplicaHold("hold_schema", "schema_invalid")
-        normalized.update(work_id=_opaque(value["work_id"]), resolution=value["resolution"], human_decision_receipt=_enrollment_receipt(value.get("human_decision_receipt")), conflict_references=[dict(zip(("replica_id", "replica_epoch", "origin_sequence", "event_id"), _identity_key(ref))) for ref in value["conflict_references"]])
+        normalized.update(work_id=_opaque(value["work_id"]), resolution=value["resolution"], human_decision_receipt=_human_decision_receipt(value.get("human_decision_receipt")), conflict_references=[dict(zip(("replica_id", "replica_epoch", "origin_sequence", "event_id"), _identity_key(ref))) for ref in value["conflict_references"]])
     elif set(value) - {"project_id", "replica_id", "replica_epoch", "origin_sequence", "event_id", "event_type", "causal_parents", "event_digest"}:
         raise ReplicaHold("hold_schema", "schema_invalid")
     supplied = _hex(value["event_digest"], "hold_transport_integrity", "transport_integrity_invalid")
@@ -235,6 +243,23 @@ def _enrollments(value: Any, project_id: str) -> dict[tuple[str, int], dict[str,
     return result
 
 
+def _inspection_context(project_id: str, identity: Mapping[str, Any], bundle_digest: str) -> str:
+    """Bind a verified external enrollment receipt to this exact bundle."""
+    return _digest({"project_id": project_id, "replica_id": identity["replica_id"],
+                    "replica_epoch": identity["replica_epoch"], "receipt_digest": identity["enrollment_receipt"]["receipt_digest"],
+                    "bundle_digest": bundle_digest})
+
+
+def _validated_inspection(value: Any, *, project_id: str, identity: Mapping[str, Any], bundle_digest: str) -> None:
+    """Consume, but never issue, a caller-provided prior inspection receipt."""
+    if not isinstance(value, Mapping) or set(value) != {"schema_version", "outcome", "project_id", "bundle_digest", "enrollment_context_digest", "flags"}:
+        raise ReplicaHold("hold_replica_identity", "replica_identity_invalid")
+    if value.get("schema_version") != VERSION or value.get("outcome") != "replica_export_ready" or value.get("project_id") != project_id or value.get("bundle_digest") != bundle_digest or value.get("flags") != FLAGS:
+        raise ReplicaHold("hold_replica_identity", "replica_identity_invalid")
+    if value.get("enrollment_context_digest") != _inspection_context(project_id, identity, bundle_digest):
+        raise ReplicaHold("hold_replica_identity", "replica_identity_invalid")
+
+
 def _bundle(value: Any) -> tuple[str, dict[str, Any], list[dict[str, Any]]]:
     """Validate immutable transport syntax without deciding enrollment trust."""
     if not isinstance(value, Mapping) or set(value) != {"schema_version", "outcome", "project_id", "replica_identity", "authority_generation", "authority_head", "frontier", "events", "bundle_digest", "flags"} or value.get("schema_version") != VERSION or value.get("outcome") != "replica_export_ready" or value.get("flags") != FLAGS:
@@ -292,13 +317,15 @@ def inspect_bundle(bundle: Any, enrolled_replicas: Any) -> dict[str, Any]:
         enrollment = _enrollments(enrolled_replicas, project_id).get((identity["replica_id"], identity["replica_epoch"]))
         if enrollment is None or enrollment["enrollment_receipt"] != identity["enrollment_receipt"]:
             raise ReplicaHold("hold_replica_identity", "replica_identity_invalid")
-        return _receipt("replica_export_ready", project_id, bundle_digest=bundle["bundle_digest"], accepted_identities=[_identity(event) for event in events])
+        return {"schema_version": VERSION, "outcome": "replica_export_ready", "project_id": project_id,
+                "bundle_digest": bundle["bundle_digest"], "enrollment_context_digest": _inspection_context(project_id, identity, bundle["bundle_digest"]),
+                "flags": dict(FLAGS)}
     except ReplicaHold as exc:
         pid = bundle.get("project_id") if isinstance(bundle, Mapping) and isinstance(bundle.get("project_id"), str) else None
         return _hold(exc, pid)
 
 
-def plan_import(local_snapshot: Any, local_event_set: Any, bundle: Any, *, transport_available: bool = True) -> dict[str, Any]:
+def plan_import(local_snapshot: Any, local_event_set: Any, bundle: Any, inspection_receipt: Any = None, *, transport_available: bool = True) -> dict[str, Any]:
     """Produce a read-only import plan; no event is appended or persisted."""
     try:
         project_id, generation, head = _snapshot(local_snapshot)
@@ -307,9 +334,10 @@ def plan_import(local_snapshot: Any, local_event_set: Any, bundle: Any, *, trans
             return _receipt("replica_offline", project_id, authority_generation=generation, authority_head=head, reason_code="replica_offline")
         if not isinstance(bundle, Mapping):
             raise ReplicaHold("hold_recovery_readback", "recovery_readback_required")
-        bundle_project, _identity_receipt, remote = _bundle(bundle)
+        bundle_project, identity_receipt, remote = _bundle(bundle)
         if bundle_project != project_id:
             raise ReplicaHold("hold_replica_identity", "replica_identity_invalid")
+        _validated_inspection(inspection_receipt, project_id=project_id, identity=identity_receipt, bundle_digest=bundle["bundle_digest"])
         local_by_id = {_identity_key(_identity(event)): event for event in local}
         accepted, duplicates = [], []
         for event in remote:
@@ -358,11 +386,23 @@ def reduce_converged_view(valid_event_set: Any) -> dict[str, Any]:
         for event in ordered:
             if event["event_type"] == "work_decision": decisions.setdefault(event["work_id"], []).append(event)
             elif event["event_type"] == "work_resolution": resolutions.setdefault(event["work_id"], []).append(event)
+        def ancestors(key: tuple[str, int, int, str]) -> set[tuple[str, int, int, str]]:
+            result: set[tuple[str, int, int, str]] = set()
+            stack = [_identity_key(parent) for parent in by_id[key]["causal_parents"]]
+            while stack:
+                candidate = stack.pop()
+                if candidate in result:
+                    continue
+                result.add(candidate)
+                stack.extend(_identity_key(parent) for parent in by_id[candidate]["causal_parents"])
+            return result
         conflicts = []
         for work_id, choices in decisions.items():
             if len({item["decision"] for item in choices}) > 1:
                 required = {_identity_key(_identity(item)) for item in choices}
-                resolved = any(required.issubset({_identity_key(ref) for ref in resolution["conflict_references"]}) for resolution in resolutions.get(work_id, []))
+                resolved = any(required.issubset({_identity_key(ref) for ref in resolution["conflict_references"]})
+                               and required.issubset(ancestors(_identity_key(_identity(resolution))))
+                               for resolution in resolutions.get(work_id, []))
                 if not resolved: conflicts.extend(_identity(item) for item in choices)
         if conflicts:
             return _receipt("hold_semantic_conflict", project_id, held_identities=conflicts, reason_code="semantic_conflict")
@@ -377,5 +417,5 @@ class FakeReplicaTransport:
     def __init__(self, available: bool = True):
         self.available = bool(available)
 
-    def plan_delivery(self, local_snapshot: Any, local_event_set: Any, bundle: Any) -> dict[str, Any]:
-        return plan_import(local_snapshot, local_event_set, bundle, transport_available=self.available)
+    def plan_delivery(self, local_snapshot: Any, local_event_set: Any, bundle: Any, inspection_receipt: Any = None) -> dict[str, Any]:
+        return plan_import(local_snapshot, local_event_set, bundle, inspection_receipt, transport_available=self.available)

@@ -35,6 +35,14 @@ $defs:
       receipt_id: {$ref: '#/$defs/opaque'}
       receipt_digest: {$ref: '#/$defs/digest'}
       outcome: {const: enrollment_accepted}
+  human_decision_receipt:
+    type: object
+    additionalProperties: false
+    required: [receipt_id, receipt_digest, outcome]
+    properties:
+      receipt_id: {$ref: '#/$defs/opaque'}
+      receipt_digest: {$ref: '#/$defs/digest'}
+      outcome: {const: human_decision_accepted}
   replica_identity:
     type: object
     additionalProperties: false
@@ -58,7 +66,7 @@ $defs:
       work_id: {$ref: '#/$defs/opaque'}
       decision: {enum: [accept, reject, hold]}
       resolution: {enum: [accept, reject, hold]}
-      human_decision_receipt: {$ref: '#/$defs/enrollment_receipt'}
+      human_decision_receipt: {$ref: '#/$defs/human_decision_receipt'}
       conflict_references:
         type: array
         maxItems: 32
@@ -68,6 +76,16 @@ $defs:
         maxItems: 32
         items: {$ref: '#/$defs/identity'}
       event_digest: {$ref: '#/$defs/digest'}
+    oneOf:
+      - required: [event_type, work_id, decision]
+        properties: {event_type: {const: work_decision}}
+        not: {anyOf: [{required: [resolution]}, {required: [human_decision_receipt]}, {required: [conflict_references]}]}
+      - required: [event_type, work_id, resolution, human_decision_receipt, conflict_references]
+        properties: {event_type: {const: work_resolution}}
+        not: {required: [decision]}
+      - required: [event_type]
+        properties: {event_type: {const: replica_note}}
+        not: {anyOf: [{required: [work_id]}, {required: [decision]}, {required: [resolution]}, {required: [human_decision_receipt]}, {required: [conflict_references]}]}
   bundle:
     type: object
     additionalProperties: false
@@ -88,6 +106,7 @@ $defs:
         maxItems: 100
         items: {$ref: '#/$defs/event'}
       bundle_digest: {$ref: '#/$defs/digest'}
+      enrollment_context_digest: {$ref: '#/$defs/digest'}
       flags: {$ref: '#/$defs/flags'}
   receipt:
     type: object
@@ -101,6 +120,7 @@ $defs:
       authority_generation: {type: integer, minimum: 0}
       authority_head: {$ref: '#/$defs/digest'}
       bundle_digest: {$ref: '#/$defs/digest'}
+      enrollment_context_digest: {$ref: '#/$defs/digest'}
       shared_view_digest: {$ref: '#/$defs/digest'}
       accepted_identities: {type: array, items: {$ref: '#/$defs/identity'}}
       duplicate_identities: {type: array, items: {$ref: '#/$defs/identity'}}
