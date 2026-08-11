@@ -111,6 +111,8 @@ def test_schema_runtime_variants():
     local = req(classification="local_only"); local.pop("gate"); local.pop("capability")
     optional = req(classification="optional_sync"); optional.pop("gate"); optional.pop("capability")
     jsonschema.validate(local, schema); jsonschema.validate(optional, schema); jsonschema.validate(req(), schema)
+    with pytest.raises(jsonschema.ValidationError): jsonschema.validate({**optional, "gate": req()["gate"]}, schema)
+    with pytest.raises(jsonschema.ValidationError): jsonschema.validate({**optional, "capability": req()["capability"]}, schema)
     with pytest.raises(jsonschema.ValidationError): jsonschema.validate({**optional, "capability": {"junk": True}}, schema)
 
 def test_no_host_io_and_external_holds_fixture_stability(monkeypatch):

@@ -50,6 +50,11 @@ $defs:
     allOf:
       - if: {properties: {classification: {const: must_publish}}}
         then: {required: [gate, capability]}
+      - if: {properties: {classification: {const: optional_sync}}}
+        then:
+          oneOf:
+            - not: {anyOf: [{required: [gate]}, {required: [capability]}]}
+            - required: [gate, capability]
     properties:
       schema_version: {const: GitHubMaterializationAdapter-v1}
       project_id: {$ref: '#/$defs/uuid'}
