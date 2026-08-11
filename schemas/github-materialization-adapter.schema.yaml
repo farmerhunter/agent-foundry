@@ -81,9 +81,9 @@ $defs:
       adapter_version: {type: string, minLength: 1}
       gate: {$ref: '#/$defs/gate'}
       capability: {$ref: '#/$defs/capability'}
-      occurred_at: {type: string, format: date-time}
+      occurred_at: {type: string, pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})$'}
       timestamp_provenance: {const: explicit}
-      nonce: {type: string, format: date-time}
+      nonce: {type: string, pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})$'}
       approved_remote_content: {$ref: '#/$defs/content'}
       canceled: {const: true}
       compensation: {const: true}
@@ -118,6 +118,6 @@ $defs:
       expected_remote_version: {type: string, minLength: 1}
       request_digest: {$ref: '#/$defs/digest'}
       desired_effect_digest: {$ref: '#/$defs/digest'}
-      occurred_at: {type: string, format: date-time}
-      read_timestamp: {type: string, format: date-time}
-      readback_nonce: {type: string, format: date-time}
+      occurred_at: {type: string, pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})$'}
+      read_timestamp: {type: string, pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})$'}
+      readback_nonce: {type: string, pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})$'}

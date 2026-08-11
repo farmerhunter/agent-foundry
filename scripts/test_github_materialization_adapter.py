@@ -178,6 +178,9 @@ def test_schema_runtime_variants():
     invalid({**optional, "capability": {"junk": True}}); invalid({**optional, "readback_only": False})
     invalid({**req(), "capability": {**req()["capability"], "supported_operations": []}})
     invalid({**req(), "approved_remote_content": {"title": "é" * 129}})
+    for field, value in (("approved_remote_content", None), ("nonce", False), ("expected_remote_ref", None), ("scheduler_generation", True), ("occurred_at", "2026-08-11T00:00:00.123Z")):
+        invalid({**req(), field: value})
+        with pytest.raises(MaterializationHold): execute_materialization({**req(), field: value}, state(), FakeConnector())
     with pytest.raises(MaterializationHold): plan_materialization(req(occurred_at="2026-02-30T00:00:00Z"), state())
     with pytest.raises(MaterializationHold): plan_materialization(req(approved_remote_content="raw"), state())
     with pytest.raises(MaterializationHold): plan_materialization(req(approved_remote_content={"body": 1}), state())

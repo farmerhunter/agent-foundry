@@ -140,7 +140,7 @@ def _base(request: Mapping[str, Any]) -> dict[str, Any]:
     if not isinstance(request.get("work_id"), str) or not request["work_id"]: raise MaterializationHold("hold_materialization_binding")
     attempt = request.get("attempt_sequence")
     if not isinstance(attempt, int) or isinstance(attempt, bool) or attempt < 1: raise MaterializationHold("hold_materialization_binding")
-    if not isinstance(request.get("scheduler_generation"), int) or request["scheduler_generation"] < 0: raise MaterializationHold("hold_materialization_stale_basis")
+    if not isinstance(request.get("scheduler_generation"), int) or isinstance(request.get("scheduler_generation"), bool) or request["scheduler_generation"] < 0: raise MaterializationHold("hold_materialization_stale_basis")
     _hex(request.get("scheduler_head")); _hex(request.get("desired_effect_digest")); _hex(request.get("approved_content_digest"))
     if request.get("classification") not in CLASSIFICATIONS: raise MaterializationHold("hold_materialization_policy")
     if request.get("operation") not in OPERATIONS: raise MaterializationHold("hold_materialization_operation_unsupported")
@@ -148,12 +148,14 @@ def _base(request: Mapping[str, Any]) -> dict[str, Any]:
         _hex(request.get(key))
     if request.get("privacy_class") not in {"public_metadata", "metadata_only", "repository_internal_redacted"}:
         raise MaterializationHold("hold_materialization_privacy")
-    _ts(request.get("occurred_at")); _ts(request.get("nonce")) if request.get("nonce") else None
+    _ts(request.get("occurred_at"))
+    if "nonce" in request: _ts(request.get("nonce"))
     if request.get("timestamp_provenance") != "explicit": raise MaterializationHold("hold_materialization_schema")
     for key in ("expected_remote_kind", "expected_remote_ref", "expected_remote_version"):
-        if request.get(key) is not None and (not isinstance(request[key], str) or not request[key]): raise MaterializationHold("hold_materialization_binding")
-    if request.get("expected_remote_digest") is not None: _hex(request["expected_remote_digest"])
+        if key in request and (not isinstance(request[key], str) or not request[key]): raise MaterializationHold("hold_materialization_binding")
+    if "expected_remote_digest" in request: _hex(request["expected_remote_digest"])
     content = request.get("approved_remote_content")
+    if "approved_remote_content" in request and content is None: raise MaterializationHold("hold_materialization_privacy")
     if content is not None:
         if not isinstance(content, Mapping): raise MaterializationHold("hold_materialization_privacy")
         for field in ("body", "summary"):
