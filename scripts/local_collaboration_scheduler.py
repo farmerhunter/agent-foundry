@@ -306,12 +306,26 @@ def reduce_scheduler_state(control_state: Mapping[str, Any], scheduler_events: I
     return state
 
 
+def _snapshot_value_for_reducer(value: Any) -> Any:
+    """Detach an immutable LedgerStore value for legacy JSON reducers only."""
+    if isinstance(value, Mapping):
+        return {key: _snapshot_value_for_reducer(item) for key, item in value.items()}
+    if isinstance(value, tuple):
+        return [_snapshot_value_for_reducer(item) for item in value]
+    return value
+
+
+def _snapshot_events_for_reducer(events: Iterable[Any]) -> list[dict[str, Any]]:
+    return [{"event_type": event.event_type, "payload": _snapshot_value_for_reducer(event.payload)} for event in events]
+
+
 def replay_scheduler_state(projects_root: str | Path, project_id: str) -> dict[str, Any]:
     pid = _project(project_id); path = Path(projects_root).expanduser() / pid / "collaboration.db"
     try:
         snapshot = LocalCollaborationLedger.authority_snapshot(path, expected_project_id=pid)
-        cstate = control.reduce_control_events([event for event in snapshot.events if event.event_type.startswith("control.")])
-        state = reduce_scheduler_state(cstate, [event for event in snapshot.events if event.event_type.startswith("scheduler.")])
+        events = _snapshot_events_for_reducer(snapshot.events)
+        cstate = control.reduce_control_events([event for event in events if event["event_type"].startswith("control.")])
+        state = reduce_scheduler_state(cstate, [event for event in events if event["event_type"].startswith("scheduler.")])
         state["authority_generation"] = snapshot.authority_generation
         state["authority_head"] = snapshot.authority_head
         return state

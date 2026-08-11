@@ -1,3 +1,4 @@
+import json
 import tempfile
 import uuid
 from pathlib import Path
@@ -73,6 +74,9 @@ def test_replay_uses_one_authority_snapshot_and_receipts_expose_pair():
             LocalCollaborationLedger.authority_snapshot = original
         assert len(calls) == 1
         assert (first["authority_generation"], first["authority_head"]) == (calls[0].authority_generation, calls[0].authority_head)
+        reducer_events = sc._snapshot_events_for_reducer(calls[0].events)
+        assert json.loads(json.dumps(reducer_events, ensure_ascii=False, sort_keys=True))
+        assert cp.reduce_control_events([event for event in reducer_events if event["event_type"].startswith("control.")])["initialized"]
         request = {"project_id": pid, "work_id": "w1", "operation": "initialize", "occurred_at": "2026-08-11T00:00:01Z"}
         applied = sc.apply_scheduler_request(root, pid, request)
         assert applied["replay"]["authority_generation"] > first["authority_generation"]

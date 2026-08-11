@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Mapping
+from types import MappingProxyType
 
 SCHEMA_VERSION = "1.0.0"
 GENESIS = "0" * 64
@@ -53,37 +54,11 @@ class LedgerBackupError(LedgerError):
     pass
 
 
-class _FrozenDict(dict):
-    """JSON-compatible mapping whose values cannot be changed by a reader."""
-    def __init__(self, values=()):
-        dict.__init__(self)
-        for key, value in dict(values).items():
-            dict.__setitem__(self, key, value)
-
-    @staticmethod
-    def _immutable(*args, **kwargs):
-        raise TypeError("snapshot values are immutable")
-
-    __setitem__ = __delitem__ = clear = pop = popitem = setdefault = update = __ior__ = _immutable
-
-
-class _FrozenList(list):
-    """JSON-compatible array whose members cannot be changed by a reader."""
-    def __init__(self, values=()):
-        list.__init__(self, values)
-
-    @staticmethod
-    def _immutable(*args, **kwargs):
-        raise TypeError("snapshot values are immutable")
-
-    __setitem__ = __delitem__ = append = clear = extend = insert = pop = remove = reverse = sort = __iadd__ = __imul__ = _immutable
-
-
 def _freeze_snapshot_json(value: Any) -> Any:
     if isinstance(value, Mapping):
-        return _FrozenDict({key: _freeze_snapshot_json(item) for key, item in value.items()})
+        return MappingProxyType({key: _freeze_snapshot_json(item) for key, item in value.items()})
     if isinstance(value, (list, tuple)):
-        return _FrozenList(_freeze_snapshot_json(item) for item in value)
+        return tuple(_freeze_snapshot_json(item) for item in value)
     return value
 
 
