@@ -1,8 +1,11 @@
 from __future__ import annotations
-import os, sys, tempfile, uuid, sqlite3, json, subprocess, time, signal
+import os, sys, tempfile, uuid, sqlite3, json, subprocess, time, signal, hashlib
 from pathlib import Path
+from jsonschema import Draft202012Validator
+import yaml
 sys.path.insert(0, str(Path(__file__).parent))
 from local_collaboration_ledger import LocalCollaborationLedger
+import github_evidence_cache as cache_module
 from github_evidence_cache import *
 
 class Producer:
@@ -19,6 +22,22 @@ def setup():
     ledger.bind_project("github_repository", "repo-opaque"); ledger.close()
     initialize_cache(projects_root=root, project_id=pid, repository_id="repo-opaque", repository_locator_digest="repo-locator",auth_scope_digest="a"*64, producer_contract="fake", producer_version="1")
     return root,pid
+
+def readout_kwargs(root, pid):
+    return dict(projects_root=root, project_id=pid, repository_id="repo-opaque",
+        repository_locator_digest="repo-locator", auth_scope_digest="a"*64,
+        evaluated_at="2026-08-11T00:00:00Z", max_age_seconds=10)
+
+def disposal_decision(*, project_id, metadata_digest, cache_path_digest, reason="test"):
+    return {
+        "schema_version":"GitHubEvidenceCache-v1", "operation":"cache_cleanup_disposal",
+        "decision_id":"human-decision-001", "decision":"dispose", "authorized_by":"human",
+        "project_id":project_id, "repository_id":"repo-opaque",
+        "repository_locator_digest":hashlib.sha256(json.dumps("repo-locator",separators=(",",":")).encode()).hexdigest(),
+        "auth_scope_digest":"a"*64, "cache_path_digest":cache_path_digest,
+        "metadata_digest":metadata_digest, "reason_digest":hashlib.sha256(json.dumps(reason,separators=(",",":")).encode()).hexdigest(),
+        "decided_at":"2026-08-11T00:00:00Z",
+    }
 
 def entry(revision="r1", summary="bounded", coverage="complete", ref="123"):
     return {"evidence_kind":"issue_metadata", "opaque_object_ref":ref, "selector_digest":"0"*64,
@@ -97,9 +116,19 @@ def test_authority_mismatch_no_orphan():
     assert not (Path(root)/pid/"github-evidence-cache.db").exists()
 
 def test_cleanup_is_explicit_and_local():
-    root,pid=setup(); path=Path(root)/pid/"github-evidence-cache.db"; plan=plan_cache_cleanup(projects_root=root,project_id=pid,disposal_reason="test",owner_receipt="owner")
+    root,pid=setup(); path=Path(root)/pid/"github-evidence-cache.db"
+    metadata=project_cache_readout(**readout_kwargs(root,pid))["metadata"]
+    cache_digest=hashlib.sha256(json.dumps(str(path),separators=(",",":")).encode()).hexdigest()
+    metadata_digest=hashlib.sha256(json.dumps(metadata,sort_keys=True,separators=(",",":")).encode()).hexdigest()
+    decision=disposal_decision(project_id=pid,metadata_digest=metadata_digest,cache_path_digest=cache_digest)
+    plan=plan_cache_cleanup(projects_root=root,project_id=pid,repository_id="repo-opaque",repository_locator_digest="repo-locator",auth_scope_digest="a"*64,disposal_decision=decision)
     assert plan["exists"] is True
-    out=apply_cache_cleanup(projects_root=root,project_id=pid,cache_path_digest=plan["cache_path_digest"],disposal_reason="test",owner_receipt="owner")
+    for bad in ({}, {**decision,"decision":"retain"}, {**decision,"auth_scope_digest":"b"*64}):
+        try: apply_cache_cleanup(projects_root=root,project_id=pid,repository_id="repo-opaque",repository_locator_digest="repo-locator",auth_scope_digest="a"*64,cache_path_digest=plan["cache_path_digest"],metadata_digest=plan["metadata_digest"],disposal_decision=bad)
+        except CacheHold as exc: assert exc.classification == "hold_cache_cleanup_gate"
+        else: raise AssertionError("missing/forged cleanup gate must hold")
+        assert path.exists()
+    out=apply_cache_cleanup(projects_root=root,project_id=pid,repository_id="repo-opaque",repository_locator_digest="repo-locator",auth_scope_digest="a"*64,cache_path_digest=plan["cache_path_digest"],metadata_digest=plan["metadata_digest"],disposal_decision=decision)
     assert out["outcome"] == "cache_cleaned" and not path.exists() and (Path(root)/pid/"collaboration.db").exists()
 
 def test_producer_coverage_is_explicit_and_terminal():
@@ -139,10 +168,10 @@ def test_closed_runtime_limits_and_preflight_do_not_touch_cache():
     assert path.read_bytes() == before and path.stat().st_mtime_ns == mtime
 
 def test_cache_metadata_declares_durability_and_reopen_validates():
-    root,pid=setup(); meta=project_cache_readout(projects_root=root,project_id=pid)["metadata"]
+    root,pid=setup(); meta=project_cache_readout(**readout_kwargs(root,pid))["metadata"]
     assert meta["durability"] == "wal_synchronous_normal"
     path=Path(root)/pid/"github-evidence-cache.db"; db=sqlite3.connect(path); db.execute("UPDATE metadata SET value='FULL' WHERE key='durability'"); db.commit(); db.close()
-    try: project_cache_readout(projects_root=root,project_id=pid)
+    try: project_cache_readout(**readout_kwargs(root,pid))
     except CacheHold as exc: assert exc.classification in {"hold_cache_schema","hold_cache_integrity"}
     else: raise AssertionError("tampered durability must hold")
 
@@ -234,7 +263,7 @@ class P:
 m.refresh_cache(projects_root=sys.argv[2],project_id=sys.argv[3],repository_id="repo-opaque",repository_locator_digest="repo-locator",auth_scope_digest="a"*64,selectors=["126"],evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10,producer=P())'''
     crash = subprocess.run([sys.executable,"-c",crash_code,str(Path(__file__).parent),root,pid])
     assert crash.returncode == -signal.SIGKILL
-    out=project_cache_readout(projects_root=root,project_id=pid)
+    out=project_cache_readout(**readout_kwargs(root,pid))
     after_crash=read_cache(projects_root=root,project_id=pid,evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10)
     assert ledger_path.read_bytes() == ledger_before and after_crash["entries"] == before_crash["entries"]
     assert after_crash["metadata"]["generation"] == before_crash["metadata"]["generation"]
@@ -286,6 +315,35 @@ def test_failed_producer_does_not_claim_durable_invocation():
     else: raise AssertionError("producer failure must hold")
     readout=read_cache(projects_root=root,project_id=pid,evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10)
     assert readout["counters"] == {"cache_miss":1} and _files_snapshot(path) == before
+
+def test_published_schema_conforms_to_runtime_public_envelopes():
+    schema=yaml.safe_load((Path(__file__).parent.parent / "schemas" / "github-evidence-cache.schema.yaml").read_text())
+    validator=Draft202012Validator(schema)
+    def valid(value):
+        errors=list(validator.iter_errors(value))
+        assert not errors, errors[0].message
+    root,pid=setup(); path=Path(root)/pid/"github-evidence-cache.db"
+    valid(project_cache_readout(**readout_kwargs(root,pid)))
+    refreshed=refresh_cache(projects_root=root,project_id=pid,repository_id="repo-opaque",repository_locator_digest="repo-locator",auth_scope_digest="a"*64,selectors=["123"],evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10,producer=Producer([entry()]))
+    valid(refreshed); valid(read_cache(projects_root=root,project_id=pid,evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10))
+    invalidated=invalidate_cache_entries(projects_root=root,project_id=pid,entry_keys=[],reason="reason",evaluated_at="2026-08-11T00:00:00Z")
+    valid(invalidated)
+    try:
+        refresh_cache(projects_root=root,project_id=pid,repository_id="repo-opaque",repository_locator_digest="repo-locator",auth_scope_digest="a"*64,selectors=["123"],evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10,producer=Producer([{**entry(),"facts":{"raw_body":"x"}}]))
+    except CacheHold as exc:
+        assert exc.classification == "hold_cache_privacy"
+        # Public failure is deliberately a typed, sanitized hold rather than
+        # an untyped result payload. Its classification is constrained by the
+        # closed runtime HOLD set and the cache remains available unchanged.
+        assert exc.classification in cache_module.HOLDS and path.exists()
+    else: raise AssertionError("privacy hold required")
+    metadata=project_cache_readout(**readout_kwargs(root,pid))["metadata"]
+    cache_digest=hashlib.sha256(json.dumps(str(path),separators=(",",":")).encode()).hexdigest()
+    metadata_digest=hashlib.sha256(json.dumps(metadata,sort_keys=True,separators=(",",":")).encode()).hexdigest()
+    decision=disposal_decision(project_id=pid,metadata_digest=metadata_digest,cache_path_digest=cache_digest)
+    plan=plan_cache_cleanup(projects_root=root,project_id=pid,repository_id="repo-opaque",repository_locator_digest="repo-locator",auth_scope_digest="a"*64,disposal_decision=decision)
+    valid(plan); valid(apply_cache_cleanup(projects_root=root,project_id=pid,repository_id="repo-opaque",repository_locator_digest="repo-locator",auth_scope_digest="a"*64,cache_path_digest=cache_digest,metadata_digest=metadata_digest,disposal_decision=decision))
+    assert not path.exists()
 
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):

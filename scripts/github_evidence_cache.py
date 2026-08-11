@@ -32,6 +32,11 @@ RECEIPT_DATA_KEYS = {
     "invalidate": {"generation", "count", "reason_digest"},
     "rebuild": {"generation", "count", "coverage"},
 }
+CLEANUP_DECISION_KEYS = {
+    "schema_version", "operation", "decision_id", "decision", "authorized_by",
+    "project_id", "repository_id", "repository_locator_digest", "auth_scope_digest",
+    "cache_path_digest", "metadata_digest", "reason_digest", "decided_at",
+}
 
 
 class CacheError(RuntimeError):
@@ -132,6 +137,55 @@ def _auth_scope_digest(value: Any) -> str:
     if not isinstance(value, str) or not HEX64.fullmatch(value):
         raise CacheHold("hold_cache_scope")
     return value
+
+
+def _metadata_digest(metadata: Mapping[str, Any]) -> str:
+    """Bind disposal to the exact, privacy-safe metadata snapshot."""
+    if not isinstance(metadata, Mapping) or set(metadata) != META_REQUIRED:
+        raise CacheHold("hold_cache_integrity")
+    return _hash(dict(metadata))
+
+
+def _cleanup_decision(value: Any, *, project_id: str, repository_id: str,
+                      repository_locator_digest: str, auth_scope_digest: str,
+                      cache_path_digest: str, metadata_digest: str) -> dict[str, Any]:
+    """Validate a closed Human/authorized-owner disposal decision.
+
+    This is deliberately an opaque, pre-authorized receipt boundary.  It does
+    not accept a free-form owner string and it never persists the decision in
+    the disposable cache immediately before deleting it.
+    """
+    if not isinstance(value, Mapping) or set(value) != CLEANUP_DECISION_KEYS:
+        raise CacheHold("hold_cache_cleanup_gate")
+    if value.get("schema_version") != VERSION or value.get("operation") != "cache_cleanup_disposal":
+        raise CacheHold("hold_cache_cleanup_gate")
+    if value.get("decision") != "dispose" or value.get("authorized_by") not in {"human", "authorized_owner"}:
+        raise CacheHold("hold_cache_cleanup_gate")
+    if not isinstance(value.get("decision_id"), str) or not value["decision_id"] or len(value["decision_id"].encode()) > 128:
+        raise CacheHold("hold_cache_cleanup_gate")
+    try:
+        _ts(value.get("decided_at"))
+        expected = {
+            "project_id": project_id, "repository_id": repository_id,
+            "repository_locator_digest": repository_locator_digest,
+            "auth_scope_digest": auth_scope_digest, "cache_path_digest": cache_path_digest,
+            "metadata_digest": metadata_digest,
+        }
+        if any(value[key] != expected[key] for key in expected):
+            raise CacheHold("hold_cache_cleanup_gate")
+        if not isinstance(value.get("reason_digest"), str) or not HEX64.fullmatch(value["reason_digest"]):
+            raise CacheHold("hold_cache_cleanup_gate")
+    except (TypeError, KeyError):
+        raise CacheHold("hold_cache_cleanup_gate") from None
+    return dict(value)
+
+
+def _result(*, operation: str, outcome: str, **fields: Any) -> dict[str, Any]:
+    """Closed outer result shared by all public operation APIs."""
+    return {
+        "schema_version": VERSION, "operation": operation, "outcome": outcome,
+        "authoritative": False, "confirmation_eligible": False, **fields,
+    }
 
 
 def _private(path: Path, mode: int) -> None:
@@ -455,19 +509,15 @@ def initialize_cache(*, projects_root, project_id, repository_id, repository_loc
             if fresh_projection:
                 cache._counter("cache_miss")
             cache.db.commit()
-            return {"outcome": "cache_initialized", "authoritative": False, "project_id": lm["project_id"], "cache_path_digest": _hash(str(path)), "generation": int(values["generation"])}
+            return _result(operation="initialize_cache", outcome="cache_initialized", project_id=lm["project_id"], cache_path_digest=_hash(str(path)), generation=int(values["generation"]))
         finally: cache.close()
     finally: ledger.close()
 
 
 def _read_envelope(*, outcome, entries, evaluated_at, offline, metadata, counters, coverage, freshness, age_seconds, next_action):
-    return {
-        "outcome": outcome, "entries": entries, "as_of": evaluated_at,
-        "age_seconds": age_seconds, "coverage": coverage, "freshness": freshness,
-        "offline": bool(offline), "authoritative": False,
-        "confirmation_eligible": False, "next_action": next_action,
-        "metadata": metadata, "counters": counters,
-    }
+    return _result(operation="read_cache", outcome=outcome, entries=entries, as_of=evaluated_at,
+        age_seconds=age_seconds, coverage=coverage, freshness=freshness,
+        offline=bool(offline), next_action=next_action, metadata=metadata, counters=counters)
 
 
 def read_cache(*, projects_root, project_id, evaluated_at, max_age_seconds, offline=False, repository_id=None, repository_locator_digest=None, auth_scope_digest=None):
@@ -569,7 +619,7 @@ def refresh_cache(*, projects_root, project_id, repository_id, repository_locato
             cache._counter("cache_hit"); cache._counter("refresh_requests"); cache._counter("producer_invocations")
             rid = cache._receipt("refresh", {"generation": before, "changed": 0, "duplicates": 0, "producer_id": result["producer_id"], "coverage": producer_coverage}, created_at=evaluated_at, provenance="caller_evaluated_at")
             cache.db.execute("COMMIT")
-            return {"outcome": "cache_unavailable" if producer_coverage == "unavailable" else "cache_privacy_held", "generation": before, "changed_count": 0, "duplicate_count": 0, "receipt_id": rid, "authoritative": False, "confirmation_eligible": False}
+            return _result(operation="refresh_cache", outcome="cache_unavailable" if producer_coverage == "unavailable" else "cache_privacy_held", generation=before, changed_count=0, duplicate_count=0, receipt_id=rid)
         for entry in entries:
             old = cache.db.execute("SELECT payload_hash,source_revision,payload FROM entries WHERE entry_key=?", (entry["entry_key"],)).fetchone()
             if old and old["source_revision"] == entry["source_revision"]:
@@ -589,12 +639,12 @@ def refresh_cache(*, projects_root, project_id, repository_id, repository_locato
             # observation of this request.
             cache._counter("cache_hit"); cache._counter("refresh_requests"); cache._counter("producer_invocations")
             cache.db.execute("COMMIT")
-            return {"outcome": "cache_partial_preserved" if preserved_complete else "cache_duplicate", "generation": before, "changed_count": 0, "duplicate_count": duplicates, "receipt_id": None, "authoritative": False, "confirmation_eligible": False}
+            return _result(operation="refresh_cache", outcome="cache_partial_preserved" if preserved_complete else "cache_duplicate", generation=before, changed_count=0, duplicate_count=duplicates, receipt_id=None)
         newgen = before + changed; cache._setmeta("generation", newgen); cache._setmeta("ledger_head", lm["head"])
         cache._counter("cache_hit"); cache._counter("refresh_requests"); cache._counter("producer_invocations")
         rid = cache._receipt("refresh", {"generation": newgen, "changed": changed, "duplicates": duplicates, "producer_id": result["producer_id"], "coverage": producer_coverage}, created_at=evaluated_at, provenance="caller_evaluated_at")
         cache.db.execute("COMMIT")
-        return {"outcome": "cache_duplicate" if not changed else ("cache_partial" if any(e["coverage"] != "complete" for e in entries) else "cache_refreshed"), "generation": newgen, "changed_count": changed, "duplicate_count": duplicates, "receipt_id": rid, "authoritative": False, "confirmation_eligible": False}
+        return _result(operation="refresh_cache", outcome="cache_duplicate" if not changed else ("cache_partial" if any(e["coverage"] != "complete" for e in entries) else "cache_refreshed"), generation=newgen, changed_count=changed, duplicate_count=duplicates, receipt_id=rid)
     except CacheHold:
         try:
             if cache is not None and cache.db.in_transaction: cache.db.execute("ROLLBACK")
@@ -641,7 +691,7 @@ def invalidate_cache_entries(*, projects_root, project_id, entry_keys, reason, e
         for key in keys:
             cache.db.execute("UPDATE entries SET invalidated=1,state='invalidated' WHERE entry_key=?", (key,))
         rid = cache._receipt("invalidate", {"count": len(keys), "reason_digest": _hash(reason), "generation": before}, created_at=evaluated_at, provenance="caller_evaluated_at"); cache.db.execute("COMMIT")
-        return {"outcome": "cache_invalidated", "count": len(keys), "receipt_id": rid, "generation": before}
+        return _result(operation="invalidate_cache_entries", outcome="cache_invalidated", count=len(keys), receipt_id=rid, generation=before)
     except CacheHold:
         try:
             if cache is not None and cache.db.in_transaction: cache.db.execute("ROLLBACK")
@@ -687,7 +737,7 @@ def rebuild_cache(*, projects_root, project_id, repository_id, repository_locato
         cache.db.execute("DELETE FROM entries")
         for entry in normalized: cache.db.execute("INSERT INTO entries VALUES (?,?,?,?,?,?,0)", (entry["entry_key"], _canon(entry), entry["payload_hash"], entry["source_revision"], entry["fetched_at"], "partial" if entry["coverage"] == "partial" else "fresh_as_of_fetch"))
         generation = before + 1; cache._setmeta("generation", generation); cache._setmeta("ledger_head", lm["head"]); rid = cache._receipt("rebuild", {"generation": generation, "count": len(normalized), "coverage": coverage}, created_at=evaluated_at, provenance="caller_evaluated_at"); cache.db.execute("COMMIT")
-        return {"outcome": "cache_rebuilt", "generation": generation, "receipt_id": rid}
+        return _result(operation="rebuild_cache", outcome="cache_rebuilt", generation=generation, receipt_id=rid)
     except CacheHold:
         try:
             if cache is not None and cache.db.in_transaction: cache.db.execute("ROLLBACK")
@@ -710,35 +760,93 @@ def rebuild_cache(*, projects_root, project_id, repository_id, repository_locato
         ledger.close()
 
 
-def project_cache_readout(*, projects_root, project_id):
-    ledger, lm = _authority(projects_root, project_id); path = _cache_path(projects_root, project_id)
+def project_cache_readout(*, projects_root, project_id, repository_id, repository_locator_digest,
+                          auth_scope_digest, evaluated_at, max_age_seconds, offline=False):
+    """Binding-checked projection readout, never a second unbound cache view."""
+    readout = read_cache(
+        projects_root=projects_root, project_id=project_id, repository_id=repository_id,
+        repository_locator_digest=repository_locator_digest, auth_scope_digest=auth_scope_digest,
+        evaluated_at=evaluated_at, max_age_seconds=max_age_seconds, offline=offline,
+    )
+    readout["operation"] = "project_cache_readout"
+    return readout
+
+
+def _cleanup_binding(*, projects_root, project_id, repository_id, repository_locator_digest,
+                     auth_scope_digest):
+    locator = _digest_locator(repository_locator_digest)
+    scope = _auth_scope_digest(auth_scope_digest)
+    ledger, lm = _authority(projects_root, project_id)
+    path = _cache_path(projects_root, project_id)
+    cache = None
     try:
-        if not path.is_file(): return {"outcome": "cache_miss", "authoritative": False, "counters": {"cache_miss": 1}}
+        if not path.is_file():
+            raise CacheHold("hold_cache_cleanup_gate")
         cache = GitHubEvidenceCache(path, read_only=True)
-        try: return {"outcome": "cache_hit", "authoritative": False, "metadata": cache._meta(), "counters": {r["name"]: r["value"] for r in cache.db.execute("SELECT * FROM counters")}}
-        finally: cache.close()
-    finally: ledger.close()
+        metadata = cache._meta()
+        _binding(metadata, lm["project_id"], repository_id, locator, scope)
+        return ledger, lm, path, locator, scope, metadata
+    except Exception:
+        if cache is not None:
+            cache.close()
+        ledger.close()
+        raise
+    finally:
+        if cache is not None:
+            cache.close()
 
 
-def plan_cache_cleanup(*, projects_root, project_id, disposal_reason, owner_receipt):
-    if not isinstance(disposal_reason, str) or not disposal_reason or not isinstance(owner_receipt, str) or not owner_receipt: raise CacheHold("hold_cache_cleanup_gate")
-    ledger, lm = _authority(projects_root, project_id); path = _cache_path(projects_root, project_id)
-    try: return {"outcome": "cache_cleanup_planned", "exists": path.is_file(), "cache_path_digest": _hash(str(path)), "project_id": lm["project_id"], "reason_digest": _hash(disposal_reason), "owner_receipt_digest": _hash(owner_receipt)}
-    finally: ledger.close()
-
-
-def apply_cache_cleanup(*, projects_root, project_id, cache_path_digest, disposal_reason, owner_receipt):
-    if not isinstance(owner_receipt, str) or not owner_receipt or not isinstance(disposal_reason, str) or not disposal_reason: raise CacheHold("hold_cache_cleanup_gate")
-    ledger, lm = _authority(projects_root, project_id); path = _cache_path(projects_root, project_id)
+def plan_cache_cleanup(*, projects_root, project_id, repository_id, repository_locator_digest,
+                       auth_scope_digest, disposal_decision):
+    ledger, lm, path, locator, scope, metadata = _cleanup_binding(
+        projects_root=projects_root, project_id=project_id, repository_id=repository_id,
+        repository_locator_digest=repository_locator_digest, auth_scope_digest=auth_scope_digest,
+    )
     try:
-        if _hash(str(path)) != cache_path_digest: raise CacheHold("hold_cache_cleanup_gate")
+        path_digest = _hash(str(path)); metadata_digest = _metadata_digest(metadata)
+        decision = _cleanup_decision(
+            disposal_decision, project_id=lm["project_id"], repository_id=str(repository_id),
+            repository_locator_digest=locator, auth_scope_digest=scope, cache_path_digest=path_digest,
+            metadata_digest=metadata_digest,
+        )
+        return _result(operation="plan_cache_cleanup", outcome="cache_cleanup_planned", exists=True,
+            project_id=lm["project_id"], repository_id=str(repository_id),
+            repository_locator_digest=locator, auth_scope_digest=scope, cache_path_digest=path_digest,
+            metadata_digest=metadata_digest, decision_id=decision["decision_id"],
+            decision_digest=_hash(decision))
+    finally:
+        ledger.close()
+
+
+def apply_cache_cleanup(*, projects_root, project_id, repository_id, repository_locator_digest,
+                        auth_scope_digest, cache_path_digest, metadata_digest, disposal_decision):
+    """Delete only the exact, disposable projection after a closed gate check."""
+    ledger, lm, path, locator, scope, metadata = _cleanup_binding(
+        projects_root=projects_root, project_id=project_id, repository_id=repository_id,
+        repository_locator_digest=repository_locator_digest, auth_scope_digest=auth_scope_digest,
+    )
+    try:
+        expected_path = _hash(str(path)); expected_metadata = _metadata_digest(metadata)
+        if cache_path_digest != expected_path or metadata_digest != expected_metadata:
+            raise CacheHold("hold_cache_cleanup_gate")
+        decision = _cleanup_decision(
+            disposal_decision, project_id=lm["project_id"], repository_id=str(repository_id),
+            repository_locator_digest=locator, auth_scope_digest=scope, cache_path_digest=expected_path,
+            metadata_digest=expected_metadata,
+        )
         for suffix in ("", "-wal", "-shm"):
             target = Path(str(path) + suffix)
             if target.exists():
-                if target.is_symlink() or (target.is_file() and stat.S_IMODE(target.stat().st_mode) != 0o600): raise CacheHold("hold_cache_permission")
+                if target.is_symlink() or (target.is_file() and stat.S_IMODE(target.stat().st_mode) != 0o600):
+                    raise CacheHold("hold_cache_permission")
                 target.unlink()
-        return {"outcome": "cache_cleaned", "project_id": lm["project_id"], "cache_path_digest": cache_path_digest, "owner_receipt_digest": _hash(owner_receipt)}
-    finally: ledger.close()
+        return _result(operation="apply_cache_cleanup", outcome="cache_cleaned",
+            project_id=lm["project_id"], repository_id=str(repository_id),
+            repository_locator_digest=locator, auth_scope_digest=scope,
+            cache_path_digest=expected_path, metadata_digest=expected_metadata,
+            decision_id=decision["decision_id"], decision_digest=_hash(decision))
+    finally:
+        ledger.close()
 
 
 __all__ = ["GitHubEvidenceCache", "CacheError", "CacheHold", "CacheIntegrityError", "initialize_cache", "read_cache", "refresh_cache", "invalidate_cache_entries", "rebuild_cache", "project_cache_readout", "plan_cache_cleanup", "apply_cache_cleanup"]
