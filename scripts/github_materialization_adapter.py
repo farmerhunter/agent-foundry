@@ -64,6 +64,17 @@ def _walk(value: Any, depth: int = 0, count: list[int] | None = None) -> None:
     count = count or [0]; count[0] += 1
     if depth > 10 or count[0] > 2000:
         raise MaterializationHold("hold_materialization_schema")
+    if isinstance(value, Mapping):
+        for key, child in value.items():
+            if not isinstance(key, str) or key.lower() in FORBIDDEN:
+                raise MaterializationHold("hold_materialization_privacy")
+            if isinstance(child, str) and any(word in child.lower() for word in FORBIDDEN):
+                raise MaterializationHold("hold_materialization_privacy")
+            _walk(child, depth + 1, count)
+    elif isinstance(value, (list, tuple)):
+        for child in value: _walk(child, depth + 1, count)
+    elif value is not None and not isinstance(value, (str, int, bool)):
+        raise MaterializationHold("hold_materialization_schema")
 
 
 def _walk_content(value: Any, depth: int = 0, count: list[int] | None = None) -> None:
@@ -81,19 +92,6 @@ def _walk_content(value: Any, depth: int = 0, count: list[int] | None = None) ->
             raise MaterializationHold("hold_materialization_privacy")
     elif value is not None and not isinstance(value, (int, bool)):
         raise MaterializationHold("hold_materialization_privacy")
-    if isinstance(value, Mapping):
-        for key, child in value.items():
-            if not isinstance(key, str) or key.lower() in FORBIDDEN:
-                raise MaterializationHold("hold_materialization_privacy")
-            if isinstance(child, str) and any(word in child.lower() for word in FORBIDDEN):
-                raise MaterializationHold("hold_materialization_privacy")
-            _walk(child, depth + 1, count)
-    elif isinstance(value, (list, tuple)):
-        for child in value: _walk(child, depth + 1, count)
-    elif value is not None and not isinstance(value, (str, int, bool)):
-        raise MaterializationHold("hold_materialization_schema")
-
-
 def _uuid(value: Any) -> str:
     try: return str(uuid.UUID(str(value)))
     except (ValueError, TypeError, AttributeError): raise MaterializationHold("hold_materialization_binding") from None
@@ -164,6 +162,9 @@ def _state_check(req: Mapping[str, Any], scheduler_state: Mapping[str, Any]) -> 
     if not isinstance(scheduler_state, Mapping): raise MaterializationHold("hold_materialization_scheduler_state")
     if scheduler_state.get("project_id") not in (None, req["project_id"]): raise MaterializationHold("hold_materialization_binding")
     if scheduler_state.get("remote_intent_state") != "pending_materialization": raise MaterializationHold("hold_materialization_scheduler_state")
+    state_generation = scheduler_state.get("scheduler_generation", scheduler_state.get("control_generation"))
+    state_head = scheduler_state.get("scheduler_head", scheduler_state.get("control_head"))
+    if state_generation != req["scheduler_generation"] or state_head != req["scheduler_head"]: raise MaterializationHold("hold_materialization_stale_basis")
     if str(scheduler_state.get("intent_id")) != req["intent_id"] or scheduler_state.get("attempt_sequence") != req["attempt_sequence"]: raise MaterializationHold("hold_materialization_stale_basis")
     if scheduler_state.get("desired_effect_digest") != req["desired_effect_digest"]: raise MaterializationHold("hold_materialization_stale_basis")
 
@@ -175,7 +176,8 @@ def _gate_capability(req: Mapping[str, Any]) -> None:
     if gate.get("kind") != "fixture_only" or gate.get("production_eligibility") is not False: raise MaterializationHold("hold_materialization_approval")
     if any(gate.get(k) != v for k, v in {"project_id": req["project_id"], "intent_id": req["intent_id"], "attempt_sequence": req["attempt_sequence"], "operation": req["operation"], "repository_id": req["repository_id"], "effect_digest": req["desired_effect_digest"], "content_digest": req["approved_content_digest"]}.items()): raise MaterializationHold("hold_materialization_approval")
     required = {"trust_domain": "same_process_reference", "production_eligibility": False, "network_capability": False}
-    if not isinstance(cap, Mapping) or any(cap.get(k) != v for k, v in required.items() for _ in [0]): raise MaterializationHold("hold_materialization_connector_untrusted")
+    if not isinstance(cap, Mapping) or set(cap) != {"trust_domain", "production_eligibility", "network_capability", "adapter_id", "adapter_version", "supported_operations"} or any(cap.get(k) != v for k, v in required.items()): raise MaterializationHold("hold_materialization_connector_untrusted")
+    if not isinstance(cap.get("supported_operations"), list) or any(not isinstance(item, str) or item not in OPERATIONS for item in cap["supported_operations"]): raise MaterializationHold("hold_materialization_connector_untrusted")
     if cap.get("adapter_id") != req.get("adapter_id") or cap.get("adapter_version") != req.get("adapter_version") or req["operation"] not in set(cap.get("supported_operations", [])): raise MaterializationHold("hold_materialization_connector_untrusted")
 
 
@@ -200,13 +202,22 @@ class FakeConnector:
         return dict(self.state.get(request["idempotency_key"], {}))
     def write(self, request: Mapping[str, Any]) -> Mapping[str, Any]:
         self.calls.append(("write", request["idempotency_key"]))
-        self.state[request["idempotency_key"]] = {"effect_digest": request["desired_effect_digest"], "content_digest": request["approved_content_digest"], "remote_kind": request.get("expected_remote_kind"), "remote_ref": request.get("expected_remote_ref"), "remote_version": request.get("expected_remote_version"), "remote_digest": request.get("expected_remote_digest")}
+        self.state[request["idempotency_key"]] = {"operation": request["operation"], "effect_digest": request["desired_effect_digest"], "content_digest": request["approved_content_digest"], "remote_kind": request.get("expected_remote_kind"), "remote_ref": request.get("expected_remote_ref"), "remote_version": request.get("expected_remote_version"), "remote_digest": request.get("expected_remote_digest")}
         if self.crash_after_write: raise CrashAfterWrite
         return self.state[request["idempotency_key"]]
 
 
 class CrashAfterWrite(Exception):
     """Test-only boundary representing process loss after the fake write."""
+
+
+def _remote_matches(req: Mapping[str, Any], observed: Mapping[str, Any]) -> bool:
+    expected = {
+        "operation": req["operation"], "remote_kind": req.get("expected_remote_kind"),
+        "remote_ref": req.get("expected_remote_ref"), "remote_version": req.get("expected_remote_version"),
+        "remote_digest": req.get("expected_remote_digest"),
+    }
+    return all(observed.get(key) == value for key, value in expected.items())
 
 
 def execute_materialization(request: Mapping[str, Any], scheduler_state: Mapping[str, Any], connector: Any, cache_observation: Mapping[str, Any] | None = None) -> dict[str, Any]:
@@ -221,7 +232,7 @@ def execute_materialization(request: Mapping[str, Any], scheduler_state: Mapping
     try: pre = connector.readback(req)
     except Exception: raise MaterializationHold("hold_materialization_readback_unavailable") from None
     if isinstance(pre, Mapping) and pre:
-        if pre.get("effect_digest") == req["desired_effect_digest"] and pre.get("content_digest") == req["approved_content_digest"]: return _result(req["operation"], "materialization_duplicate", classification=req["classification"], project_id=req["project_id"], intent_id=req["intent_id"], attempt_sequence=req["attempt_sequence"], idempotency_key=req["idempotency_key"])
+        if _remote_matches(req, pre) and pre.get("effect_digest") == req["desired_effect_digest"] and pre.get("content_digest") == req["approved_content_digest"]: return _result(req["operation"], "materialization_duplicate", classification=req["classification"], project_id=req["project_id"], intent_id=req["intent_id"], attempt_sequence=req["attempt_sequence"], idempotency_key=req["idempotency_key"])
         raise MaterializationHold("hold_materialization_remote_conflict")
     try: connector.write(req)
     except CrashAfterWrite:
@@ -230,7 +241,7 @@ def execute_materialization(request: Mapping[str, Any], scheduler_state: Mapping
     except Exception: raise MaterializationHold("hold_materialization_readback_unavailable") from None
     try: post = connector.readback(req)
     except Exception: raise MaterializationHold("hold_materialization_retry_required") from None
-    if not isinstance(post, Mapping) or post.get("effect_digest") != req["desired_effect_digest"] or post.get("content_digest") != req["approved_content_digest"]: raise MaterializationHold("hold_materialization_readback_unavailable")
+    if not isinstance(post, Mapping) or not _remote_matches(req, post) or post.get("effect_digest") != req["desired_effect_digest"] or post.get("content_digest") != req["approved_content_digest"]: raise MaterializationHold("hold_materialization_remote_conflict")
     return _result(req["operation"], "materialization_readback_verified", classification=req["classification"], project_id=req["project_id"], intent_id=req["intent_id"], attempt_sequence=req["attempt_sequence"], idempotency_key=req["idempotency_key"], readback_digest=_digest(post), opaque_receipt_ref="fake:" + req["idempotency_key"])
 
 

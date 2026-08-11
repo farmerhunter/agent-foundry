@@ -22,7 +22,7 @@ def req(**extra):
 
 def state():
     return {"project_id": PID, "remote_intent_state": "pending_materialization", "intent_id": INTENT,
-            "attempt_sequence": 1, "desired_effect_digest": H}
+            "attempt_sequence": 1, "desired_effect_digest": H, "scheduler_generation": 4, "scheduler_head": H}
 
 def test_local_only_zero_calls():
     r = req(classification="local_only"); r.pop("gate"); r.pop("capability")
@@ -48,3 +48,27 @@ def test_conflict_and_crash_hold():
 def test_wrong_state_and_unknown_operation_hold():
     with pytest.raises(MaterializationHold): plan_materialization(req(operation="delete_issue"), state())
     with pytest.raises(MaterializationHold): plan_materialization(req(), {**state(), "remote_intent_state": "confirmed"})
+
+def test_stale_scheduler_binding_and_closed_capability_hold():
+    with pytest.raises(MaterializationHold) as e: plan_materialization(req(), {**state(), "scheduler_generation": 3})
+    assert str(e.value) == "hold_materialization_stale_basis"
+    bad = req(capability={**req()["capability"], "junk": True})
+    with pytest.raises(MaterializationHold) as e: execute_materialization(bad, state(), FakeConnector())
+    assert str(e.value) == "hold_materialization_connector_untrusted"
+
+def test_bounded_approved_body_and_wrong_remote_identity():
+    content = {"body": "synthetic comment", "summary": "short"}
+    digest = hashlib.sha256(__import__("json").dumps(content, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()).hexdigest()
+    r = req(approved_remote_content=content, approved_content_digest=digest)
+    r["gate"] = {**r["gate"], "content_digest": digest}
+    assert execute_materialization(r, state(), FakeConnector())["outcome"] == "materialization_readback_verified"
+    c = FakeConnector(); first = execute_materialization(req(), state(), c); assert first["outcome"] == "materialization_readback_verified"
+    c.state[first["idempotency_key"]]["remote_ref"] = "out-of-band"
+    with pytest.raises(MaterializationHold) as e: execute_materialization(req(), state(), c)
+    assert str(e.value) == "hold_materialization_remote_conflict"
+
+def test_privacy_and_crash_do_not_confirm():
+    with pytest.raises(MaterializationHold) as e: plan_materialization(req(approved_remote_content={"body": "prompt transcript"}), state())
+    assert str(e.value) == "hold_materialization_privacy"
+    result = execute_materialization(req(), state(), FakeConnector(crash_after_write=True))
+    assert result["outcome"] == "materialization_recovery_readback_required" and result["remote_mutation_performed"] is False
