@@ -10,6 +10,7 @@ import datetime as dt
 import hashlib
 import json
 import re
+import sqlite3
 import uuid
 from pathlib import Path
 from typing import Any, Iterable, Mapping
@@ -370,6 +371,10 @@ def replay_scheduler_state(projects_root: str | Path, project_id: str) -> dict[s
         raise
     except (LedgerError, OSError) as exc:
         raise _hold_from_ledger(exc) from exc
+    except sqlite3.OperationalError as exc:
+        if "locked" in str(exc).lower() or "busy" in str(exc).lower():
+            raise SchedulerHold("hold_ledger_busy") from exc
+        raise SchedulerHold("hold_ledger_integrity") from exc
     except Exception as exc:
         # A malformed, foreign, or unreadable authority must never become a
         # best-effort replay.

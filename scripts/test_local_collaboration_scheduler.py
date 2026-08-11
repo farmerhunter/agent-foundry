@@ -4,7 +4,9 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import time
 import uuid
+import shutil
 from pathlib import Path
 
 from local_collaboration_ledger import LocalCollaborationLedger
@@ -367,19 +369,29 @@ def test_replay_exposes_committed_authority_snapshot_without_side_effects():
         pid = _setup(root)
         path = Path(root) / pid / "collaboration.db"
         sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "initialize", "occurred_at": "2026-08-11T00:00:01Z"})
+        intent = str(uuid.uuid4())
+        sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "intent", "intent_id": intent, "intent_kind": "issue", "desired_effect": {"kind": "issue"}, "occurred_at": "2026-08-11T00:00:02Z"})
+        pending_request = {"project_id": pid, "work_id": "w1", "operation": "pending", "intent_id": intent, "expected_remote_kind": "issue", "expected_remote_ref": "opaque:404", "expected_remote_digest": "a" * 64, "expected_remote_version": "v1", "occurred_at": "2026-08-11T00:00:03Z"}
+        pending = sc.apply_scheduler_request(root, pid, pending_request)
         expected = _ledger_authority(path, pid)
+        assert (pending["replay"]["authority_generation"], pending["replay"]["authority_head"]) == expected
         before = _filesystem_snapshot(path)
         replay = sc.replay_scheduler_state(root, pid)
         assert (replay["authority_generation"], replay["authority_head"]) == expected
         assert replay["authority_generation"] > replay["events"]
         _assert_filesystem_unchanged(path, before)
 
-        # A duplicate is not a commit and therefore preserves the pair.
-        duplicate = sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "initialize", "occurred_at": "2026-08-11T00:00:01Z"})
+        # A scheduler action after the pending intent has a normal append
+        # receipt. Its exact duplicate is not a commit and preserves the pair.
+        transition_request = {"project_id": pid, "work_id": "w1", "operation": "transition", "from_state": "registered", "to_state": "queued", "transition_sequence": 1, "occurred_at": "2026-08-11T00:00:04Z"}
+        action = sc.apply_scheduler_request(root, pid, transition_request)
+        action_pair = _ledger_authority(path, pid)
+        assert (action["replay"]["authority_generation"], action["replay"]["authority_head"]) == action_pair
+        duplicate = sc.apply_scheduler_request(root, pid, transition_request)
         assert duplicate["decision"] == "duplicate"
-        assert (duplicate["replay"]["authority_generation"], duplicate["replay"]["authority_head"]) == expected
+        assert (duplicate["replay"]["authority_generation"], duplicate["replay"]["authority_head"]) == action_pair
 
-        changed = sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "transition", "from_state": "registered", "to_state": "queued", "transition_sequence": 1, "occurred_at": "2026-08-11T00:00:02Z"})
+        changed = sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "transition", "from_state": "queued", "to_state": "claimed", "transition_sequence": 2, "occurred_at": "2026-08-11T00:00:05Z"})
         assert changed["mutation_performed"]
         assert (changed["replay"]["authority_generation"], changed["replay"]["authority_head"]) == _ledger_authority(path, pid)
         assert (changed["replay"]["authority_generation"], changed["replay"]["authority_head"]) != expected
@@ -396,14 +408,29 @@ def test_replay_authority_snapshot_negative_paths_hold_without_mutation():
     """Read-only replay never turns invalid authorities into a nullable snapshot."""
     with tempfile.TemporaryDirectory() as root:
         pid = _setup(root); path = Path(root) / pid / "collaboration.db"
-        before = _filesystem_snapshot(path)
+        missing_pid = str(uuid.uuid4()); missing = Path(root) / missing_pid / "collaboration.db"
+        before = _filesystem_snapshot(missing)
         try:
-            sc.replay_scheduler_state(root, str(uuid.uuid4()))
+            sc.replay_scheduler_state(root, missing_pid)
         except sc.SchedulerHold as exc:
             assert str(exc) == "hold_ledger_integrity"
         else:
             raise AssertionError("missing/foreign authority must hold")
-        _assert_filesystem_unchanged(path, before)
+        _assert_filesystem_unchanged(missing, before)
+
+        # A valid authority copied under a different project directory is not
+        # a valid binding for that directory/project identity.
+        foreign_pid = str(uuid.uuid4()); foreign_dir = Path(root) / foreign_pid
+        foreign_dir.mkdir(mode=0o700)
+        foreign = foreign_dir / "collaboration.db"; shutil.copy2(path, foreign); foreign.chmod(0o600)
+        foreign_before = _filesystem_snapshot(foreign)
+        try:
+            sc.replay_scheduler_state(root, foreign_pid)
+        except sc.SchedulerHold as exc:
+            assert str(exc) == "hold_ledger_integrity"
+        else:
+            raise AssertionError("valid but foreign project binding must hold")
+        _assert_filesystem_unchanged(foreign, foreign_before)
 
         # A non-canonical metadata schema remains a schema hold without a
         # replay connection writing WAL/SHM or fixing it.
@@ -426,58 +453,65 @@ def test_replay_authority_snapshot_corruption_and_permissions_hold():
         connection = sqlite3.connect(path)
         connection.execute("UPDATE events SET event_hash=? WHERE sequence=1", ("f" * 64,))
         connection.commit(); connection.close()
+        before = _filesystem_snapshot(path)
         try:
             sc.replay_scheduler_state(root, pid)
         except sc.SchedulerHold as exc:
             assert str(exc) == "hold_ledger_integrity"
         else:
             raise AssertionError("hash-chain corruption must hold")
+        _assert_filesystem_unchanged(path, before)
 
     with tempfile.TemporaryDirectory() as root:
         pid = _setup(root); path = Path(root) / pid / "collaboration.db"
-        path.chmod(0o644)
+        path.chmod(0o644); before = _filesystem_snapshot(path)
         try:
             sc.replay_scheduler_state(root, pid)
         except sc.SchedulerHold as exc:
             assert str(exc) == "hold_ledger_permission"
         else:
             raise AssertionError("permission drift must hold")
+        _assert_filesystem_unchanged(path, before)
 
 
 def test_replay_authority_snapshot_busy_and_symlink_holds():
     """Busy and symlink failures are classified, never downgraded to null data."""
     with tempfile.TemporaryDirectory() as root:
         pid = _setup(root)
-        original = sc.LocalCollaborationLedger
-
-        class BusyLedger:
-            def __init__(self, *args, **kwargs):
-                from local_collaboration_ledger import LedgerBusyError
-                raise LedgerBusyError("test busy")
-
-        sc.LocalCollaborationLedger = BusyLedger
+        path = Path(root) / pid / "collaboration.db"
+        # Keep real WAL/SHM sidecars alive, then take an exclusive write lock
+        # from a second SQLite connection. The production read-only open has a
+        # bounded 5000ms timeout and must classify the actual lock as busy.
+        writer = LocalCollaborationLedger.open_existing(path, expected_project_id=pid)
+        writer.append_event("test.busy_probe", {"probe": "busy"}, root=pid)
+        writer._conn.execute("PRAGMA locking_mode=EXCLUSIVE")
+        writer._conn.execute("BEGIN EXCLUSIVE")
+        before = _filesystem_snapshot(path)
         try:
+            started = time.monotonic()
             try:
                 sc.replay_scheduler_state(root, pid)
             except sc.SchedulerHold as exc:
                 assert str(exc) == "hold_ledger_busy"
             else:
                 raise AssertionError("busy authority must hold")
+            assert time.monotonic() - started < 6.5
         finally:
-            sc.LocalCollaborationLedger = original
+            _assert_filesystem_unchanged(path, before)
+            writer._conn.execute("ROLLBACK"); writer.close()
 
     with tempfile.TemporaryDirectory() as root:
         pid = _setup(root); path = Path(root) / pid / "collaboration.db"
         target = Path(root) / "authority-target.db"
         path.rename(target); path.symlink_to(target)
-        before = _filesystem_snapshot(target)
+        before = _filesystem_snapshot(path)
         try:
             sc.replay_scheduler_state(root, pid)
         except sc.SchedulerHold as exc:
             assert str(exc) == "hold_ledger_integrity"
         else:
             raise AssertionError("symlink authority must hold")
-        _assert_filesystem_unchanged(target, before)
+        _assert_filesystem_unchanged(path, before)
 
 
 def test_authority_snapshot_schema_definition_is_closed():
