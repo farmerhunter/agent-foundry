@@ -14,6 +14,9 @@ from collections.abc import Mapping
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+import github_evidence_cache as evidence_cache
+import github_materialization_adapter as materialization
+import local_collaboration_scheduler as scheduler
 
 VERSION = "GitHubProjectProjection-v1"
 NAMESPACE = uuid.UUID("b5d55298-a05e-4f12-b89b-42a3c035ac4f")
@@ -91,7 +94,7 @@ def _capability(request: Mapping[str, Any]) -> None:
 
 def _base(request: Mapping[str, Any]) -> dict[str, Any]:
     if not isinstance(request, Mapping): raise ProjectProjectionHold("hold_project_projection_schema")
-    allowed = {"schema_version","operation","project_id","work_id","intent_id","attempt_sequence","scheduler_generation","scheduler_head","desired_effect_digest","repository_id","repository_locator_digest","auth_scope_digest","remote_project_digest","source_materialization","item_basis","policy_digest","projection_mode","occurred_at","readback_nonce","expected_remote_kind","expected_remote_ref","expected_remote_version","expected_remote_digest","field_digest","option_or_value_digest","readback_only","canceled","compensation","gate","capability"}
+    allowed = {"schema_version","operation","project_id","work_id","intent_id","attempt_sequence","scheduler_generation","scheduler_head","desired_effect_digest","repository_id","repository_locator_digest","auth_scope_digest","remote_project_digest","source_materialization","item_basis","policy_digest","projection_mode","cache_max_age_seconds","cache_offline","occurred_at","readback_nonce","expected_remote_kind","expected_remote_ref","expected_remote_version","expected_remote_digest","field_digest","option_or_value_digest","readback_only","canceled","compensation","gate","capability"}
     if set(request) - allowed: raise ProjectProjectionHold("hold_project_projection_schema")
     _walk(request); _schema(request)
     if request.get("schema_version") != VERSION or request.get("operation") not in OPERATIONS: raise ProjectProjectionHold("hold_project_projection_schema")
@@ -110,6 +113,7 @@ def _base(request: Mapping[str, Any]) -> dict[str, Any]:
         if key in out: _hex(out[key])
     if "expected_remote_kind" in out and (not isinstance(out["expected_remote_kind"],str) or not out["expected_remote_kind"]): raise ProjectProjectionHold("hold_project_projection_binding")
     if out.get("projection_mode", "enabled") not in {"enabled","disabled","local_only"}: raise ProjectProjectionHold("hold_project_projection_schema")
+    if not isinstance(out.get("cache_max_age_seconds", 0), int) or isinstance(out.get("cache_max_age_seconds", 0), bool) or not 0 <= out.get("cache_max_age_seconds", 0) <= 604800 or "cache_offline" in out and type(out["cache_offline"]) is not bool: raise ProjectProjectionHold("hold_project_projection_schema")
     if not isinstance(out.get("source_materialization"),Mapping) or not isinstance(out.get("item_basis"),Mapping): raise ProjectProjectionHold("hold_project_projection_materialization")
     _capability(out)
     out["idempotency_key"] = str(uuid.uuid5(NAMESPACE, _canon([VERSION,out["project_id"],out["intent_id"],out["attempt_sequence"],out["operation"],out["remote_project_digest"],out["desired_effect_digest"],out.get("field_digest"),out.get("option_or_value_digest")])))
@@ -123,10 +127,12 @@ def _scheduler(req: Mapping[str,Any], state: Mapping[str,Any]) -> None:
     if generation != req["scheduler_generation"] or head != req["scheduler_head"]: raise ProjectProjectionHold("hold_project_projection_scheduler")
 
 def _materialization(req: Mapping[str,Any], result: Mapping[str,Any]) -> None:
+    try: materialization._schema_validate(result, "result")
+    except Exception: raise ProjectProjectionHold("hold_project_projection_materialization") from None
     expected={"schema_version":"GitHubMaterializationAdapter-v1","project_id":req["project_id"],"intent_id":req["intent_id"],"attempt_sequence":req["attempt_sequence"],"desired_effect_digest":req["desired_effect_digest"],"authoritative":False,"confirmation_eligible":False,"simulation_only":True,"remote_mutation_performed":False}
     if not isinstance(result,Mapping) or any(result.get(k)!=v for k,v in expected.items()) or result.get("outcome") not in {"materialization_plan_ready","materialization_duplicate","materialization_readback_verified"}: raise ProjectProjectionHold("hold_project_projection_materialization")
     basis=req["item_basis"]
-    if set(basis)!={"item_digest","materialization_receipt_digest","cache_selector_digest"} or any(not isinstance(basis[k],str) or not HEX.fullmatch(basis[k]) for k in basis) or result.get("readback_digest") not in {None,basis["materialization_receipt_digest"]}: raise ProjectProjectionHold("hold_project_projection_materialization")
+    if set(basis)!={"item_digest","materialization_receipt_digest","cache_selector_digest","cache_object_ref_digest"} or any(not isinstance(basis[k],str) or not HEX.fullmatch(basis[k]) for k in basis) or result.get("readback_digest") != basis["materialization_receipt_digest"]: raise ProjectProjectionHold("hold_project_projection_materialization")
 
 def _cache(req: Mapping[str,Any], cache: Mapping[str,Any]|None) -> bool:
     if cache is None: return False
@@ -135,13 +141,19 @@ def _cache(req: Mapping[str,Any], cache: Mapping[str,Any]|None) -> bool:
     meta=cache.get("metadata")
     if not isinstance(meta,Mapping) or meta.get("project_id")!=req["project_id"] or meta.get("repository_id")!=req["repository_id"] or meta.get("repository_locator_digest")!=req["repository_locator_digest"] or meta.get("auth_scope_digest")!=req["auth_scope_digest"]: return False
     entries=cache.get("entries")
-    return isinstance(entries,list) and len(entries)==1 and isinstance(entries[0],Mapping) and entries[0].get("opaque_object_ref")==req["item_basis"].get("item_digest") and entries[0].get("selector_digest")==req["item_basis"].get("cache_selector_digest")
+    return isinstance(entries,list) and len(entries)==1 and isinstance(entries[0],Mapping) and _digest(entries[0].get("opaque_object_ref"))==req["item_basis"].get("cache_object_ref_digest") and entries[0].get("selector_digest")==req["item_basis"].get("cache_selector_digest")
 
-def plan_project_projection(request: Mapping[str,Any], scheduler_state: Mapping[str,Any], materialization_result: Mapping[str,Any], cache_readout: Mapping[str,Any]|None=None) -> dict[str,Any]:
+def plan_project_projection(*, projects_root: str, request: Mapping[str,Any], materialization_result: Mapping[str,Any]) -> dict[str,Any]:
     req=_base(request)
     if req.get("canceled") or req.get("compensation"): return _result(req["operation"],"project_projection_canceled",project_id=req["project_id"],intent_id=req["intent_id"])
     if req.get("projection_mode", "enabled") in {"disabled", "local_only"}: return _result(req["operation"],"project_projection_not_required",project_id=req["project_id"],intent_id=req["intent_id"],classification=req["projection_mode"])
-    _scheduler(req,scheduler_state); _materialization(req,materialization_result)
+    try: actual_state=scheduler.replay_scheduler_state(projects_root, req["project_id"])
+    except Exception: raise ProjectProjectionHold("hold_project_projection_scheduler") from None
+    _scheduler(req,actual_state); _materialization(req,materialization_result)
+    try:
+        cache_readout=evidence_cache.project_cache_readout(projects_root=projects_root, project_id=req["project_id"], repository_id=req["repository_id"], repository_locator_digest=req["repository_locator_digest"], auth_scope_digest=req["auth_scope_digest"], evaluated_at=req["occurred_at"], max_age_seconds=req.get("cache_max_age_seconds",0), offline=req.get("cache_offline",False))
+    except Exception:
+        return _result(req["operation"],"project_projection_approval_required",project_id=req["project_id"],intent_id=req["intent_id"],classification="cache_evidence_unavailable")
     if not _cache(req,cache_readout): return _result(req["operation"],"project_projection_approval_required",project_id=req["project_id"],intent_id=req["intent_id"],classification="cache_evidence_unavailable")
     return _result(req["operation"],"project_projection_plan_ready",project_id=req["project_id"],intent_id=req["intent_id"],request_digest=_digest(_request_receipt(req)),readback_nonce=req.get("readback_nonce"))
 
@@ -157,8 +169,8 @@ class FakeProjectConnector:
 
 def _matches(req, observed): return isinstance(observed,Mapping) and observed.get("request_digest")==_digest(_request_receipt(req)) and observed.get("remote_project_digest")==req["remote_project_digest"] and observed.get("item_digest")==req["item_basis"]["item_digest"] and observed.get("field_digest")==req.get("field_digest") and observed.get("option_or_value_digest")==req.get("option_or_value_digest")
 
-def execute_project_projection(request, scheduler_state, materialization_result, cache_readout, connector):
-    planned=plan_project_projection(request,scheduler_state,materialization_result,cache_readout)
+def execute_project_projection(*, projects_root, request, materialization_result, connector):
+    planned=plan_project_projection(projects_root=projects_root,request=request,materialization_result=materialization_result)
     if planned["outcome"] != "project_projection_plan_ready": return planned
     req=_base(request)
     if not isinstance(connector,FakeProjectConnector) or connector.trust_domain!="same_process_reference" or connector.production_eligibility is not False or connector.network_capability is not False: raise ProjectProjectionHold("hold_project_projection_connector")

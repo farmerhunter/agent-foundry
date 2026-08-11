@@ -60,13 +60,16 @@ $defs:
       item_basis:
         type: object
         additionalProperties: false
-        required: [item_digest, materialization_receipt_digest, cache_selector_digest]
+        required: [item_digest, materialization_receipt_digest, cache_selector_digest, cache_object_ref_digest]
         properties:
           item_digest: {$ref: '#/$defs/digest'}
           materialization_receipt_digest: {$ref: '#/$defs/digest'}
           cache_selector_digest: {$ref: '#/$defs/digest'}
+          cache_object_ref_digest: {$ref: '#/$defs/digest'}
       policy_digest: {$ref: '#/$defs/digest'}
       projection_mode: {enum: [enabled, disabled, local_only]}
+      cache_max_age_seconds: {type: integer, minimum: 0, maximum: 604800}
+      cache_offline: {type: boolean}
       occurred_at: {$ref: '#/$defs/time'}
       readback_nonce: {$ref: '#/$defs/time'}
       expected_remote_kind: {type: string, minLength: 1, maxLength: 64}
