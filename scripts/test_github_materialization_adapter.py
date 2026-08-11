@@ -101,6 +101,18 @@ def test_schema_and_nested_privacy_contract():
     assert "request" in schema["$defs"] and "gate" in schema["$defs"] and "capability" in schema["$defs"] and "result" in schema["$defs"]
     with pytest.raises(MaterializationHold): plan_materialization(req(approved_remote_content={"body": "tool_output"}), state())
 
+def test_schema_runtime_variants():
+    try:
+        import jsonschema
+        import yaml
+        schema = yaml.safe_load(open("schemas/github-materialization-adapter.schema.yaml"))
+    except ImportError:
+        pytest.skip("schema validator unavailable")
+    local = req(classification="local_only"); local.pop("gate"); local.pop("capability")
+    optional = req(classification="optional_sync"); optional.pop("gate"); optional.pop("capability")
+    jsonschema.validate(local, schema); jsonschema.validate(optional, schema); jsonschema.validate(req(), schema)
+    with pytest.raises(jsonschema.ValidationError): jsonschema.validate({**optional, "capability": {"junk": True}}, schema)
+
 def test_no_host_io_and_external_holds_fixture_stability(monkeypatch):
     def blocked(*args, **kwargs): raise AssertionError("host I/O invoked")
     monkeypatch.setattr(socket, "socket", blocked)
