@@ -90,12 +90,18 @@ def test_retry_requires_receipt_and_advances_only_after_failed_attempt():
         sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "intent", "intent_id": intent, "intent_kind": "issue", "desired_effect": {"kind": "issue"}, "occurred_at": "2026-08-11T00:00:02Z"})
         sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "pending", "intent_id": intent, "occurred_at": "2026-08-11T00:00:03Z"})
         # An outcome belongs to attempt 1; an arbitrary attempt 2 is not a retry.
+        ledger_path = Path(root) / pid / "collaboration.db"
+        ledger = LocalCollaborationLedger.open_existing(ledger_path, expected_project_id=pid)
+        before = len(ledger.list_events()); ledger.close()
         try:
             sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "observe", "intent_id": intent, "attempt_sequence": 2, "observed_remote_state": "open", "occurred_at": "2026-08-11T00:00:04Z"})
         except sc.SchedulerHold as exc:
             assert str(exc) == "hold_transition_order"
         else:
             raise AssertionError("observation cannot invent a new attempt")
+        ledger = LocalCollaborationLedger.open_existing(ledger_path, expected_project_id=pid)
+        assert len(ledger.list_events()) == before
+        ledger.close()
         sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "failure", "intent_id": intent, "classification": "hold_readback_unavailable", "occurred_at": "2026-08-11T00:00:04Z"})
         assert sc.replay_scheduler_state(root, pid)["remote_intent_state"] == "readback_unavailable"
         retry = {"project_id": pid, "work_id": "w1", "operation": "pending", "intent_id": intent, "attempt_sequence": 2, "occurred_at": "2026-08-11T00:00:05Z"}

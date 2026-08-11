@@ -253,7 +253,8 @@ def reduce_scheduler_state(control_state: Mapping[str, Any], scheduler_events: I
             if state["scheduler_state"] != "enabled" or state["intent_id"] is not None or not p.get("desired_effect_digest"): raise SchedulerHold("hold_transition_order")
             state["intent_id"] = p.get("intent_id"); state["desired_effect_digest"] = p.get("desired_effect_digest"); state["remote_intent_state"] = "accepted_local"; state["attempt_sequence"] = 0
         elif kind in {"remote_materialization_pending", "remote_observation_recorded", "remote_confirmation_recorded", "remote_failure_recorded", "remote_conflict_recorded", "remote_intent_canceled"}:
-            if state["intent_id"] is None or p.get("intent_id") != state["intent_id"] or state["remote_intent_state"] in {"confirmed", "failed", "conflict", "canceled", "privacy_held"}:
+            retrying = kind == "remote_materialization_pending" and state["remote_intent_state"] in {"failed", "readback_unavailable"}
+            if state["intent_id"] is None or p.get("intent_id") != state["intent_id"] or (state["remote_intent_state"] in {"confirmed", "failed", "conflict", "canceled", "privacy_held"} and not retrying):
                 raise SchedulerHold("hold_terminal_or_disabled")
             if state["remote_intent_state"] not in REMOTE_PREDECESSORS[kind]:
                 raise SchedulerHold("hold_transition_order")
@@ -399,6 +400,9 @@ def plan_scheduler_request(request: Mapping[str, Any], control_state: Mapping[st
         if request.get("observed_remote_state") is None: raise SchedulerHold("hold_readback_unavailable")
         if sstate.get("remote_intent_state") not in REMOTE_PREDECESSORS["remote_observation_recorded"]:
             raise SchedulerHold("hold_transition_order")
+        attempt = request.get("attempt_sequence", sstate.get("attempt_sequence", 0))
+        if attempt != sstate.get("attempt_sequence", 0):
+            raise SchedulerHold("hold_transition_order")
         events.append(_event(pid, "remote_observation_recorded", {"work_id": work_id, **base, "intent_id": request.get("intent_id", sstate.get("intent_id")), "desired_effect_digest": sstate.get("desired_effect_digest"), "attempt_sequence": request.get("attempt_sequence", sstate.get("attempt_sequence", 0)), "expected_remote_kind": request.get("expected_remote_kind", sstate.get("expected_remote_kind")), "expected_remote_ref": request.get("expected_remote_ref", sstate.get("expected_remote_ref")), "expected_remote_digest": request.get("expected_remote_digest", sstate.get("expected_remote_digest")), "expected_remote_version": request.get("expected_remote_version", sstate.get("expected_remote_version")), "observed_remote_state": request.get("observed_remote_state"), "classification": "observed_unverified", "next_action": "trusted_adapter_readback"}, occurred))
     elif op in {"cancel", "privacy_hold", "failure", "conflict"}:
         if op == "privacy_hold": kind, cls = "privacy_hold_recorded", "hold_privacy"
@@ -426,6 +430,10 @@ def apply_scheduler_request(projects_root: str | Path, project_id: str, request:
         # Recheck the source head immediately before the atomic LedgerStore append.
         current = ledger.list_events();
         if len(current) != len(before) or (current and before and current[-1].event_hash != before[-1].event_hash): raise SchedulerHold("hold_stale_ledger_head")
+        # Validate the complete candidate batch against the current replay
+        # before writing.  A malformed or out-of-order event must not leave a
+        # durable hold or partial append behind when the reducer rejects it.
+        reduce_scheduler_state(cstate, [e for e in before if e.event_type.startswith("scheduler.")] + batch)
         rows = ledger.append_batch(batch); after = ledger.list_events(); result["mutation_performed"] = len(after) > len(before); result["appended_count"] = len(after) - len(before); result["duplicate_count"] = len(batch) - result["appended_count"]; result["generation"] = len(after); result["replay"] = reduce_scheduler_state(cstate, [e for e in after if e.event_type.startswith("scheduler.")]); return result
     except SchedulerHold: raise
     except LedgerBusyError as exc: raise SchedulerHold("hold_ledger_busy") from exc
