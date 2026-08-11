@@ -27,6 +27,7 @@ properties:
     items: {$ref: '#/$defs/entry'}
   receipt: {$ref: '#/$defs/receipt'}
   metadata: {$ref: '#/$defs/metadata'}
+  producer: {$ref: '#/$defs/producer'}
   readout: {$ref: '#/$defs/readout'}
 $defs:
   timestamp: {type: string, pattern: '^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?Z$'}
@@ -69,17 +70,42 @@ $defs:
   receipt:
     type: object
     additionalProperties: false
-    required: [operation, provenance, durability]
+    required: [schema_version, operation, data, created_at, provenance, durability]
     properties:
+      schema_version: {const: GitHubEvidenceCache-v1}
       operation: {type: string, enum: [refresh, invalidate, rebuild, cleanup_plan, cleanup_apply]}
       provenance: {enum: [caller_supplied, caller_evaluated_at]}
       created_at: {$ref: '#/$defs/timestamp'}
-      generation: {type: integer, minimum: 0}
-      changed: {type: integer, minimum: 0}
-      duplicates: {type: integer, minimum: 0}
-      count: {type: integer, minimum: 0}
-      reason_digest: {$ref: '#/$defs/digest'}
       durability: {const: wal_synchronous_normal}
+      data:
+        type: object
+        additionalProperties: false
+        properties:
+          generation: {type: integer, minimum: 0}
+          changed: {type: integer, minimum: 0}
+          duplicates: {type: integer, minimum: 0}
+          count: {type: integer, minimum: 0}
+          producer_id: {type: string, minLength: 1, maxLength: 256}
+          coverage: {enum: [complete, partial, unavailable, privacy_held]}
+          reason_digest: {$ref: '#/$defs/digest'}
+  producer:
+    type: object
+    additionalProperties: false
+    required: [trust_domain, production_eligibility, project_id, repository_id, producer_id, producer_version, coverage, entries]
+    properties:
+      trust_domain: {const: same_process_reference}
+      production_eligibility: {const: false}
+      project_id: {type: string, format: uuid}
+      repository_id: {type: string, minLength: 1, maxLength: 256}
+      producer_id: {type: string, minLength: 1, maxLength: 256}
+      producer_version: {type: string, minLength: 1, maxLength: 128}
+      coverage: {enum: [complete, partial, unavailable, privacy_held]}
+      fetched_at: {$ref: '#/$defs/timestamp'}
+      source_revision: {type: string, minLength: 1, maxLength: 512}
+      entries:
+        type: array
+        maxItems: 25
+        items: {$ref: '#/$defs/entry'}
   metadata:
     type: object
     additionalProperties: false

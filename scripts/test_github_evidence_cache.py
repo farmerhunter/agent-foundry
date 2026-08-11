@@ -10,13 +10,14 @@ class Producer:
     def fetch_evidence(self, binding, selectors, capability_receipt):
         self.calls += 1
         return {"trust_domain":"same_process_reference", "production_eligibility":False,
+                "project_id":binding["project_id"], "repository_id":binding["repository_id"],
                 "producer_id":"fake", "producer_version":"1", "coverage":"complete", "entries":self.entries, **self.extra}
 
 def setup():
     root=tempfile.mkdtemp(prefix="evidence-cache-"); pid=str(uuid.uuid4())
     ledger=LocalCollaborationLedger.create_project(projects_root=root, project_id=pid)
     ledger.bind_project("github_repository", "repo-opaque"); ledger.close()
-    initialize_cache(projects_root=root, project_id=pid, repository_id="repo-opaque", repository_locator_digest="repo-locator")
+    initialize_cache(projects_root=root, project_id=pid, repository_id="repo-opaque", repository_locator_digest="repo-locator", producer_contract="fake", producer_version="1")
     return root,pid
 
 def entry(revision="r1", summary="bounded", coverage="complete", ref="123"):
@@ -142,11 +143,68 @@ def test_cache_metadata_declares_durability_and_reopen_validates():
     except CacheHold as exc: assert exc.classification in {"hold_cache_schema","hold_cache_integrity"}
     else: raise AssertionError("tampered durability must hold")
 
+def test_producer_contract_failures_hold_before_cache_write():
+    root,pid=setup(); path=Path(root)/pid/"github-evidence-cache.db"; before=path.read_bytes(); mtime=path.stat().st_mtime_ns
+    kwargs=dict(projects_root=root,project_id=pid,repository_id="repo-opaque",repository_locator_digest="repo-locator",selectors=["123"],evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10)
+    for extra, expected in [
+        ({"project_id":"other"}, "hold_cache_binding_mismatch"),
+        ({"producer_id":"other"}, "hold_cache_producer_untrusted"),
+        ({"producer_version":"2"}, "hold_cache_producer_untrusted"),
+        ({"producer_id":None}, "hold_cache_schema"),
+    ]:
+        try: refresh_cache(**kwargs, producer=Producer([entry()], **extra))
+        except CacheHold as exc: assert exc.classification == expected
+        else: raise AssertionError("producer contract mismatch must hold")
+    class Explodes:
+        def fetch_evidence(self, *_): raise RuntimeError("producer secret text must not escape")
+    try: refresh_cache(**kwargs, producer=Explodes())
+    except CacheHold as exc: assert exc.classification == "hold_cache_producer_untrusted" and "secret" not in str(exc).lower()
+    else: raise AssertionError("producer exception must be sanitized")
+    assert path.read_bytes() == before and path.stat().st_mtime_ns == mtime
+
+def test_rebuild_future_and_receipt_data_are_closed_prewrite():
+    root,pid=setup(); path=Path(root)/pid/"github-evidence-cache.db"; before=path.read_bytes(); mtime=path.stat().st_mtime_ns
+    future={**entry(), "fetched_at":"2027-01-01T00:00:00Z"}
+    try: rebuild_cache(projects_root=root,project_id=pid,repository_id="repo-opaque",repository_locator_digest="repo-locator",entries=[future],evaluated_at="2026-08-11T00:00:00Z")
+    except CacheHold as exc: assert exc.classification == "hold_cache_clock_or_freshness"
+    else: raise AssertionError("future rebuild input must hold")
+    assert path.read_bytes() == before and path.stat().st_mtime_ns == mtime
+    refresh_cache(projects_root=root,project_id=pid,repository_id="repo-opaque",repository_locator_digest="repo-locator",selectors=["123"],evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10,producer=Producer([entry()]))
+    db=sqlite3.connect(path); payload=json.loads(db.execute("SELECT payload FROM receipts WHERE operation='refresh'").fetchone()[0]); payload["data"]["bogus"]=1; db.execute("UPDATE receipts SET payload=?",(json.dumps(payload),)); db.commit(); db.close()
+    try: read_cache(projects_root=root,project_id=pid,evaluated_at="2026-08-11T00:00:01Z",max_age_seconds=10)
+    except CacheHold as exc: assert exc.classification == "hold_cache_integrity"
+    else: raise AssertionError("unknown receipt data must hold")
+
+def _files_snapshot(path):
+    return {suffix: Path(str(path)+suffix).read_bytes() for suffix in ("", "-wal", "-shm") if Path(str(path)+suffix).exists()}
+
+def _ledger_state(path):
+    ledger=LocalCollaborationLedger(db_path=path,create=False)
+    try:
+        ledger.verify()
+        row=ledger._conn.execute("SELECT COALESCE(MAX(sequence),0), COALESCE((SELECT event_hash FROM events ORDER BY sequence DESC LIMIT 1),?) FROM events", ("0"*64,)).fetchone()
+        return int(row[0]), row[1], _files_snapshot(path)
+    finally: ledger.close()
+
+def test_post_commit_unobserved_retry_recovers_exactly():
+    root,pid=setup(); ledger_path=Path(root)/pid/"collaboration.db"; before=_ledger_state(ledger_path)
+    code = '''import os,signal,sys; sys.path.insert(0,sys.argv[1]); from github_evidence_cache import refresh_cache
+class P:
+ def fetch_evidence(self,b,s,c): return {"trust_domain":"same_process_reference","production_eligibility":False,"project_id":b["project_id"],"repository_id":b["repository_id"],"producer_id":"fake","producer_version":"1","coverage":"complete","entries":[{"evidence_kind":"issue_metadata","opaque_object_ref":"post","selector_digest":"0"*64,"representation_version":"1","facts":{"state":"open"},"summary":"post-commit","anchors":["issue:post"],"source_revision":"post","fetched_at":"2026-08-11T00:00:00Z","coverage":"complete","privacy_class":"metadata_only"}]}
+refresh_cache(projects_root=sys.argv[2],project_id=sys.argv[3],repository_id="repo-opaque",repository_locator_digest="repo-locator",selectors=["post"],evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10,producer=P()); os.kill(os.getpid(),signal.SIGKILL)'''
+    crashed=subprocess.run([sys.executable,"-c",code,str(Path(__file__).parent),root,pid])
+    assert crashed.returncode == -signal.SIGKILL
+    retry_entry={**entry(ref="post",revision="post",summary="post-commit"), "anchors":["issue:post"]}
+    retry=refresh_cache(projects_root=root,project_id=pid,repository_id="repo-opaque",repository_locator_digest="repo-locator",selectors=["post"],evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10,producer=Producer([retry_entry]))
+    assert retry["outcome"] == "cache_duplicate" and retry["receipt_id"] is None
+    rows=read_cache(projects_root=root,project_id=pid,evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10)["entries"]
+    assert [row["opaque_object_ref"] for row in rows] == ["post"] and _ledger_state(ledger_path) == before
+
 def _subprocess_cache(root, pid, summary, sleep_seconds=0):
     code = '''import os,sys,time; sys.path.insert(0,sys.argv[1]); from github_evidence_cache import refresh_cache
 class P:
  def fetch_evidence(self,b,s,c):
-  time.sleep(float(sys.argv[6])); return {"trust_domain":"same_process_reference","production_eligibility":False,"producer_id":"race","producer_version":"1","coverage":"complete","entries":[{"evidence_kind":"issue_metadata","opaque_object_ref":"123","selector_digest":"0"*64,"representation_version":"1","facts":{"state":"open"},"summary":sys.argv[5],"anchors":["issue:123"],"source_revision":"race","fetched_at":"2026-08-11T00:00:00Z","coverage":"complete","privacy_class":"metadata_only"}]}
+  time.sleep(float(sys.argv[6])); return {"trust_domain":"same_process_reference","production_eligibility":False,"project_id":b["project_id"],"repository_id":b["repository_id"],"producer_id":"fake","producer_version":"1","coverage":"complete","entries":[{"evidence_kind":"issue_metadata","opaque_object_ref":"123","selector_digest":"0"*64,"representation_version":"1","facts":{"state":"open"},"summary":sys.argv[5],"anchors":["issue:123"],"source_revision":"race","fetched_at":"2026-08-11T00:00:00Z","coverage":"complete","privacy_class":"metadata_only"}]}
 try: print(refresh_cache(projects_root=sys.argv[2],project_id=sys.argv[3],repository_id="repo-opaque",repository_locator_digest="repo-locator",selectors=["123"],evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10,producer=P()))
 except Exception as e: print(type(e).__name__, getattr(e,"classification","")); raise
 '''
@@ -167,7 +225,7 @@ def test_two_process_race_busy_and_crash_recovery():
 def kill(self,*a,**kw): os.kill(os.getpid(),signal.SIGKILL)
 m.GitHubEvidenceCache._receipt=kill
 class P:
- def fetch_evidence(self,b,s,c): return {"trust_domain":"same_process_reference","production_eligibility":False,"producer_id":"crash","producer_version":"1","coverage":"complete","entries":[{"evidence_kind":"issue_metadata","opaque_object_ref":"126","selector_digest":"0"*64,"representation_version":"1","facts":{"state":"open"},"summary":"crash-before-commit","anchors":["issue:126"],"source_revision":"crash","fetched_at":"2026-08-11T00:00:00Z","coverage":"complete","privacy_class":"metadata_only"}]}
+ def fetch_evidence(self,b,s,c): return {"trust_domain":"same_process_reference","production_eligibility":False,"project_id":b["project_id"],"repository_id":b["repository_id"],"producer_id":"fake","producer_version":"1","coverage":"complete","entries":[{"evidence_kind":"issue_metadata","opaque_object_ref":"126","selector_digest":"0"*64,"representation_version":"1","facts":{"state":"open"},"summary":"crash-before-commit","anchors":["issue:126"],"source_revision":"crash","fetched_at":"2026-08-11T00:00:00Z","coverage":"complete","privacy_class":"metadata_only"}]}
 m.refresh_cache(projects_root=sys.argv[2],project_id=sys.argv[3],repository_id="repo-opaque",repository_locator_digest="repo-locator",selectors=["126"],evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10,producer=P())'''
     crash = subprocess.run([sys.executable,"-c",crash_code,str(Path(__file__).parent),root,pid])
     assert crash.returncode == -signal.SIGKILL

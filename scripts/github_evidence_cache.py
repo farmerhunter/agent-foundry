@@ -27,6 +27,11 @@ HEX64 = re.compile(r"^[0-9a-f]{64}$")
 HOLDS = {"hold_cache_authority_unready", "hold_cache_binding_mismatch", "hold_cache_schema", "hold_cache_permission", "hold_cache_integrity", "hold_cache_busy", "hold_cache_stale_basis", "hold_cache_divergent_revision", "hold_cache_generation_conflict", "hold_cache_clock_or_freshness", "hold_cache_scope", "hold_cache_privacy", "hold_cache_producer_untrusted", "hold_cache_cleanup_gate"}
 DURABILITY = "wal_synchronous_normal"
 META_REQUIRED = {"schema_version", "project_id", "repository_id", "repository_locator_digest", "host_kind", "producer_contract", "producer_version", "generation", "ledger_head", "created_at", "timestamp_provenance", "durability"}
+RECEIPT_DATA_KEYS = {
+    "refresh": {"generation", "changed", "duplicates", "producer_id", "coverage"},
+    "invalidate": {"generation", "count", "reason_digest"},
+    "rebuild": {"generation", "count", "coverage"},
+}
 
 
 class CacheError(RuntimeError):
@@ -43,6 +48,28 @@ class CacheHold(CacheError):
 
 class CacheIntegrityError(CacheHold):
     pass
+
+
+def _receipt_data(operation: str, data: Any) -> dict[str, Any]:
+    """Validate the intentionally small durable receipt payload.
+
+    Receipts are a projection audit trail, not an escape hatch for arbitrary
+    producer output.  Keeping this separate from the outer envelope makes a
+    reopened database fail closed if an old or tampered receipt grows fields.
+    """
+    if operation not in RECEIPT_DATA_KEYS or not isinstance(data, Mapping) or set(data) != RECEIPT_DATA_KEYS[operation]:
+        raise CacheHold("hold_cache_schema")
+    out = dict(data)
+    for key in ("generation", "changed", "duplicates", "count"):
+        if key in out and (not isinstance(out[key], int) or isinstance(out[key], bool) or out[key] < 0):
+            raise CacheHold("hold_cache_schema")
+    if "producer_id" in out and (not isinstance(out["producer_id"], str) or not out["producer_id"] or len(out["producer_id"].encode()) > 256):
+        raise CacheHold("hold_cache_schema")
+    if "coverage" in out and out["coverage"] not in COVERAGE:
+        raise CacheHold("hold_cache_schema")
+    if "reason_digest" in out and (not isinstance(out["reason_digest"], str) or not HEX64.fullmatch(out["reason_digest"])):
+        raise CacheHold("hold_cache_schema")
+    return out
 
 
 def _walk(value: Any, depth: int = 0, count: list[int] | None = None) -> None:
@@ -300,9 +327,12 @@ class GitHubEvidenceCache:
                 body = json.loads(row[2])
                 if not isinstance(body, Mapping) or set(body) != {"schema_version", "operation", "data", "created_at", "provenance", "durability"} or body["schema_version"] != VERSION or body["operation"] != row[1] or body["created_at"] != row[3] or body["provenance"] != row[4] or body["durability"] != DURABILITY:
                     raise CacheHold("hold_cache_integrity")
-                if row[1] not in {"refresh", "invalidate", "rebuild"} or row[4] not in {"caller_supplied", "caller_evaluated_at"} or (row[3] is not None and _ts(row[3]) != row[3]) or not isinstance(body["data"], Mapping):
+                if row[1] not in {"refresh", "invalidate", "rebuild"} or row[4] not in {"caller_supplied", "caller_evaluated_at"} or (row[3] is not None and _ts(row[3]) != row[3]):
                     raise CacheHold("hold_cache_integrity")
-                _walk(body["data"])
+                try:
+                    _receipt_data(row[1], body["data"])
+                except CacheHold:
+                    raise CacheHold("hold_cache_integrity") from None
         except CacheHold:
             raise
         except (sqlite3.Error, ValueError, TypeError):
@@ -323,9 +353,8 @@ class GitHubEvidenceCache:
     def _receipt(self, operation, data, *, created_at=None, provenance="caller_supplied"):
         if created_at is not None: _ts(created_at)
         if not isinstance(provenance, str) or not provenance or provenance in {"wall_clock", "implicit"}: raise CacheHold("hold_cache_clock_or_freshness")
-        if operation not in {"refresh", "invalidate", "rebuild"} or not isinstance(data, Mapping):
-            raise CacheHold("hold_cache_schema")
-        payload = _canon({"schema_version": VERSION, "operation": operation, "data": dict(data), "created_at": created_at, "provenance": provenance, "durability": DURABILITY})
+        data = _receipt_data(operation, data)
+        payload = _canon({"schema_version": VERSION, "operation": operation, "data": data, "created_at": created_at, "provenance": provenance, "durability": DURABILITY})
         rid = str(uuid.uuid4())
         self.db.execute("INSERT INTO receipts VALUES (?,?,?,?,?)", (rid, operation, payload, created_at, provenance))
         return rid
@@ -376,6 +405,8 @@ def _open_existing(path: Path) -> GitHubEvidenceCache:
 def initialize_cache(*, projects_root, project_id, repository_id, repository_locator_digest, producer_contract="unknown", producer_version="unknown", receipt_at=None):
     ledger, lm = _authority(projects_root, project_id); path = _cache_path(projects_root, project_id); locator = _digest_locator(repository_locator_digest)
     try:
+        if not isinstance(producer_contract, str) or not producer_contract or not isinstance(producer_version, str) or not producer_version:
+            raise CacheHold("hold_cache_schema")
         cache = GitHubEvidenceCache(path)
         try:
             old = cache._meta(); _binding({**old, "project_id": lm["project_id"], "repository_id": repository_id, "repository_locator_digest": locator}, lm["project_id"], repository_id, locator)
@@ -409,12 +440,13 @@ def _producer_result(result: Any, project_id: str, repository_id: str, selectors
     allowed = {"trust_domain", "production_eligibility", "project_id", "repository_id", "producer_id", "producer_version", "coverage", "entries", "source_revision", "fetched_at"}
     if set(result) - allowed:
         raise CacheHold("hold_cache_schema")
-    if "coverage" not in result or result["coverage"] not in COVERAGE:
+    required = {"trust_domain", "production_eligibility", "project_id", "repository_id", "producer_id", "producer_version", "coverage", "entries"}
+    if not required.issubset(result) or result["coverage"] not in COVERAGE:
         raise CacheHold("hold_cache_schema")
     for key in ("producer_id", "producer_version"):
-        if key in result and (not isinstance(result[key], str) or not result[key]): raise CacheHold("hold_cache_schema")
+        if not isinstance(result[key], str) or not result[key]: raise CacheHold("hold_cache_schema")
     if result.get("fetched_at") is not None: _ts(result["fetched_at"])
-    if result.get("project_id", project_id) != project_id or result.get("repository_id", repository_id) != repository_id:
+    if result["project_id"] != project_id or result["repository_id"] != repository_id:
         raise CacheHold("hold_cache_binding_mismatch")
     if not isinstance(result.get("entries"), list): raise CacheHold("hold_cache_schema")
     entries = [_entry(e, project_id, repository_id) for e in result["entries"]]
@@ -439,8 +471,16 @@ def refresh_cache(*, projects_root, project_id, repository_id, repository_locato
     try:
         locator = _digest_locator(repository_locator_digest)
         cache = _open_existing(path); meta = cache._meta(); _binding(meta, lm["project_id"], repository_id, locator)
-        before = int(meta.get("generation", "0")); result = producer.fetch_evidence({"project_id": lm["project_id"], "repository_id": str(repository_id)}, list(selectors), {"trust_domain": "same_process_reference", "production_eligibility": False})
+        before = int(meta.get("generation", "0"))
+        try:
+            result = producer.fetch_evidence({"project_id": lm["project_id"], "repository_id": str(repository_id)}, list(selectors), {"trust_domain": "same_process_reference", "production_eligibility": False})
+        except CacheHold:
+            raise
+        except Exception:
+            raise CacheHold("hold_cache_producer_untrusted") from None
         entries, result = _producer_result(result, lm["project_id"], str(repository_id), list(selectors))
+        if result["producer_id"] != meta["producer_contract"] or result["producer_version"] != meta["producer_version"]:
+            raise CacheHold("hold_cache_producer_untrusted")
         evaluated_dt = datetime.fromisoformat(evaluated_at.replace("Z", "+00:00"))
         for entry in entries:
             if datetime.fromisoformat(entry["fetched_at"].replace("Z", "+00:00")) > evaluated_dt:
@@ -453,7 +493,7 @@ def refresh_cache(*, projects_root, project_id, repository_id, repository_locato
         producer_coverage = result["coverage"]
         if producer_coverage in {"unavailable", "privacy_held"}:
             cache._counter("refresh_requests"); cache._counter("producer_invocations")
-            rid = cache._receipt("refresh", {"generation": before, "changed": 0, "duplicates": 0, "producer_id": str(result.get("producer_id", "unknown")), "coverage": producer_coverage}, created_at=evaluated_at, provenance="caller_evaluated_at")
+            rid = cache._receipt("refresh", {"generation": before, "changed": 0, "duplicates": 0, "producer_id": result["producer_id"], "coverage": producer_coverage}, created_at=evaluated_at, provenance="caller_evaluated_at")
             cache.db.execute("COMMIT")
             return {"outcome": "cache_unavailable" if producer_coverage == "unavailable" else "cache_privacy_held", "generation": before, "changed_count": 0, "duplicate_count": 0, "receipt_id": rid, "authoritative": False, "confirmation_eligible": False}
         for entry in entries:
@@ -474,7 +514,7 @@ def refresh_cache(*, projects_root, project_id, repository_id, repository_locato
             return {"outcome": "cache_partial_preserved" if preserved_complete else "cache_duplicate", "generation": before, "changed_count": 0, "duplicate_count": duplicates, "receipt_id": None, "authoritative": False, "confirmation_eligible": False}
         newgen = before + changed; cache._setmeta("generation", newgen); cache._setmeta("ledger_head", lm["head"])
         cache._counter("refresh_requests"); cache._counter("producer_invocations")
-        rid = cache._receipt("refresh", {"generation": newgen, "changed": changed, "duplicates": duplicates, "producer_id": str(result.get("producer_id", "unknown")), "coverage": producer_coverage}, created_at=evaluated_at, provenance="caller_evaluated_at")
+        rid = cache._receipt("refresh", {"generation": newgen, "changed": changed, "duplicates": duplicates, "producer_id": result["producer_id"], "coverage": producer_coverage}, created_at=evaluated_at, provenance="caller_evaluated_at")
         cache.db.execute("COMMIT")
         return {"outcome": "cache_duplicate" if not changed else ("cache_partial" if any(e["coverage"] != "complete" for e in entries) else "cache_refreshed"), "generation": newgen, "changed_count": changed, "duplicate_count": duplicates, "receipt_id": rid, "authoritative": False, "confirmation_eligible": False}
     except CacheHold:
@@ -552,6 +592,9 @@ def rebuild_cache(*, projects_root, project_id, repository_id, repository_locato
         if len(normalized) > 25 or sum(len(_canon(e).encode()) for e in normalized) > 256 * 1024: raise CacheHold("hold_cache_scope")
         if len({entry["entry_key"] for entry in normalized}) != len(normalized): raise CacheHold("hold_cache_divergent_revision")
         if any(entry["coverage"] != coverage for entry in normalized): raise CacheHold("hold_cache_schema")
+        evaluated_dt = datetime.fromisoformat(evaluated_at.replace("Z", "+00:00"))
+        if any(datetime.fromisoformat(entry["fetched_at"].replace("Z", "+00:00")) > evaluated_dt for entry in normalized):
+            raise CacheHold("hold_cache_clock_or_freshness")
         locator = _digest_locator(repository_locator_digest)
         cache = _open_existing(path); meta = cache._meta(); _binding(meta, lm["project_id"], repository_id, locator)
         before = int(meta.get("generation", "0")); _ledger_recheck(projects_root, project_id, lm); cache.db.execute("BEGIN IMMEDIATE")
