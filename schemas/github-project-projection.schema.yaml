@@ -1,0 +1,82 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://agent-foundry.local/schemas/github-project-projection.schema.yaml
+title: GitHubProjectProjection-v1
+oneOf:
+  - $ref: '#/$defs/request'
+  - $ref: '#/$defs/plan'
+  - $ref: '#/$defs/result'
+$defs:
+  digest: {type: string, pattern: '^[0-9a-f]{64}$'}
+  uuid: {type: string, format: uuid}
+  timestamp: {type: string, pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$'}
+  flags:
+    type: object
+    additionalProperties: false
+    required: [simulation_only, production_eligibility, network_capability, authoritative, confirmation_eligible, remote_mutation_performed]
+    properties:
+      simulation_only: {const: true}
+      production_eligibility: {const: false}
+      network_capability: {const: false}
+      authoritative: {const: false}
+      confirmation_eligible: {const: false}
+      remote_mutation_performed: {const: false}
+  request:
+    type: object
+    additionalProperties: false
+    required: [schema_version, project_id, work_id, intent_id, attempt_sequence, desired_effect_digest, operation, repository_id, repository_locator_digest, auth_scope_digest, evaluated_at, max_age_seconds, opaque_item_basis, expected_revision, expected_value_digest, disposition, materialization_result]
+    properties:
+      schema_version: {const: GitHubProjectProjection-v1}
+      project_id: {$ref: '#/$defs/uuid'}
+      work_id: {type: string, minLength: 1, maxLength: 128}
+      intent_id: {$ref: '#/$defs/uuid'}
+      attempt_sequence: {type: integer, minimum: 1}
+      desired_effect_digest: {$ref: '#/$defs/digest'}
+      operation: {enum: [project_item_add, project_field_set]}
+      repository_id: {$ref: '#/$defs/digest'}
+      repository_locator_digest: {$ref: '#/$defs/digest'}
+      auth_scope_digest: {$ref: '#/$defs/digest'}
+      evaluated_at: {$ref: '#/$defs/timestamp'}
+      max_age_seconds: {type: integer, minimum: 0, maximum: 86400}
+      opaque_item_basis: {type: string, minLength: 1, maxLength: 128, pattern: '^[A-Za-z0-9._-]+$'}
+      expected_revision: {type: string, minLength: 1, maxLength: 128, pattern: '^[A-Za-z0-9._-]+$'}
+      expected_value_digest: {$ref: '#/$defs/digest'}
+      disposition: {enum: [required, not_required, approval_required, canceled]}
+      materialization_result: {type: object}
+  plan:
+    type: object
+    additionalProperties: false
+    required: [schema_version, operation, outcome, project_id, work_id, intent_id, attempt_sequence, desired_effect_digest, opaque_item_basis, expected_revision, expected_value_digest, authority_generation, authority_head, cache_entry_key, materialization_result_digest, plan_digest, flags]
+    properties:
+      schema_version: {const: GitHubProjectProjection-v1}
+      operation: {enum: [project_item_add, project_field_set]}
+      outcome: {const: project_projection_plan_ready}
+      project_id: {$ref: '#/$defs/uuid'}
+      work_id: {type: string, minLength: 1, maxLength: 128}
+      intent_id: {$ref: '#/$defs/uuid'}
+      attempt_sequence: {type: integer, minimum: 1}
+      desired_effect_digest: {$ref: '#/$defs/digest'}
+      opaque_item_basis: {type: string, minLength: 1, maxLength: 128, pattern: '^[A-Za-z0-9._-]+$'}
+      expected_revision: {type: string, minLength: 1, maxLength: 128, pattern: '^[A-Za-z0-9._-]+$'}
+      expected_value_digest: {$ref: '#/$defs/digest'}
+      authority_generation: {type: integer, minimum: 0}
+      authority_head: {$ref: '#/$defs/digest'}
+      cache_entry_key: {$ref: '#/$defs/digest'}
+      materialization_result_digest: {$ref: '#/$defs/digest'}
+      plan_digest: {$ref: '#/$defs/digest'}
+      flags: {$ref: '#/$defs/flags'}
+  result:
+    type: object
+    additionalProperties: false
+    required: [schema_version, operation, outcome, flags]
+    properties:
+      schema_version: {const: GitHubProjectProjection-v1}
+      operation: {enum: [project_item_add, project_field_set]}
+      outcome:
+        enum: [project_projection_not_required, project_projection_plan_ready, project_projection_approval_required, project_projection_duplicate, project_projection_stale_authority_hold, project_projection_dependency_hold, project_projection_conflict_hold, project_projection_privacy_hold, project_projection_recovery_readback_required, project_projection_fixture_readback_verified, project_projection_canceled]
+      classification: {type: string, enum: [hold_stale_authority, hold_dependency, hold_conflict, hold_privacy, hold_schema]}
+      project_id: {$ref: '#/$defs/uuid'}
+      intent_id: {$ref: '#/$defs/uuid'}
+      attempt_sequence: {type: integer, minimum: 1}
+      plan_digest: {$ref: '#/$defs/digest'}
+      fixture_readback_digest: {$ref: '#/$defs/digest'}
+      flags: {$ref: '#/$defs/flags'}
