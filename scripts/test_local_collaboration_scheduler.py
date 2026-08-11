@@ -7,6 +7,8 @@ import tempfile
 import time
 import uuid
 import shutil
+import jsonschema
+import yaml
 from pathlib import Path
 
 from local_collaboration_ledger import LocalCollaborationLedger
@@ -571,6 +573,61 @@ def test_replay_dangling_sidecar_symlinks_hold_without_mutation():
             sidecar.unlink()
 
 
+def test_replay_writer_races_hold_without_replay_mutation():
+    """A post-open real append is never returned as a stale immutable replay."""
+    def run_race(*, keep_writer_open):
+        with tempfile.TemporaryDirectory() as root:
+            pid = _setup(root); path = Path(root) / pid / "collaboration.db"
+            original = sc.LocalCollaborationLedger
+            writers, captured = [], []
+
+            def construct(*args, **kwargs):
+                reader = original(*args, **kwargs)
+                writer = original.open_existing(path, expected_project_id=pid)
+                writer.append_event("test.replay_race", {"probe": "race"}, root=pid)
+                if keep_writer_open:
+                    writers.append(writer)
+                else:
+                    writer.close()
+                captured.append(_filesystem_snapshot(path))
+                return reader
+
+            sc.LocalCollaborationLedger = construct
+            try:
+                try:
+                    sc.replay_scheduler_state(root, pid)
+                except sc.SchedulerHold as exc:
+                    assert str(exc) == "hold_stale_ledger_head"
+                else:
+                    raise AssertionError("writer race must not return stale authority")
+                assert captured
+                _assert_filesystem_unchanged(path, captured[-1])
+            finally:
+                sc.LocalCollaborationLedger = original
+                for writer in writers:
+                    writer.close()
+
+    run_race(keep_writer_open=True)   # final sidecar recheck
+    run_race(keep_writer_open=False)  # final DB-image fingerprint recheck
+
+
+def test_authority_snapshot_schema_is_draft_2020_12_closed():
+    schema_path = Path(__file__).parent.parent / "schemas" / "local-collaboration-scheduler.schema.yaml"
+    with schema_path.open() as handle:
+        definition = yaml.safe_load(handle)["$defs"]["authority_snapshot"]
+    validator = jsonschema.Draft202012Validator(definition)
+    assert not list(validator.iter_errors({"authority_generation": 0, "authority_head": "0" * 64}))
+    for invalid in (
+        {},
+        {"authority_generation": None, "authority_head": "0" * 64},
+        {"authority_generation": True, "authority_head": "0" * 64},
+        {"authority_generation": 0, "authority_head": None},
+        {"authority_generation": 0, "authority_head": "bad"},
+        {"authority_generation": 0, "authority_head": "0" * 64, "unknown": 1},
+    ):
+        assert list(validator.iter_errors(invalid))
+
+
 def test_authority_snapshot_schema_definition_is_closed():
     schema = Path(__file__).parent.parent / "schemas" / "local-collaboration-scheduler.schema.yaml"
     text = schema.read_text()
@@ -580,4 +637,4 @@ def test_authority_snapshot_schema_definition_is_closed():
 
 
 if __name__ == "__main__":
-    test_initialize_and_offline_transitions(); test_exact_retry_and_divergence_hold(); test_remote_never_confirmed_by_observation(); test_remote_predecessor_guards(); test_observation_and_terminal_use_current_attempt(); test_closed_payload_and_resume_gate(); test_caller_project_binding_and_disabled_gate(); test_reducer_version_mismatch_is_preappend_hold(); test_planner_observation_version_mismatch_is_preappend_hold(); test_privacy_binding_mismatch_is_preappend_hold(); test_adapter_version_mismatch_is_preappend_hold(); test_observed_unverified_to_privacy_hold_preserves_all_bindings(); test_pending_materialization_to_privacy_hold_preserves_all_bindings(); test_replay_exposes_committed_authority_snapshot_without_side_effects(); test_replay_authority_snapshot_negative_paths_hold_without_mutation(); test_replay_authority_snapshot_corruption_and_permissions_hold(); test_replay_authority_snapshot_busy_and_symlink_holds(); test_replay_wal_sidecar_states_hold_without_source_mutation(); test_replay_dangling_sidecar_symlinks_hold_without_mutation(); test_authority_snapshot_schema_definition_is_closed(); print("ok")
+    test_initialize_and_offline_transitions(); test_exact_retry_and_divergence_hold(); test_remote_never_confirmed_by_observation(); test_remote_predecessor_guards(); test_observation_and_terminal_use_current_attempt(); test_closed_payload_and_resume_gate(); test_caller_project_binding_and_disabled_gate(); test_reducer_version_mismatch_is_preappend_hold(); test_planner_observation_version_mismatch_is_preappend_hold(); test_privacy_binding_mismatch_is_preappend_hold(); test_adapter_version_mismatch_is_preappend_hold(); test_observed_unverified_to_privacy_hold_preserves_all_bindings(); test_pending_materialization_to_privacy_hold_preserves_all_bindings(); test_replay_exposes_committed_authority_snapshot_without_side_effects(); test_replay_authority_snapshot_negative_paths_hold_without_mutation(); test_replay_authority_snapshot_corruption_and_permissions_hold(); test_replay_authority_snapshot_busy_and_symlink_holds(); test_replay_wal_sidecar_states_hold_without_source_mutation(); test_replay_dangling_sidecar_symlinks_hold_without_mutation(); test_replay_writer_races_hold_without_replay_mutation(); test_authority_snapshot_schema_definition_is_closed(); test_authority_snapshot_schema_is_draft_2020_12_closed(); print("ok")

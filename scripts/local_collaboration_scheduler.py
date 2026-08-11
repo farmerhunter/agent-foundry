@@ -12,6 +12,7 @@ import json
 import os
 import re
 import sqlite3
+import stat
 import uuid
 from pathlib import Path
 from typing import Any, Iterable, Mapping
@@ -344,7 +345,21 @@ def _hold_from_ledger(exc: Exception) -> SchedulerHold:
     return SchedulerHold("hold_ledger_integrity")
 
 
-def _read_only_sidecar_preflight(path: Path) -> None:
+def _source_fingerprint(path: Path) -> tuple[int, int, int, int, int, str]:
+    """Fingerprint the immutable authority image without opening SQLite."""
+    if path.is_symlink() or not path.is_file():
+        raise SchedulerHold("hold_ledger_integrity")
+    info = path.stat()
+    if not stat.S_ISREG(info.st_mode):
+        raise SchedulerHold("hold_ledger_integrity")
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return (info.st_dev, info.st_ino, stat.S_IMODE(info.st_mode), info.st_size, info.st_mtime_ns, digest.hexdigest())
+
+
+def _read_only_sidecar_preflight(path: Path, *, during_replay: bool = False) -> tuple[int, int, int, int, int, str]:
     """Reject any live WAL state before a replay can alter source SHM bytes.
 
     SQLite's WAL reader updates the shared-memory index even through a normal
@@ -361,7 +376,8 @@ def _read_only_sidecar_preflight(path: Path) -> None:
     # That is still an authority-directory entry and must not be allowed to
     # bypass this pre-open safety boundary.
     if os.path.lexists(wal) or os.path.lexists(shm):
-        raise SchedulerHold("hold_ledger_integrity")
+        raise SchedulerHold("hold_stale_ledger_head" if during_replay else "hold_ledger_integrity")
+    return _source_fingerprint(path)
 
 
 def replay_scheduler_state(projects_root: str | Path, project_id: str) -> dict[str, Any]:
@@ -378,7 +394,7 @@ def replay_scheduler_state(projects_root: str | Path, project_id: str) -> dict[s
         # possible), so replay cannot initialize, checkpoint, or create
         # authority sidecars.  An explicit read transaction pins the event
         # list and the derived last sequence/hash to one snapshot.
-        _read_only_sidecar_preflight(path)
+        source_before = _read_only_sidecar_preflight(path)
         ledger = LocalCollaborationLedger(db_path=path, create=False)
         if ledger.project_id != pid:
             raise SchedulerHold("hold_control_plane_unready")
@@ -388,6 +404,13 @@ def replay_scheduler_state(projects_root: str | Path, project_id: str) -> dict[s
         cstate = control.reduce_control_events(
             [event for event in events if event.event_type.startswith("control.")]
         )
+        # Immutable mode intentionally avoids sidecar mutation. It also means
+        # a writer that starts in this window would otherwise be invisible, so
+        # return success only when the source image and sidecar boundary stayed
+        # exactly unchanged for the whole verified reduction.
+        source_after = _read_only_sidecar_preflight(path, during_replay=True)
+        if source_after != source_before:
+            raise SchedulerHold("hold_stale_ledger_head")
         return _decorate_replay(cstate, events)
     except SchedulerHold:
         raise
