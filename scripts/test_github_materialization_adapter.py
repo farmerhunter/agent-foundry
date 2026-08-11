@@ -90,6 +90,11 @@ def test_recovery_readback_only_and_closed_content_limits():
     unicode_request = req(approved_remote_content=unicode_content, approved_content_digest=unicode_digest)
     unicode_request["gate"] = {**unicode_request["gate"], "content_digest": unicode_digest}
     assert plan_materialization(unicode_request, state())["outcome"] == "materialization_plan_ready"
+    aggregate = {"body": "é" * 8193}
+    aggregate_digest = hashlib.sha256(json.dumps(aggregate, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    aggregate_request = req(approved_remote_content=aggregate, approved_content_digest=aggregate_digest)
+    aggregate_request["gate"] = {**aggregate_request["gate"], "content_digest": aggregate_digest}
+    with pytest.raises(MaterializationHold): plan_materialization(aggregate_request, state())
 
 def test_readback_result_has_404_boundary_fields():
     result = execute_materialization(req(), state(), FakeConnector())
@@ -159,6 +164,8 @@ def test_schema_runtime_variants():
     with pytest.raises(jsonschema.ValidationError): jsonschema.validate({**optional, "gate": req()["gate"]}, schema)
     with pytest.raises(jsonschema.ValidationError): jsonschema.validate({**optional, "capability": req()["capability"]}, schema)
     with pytest.raises(jsonschema.ValidationError): jsonschema.validate({**optional, "capability": {"junk": True}}, schema)
+    with pytest.raises(jsonschema.ValidationError): jsonschema.validate({**optional, "readback_only": False}, schema)
+    with pytest.raises(jsonschema.ValidationError): jsonschema.validate({**req(), "capability": {**req()["capability"], "supported_operations": []}}, schema)
     with pytest.raises(MaterializationHold): plan_materialization({**optional, "capability": req()["capability"]}, state())
     with pytest.raises(MaterializationHold): plan_materialization({**optional, "scheduler_state": "forbidden"}, state())
 

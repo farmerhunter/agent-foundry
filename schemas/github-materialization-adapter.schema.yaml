@@ -33,6 +33,7 @@ $defs:
       adapter_version: {type: string, minLength: 1}
       supported_operations:
         type: array
+        minItems: 1
         uniqueItems: true
         items: {enum: [issue_create, issue_comment, pull_request_comment]}
   content:

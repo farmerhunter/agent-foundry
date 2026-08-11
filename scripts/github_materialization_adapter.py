@@ -129,6 +129,8 @@ def _base(request: Mapping[str, Any]) -> dict[str, Any]:
         raise MaterializationHold("hold_materialization_schema")
     safe_request = dict(request); safe_request.pop("approved_remote_content", None); _walk(safe_request)
     if request.get("schema_version") != VERSION: raise MaterializationHold("hold_materialization_schema")
+    for flag in ("canceled", "compensation", "readback_only"):
+        if flag in request and request[flag] is not True: raise MaterializationHold("hold_materialization_schema")
     pid = _uuid(request.get("project_id")); intent = _uuid(request.get("intent_id"))
     if not isinstance(request.get("work_id"), str) or not request["work_id"]: raise MaterializationHold("hold_materialization_binding")
     attempt = request.get("attempt_sequence")
@@ -151,10 +153,10 @@ def _base(request: Mapping[str, Any]) -> dict[str, Any]:
         _walk_content(content); encoded = json.dumps(content, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
         if hashlib.sha256(encoded).hexdigest() != request["approved_content_digest"]:
             raise MaterializationHold("hold_materialization_binding")
-        if len(encoded) > 8192: raise MaterializationHold("hold_materialization_privacy")
+        if len(encoded) > 8192 or sum(len(item) for item in content.values() if isinstance(item, str)) > 8192: raise MaterializationHold("hold_materialization_privacy")
         if isinstance(content, Mapping):
             if "title" in content and (not isinstance(content["title"], str) or len(content["title"]) > 256): raise MaterializationHold("hold_materialization_privacy")
-            if "labels" in content and (not isinstance(content["labels"], list) or len(content["labels"]) > 10 or any(not isinstance(label, str) or len(label.encode()) > 128 for label in content["labels"])): raise MaterializationHold("hold_materialization_privacy")
+            if "labels" in content and (not isinstance(content["labels"], list) or len(content["labels"]) > 10 or any(not isinstance(label, str) or len(label) > 128 for label in content["labels"])): raise MaterializationHold("hold_materialization_privacy")
     idem_input = [VERSION, pid, intent, attempt, request["operation"], request["repository_id"], request["desired_effect_digest"], request["approved_content_digest"]]
     return {"project_id": pid, "intent_id": intent, "attempt_sequence": attempt,
             "idempotency_key": str(uuid.uuid5(NAMESPACE, _canon(idem_input))), **dict(request)}
@@ -183,7 +185,7 @@ def _gate_capability(req: Mapping[str, Any]) -> None:
     if any(gate.get(k) != v for k, v in {"project_id": req["project_id"], "intent_id": req["intent_id"], "attempt_sequence": req["attempt_sequence"], "operation": req["operation"], "repository_id": req["repository_id"], "effect_digest": req["desired_effect_digest"], "content_digest": req["approved_content_digest"]}.items()): raise MaterializationHold("hold_materialization_approval")
     required = {"trust_domain": "same_process_reference", "production_eligibility": False, "network_capability": False}
     if not isinstance(cap, Mapping) or set(cap) != {"trust_domain", "production_eligibility", "network_capability", "adapter_id", "adapter_version", "supported_operations"} or any(cap.get(k) != v for k, v in required.items()): raise MaterializationHold("hold_materialization_connector_untrusted")
-    if not isinstance(cap.get("supported_operations"), list) or any(not isinstance(item, str) or item not in OPERATIONS for item in cap["supported_operations"]): raise MaterializationHold("hold_materialization_connector_untrusted")
+    if not isinstance(cap.get("supported_operations"), list) or not cap["supported_operations"] or any(not isinstance(item, str) or item not in OPERATIONS for item in cap["supported_operations"]): raise MaterializationHold("hold_materialization_connector_untrusted")
     if cap.get("adapter_id") != req.get("adapter_id") or cap.get("adapter_version") != req.get("adapter_version") or req["operation"] not in set(cap.get("supported_operations", [])): raise MaterializationHold("hold_materialization_connector_untrusted")
 
 
