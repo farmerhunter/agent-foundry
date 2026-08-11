@@ -297,10 +297,16 @@ def test_hermetic_readback_never_confirms_and_invalid_envelopes_do_not_call_adap
         assert adapter.calls == 1 and _business_snapshot(path, root, pid) == before
 
         # Closed request validation happens before the fake boundary is invoked.
-        for bad in ({"unknown": "x"}, {"request_digest": "not-a-digest"},
-                    {"expected_remote_ref": "other"}, {"attempt_sequence": 2}):
+        invalid_overlays = [{"unknown": "x"}, {"request_digest": "not-a-digest"},
+            {"expected_remote_ref": "other"}, {"attempt_sequence": 2},
+            {"desired_effect_digest": None}, {"expected_remote_ref": None},
+            {"desired_effect_digest": 1}, {"expected_remote_ref": 1}]
+        invalid_requests = [{**request, **bad} for bad in invalid_overlays]
+        for field in ("desired_effect_digest", "expected_remote_kind", "expected_remote_ref", "expected_remote_digest", "expected_remote_version"):
+            missing = dict(request); del missing[field]; invalid_requests.append(missing)
+        for candidate in invalid_requests:
             try:
-                sc.apply_remote_readback(root, pid, intent, adapter, {**request, **bad})
+                sc.apply_remote_readback(root, pid, intent, adapter, candidate)
             except sc.SchedulerHold:
                 pass
             else:
@@ -315,7 +321,8 @@ def test_readback_response_closed_parity_and_self_attestation_never_mutate():
         path = Path(root) / pid / "collaboration.db"
         desired = sc.replay_scheduler_state(root, pid)["desired_effect_digest"]
         request = {"project_id": pid, "work_id": "w1", "operation": "confirm", "intent_id": intent,
-                   "attempt_sequence": 1, "request_digest": "e" * 64, "occurred_at": "2026-08-11T00:00:04Z"}
+                   "attempt_sequence": 1, "request_digest": "e" * 64, "occurred_at": "2026-08-11T00:00:04Z",
+                   **expected, "desired_effect_digest": desired}
         before = _business_snapshot(path, root, pid)
         variants = [
             lambda r: {**r, "unknown": "x"},

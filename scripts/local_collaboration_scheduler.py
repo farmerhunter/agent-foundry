@@ -497,7 +497,8 @@ def apply_scheduler_request(projects_root: str | Path, project_id: str, request:
 def _validate_readback_request(request: Any, pid: str, intent_id: str, sstate: Mapping[str, Any]) -> None:
     if not isinstance(request, Mapping) or set(request) - READBACK_REQUEST_KEYS:
         raise SchedulerHold("hold_readback_binding_conflict")
-    required = {"project_id", "work_id", "operation", "intent_id", "attempt_sequence", "request_digest", "occurred_at"}
+    required = {"project_id", "work_id", "operation", "intent_id", "attempt_sequence", "request_digest", "occurred_at",
+        "desired_effect_digest", "expected_remote_kind", "expected_remote_ref", "expected_remote_digest", "expected_remote_version"}
     if not required.issubset(request) or _project(request.get("project_id")) != pid:
         raise SchedulerHold("hold_readback_binding_conflict")
     if request.get("operation") not in {"confirm", "readback"} or request.get("intent_id") != intent_id:
@@ -508,13 +509,13 @@ def _validate_readback_request(request: Any, pid: str, intent_id: str, sstate: M
     if not isinstance(request.get("request_digest"), str) or not re.fullmatch(r"[0-9a-f]{64}", request["request_digest"]):
         raise SchedulerHold("hold_readback_binding_conflict")
     for key in ("desired_effect_digest", "expected_remote_digest"):
-        if key in request and (not isinstance(request[key], str) or not re.fullmatch(r"[0-9a-f]{64}", request[key])):
+        if not isinstance(request.get(key), str) or not re.fullmatch(r"[0-9a-f]{64}", request[key]):
             raise SchedulerHold("hold_readback_binding_conflict")
     for key in ("expected_remote_kind", "expected_remote_ref", "expected_remote_version"):
-        if key in request and (not isinstance(request[key], str) or not request[key]):
+        if not isinstance(request.get(key), str) or not request[key]:
             raise SchedulerHold("hold_readback_binding_conflict")
     for key in ("desired_effect_digest", "expected_remote_kind", "expected_remote_ref", "expected_remote_digest", "expected_remote_version"):
-        if key in request and request[key] != sstate.get(key):
+        if request[key] != sstate.get(key):
             raise SchedulerHold("hold_readback_binding_conflict")
 
 
