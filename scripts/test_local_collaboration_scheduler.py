@@ -479,9 +479,8 @@ def test_replay_authority_snapshot_busy_and_symlink_holds():
     with tempfile.TemporaryDirectory() as root:
         pid = _setup(root)
         path = Path(root) / pid / "collaboration.db"
-        # Keep real WAL/SHM sidecars alive, then take an exclusive write lock
-        # from a second SQLite connection. The production read-only open has a
-        # bounded 5000ms timeout and must classify the actual lock as busy.
+        # Keep real WAL/SHM sidecars alive under a second writer. Production
+        # replay must hold before a WAL reader can alter source SHM bytes.
         writer = LocalCollaborationLedger.open_existing(path, expected_project_id=pid)
         writer.append_event("test.busy_probe", {"probe": "busy"}, root=pid)
         writer._conn.execute("PRAGMA locking_mode=EXCLUSIVE")
@@ -492,10 +491,10 @@ def test_replay_authority_snapshot_busy_and_symlink_holds():
             try:
                 sc.replay_scheduler_state(root, pid)
             except sc.SchedulerHold as exc:
-                assert str(exc) == "hold_ledger_busy"
+                assert str(exc) == "hold_ledger_integrity"
             else:
-                raise AssertionError("busy authority must hold")
-            assert time.monotonic() - started < 6.5
+                raise AssertionError("live WAL authority must hold")
+            assert time.monotonic() - started < 0.5
         finally:
             _assert_filesystem_unchanged(path, before)
             writer._conn.execute("ROLLBACK"); writer.close()
@@ -514,8 +513,8 @@ def test_replay_authority_snapshot_busy_and_symlink_holds():
         _assert_filesystem_unchanged(path, before)
 
 
-def test_replay_db_wal_without_shm_holds_without_creating_sidecar():
-    """A valid copied WAL cannot cause a read-only replay to manufacture SHM."""
+def test_replay_wal_sidecar_states_hold_without_source_mutation():
+    """Valid complete and incomplete WAL states stay byte-identical on hold."""
     with tempfile.TemporaryDirectory() as source_root, tempfile.TemporaryDirectory() as target_root:
         pid = _setup(source_root); source = Path(source_root) / pid / "collaboration.db"
         writer = LocalCollaborationLedger.open_existing(source, expected_project_id=pid)
@@ -537,6 +536,18 @@ def test_replay_db_wal_without_shm_holds_without_creating_sidecar():
             else:
                 raise AssertionError("DB+WAL without SHM must fail closed")
             _assert_filesystem_unchanged(target, before)
+
+            # The complete authoritative pair is also held: opening it as a
+            # normal SQLite WAL reader would mutate source SHM. The source is
+            # deliberately kept writer-live to make this the real boundary.
+            source_before = _filesystem_snapshot(source)
+            try:
+                sc.replay_scheduler_state(source_root, pid)
+            except sc.SchedulerHold as exc:
+                assert str(exc) == "hold_ledger_integrity"
+            else:
+                raise AssertionError("DB+WAL+SHM must hold before source mutation")
+            _assert_filesystem_unchanged(source, source_before)
         finally:
             writer.close()
 
@@ -550,4 +561,4 @@ def test_authority_snapshot_schema_definition_is_closed():
 
 
 if __name__ == "__main__":
-    test_initialize_and_offline_transitions(); test_exact_retry_and_divergence_hold(); test_remote_never_confirmed_by_observation(); test_remote_predecessor_guards(); test_observation_and_terminal_use_current_attempt(); test_closed_payload_and_resume_gate(); test_caller_project_binding_and_disabled_gate(); test_reducer_version_mismatch_is_preappend_hold(); test_planner_observation_version_mismatch_is_preappend_hold(); test_privacy_binding_mismatch_is_preappend_hold(); test_adapter_version_mismatch_is_preappend_hold(); test_observed_unverified_to_privacy_hold_preserves_all_bindings(); test_pending_materialization_to_privacy_hold_preserves_all_bindings(); test_replay_exposes_committed_authority_snapshot_without_side_effects(); test_replay_authority_snapshot_negative_paths_hold_without_mutation(); test_replay_authority_snapshot_corruption_and_permissions_hold(); test_replay_authority_snapshot_busy_and_symlink_holds(); test_replay_db_wal_without_shm_holds_without_creating_sidecar(); test_authority_snapshot_schema_definition_is_closed(); print("ok")
+    test_initialize_and_offline_transitions(); test_exact_retry_and_divergence_hold(); test_remote_never_confirmed_by_observation(); test_remote_predecessor_guards(); test_observation_and_terminal_use_current_attempt(); test_closed_payload_and_resume_gate(); test_caller_project_binding_and_disabled_gate(); test_reducer_version_mismatch_is_preappend_hold(); test_planner_observation_version_mismatch_is_preappend_hold(); test_privacy_binding_mismatch_is_preappend_hold(); test_adapter_version_mismatch_is_preappend_hold(); test_observed_unverified_to_privacy_hold_preserves_all_bindings(); test_pending_materialization_to_privacy_hold_preserves_all_bindings(); test_replay_exposes_committed_authority_snapshot_without_side_effects(); test_replay_authority_snapshot_negative_paths_hold_without_mutation(); test_replay_authority_snapshot_corruption_and_permissions_hold(); test_replay_authority_snapshot_busy_and_symlink_holds(); test_replay_wal_sidecar_states_hold_without_source_mutation(); test_authority_snapshot_schema_definition_is_closed(); print("ok")

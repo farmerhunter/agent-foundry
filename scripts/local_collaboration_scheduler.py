@@ -344,18 +344,19 @@ def _hold_from_ledger(exc: Exception) -> SchedulerHold:
 
 
 def _read_only_sidecar_preflight(path: Path) -> None:
-    """Reject incomplete WAL state before SQLite can create a missing SHM.
+    """Reject any live WAL state before a replay can alter source SHM bytes.
 
-    A normal ``mode=ro`` connection must consult a WAL when it is present.
-    SQLite may create its shared-memory companion as part of that consultation,
-    even though the connection has no write intent.  An incomplete pair is not
-    an authority snapshot we can verify without changing it, so it is held
-    before opening the database.  A complete pair remains available for a
-    correct WAL-aware read snapshot; no pair uses LedgerStore immutable mode.
+    SQLite's WAL reader updates the shared-memory index even through a normal
+    ``mode=ro`` connection. That means neither a complete pair nor an
+    incomplete pair can meet this replay boundary's byte-level no-mutation
+    contract.  We cannot use immutable mode here because it would ignore
+    committed WAL frames. Therefore a present WAL or SHM is an explicit hold;
+    only an authority with no sidecars proceeds via LedgerStore's immutable
+    read-only path.
     """
     wal = Path(str(path) + "-wal")
     shm = Path(str(path) + "-shm")
-    if wal.exists() != shm.exists():
+    if wal.exists() or shm.exists():
         raise SchedulerHold("hold_ledger_integrity")
 
 
