@@ -29,7 +29,7 @@ def identity(replica_id, epoch, sequence, seed):
 
 def enrollment(project_id, replica_id, epoch):
     return {"project_id": project_id, "replica_id": replica_id, "replica_epoch": epoch,
-            "enrollment_receipt": {"receipt_id": f"receipt-{replica_id}", "receipt_digest": hashlib.sha256(replica_id.encode()).hexdigest(), "outcome": "enrollment_accepted"}}
+            "enrollment_descriptor": {"descriptor_id": f"descriptor-{replica_id}", "descriptor_digest": hashlib.sha256(replica_id.encode()).hexdigest()}}
 
 
 def event(project_id, rid, epoch, seq, seed, *, parents=(), work=None, decision=None, resolution=None, refs=None):
@@ -53,7 +53,7 @@ def test_schema_parses_and_closed_export_round_trip():
     bundle = replica.export_bundle(snapshot(), events, enrollment(P1, "replica.a", 1), [identity("replica.a", 1, 1, "a")])
     Draft202012Validator(schema).validate(bundle)
     assert bundle["outcome"] == "replica_export_ready"
-    inspection = replica.inspect_bundle(bundle, [enrollment(P1, "replica.a", 1)])
+    inspection = replica.inspect_bundle(bundle, enrollment(P1, "replica.a", 1)["enrollment_descriptor"])
     Draft202012Validator(schema).validate(inspection)
     assert inspection["outcome"] == "replica_export_ready"
 
@@ -79,25 +79,28 @@ def test_shuffled_duplicate_delivery_converges_to_one_digest_and_read_only_plan(
     assert one["outcome"] == two["outcome"] == "replica_converged"
     assert one["shared_view_digest"] == two["shared_view_digest"]
     bundle = replica.export_bundle(snapshot(), [first, second], enrollment(P1, "replica.b", 1), [identity("replica.b", 1, 1, "b")])
-    inspection = replica.inspect_bundle(bundle, [enrollment(P1, "replica.b", 1)])
-    plan = replica.plan_import(snapshot(), [first], bundle, inspection)
-    assert plan["outcome"] == "replica_import_plan_ready"
-    assert plan["accepted_identities"] == [identity("replica.b", 1, 1, "b")]
-    duplicate = replica.plan_import(snapshot(), [first, second], bundle, inspection)
+    plan = replica.plan_import(snapshot(), [first], bundle, enrollment(P1, "replica.b", 1)["enrollment_descriptor"])
+    assert plan["outcome"] == "replica_import_candidate_ready"
+    schema = yaml.safe_load((Path(__file__).parent.parent / "schemas" / "local-collaboration-replica.schema.yaml").read_text())
+    Draft202012Validator(schema).validate(plan)
+    assert plan["candidate_identities"] == [identity("replica.b", 1, 1, "b")]
+    duplicate = replica.plan_import(snapshot(), [first, second], bundle, enrollment(P1, "replica.b", 1)["enrollment_descriptor"])
     assert duplicate["outcome"] == "replica_duplicate"
 
 
-def test_import_requires_prior_verified_enrollment_context_not_self_issued_receipt():
+def test_import_returns_non_authoritative_candidate_after_current_descriptor_validation():
     item = event(P1, "replica.unapproved", 1, 1, "unapproved")
     forged = enrollment(P1, "replica.unapproved", 1)
     bundle = replica.export_bundle(snapshot(), [item], forged, [identity("replica.unapproved", 1, 1, "unapproved")])
-    assert replica.plan_import(snapshot(), [], bundle)["outcome"] == "hold_replica_identity"
-    assert replica.inspect_bundle(bundle, [enrollment(P1, "replica.approved", 1)])["outcome"] == "hold_replica_identity"
-    inspection = replica.inspect_bundle(bundle, [forged])
-    assert inspection["outcome"] == "replica_export_ready"
-    tampered = {**inspection, "enrollment_context_digest": "0" * 64}
-    assert replica.plan_import(snapshot(), [], bundle, tampered)["outcome"] == "hold_replica_identity"
-    assert replica.plan_import(snapshot(), [], bundle, inspection)["outcome"] == "replica_import_plan_ready"
+    claimed_receipt = {"schema_version": replica.VERSION, "outcome": "replica_export_ready", "project_id": P1, "bundle_digest": bundle["bundle_digest"], "flags": replica.FLAGS}
+    assert replica.plan_import(snapshot(), [], bundle, claimed_receipt)["outcome"] == "hold_replica_identity"
+    claimed_trust = {**forged["enrollment_descriptor"], "trusted": True}
+    assert replica.plan_import(snapshot(), [], bundle, claimed_trust)["outcome"] == "hold_replica_identity"
+    assert replica.inspect_bundle(bundle, enrollment(P1, "replica.approved", 1)["enrollment_descriptor"])["outcome"] == "hold_replica_identity"
+    plan = replica.plan_import(snapshot(), [], bundle, forged["enrollment_descriptor"])
+    assert plan["outcome"] == "replica_import_candidate_ready"
+    assert {key: plan[key] for key in ("authority_level", "owner_enrollment_verified", "import_authorized", "requires_owner_verification")} == {"authority_level": "current_validation_only", "owner_enrollment_verified": False, "import_authorized": False, "requires_owner_verification": True}
+    assert "accepted_identities" not in plan and plan["candidate_identities"] == [identity("replica.unapproved", 1, 1, "unapproved")]
 
 
 @pytest.mark.parametrize("mutate,outcome", [
@@ -109,7 +112,7 @@ def test_representative_integrity_identity_and_epoch_holds(mutate, outcome):
     item = event(P1, "replica.a", 1, 1, "a")
     bundle = replica.export_bundle(snapshot(), [item], enrollment(P1, "replica.a", 1), [identity("replica.a", 1, 1, "a")])
     mutate(bundle)
-    assert replica.inspect_bundle(bundle, [enrollment(P1, "replica.a", 1)])["outcome"] == outcome
+    assert replica.inspect_bundle(bundle, enrollment(P1, "replica.a", 1)["enrollment_descriptor"])["outcome"] == outcome
 
 
 def test_missing_parent_and_cycle_hold():
@@ -151,12 +154,11 @@ def test_privacy_json_size_and_offline_hold_without_hidden_retry_or_io(monkeypat
     assert replica.reduce_converged_view([private])["outcome"] == "hold_privacy"
     assert replica.reduce_converged_view([item] * 101)["outcome"] == "hold_schema"
     bundle = replica.export_bundle(snapshot(), [item], enrollment(P1, "replica.a", 1), [identity("replica.a", 1, 1, "a")])
-    result = replica.FakeReplicaTransport(available=False).plan_delivery(snapshot(), [], bundle)
+    result = replica.FakeReplicaTransport(available=False).plan_delivery(snapshot(), [], bundle, enrollment(P1, "replica.a", 1)["enrollment_descriptor"])
     assert result["outcome"] == "replica_offline"
     monkeypatch.setattr(socket, "socket", lambda *a, **k: pytest.fail("network call"))
     monkeypatch.setattr(subprocess, "run", lambda *a, **k: pytest.fail("process call"))
-    inspection = replica.inspect_bundle(bundle, [enrollment(P1, "replica.a", 1)])
-    assert replica.FakeReplicaTransport().plan_delivery(snapshot(), [], bundle, inspection)["outcome"] == "replica_import_plan_ready"
+    assert replica.FakeReplicaTransport().plan_delivery(snapshot(), [], bundle, enrollment(P1, "replica.a", 1)["enrollment_descriptor"])["outcome"] == "replica_import_candidate_ready"
 
 
 def test_public_fake_dependency_envelopes_remain_non_confirming():

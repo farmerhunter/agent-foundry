@@ -22,10 +22,10 @@ MAX_DEPTH = 12
 MAX_PARENTS = 32
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 OPAQUE = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
-FORBIDDEN = {"prompt", "transcript", "raw_transcript", "tool_output", "raw_tool_output", "secret", "credential", "token", "native_history", "hostname", "username", "path", "native_thread_id", "hardware", "exception"}
+FORBIDDEN = {"prompt", "transcript", "raw_transcript", "tool_output", "raw_tool_output", "secret", "credential", "token", "native_history", "hostname", "username", "path", "native_thread_id", "hardware", "exception", "trusted", "accepted", "enrolled", "verified", "import_authorized"}
 FLAGS = {"simulation_only": True, "network_capability": False, "authoritative": False,
          "confirmation_eligible": False, "remote_mutation_performed": False}
-OUTCOMES = {"replica_export_ready", "replica_import_plan_ready", "replica_converged", "replica_duplicate", "replica_offline", "hold_replica_identity", "hold_transport_integrity", "hold_missing_dependency", "hold_semantic_conflict", "hold_privacy", "hold_schema", "hold_recovery_readback"}
+OUTCOMES = {"replica_export_ready", "replica_import_candidate_ready", "replica_converged", "replica_duplicate", "replica_offline", "hold_replica_identity", "hold_transport_integrity", "hold_missing_dependency", "hold_semantic_conflict", "hold_privacy", "hold_schema", "hold_recovery_readback"}
 
 
 class ReplicaHold(ValueError):
@@ -95,12 +95,10 @@ def _identity_key(identity: Mapping[str, Any]) -> tuple[str, int, int, str]:
     return rid, epoch, sequence, _uuid(identity["event_id"], identity=True)
 
 
-def _enrollment_receipt(value: Any) -> dict[str, str]:
-    if not isinstance(value, Mapping) or set(value) != {"receipt_id", "receipt_digest", "outcome"}:
+def _enrollment_descriptor(value: Any) -> dict[str, str]:
+    if not isinstance(value, Mapping) or set(value) != {"descriptor_id", "descriptor_digest"}:
         raise ReplicaHold("hold_replica_identity", "replica_identity_invalid")
-    if value.get("outcome") != "enrollment_accepted":
-        raise ReplicaHold("hold_replica_identity", "replica_identity_invalid")
-    return {"receipt_id": _opaque(value["receipt_id"], identity=True), "receipt_digest": _hex(value["receipt_digest"], "hold_replica_identity", "replica_identity_invalid"), "outcome": "enrollment_accepted"}
+    return {"descriptor_id": _opaque(value["descriptor_id"], identity=True), "descriptor_digest": _hex(value["descriptor_digest"], "hold_replica_identity", "replica_identity_invalid")}
 
 
 def _human_decision_receipt(value: Any) -> dict[str, str]:
@@ -112,7 +110,7 @@ def _human_decision_receipt(value: Any) -> dict[str, str]:
 
 
 def _replica_identity(value: Any, project_id: str | None = None) -> dict[str, Any]:
-    if not isinstance(value, Mapping) or set(value) != {"project_id", "replica_id", "replica_epoch", "enrollment_receipt"}:
+    if not isinstance(value, Mapping) or set(value) != {"project_id", "replica_id", "replica_epoch", "enrollment_descriptor"}:
         raise ReplicaHold("hold_replica_identity", "replica_identity_invalid")
     pid = _uuid(value["project_id"], identity=True)
     if project_id is not None and pid != project_id:
@@ -120,7 +118,7 @@ def _replica_identity(value: Any, project_id: str | None = None) -> dict[str, An
     epoch = value["replica_epoch"]
     if not isinstance(epoch, int) or isinstance(epoch, bool) or epoch < 1:
         raise ReplicaHold("hold_replica_identity", "replica_identity_invalid")
-    return {"project_id": pid, "replica_id": _opaque(value["replica_id"], identity=True), "replica_epoch": epoch, "enrollment_receipt": _enrollment_receipt(value["enrollment_receipt"])}
+    return {"project_id": pid, "replica_id": _opaque(value["replica_id"], identity=True), "replica_epoch": epoch, "enrollment_descriptor": _enrollment_descriptor(value["enrollment_descriptor"])}
 
 
 def _event(value: Any, project_id: str | None = None) -> dict[str, Any]:
@@ -224,42 +222,6 @@ def _hold(exc: ReplicaHold, project_id: str | None = None, **extra: Any) -> dict
     return _receipt(exc.outcome, project_id or str(uuid.UUID(int=0)), reason_code=exc.reason_code, **extra)
 
 
-def _enrollments(value: Any, project_id: str) -> dict[tuple[str, int], dict[str, Any]]:
-    if isinstance(value, Mapping) and "replica_id" in value:
-        values = [value]
-    elif isinstance(value, Mapping):
-        values = list(value.values())
-    elif isinstance(value, Iterable) and not isinstance(value, (str, bytes)):
-        values = list(value)
-    else:
-        raise ReplicaHold("hold_replica_identity", "replica_identity_invalid")
-    result = {}
-    for item in values:
-        identity = _replica_identity(item, project_id)
-        key = identity["replica_id"], identity["replica_epoch"]
-        if key in result and result[key] != identity:
-            raise ReplicaHold("hold_replica_identity", "replica_identity_invalid")
-        result[key] = identity
-    return result
-
-
-def _inspection_context(project_id: str, identity: Mapping[str, Any], bundle_digest: str) -> str:
-    """Bind a verified external enrollment receipt to this exact bundle."""
-    return _digest({"project_id": project_id, "replica_id": identity["replica_id"],
-                    "replica_epoch": identity["replica_epoch"], "receipt_digest": identity["enrollment_receipt"]["receipt_digest"],
-                    "bundle_digest": bundle_digest})
-
-
-def _validated_inspection(value: Any, *, project_id: str, identity: Mapping[str, Any], bundle_digest: str) -> None:
-    """Consume, but never issue, a caller-provided prior inspection receipt."""
-    if not isinstance(value, Mapping) or set(value) != {"schema_version", "outcome", "project_id", "bundle_digest", "enrollment_context_digest", "flags"}:
-        raise ReplicaHold("hold_replica_identity", "replica_identity_invalid")
-    if value.get("schema_version") != VERSION or value.get("outcome") != "replica_export_ready" or value.get("project_id") != project_id or value.get("bundle_digest") != bundle_digest or value.get("flags") != FLAGS:
-        raise ReplicaHold("hold_replica_identity", "replica_identity_invalid")
-    if value.get("enrollment_context_digest") != _inspection_context(project_id, identity, bundle_digest):
-        raise ReplicaHold("hold_replica_identity", "replica_identity_invalid")
-
-
 def _bundle(value: Any) -> tuple[str, dict[str, Any], list[dict[str, Any]]]:
     """Validate immutable transport syntax without deciding enrollment trust."""
     if not isinstance(value, Mapping) or set(value) != {"schema_version", "outcome", "project_id", "replica_identity", "authority_generation", "authority_head", "frontier", "events", "bundle_digest", "flags"} or value.get("schema_version") != VERSION or value.get("outcome") != "replica_export_ready" or value.get("flags") != FLAGS:
@@ -310,22 +272,28 @@ def export_bundle(authority_snapshot: Any, events: Any, replica_identity: Any, f
         return _hold(exc)
 
 
-def inspect_bundle(bundle: Any, enrolled_replicas: Any) -> dict[str, Any]:
-    """Validate a received immutable envelope against prior enrollment receipts."""
+def _inspect_current(bundle: Any, enrollment_descriptor: Any) -> tuple[str, dict[str, Any], list[dict[str, Any]]]:
+    """One shared structural validation path; it deliberately establishes no trust."""
+    project_id, identity, events = _bundle(bundle)
+    descriptor = _enrollment_descriptor(enrollment_descriptor)
+    if descriptor != identity["enrollment_descriptor"]:
+        raise ReplicaHold("hold_replica_identity", "replica_identity_invalid")
+    return project_id, identity, events
+
+
+def inspect_bundle(bundle: Any, enrollment_descriptor: Any) -> dict[str, Any]:
+    """Return a current-validation audit; it is not enrollment authorization."""
     try:
-        project_id, identity, events = _bundle(bundle)
-        enrollment = _enrollments(enrolled_replicas, project_id).get((identity["replica_id"], identity["replica_epoch"]))
-        if enrollment is None or enrollment["enrollment_receipt"] != identity["enrollment_receipt"]:
-            raise ReplicaHold("hold_replica_identity", "replica_identity_invalid")
+        project_id, _identity_descriptor, _events = _inspect_current(bundle, enrollment_descriptor)
         return {"schema_version": VERSION, "outcome": "replica_export_ready", "project_id": project_id,
-                "bundle_digest": bundle["bundle_digest"], "enrollment_context_digest": _inspection_context(project_id, identity, bundle["bundle_digest"]),
+                "bundle_digest": bundle["bundle_digest"],
                 "flags": dict(FLAGS)}
     except ReplicaHold as exc:
         pid = bundle.get("project_id") if isinstance(bundle, Mapping) and isinstance(bundle.get("project_id"), str) else None
         return _hold(exc, pid)
 
 
-def plan_import(local_snapshot: Any, local_event_set: Any, bundle: Any, inspection_receipt: Any = None, *, transport_available: bool = True) -> dict[str, Any]:
+def plan_import(local_snapshot: Any, local_event_set: Any, bundle: Any, enrollment_descriptor: Any, *, transport_available: bool = True) -> dict[str, Any]:
     """Produce a read-only import plan; no event is appended or persisted."""
     try:
         project_id, generation, head = _snapshot(local_snapshot)
@@ -334,10 +302,9 @@ def plan_import(local_snapshot: Any, local_event_set: Any, bundle: Any, inspecti
             return _receipt("replica_offline", project_id, authority_generation=generation, authority_head=head, reason_code="replica_offline")
         if not isinstance(bundle, Mapping):
             raise ReplicaHold("hold_recovery_readback", "recovery_readback_required")
-        bundle_project, identity_receipt, remote = _bundle(bundle)
+        bundle_project, _identity_descriptor, remote = _inspect_current(bundle, enrollment_descriptor)
         if bundle_project != project_id:
             raise ReplicaHold("hold_replica_identity", "replica_identity_invalid")
-        _validated_inspection(inspection_receipt, project_id=project_id, identity=identity_receipt, bundle_digest=bundle["bundle_digest"])
         local_by_id = {_identity_key(_identity(event)): event for event in local}
         accepted, duplicates = [], []
         for event in remote:
@@ -348,8 +315,12 @@ def plan_import(local_snapshot: Any, local_event_set: Any, bundle: Any, inspecti
                 duplicates.append(_identity(event))
             else:
                 raise ReplicaHold("hold_transport_integrity", "transport_integrity_invalid")
-        outcome = "replica_duplicate" if not accepted else "replica_import_plan_ready"
-        return _receipt(outcome, project_id, authority_generation=generation, authority_head=head, bundle_digest=bundle["bundle_digest"], accepted_identities=accepted or None, duplicate_identities=duplicates or None)
+        if not accepted:
+            return _receipt("replica_duplicate", project_id, authority_generation=generation, authority_head=head, bundle_digest=bundle["bundle_digest"], duplicate_identities=duplicates)
+        return _receipt("replica_import_candidate_ready", project_id, authority_generation=generation, authority_head=head,
+                        bundle_digest=bundle["bundle_digest"], candidate_identities=accepted,
+                        authority_level="current_validation_only", owner_enrollment_verified=False,
+                        import_authorized=False, requires_owner_verification=True)
     except ReplicaHold as exc:
         try:
             pid, generation, head = _snapshot(local_snapshot)
@@ -407,7 +378,7 @@ def reduce_converged_view(valid_event_set: Any) -> dict[str, Any]:
         if conflicts:
             return _receipt("hold_semantic_conflict", project_id, held_identities=conflicts, reason_code="semantic_conflict")
         view = [{"identity": _identity(event), "event_digest": event["event_digest"]} for event in ordered]
-        return _receipt("replica_converged", project_id, shared_view_digest=_digest(view), accepted_identities=[_identity(event) for event in ordered])
+        return _receipt("replica_converged", project_id, shared_view_digest=_digest(view), converged_identities=[_identity(event) for event in ordered])
     except ReplicaHold as exc:
         return _hold(exc)
 
@@ -417,5 +388,5 @@ class FakeReplicaTransport:
     def __init__(self, available: bool = True):
         self.available = bool(available)
 
-    def plan_delivery(self, local_snapshot: Any, local_event_set: Any, bundle: Any, inspection_receipt: Any = None) -> dict[str, Any]:
-        return plan_import(local_snapshot, local_event_set, bundle, inspection_receipt, transport_available=self.available)
+    def plan_delivery(self, local_snapshot: Any, local_event_set: Any, bundle: Any, enrollment_descriptor: Any) -> dict[str, Any]:
+        return plan_import(local_snapshot, local_event_set, bundle, enrollment_descriptor, transport_available=self.available)

@@ -27,14 +27,13 @@ $defs:
       replica_epoch: {type: integer, minimum: 1}
       origin_sequence: {type: integer, minimum: 1}
       event_id: {$ref: '#/$defs/uuid'}
-  enrollment_receipt:
+  enrollment_descriptor:
     type: object
     additionalProperties: false
-    required: [receipt_id, receipt_digest, outcome]
+    required: [descriptor_id, descriptor_digest]
     properties:
-      receipt_id: {$ref: '#/$defs/opaque'}
-      receipt_digest: {$ref: '#/$defs/digest'}
-      outcome: {const: enrollment_accepted}
+      descriptor_id: {$ref: '#/$defs/opaque'}
+      descriptor_digest: {$ref: '#/$defs/digest'}
   human_decision_receipt:
     type: object
     additionalProperties: false
@@ -46,12 +45,12 @@ $defs:
   replica_identity:
     type: object
     additionalProperties: false
-    required: [project_id, replica_id, replica_epoch, enrollment_receipt]
+    required: [project_id, replica_id, replica_epoch, enrollment_descriptor]
     properties:
       project_id: {$ref: '#/$defs/uuid'}
       replica_id: {$ref: '#/$defs/opaque'}
       replica_epoch: {type: integer, minimum: 1}
-      enrollment_receipt: {$ref: '#/$defs/enrollment_receipt'}
+      enrollment_descriptor: {$ref: '#/$defs/enrollment_descriptor'}
   event:
     type: object
     additionalProperties: false
@@ -106,7 +105,6 @@ $defs:
         maxItems: 100
         items: {$ref: '#/$defs/event'}
       bundle_digest: {$ref: '#/$defs/digest'}
-      enrollment_context_digest: {$ref: '#/$defs/digest'}
       flags: {$ref: '#/$defs/flags'}
   receipt:
     type: object
@@ -115,15 +113,23 @@ $defs:
     properties:
       schema_version: {const: LocalCollaborationReplica-v1}
       outcome:
-        enum: [replica_export_ready, replica_import_plan_ready, replica_converged, replica_duplicate, replica_offline, hold_replica_identity, hold_transport_integrity, hold_missing_dependency, hold_semantic_conflict, hold_privacy, hold_schema, hold_recovery_readback]
+        enum: [replica_export_ready, replica_import_candidate_ready, replica_converged, replica_duplicate, replica_offline, hold_replica_identity, hold_transport_integrity, hold_missing_dependency, hold_semantic_conflict, hold_privacy, hold_schema, hold_recovery_readback]
       project_id: {$ref: '#/$defs/uuid'}
       authority_generation: {type: integer, minimum: 0}
       authority_head: {$ref: '#/$defs/digest'}
       bundle_digest: {$ref: '#/$defs/digest'}
-      enrollment_context_digest: {$ref: '#/$defs/digest'}
       shared_view_digest: {$ref: '#/$defs/digest'}
-      accepted_identities: {type: array, items: {$ref: '#/$defs/identity'}}
+      candidate_identities: {type: array, items: {$ref: '#/$defs/identity'}}
+      converged_identities: {type: array, items: {$ref: '#/$defs/identity'}}
       duplicate_identities: {type: array, items: {$ref: '#/$defs/identity'}}
       held_identities: {type: array, items: {$ref: '#/$defs/identity'}}
       reason_code: {enum: [replica_offline, replica_identity_invalid, transport_integrity_invalid, missing_dependency, semantic_conflict, privacy_rejected, schema_invalid, recovery_readback_required]}
       flags: {$ref: '#/$defs/flags'}
+      authority_level: {const: current_validation_only}
+      owner_enrollment_verified: {const: false}
+      import_authorized: {const: false}
+      requires_owner_verification: {const: true}
+    allOf:
+      - if: {properties: {outcome: {const: replica_import_candidate_ready}}}
+        then:
+          required: [authority_level, owner_enrollment_verified, import_authorized, requires_owner_verification, candidate_identities]
