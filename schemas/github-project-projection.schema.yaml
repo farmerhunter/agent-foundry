@@ -64,15 +64,11 @@ $defs:
       materialization_result_digest: {$ref: '#/$defs/digest'}
       plan_digest: {$ref: '#/$defs/digest'}
       flags: {$ref: '#/$defs/flags'}
-  result:
+  result_common:
     type: object
-    additionalProperties: false
-    required: [schema_version, operation, outcome, flags]
     properties:
       schema_version: {const: GitHubProjectProjection-v1}
       operation: {enum: [project_item_add, project_field_set]}
-      outcome:
-        enum: [project_projection_not_required, project_projection_plan_ready, project_projection_approval_required, project_projection_duplicate, project_projection_stale_authority_hold, project_projection_dependency_hold, project_projection_conflict_hold, project_projection_privacy_hold, project_projection_recovery_readback_required, project_projection_fixture_readback_verified, project_projection_canceled]
       classification: {type: string, enum: [hold_stale_authority, hold_dependency, hold_conflict, hold_privacy, hold_schema]}
       project_id: {$ref: '#/$defs/uuid'}
       intent_id: {$ref: '#/$defs/uuid'}
@@ -80,3 +76,76 @@ $defs:
       plan_digest: {$ref: '#/$defs/digest'}
       fixture_readback_digest: {$ref: '#/$defs/digest'}
       flags: {$ref: '#/$defs/flags'}
+  terminal_binding:
+    type: object
+    required: [schema_version, operation, outcome, project_id, intent_id, attempt_sequence, flags]
+  effect_binding:
+    type: object
+    required: [schema_version, operation, outcome, project_id, intent_id, attempt_sequence, plan_digest, flags]
+  result:
+    oneOf:
+      - allOf:
+          - {$ref: '#/$defs/result_common'}
+          - {$ref: '#/$defs/terminal_binding'}
+          - properties: {outcome: {const: project_projection_not_required}}
+          - not: {anyOf: [{required: [classification]}, {required: [plan_digest]}, {required: [fixture_readback_digest]}]}
+        unevaluatedProperties: false
+      - allOf:
+          - {$ref: '#/$defs/result_common'}
+          - {$ref: '#/$defs/terminal_binding'}
+          - properties: {outcome: {const: project_projection_approval_required}}
+          - not: {anyOf: [{required: [classification]}, {required: [plan_digest]}, {required: [fixture_readback_digest]}]}
+        unevaluatedProperties: false
+      - allOf:
+          - {$ref: '#/$defs/result_common'}
+          - {$ref: '#/$defs/terminal_binding'}
+          - properties: {outcome: {const: project_projection_canceled}}
+          - not: {anyOf: [{required: [classification]}, {required: [plan_digest]}, {required: [fixture_readback_digest]}]}
+        unevaluatedProperties: false
+      - allOf:
+          - {$ref: '#/$defs/result_common'}
+          - {$ref: '#/$defs/effect_binding'}
+          - properties: {outcome: {const: project_projection_duplicate}}
+          - not: {anyOf: [{required: [classification]}, {required: [fixture_readback_digest]}]}
+        unevaluatedProperties: false
+      - allOf:
+          - {$ref: '#/$defs/result_common'}
+          - {$ref: '#/$defs/effect_binding'}
+          - required: [classification]
+          - properties: {outcome: {const: project_projection_stale_authority_hold}, classification: {const: hold_stale_authority}}
+          - not: {required: [fixture_readback_digest]}
+        unevaluatedProperties: false
+      - allOf:
+          - {$ref: '#/$defs/result_common'}
+          - {$ref: '#/$defs/effect_binding'}
+          - required: [classification]
+          - properties: {outcome: {const: project_projection_dependency_hold}, classification: {enum: [hold_dependency, hold_schema, hold_privacy]}}
+          - not: {required: [fixture_readback_digest]}
+        unevaluatedProperties: false
+      - allOf:
+          - {$ref: '#/$defs/result_common'}
+          - {$ref: '#/$defs/effect_binding'}
+          - required: [classification]
+          - properties: {outcome: {const: project_projection_conflict_hold}, classification: {const: hold_conflict}}
+          - not: {required: [fixture_readback_digest]}
+        unevaluatedProperties: false
+      - allOf:
+          - {$ref: '#/$defs/result_common'}
+          - {$ref: '#/$defs/effect_binding'}
+          - required: [classification]
+          - properties: {outcome: {const: project_projection_privacy_hold}, classification: {const: hold_privacy}}
+          - not: {required: [fixture_readback_digest]}
+        unevaluatedProperties: false
+      - allOf:
+          - {$ref: '#/$defs/result_common'}
+          - {$ref: '#/$defs/effect_binding'}
+          - properties: {outcome: {const: project_projection_recovery_readback_required}}
+          - not: {anyOf: [{required: [classification]}, {required: [fixture_readback_digest]}]}
+        unevaluatedProperties: false
+      - allOf:
+          - {$ref: '#/$defs/result_common'}
+          - {$ref: '#/$defs/effect_binding'}
+          - required: [fixture_readback_digest]
+          - properties: {outcome: {const: project_projection_fixture_readback_verified}}
+          - not: {required: [classification]}
+        unevaluatedProperties: false

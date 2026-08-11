@@ -234,6 +234,38 @@ def test_schema_outcome_fixtures_and_no_real_io(monkeypatch):
     assert projection.recover_project_projection(plan, connector)["outcome"] == "project_projection_fixture_readback_verified"
 
 
+def test_outcome_specific_schema_runtime_parity_and_representative_rejections():
+    root, _, _, request = setup()
+    plan = projection.plan_project_projection(request, projects_root=root)
+    terminal = {"project_id": plan["project_id"], "intent_id": plan["intent_id"], "attempt_sequence": plan["attempt_sequence"]}
+    effect = {**terminal, "plan_digest": plan["plan_digest"]}
+    fixtures = [
+        projection._result(plan["operation"], "project_projection_not_required", **terminal),
+        projection._result(plan["operation"], "project_projection_approval_required", **terminal),
+        projection._result(plan["operation"], "project_projection_canceled", **terminal),
+        projection._result(plan["operation"], "project_projection_duplicate", **effect),
+        projection._result(plan["operation"], "project_projection_stale_authority_hold", classification="hold_stale_authority", **effect),
+        projection._result(plan["operation"], "project_projection_dependency_hold", classification="hold_dependency", **effect),
+        projection._result(plan["operation"], "project_projection_conflict_hold", classification="hold_conflict", **effect),
+        projection._result(plan["operation"], "project_projection_privacy_hold", classification="hold_privacy", **effect),
+        projection._result(plan["operation"], "project_projection_recovery_readback_required", **effect),
+        projection._result(plan["operation"], "project_projection_fixture_readback_verified", fixture_readback_digest=C, **effect),
+    ]
+    for fixture in fixtures:
+        projection._schema(fixture, "result")
+    invalid = [
+        {key: value for key, value in fixtures[-1].items() if key != "fixture_readback_digest"},
+        {key: value for key, value in fixtures[4].items() if key != "classification"},
+        {**fixtures[2], "plan_digest": H},
+        {**fixtures[0], "unexpected": True},
+        {**fixtures[3], "attempt_sequence": "1"},
+    ]
+    for envelope in invalid:
+        with pytest.raises(projection.ProjectProjectionHold) as held:
+            projection._schema(envelope, "result")
+        assert held.value.classification == "hold_schema"
+
+
 def test_fresh_process_recovery_only_reads_fake_state(tmp_path):
     root, _, _, request = setup(); plan = projection.plan_project_projection(request, projects_root=root)
     connector = projection.FakeProjectConnector(crash_after_write=True)
