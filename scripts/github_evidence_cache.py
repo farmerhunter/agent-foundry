@@ -26,7 +26,7 @@ RFC3339 = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z$")
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 HOLDS = {"hold_cache_authority_unready", "hold_cache_binding_mismatch", "hold_cache_schema", "hold_cache_permission", "hold_cache_integrity", "hold_cache_busy", "hold_cache_stale_basis", "hold_cache_divergent_revision", "hold_cache_generation_conflict", "hold_cache_clock_or_freshness", "hold_cache_scope", "hold_cache_privacy", "hold_cache_producer_untrusted", "hold_cache_cleanup_gate"}
 DURABILITY = "wal_synchronous_normal"
-META_REQUIRED = {"schema_version", "project_id", "repository_id", "repository_locator_digest", "host_kind", "producer_contract", "producer_version", "generation", "ledger_head", "created_at", "timestamp_provenance", "durability"}
+META_REQUIRED = {"schema_version", "project_id", "repository_id", "repository_locator_digest", "auth_scope_digest", "host_kind", "producer_contract", "producer_version", "generation", "ledger_head", "created_at", "timestamp_provenance", "durability"}
 RECEIPT_DATA_KEYS = {
     "refresh": {"generation", "changed", "duplicates", "producer_id", "coverage"},
     "invalidate": {"generation", "count", "reason_digest"},
@@ -125,6 +125,13 @@ def _digest_locator(value: Any) -> str:
     if not isinstance(value, str) or not value or len(value.encode()) > 2048:
         raise CacheHold("hold_cache_binding_mismatch")
     return _hash(value)
+
+
+def _auth_scope_digest(value: Any) -> str:
+    """Accept an already-opaque scope binding, never a credential or header."""
+    if not isinstance(value, str) or not HEX64.fullmatch(value):
+        raise CacheHold("hold_cache_scope")
+    return value
 
 
 def _private(path: Path, mode: int) -> None:
@@ -236,13 +243,16 @@ def _entry(entry: Any, project_id: str, repository_id: str) -> dict[str, Any]:
 
 
 class GitHubEvidenceCache:
-    def __init__(self, path: str | Path, *, read_only: bool = False):
+    def __init__(self, path: str | Path, *, read_only: bool = False, create: bool = True):
         self.path = Path(path).expanduser()
         self.read_only = read_only
         if read_only:
             _private(self.path, 0o600)
             try:
-                self.db = sqlite3.connect(f"file:{self.path}?mode=ro", uri=True, timeout=5)
+                # immutable prevents SQLite from creating read-lock sidecars
+                # during preflight/read paths.  A reader therefore never
+                # performs recovery or changes cache file timestamps.
+                self.db = sqlite3.connect(f"file:{self.path}?mode=ro&immutable=1", uri=True, timeout=5)
                 self.db.row_factory = sqlite3.Row
                 self._configure(read_only=True)
                 self._validate()
@@ -255,15 +265,21 @@ class GitHubEvidenceCache:
                 raise CacheHold("hold_cache_permission")
             if self.path.exists() and not self.path.is_file():
                 raise CacheHold("hold_cache_permission")
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            os.chmod(self.path.parent, 0o700)
+            if not create:
+                _private(self.path, 0o600)
+            else:
+                self.path.parent.mkdir(parents=True, exist_ok=True)
+                os.chmod(self.path.parent, 0o700)
             try:
-                self.db = sqlite3.connect(self.path, timeout=5, isolation_level=None)
+                target = self.path if create else f"file:{self.path}?mode=rw"
+                self.db = sqlite3.connect(target, uri=not create, timeout=5, isolation_level=None)
                 self.db.row_factory = sqlite3.Row
                 self._configure(read_only=False)
-                self._init()
+                if create:
+                    self._init()
                 self._validate()
-                os.chmod(self.path, 0o600)
+                if create:
+                    os.chmod(self.path, 0o600)
             except CacheHold:
                 try: self.db.close()
                 except Exception: pass
@@ -311,7 +327,7 @@ class GitHubEvidenceCache:
                 if set(meta) != META_REQUIRED or meta.get("durability") != DURABILITY or meta.get("host_kind") != "github":
                     raise CacheHold("hold_cache_schema")
                 str(uuid.UUID(meta["project_id"]))
-                if not meta["repository_id"] or not HEX64.fullmatch(meta["repository_locator_digest"]) or not meta["producer_contract"] or not meta["producer_version"]:
+                if not meta["repository_id"] or not HEX64.fullmatch(meta["repository_locator_digest"]) or not HEX64.fullmatch(meta["auth_scope_digest"]) or not meta["producer_contract"] or not meta["producer_version"]:
                     raise CacheHold("hold_cache_schema")
                 if not meta["generation"].isdigit() or not HEX64.fullmatch(meta["ledger_head"]) or meta["timestamp_provenance"] not in {"caller_supplied", "caller_evaluated_at", "not_collected"}:
                     raise CacheHold("hold_cache_schema")
@@ -385,9 +401,11 @@ class GitHubEvidenceCache:
             raise CacheHold("hold_cache_integrity") from None
 
 
-def _binding(meta: Mapping[str, Any], pid: str, repository_id: str, locator: str) -> None:
+def _binding(meta: Mapping[str, Any], pid: str, repository_id: str, locator: str, auth_scope_digest: str | None = None) -> None:
     if meta.get("project_id") != pid or meta.get("repository_id") != str(repository_id) or meta.get("repository_locator_digest") != locator:
         raise CacheHold("hold_cache_binding_mismatch")
+    if auth_scope_digest is not None and meta.get("auth_scope_digest") != auth_scope_digest:
+        raise CacheHold("hold_cache_scope")
 
 
 def _ledger_recheck(projects_root, project_id, snapshot):
@@ -399,48 +417,95 @@ def _ledger_recheck(projects_root, project_id, snapshot):
 
 def _open_existing(path: Path) -> GitHubEvidenceCache:
     if not path.is_file() or path.is_symlink(): raise CacheHold("hold_cache_authority_unready")
-    return GitHubEvidenceCache(path)
+    return GitHubEvidenceCache(path, create=False)
 
 
-def initialize_cache(*, projects_root, project_id, repository_id, repository_locator_digest, producer_contract="unknown", producer_version="unknown", receipt_at=None):
+def _read_preflight(path: Path, lm: Mapping[str, Any], repository_id: str, locator: str, auth_scope_digest: str) -> tuple[dict[str, str], int]:
+    """Validate all durable bindings without changing DB, WAL, SHM, or mtime."""
+    if not path.is_file() or path.is_symlink():
+        raise CacheHold("hold_cache_authority_unready")
+    cache = GitHubEvidenceCache(path, read_only=True)
+    try:
+        meta = cache._meta()
+        _binding(meta, lm["project_id"], repository_id, locator, auth_scope_digest)
+        return meta, int(meta.get("generation", "0"))
+    finally:
+        cache.close()
+
+
+def initialize_cache(*, projects_root, project_id, repository_id, repository_locator_digest, auth_scope_digest, producer_contract="unknown", producer_version="unknown", receipt_at=None):
     ledger, lm = _authority(projects_root, project_id); path = _cache_path(projects_root, project_id); locator = _digest_locator(repository_locator_digest)
     try:
+        scope = _auth_scope_digest(auth_scope_digest)
         if not isinstance(producer_contract, str) or not producer_contract or not isinstance(producer_version, str) or not producer_version:
             raise CacheHold("hold_cache_schema")
         cache = GitHubEvidenceCache(path)
         try:
-            old = cache._meta(); _binding({**old, "project_id": lm["project_id"], "repository_id": repository_id, "repository_locator_digest": locator}, lm["project_id"], repository_id, locator)
-            values = {"project_id": lm["project_id"], "repository_id": str(repository_id), "repository_locator_digest": locator, "host_kind": "github", "producer_contract": str(producer_contract), "producer_version": str(producer_version), "generation": old.get("generation", "0"), "ledger_head": lm["head"], "created_at": receipt_at or old.get("created_at", ""), "timestamp_provenance": "caller_supplied" if receipt_at else "not_collected"}
+            old = cache._meta(); fresh_projection = set(old) == {"schema_version", "durability"}
+            if not fresh_projection and old.get("auth_scope_digest") != scope:
+                raise CacheHold("hold_cache_scope")
+            _binding({**old, "project_id": lm["project_id"], "repository_id": repository_id, "repository_locator_digest": locator, "auth_scope_digest": scope}, lm["project_id"], repository_id, locator, scope)
+            values = {"project_id": lm["project_id"], "repository_id": str(repository_id), "repository_locator_digest": locator, "auth_scope_digest": scope, "host_kind": "github", "producer_contract": str(producer_contract), "producer_version": str(producer_version), "generation": old.get("generation", "0"), "ledger_head": lm["head"], "created_at": receipt_at or old.get("created_at", ""), "timestamp_provenance": "caller_supplied" if receipt_at else "not_collected"}
             if receipt_at: _ts(receipt_at)
             for key, value in values.items():
                 if key in old and old[key] != str(value) and key not in {"ledger_head", "created_at", "timestamp_provenance"}: raise CacheHold("hold_cache_binding_mismatch")
                 cache._setmeta(key, value)
+            # A cache cannot durably observe a miss until it exists.  The
+            # successful first initialization is that single durable miss.
+            if fresh_projection:
+                cache._counter("cache_miss")
             cache.db.commit()
             return {"outcome": "cache_initialized", "authoritative": False, "project_id": lm["project_id"], "cache_path_digest": _hash(str(path)), "generation": int(values["generation"])}
         finally: cache.close()
     finally: ledger.close()
 
 
-def read_cache(*, projects_root, project_id, evaluated_at, max_age_seconds, offline=False, repository_id=None, repository_locator_digest=None):
+def _read_envelope(*, outcome, entries, evaluated_at, offline, metadata, counters, coverage, freshness, age_seconds, next_action):
+    return {
+        "outcome": outcome, "entries": entries, "as_of": evaluated_at,
+        "age_seconds": age_seconds, "coverage": coverage, "freshness": freshness,
+        "offline": bool(offline), "authoritative": False,
+        "confirmation_eligible": False, "next_action": next_action,
+        "metadata": metadata, "counters": counters,
+    }
+
+
+def read_cache(*, projects_root, project_id, evaluated_at, max_age_seconds, offline=False, repository_id=None, repository_locator_digest=None, auth_scope_digest=None):
+    # Validate caller freshness policy before even deciding whether this is a miss.
+    _ts(evaluated_at)
+    if not isinstance(max_age_seconds, int) or isinstance(max_age_seconds, bool) or not 0 <= max_age_seconds <= 604800:
+        raise CacheHold("hold_cache_clock_or_freshness")
+    if (repository_id is None) != (repository_locator_digest is None):
+        raise CacheHold("hold_cache_binding_mismatch")
+    if auth_scope_digest is not None:
+        auth_scope_digest = _auth_scope_digest(auth_scope_digest)
     ledger, lm = _authority(projects_root, project_id); path = _cache_path(projects_root, project_id); cache = None
     try:
         if not path.is_file():
-            return {"outcome": "cache_miss", "entries": [], "authoritative": False, "offline": bool(offline), "counters": {"cache_miss": 1}}
+            return _read_envelope(outcome="cache_miss", entries=[], evaluated_at=evaluated_at, offline=offline, metadata=None, counters={"cache_miss": 1}, coverage="unavailable", freshness="unavailable", age_seconds=None, next_action="initialize_cache")
         cache = GitHubEvidenceCache(path, read_only=True); meta = cache._meta()
         try:
-            if repository_id is not None and repository_locator_digest is not None: _binding(meta, lm["project_id"], repository_id, _digest_locator(repository_locator_digest))
-            return {"outcome": "cache_hit", "entries": cache.read(evaluated_at=evaluated_at, max_age_seconds=max_age_seconds, offline=offline), "metadata": meta, "authoritative": False, "confirmation_eligible": False, "counters": {r["name"]: r["value"] for r in cache.db.execute("SELECT * FROM counters")}}
+            if repository_id is not None:
+                _binding(meta, lm["project_id"], repository_id, _digest_locator(repository_locator_digest), auth_scope_digest)
+            elif auth_scope_digest is not None and meta.get("auth_scope_digest") != auth_scope_digest:
+                raise CacheHold("hold_cache_scope")
+            entries = cache.read(evaluated_at=evaluated_at, max_age_seconds=max_age_seconds, offline=offline)
+            freshness = "unavailable" if not entries else ("stale" if any(e["freshness"] == "stale" for e in entries) else entries[0]["freshness"])
+            coverage = "unavailable" if not entries else ("partial" if any(e["coverage"] == "partial" for e in entries) else entries[0]["coverage"])
+            ages = [e["age_seconds"] for e in entries]
+            next_action = "refresh" if freshness in {"stale", "unavailable", "invalidated"} else "observe_unverified"
+            return _read_envelope(outcome="cache_hit", entries=entries, evaluated_at=evaluated_at, offline=offline, metadata=meta, counters={r["name"]: r["value"] for r in cache.db.execute("SELECT * FROM counters")}, coverage=coverage, freshness=freshness, age_seconds=max(ages) if ages else None, next_action=next_action)
         finally: cache.close()
     finally: ledger.close()
 
 
-def _producer_result(result: Any, project_id: str, repository_id: str, selectors: list[Any]) -> tuple[list[dict[str, Any]], Mapping[str, Any]]:
+def _producer_result(result: Any, project_id: str, repository_id: str, selectors: list[Any], auth_scope_digest: str) -> tuple[list[dict[str, Any]], Mapping[str, Any]]:
     if not isinstance(result, Mapping) or result.get("trust_domain") != "same_process_reference" or result.get("production_eligibility") is not False:
         raise CacheHold("hold_cache_producer_untrusted")
-    allowed = {"trust_domain", "production_eligibility", "project_id", "repository_id", "producer_id", "producer_version", "coverage", "entries", "source_revision", "fetched_at"}
+    allowed = {"trust_domain", "production_eligibility", "project_id", "repository_id", "auth_scope_digest", "producer_id", "producer_version", "coverage", "entries", "source_revision", "fetched_at"}
     if set(result) - allowed:
         raise CacheHold("hold_cache_schema")
-    required = {"trust_domain", "production_eligibility", "project_id", "repository_id", "producer_id", "producer_version", "coverage", "entries"}
+    required = {"trust_domain", "production_eligibility", "project_id", "repository_id", "auth_scope_digest", "producer_id", "producer_version", "coverage", "entries"}
     if not required.issubset(result) or result["coverage"] not in COVERAGE:
         raise CacheHold("hold_cache_schema")
     for key in ("producer_id", "producer_version"):
@@ -448,6 +513,8 @@ def _producer_result(result: Any, project_id: str, repository_id: str, selectors
     if result.get("fetched_at") is not None: _ts(result["fetched_at"])
     if result["project_id"] != project_id or result["repository_id"] != repository_id:
         raise CacheHold("hold_cache_binding_mismatch")
+    if _auth_scope_digest(result["auth_scope_digest"]) != auth_scope_digest:
+        raise CacheHold("hold_cache_scope")
     if not isinstance(result.get("entries"), list): raise CacheHold("hold_cache_schema")
     entries = [_entry(e, project_id, repository_id) for e in result["entries"]]
     if len(entries) > 25 or sum(len(_canon(e).encode()) for e in entries) > 256 * 1024: raise CacheHold("hold_cache_scope")
@@ -461,24 +528,26 @@ def _producer_result(result: Any, project_id: str, repository_id: str, selectors
     return entries, result
 
 
-def refresh_cache(*, projects_root, project_id, repository_id, repository_locator_digest, selectors, evaluated_at, max_age_seconds, producer, reason="targeted"):
+def refresh_cache(*, projects_root, project_id, repository_id, repository_locator_digest, auth_scope_digest, selectors, evaluated_at, max_age_seconds, producer, reason="targeted"):
     if not isinstance(selectors, Sequence) or isinstance(selectors, (str, bytes)) or not 1 <= len(selectors) <= 25: raise CacheHold("hold_cache_scope")
     _ts(evaluated_at)
     _walk(list(selectors))
     if len(_canon(list(selectors)).encode("utf-8")) > 16 * 1024: raise CacheHold("hold_cache_scope")
     if not isinstance(max_age_seconds, int) or isinstance(max_age_seconds, bool) or not 0 <= max_age_seconds <= 604800: raise CacheHold("hold_cache_clock_or_freshness")
+    scope = _auth_scope_digest(auth_scope_digest)
     ledger, lm = _authority(projects_root, project_id); path = _cache_path(projects_root, project_id); cache = None
     try:
         locator = _digest_locator(repository_locator_digest)
-        cache = _open_existing(path); meta = cache._meta(); _binding(meta, lm["project_id"], repository_id, locator)
-        before = int(meta.get("generation", "0"))
+        # This is intentionally a real read-only preflight.  Bad producer data
+        # therefore cannot create WAL/SHM or touch the cache mtime.
+        meta, before = _read_preflight(path, lm, repository_id, locator, scope)
         try:
-            result = producer.fetch_evidence({"project_id": lm["project_id"], "repository_id": str(repository_id)}, list(selectors), {"trust_domain": "same_process_reference", "production_eligibility": False})
+            result = producer.fetch_evidence({"project_id": lm["project_id"], "repository_id": str(repository_id), "auth_scope_digest": scope}, list(selectors), {"trust_domain": "same_process_reference", "production_eligibility": False, "auth_scope_digest": scope})
         except CacheHold:
             raise
         except Exception:
             raise CacheHold("hold_cache_producer_untrusted") from None
-        entries, result = _producer_result(result, lm["project_id"], str(repository_id), list(selectors))
+        entries, result = _producer_result(result, lm["project_id"], str(repository_id), list(selectors), scope)
         if result["producer_id"] != meta["producer_contract"] or result["producer_version"] != meta["producer_version"]:
             raise CacheHold("hold_cache_producer_untrusted")
         evaluated_dt = datetime.fromisoformat(evaluated_at.replace("Z", "+00:00"))
@@ -486,13 +555,18 @@ def refresh_cache(*, projects_root, project_id, repository_id, repository_locato
             if datetime.fromisoformat(entry["fetched_at"].replace("Z", "+00:00")) > evaluated_dt:
                 raise CacheHold("hold_cache_clock_or_freshness")
         _ledger_recheck(projects_root, project_id, lm)
+        # Reopen only after all producer data has passed validation. `mode=rw`
+        # refuses missing paths and never recreates an authority projection.
+        cache = _open_existing(path)
         cache.db.execute("BEGIN IMMEDIATE")
         current = cache._meta();
+        _binding(current, lm["project_id"], repository_id, locator, scope)
         if int(current.get("generation", "0")) != before: raise CacheHold("hold_cache_generation_conflict")
+        _ledger_recheck(projects_root, project_id, lm)
         changed = duplicates = preserved_complete = 0
         producer_coverage = result["coverage"]
         if producer_coverage in {"unavailable", "privacy_held"}:
-            cache._counter("refresh_requests"); cache._counter("producer_invocations")
+            cache._counter("cache_hit"); cache._counter("refresh_requests"); cache._counter("producer_invocations")
             rid = cache._receipt("refresh", {"generation": before, "changed": 0, "duplicates": 0, "producer_id": result["producer_id"], "coverage": producer_coverage}, created_at=evaluated_at, provenance="caller_evaluated_at")
             cache.db.execute("COMMIT")
             return {"outcome": "cache_unavailable" if producer_coverage == "unavailable" else "cache_privacy_held", "generation": before, "changed_count": 0, "duplicate_count": 0, "receipt_id": rid, "authoritative": False, "confirmation_eligible": False}
@@ -510,10 +584,14 @@ def refresh_cache(*, projects_root, project_id, repository_id, repository_locato
                     preserved_complete += 1; continue
             cache.db.execute("INSERT OR REPLACE INTO entries VALUES (?,?,?,?,?,?,0)", (entry["entry_key"], _canon(entry), entry["payload_hash"], entry["source_revision"], entry["fetched_at"], "partial" if entry["coverage"] == "partial" else "fresh_as_of_fetch")); changed += 1
         if not changed:
-            cache.db.execute("ROLLBACK")
+            # A duplicate proves the producer was invoked, but does not advance
+            # generation or change entries.  Counters are the sole durable
+            # observation of this request.
+            cache._counter("cache_hit"); cache._counter("refresh_requests"); cache._counter("producer_invocations")
+            cache.db.execute("COMMIT")
             return {"outcome": "cache_partial_preserved" if preserved_complete else "cache_duplicate", "generation": before, "changed_count": 0, "duplicate_count": duplicates, "receipt_id": None, "authoritative": False, "confirmation_eligible": False}
         newgen = before + changed; cache._setmeta("generation", newgen); cache._setmeta("ledger_head", lm["head"])
-        cache._counter("refresh_requests"); cache._counter("producer_invocations")
+        cache._counter("cache_hit"); cache._counter("refresh_requests"); cache._counter("producer_invocations")
         rid = cache._receipt("refresh", {"generation": newgen, "changed": changed, "duplicates": duplicates, "producer_id": result["producer_id"], "coverage": producer_coverage}, created_at=evaluated_at, provenance="caller_evaluated_at")
         cache.db.execute("COMMIT")
         return {"outcome": "cache_duplicate" if not changed else ("cache_partial" if any(e["coverage"] != "complete" for e in entries) else "cache_refreshed"), "generation": newgen, "changed_count": changed, "duplicate_count": duplicates, "receipt_id": rid, "authoritative": False, "confirmation_eligible": False}
@@ -539,7 +617,7 @@ def refresh_cache(*, projects_root, project_id, repository_id, repository_locato
         ledger.close()
 
 
-def invalidate_cache_entries(*, projects_root, project_id, entry_keys, reason, evaluated_at, repository_id=None, repository_locator_digest=None):
+def invalidate_cache_entries(*, projects_root, project_id, entry_keys, reason, evaluated_at, repository_id=None, repository_locator_digest=None, auth_scope_digest=None):
     _ts(evaluated_at)
     if not isinstance(entry_keys, Sequence) or isinstance(entry_keys, (str, bytes)) or len(entry_keys) > 25: raise CacheHold("hold_cache_scope")
     if not isinstance(reason, str) or not reason or len(reason.encode("utf-8")) > 1024:
@@ -550,10 +628,14 @@ def invalidate_cache_entries(*, projects_root, project_id, entry_keys, reason, e
     locator = _digest_locator(repository_locator_digest) if repository_locator_digest is not None else None
     if (repository_id is None) != (repository_locator_digest is None):
         raise CacheHold("hold_cache_binding_mismatch")
+    if (repository_id is None) != (auth_scope_digest is None):
+        raise CacheHold("hold_cache_binding_mismatch")
+    if auth_scope_digest is not None:
+        auth_scope_digest = _auth_scope_digest(auth_scope_digest)
     ledger, lm = _authority(projects_root, project_id); path = _cache_path(projects_root, project_id); cache = None
     try:
         cache = _open_existing(path); meta = cache._meta()
-        if repository_id is not None: _binding(meta, lm["project_id"], repository_id, locator)
+        if repository_id is not None: _binding(meta, lm["project_id"], repository_id, locator, auth_scope_digest)
         before = int(meta.get("generation", "0")); _ledger_recheck(projects_root, project_id, lm); cache.db.execute("BEGIN IMMEDIATE")
         if int(cache._meta().get("generation", "0")) != before: raise CacheHold("hold_cache_generation_conflict")
         for key in keys:
@@ -582,7 +664,7 @@ def invalidate_cache_entries(*, projects_root, project_id, entry_keys, reason, e
         ledger.close()
 
 
-def rebuild_cache(*, projects_root, project_id, repository_id, repository_locator_digest, entries, evaluated_at, coverage="complete"):
+def rebuild_cache(*, projects_root, project_id, repository_id, repository_locator_digest, auth_scope_digest, entries, evaluated_at, coverage="complete"):
     _ts(evaluated_at)
     if not isinstance(entries, Sequence) or isinstance(entries, (str, bytes)) or len(entries) > 25: raise CacheHold("hold_cache_scope")
     if coverage not in COVERAGE: raise CacheHold("hold_cache_schema")
@@ -595,8 +677,11 @@ def rebuild_cache(*, projects_root, project_id, repository_id, repository_locato
         evaluated_dt = datetime.fromisoformat(evaluated_at.replace("Z", "+00:00"))
         if any(datetime.fromisoformat(entry["fetched_at"].replace("Z", "+00:00")) > evaluated_dt for entry in normalized):
             raise CacheHold("hold_cache_clock_or_freshness")
-        locator = _digest_locator(repository_locator_digest)
-        cache = _open_existing(path); meta = cache._meta(); _binding(meta, lm["project_id"], repository_id, locator)
+        locator = _digest_locator(repository_locator_digest); scope = _auth_scope_digest(auth_scope_digest)
+        # Validate the existing projection in URI read-only mode before the
+        # rebuild's already-normalized input can reach a writable connection.
+        meta, before = _read_preflight(path, lm, repository_id, locator, scope)
+        cache = _open_existing(path); meta = cache._meta(); _binding(meta, lm["project_id"], repository_id, locator, scope)
         before = int(meta.get("generation", "0")); _ledger_recheck(projects_root, project_id, lm); cache.db.execute("BEGIN IMMEDIATE")
         if int(cache._meta().get("generation", "0")) != before: raise CacheHold("hold_cache_generation_conflict")
         cache.db.execute("DELETE FROM entries")

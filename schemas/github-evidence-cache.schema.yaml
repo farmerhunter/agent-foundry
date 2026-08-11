@@ -9,6 +9,7 @@ properties:
   project_id: {type: string, format: uuid}
   repository_id: {type: string, minLength: 1, maxLength: 256}
   repository_locator_digest: {type: string, pattern: '^[0-9a-f]{64}$'}
+  auth_scope_digest: {type: string, pattern: '^[0-9a-f]{64}$'}
   host_kind: {const: github}
   producer_contract: {type: string, minLength: 1, maxLength: 256}
   producer_version: {type: string, minLength: 1, maxLength: 128}
@@ -91,12 +92,13 @@ $defs:
   producer:
     type: object
     additionalProperties: false
-    required: [trust_domain, production_eligibility, project_id, repository_id, producer_id, producer_version, coverage, entries]
+    required: [trust_domain, production_eligibility, project_id, repository_id, auth_scope_digest, producer_id, producer_version, coverage, entries]
     properties:
       trust_domain: {const: same_process_reference}
       production_eligibility: {const: false}
       project_id: {type: string, format: uuid}
       repository_id: {type: string, minLength: 1, maxLength: 256}
+      auth_scope_digest: {$ref: '#/$defs/digest'}
       producer_id: {type: string, minLength: 1, maxLength: 256}
       producer_version: {type: string, minLength: 1, maxLength: 128}
       coverage: {enum: [complete, partial, unavailable, privacy_held]}
@@ -114,6 +116,7 @@ $defs:
       project_id: {type: string, format: uuid}
       repository_id: {type: string, minLength: 1}
       repository_locator_digest: {$ref: '#/$defs/digest'}
+      auth_scope_digest: {$ref: '#/$defs/digest'}
       generation: {type: integer, minimum: 0}
       ledger_head: {$ref: '#/$defs/digest'}
       producer_contract: {type: string}
@@ -123,11 +126,13 @@ $defs:
   readout:
     type: object
     additionalProperties: false
-    required: [as_of, authoritative, confirmation_eligible]
+    required: [as_of, age_seconds, coverage, freshness, offline, authoritative, confirmation_eligible, next_action]
     properties:
       as_of: {$ref: '#/$defs/timestamp'}
-      age_seconds: {type: integer, minimum: 0}
+      age_seconds: {type: [integer, 'null'], minimum: 0}
       offline: {type: boolean}
+      coverage: {enum: [complete, partial, unavailable, privacy_held]}
+      freshness: {enum: [fresh_as_of_fetch, stale, partial, unavailable, privacy_held, invalidated, conflict]}
       authoritative: {const: false}
       confirmation_eligible: {const: false}
       next_action: {type: string}
