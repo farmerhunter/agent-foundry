@@ -190,11 +190,12 @@ def _gate_capability(req: Mapping[str, Any]) -> None:
     gate, cap = req.get("gate"), req.get("capability")
     if not isinstance(gate, Mapping) or set(gate) != {"kind", "production_eligibility", "project_id", "intent_id", "attempt_sequence", "operation", "repository_id", "effect_digest", "content_digest"}:
         raise MaterializationHold("hold_materialization_approval")
-    if gate.get("kind") != "fixture_only" or gate.get("production_eligibility") is not False: raise MaterializationHold("hold_materialization_approval")
+    if gate.get("kind") != "fixture_only" or type(gate.get("production_eligibility")) is not bool or gate.get("production_eligibility") is not False: raise MaterializationHold("hold_materialization_approval")
+    if not isinstance(gate.get("attempt_sequence"), int) or isinstance(gate.get("attempt_sequence"), bool): raise MaterializationHold("hold_materialization_approval")
     if any(gate.get(k) != v for k, v in {"project_id": req["project_id"], "intent_id": req["intent_id"], "attempt_sequence": req["attempt_sequence"], "operation": req["operation"], "repository_id": req["repository_id"], "effect_digest": req["desired_effect_digest"], "content_digest": req["approved_content_digest"]}.items()): raise MaterializationHold("hold_materialization_approval")
     required = {"trust_domain": "same_process_reference", "production_eligibility": False, "network_capability": False}
-    if not isinstance(cap, Mapping) or set(cap) != {"trust_domain", "production_eligibility", "network_capability", "adapter_id", "adapter_version", "supported_operations"} or any(cap.get(k) != v for k, v in required.items()): raise MaterializationHold("hold_materialization_connector_untrusted")
-    if not isinstance(cap.get("supported_operations"), list) or not cap["supported_operations"] or any(not isinstance(item, str) or item not in OPERATIONS for item in cap["supported_operations"]): raise MaterializationHold("hold_materialization_connector_untrusted")
+    if not isinstance(cap, Mapping) or set(cap) != {"trust_domain", "production_eligibility", "network_capability", "adapter_id", "adapter_version", "supported_operations"} or cap.get("trust_domain") != "same_process_reference" or type(cap.get("production_eligibility")) is not bool or cap.get("production_eligibility") is not False or type(cap.get("network_capability")) is not bool or cap.get("network_capability") is not False: raise MaterializationHold("hold_materialization_connector_untrusted")
+    if not isinstance(cap.get("supported_operations"), list) or not cap["supported_operations"] or len(set(cap["supported_operations"])) != len(cap["supported_operations"]) or any(not isinstance(item, str) or item not in OPERATIONS for item in cap["supported_operations"]): raise MaterializationHold("hold_materialization_connector_untrusted")
     if cap.get("adapter_id") != req.get("adapter_id") or cap.get("adapter_version") != req.get("adapter_version") or req["operation"] not in set(cap.get("supported_operations", [])): raise MaterializationHold("hold_materialization_connector_untrusted")
 
 

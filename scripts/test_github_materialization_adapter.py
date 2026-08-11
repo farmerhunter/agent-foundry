@@ -194,6 +194,17 @@ def test_schema_runtime_variants():
     with pytest.raises(MaterializationHold): plan_materialization({**req(classification="local_only"), "gate": {"junk": True}}, state())
     with pytest.raises(MaterializationHold): plan_materialization({**optional, "capability": req()["capability"]}, state())
     with pytest.raises(MaterializationHold): plan_materialization({**optional, "scheduler_state": "forbidden"}, state())
+    single_gate = {**req(classification="local_only")}; single_gate.pop("capability")
+    single_cap = {**req(classification="local_only")}; single_cap.pop("gate")
+    invalid(single_gate); invalid(single_cap)
+    with pytest.raises(MaterializationHold): plan_materialization(single_gate, state())
+    with pytest.raises(MaterializationHold): plan_materialization(single_cap, state())
+    bad_gate = {**req(), "gate": {**req()["gate"], "attempt_sequence": True}}
+    bad_cap = {**req(), "capability": {**req()["capability"], "production_eligibility": 0}}
+    dup_cap = {**req(), "capability": {**req()["capability"], "supported_operations": ["issue_comment", "issue_comment"]}}
+    for bad in (bad_gate, bad_cap, dup_cap):
+        invalid(bad)
+        with pytest.raises(MaterializationHold): execute_materialization(bad, state(), FakeConnector())
     for classification in ("local_only", "optional_sync"):
         variant = req(classification=classification); variant.pop("gate"); variant.pop("capability")
         for key in ("gate", "capability"):
