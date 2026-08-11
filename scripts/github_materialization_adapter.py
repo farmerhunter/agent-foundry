@@ -11,6 +11,7 @@ import hashlib
 import json
 import re
 import uuid
+from datetime import datetime
 from collections.abc import Mapping
 from typing import Any
 
@@ -100,6 +101,10 @@ def _uuid(value: Any) -> str:
 def _ts(value: Any) -> str:
     if not isinstance(value, str) or not RFC3339.fullmatch(value):
         raise MaterializationHold("hold_materialization_schema")
+    try:
+        datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        raise MaterializationHold("hold_materialization_schema") from None
     return value
 
 
@@ -150,13 +155,15 @@ def _base(request: Mapping[str, Any]) -> dict[str, Any]:
     if request.get("expected_remote_digest") is not None: _hex(request["expected_remote_digest"])
     content = request.get("approved_remote_content")
     if content is not None:
+        if not isinstance(content, Mapping): raise MaterializationHold("hold_materialization_privacy")
+        for field in ("body", "summary"):
+            if field in content and not isinstance(content[field], str): raise MaterializationHold("hold_materialization_privacy")
         _walk_content(content); encoded = json.dumps(content, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
         if hashlib.sha256(encoded).hexdigest() != request["approved_content_digest"]:
             raise MaterializationHold("hold_materialization_binding")
         if len(encoded) > 8192 or sum(len(item) for item in content.values() if isinstance(item, str)) > 8192: raise MaterializationHold("hold_materialization_privacy")
-        if isinstance(content, Mapping):
-            if "title" in content and (not isinstance(content["title"], str) or len(content["title"].encode()) > 256): raise MaterializationHold("hold_materialization_privacy")
-            if "labels" in content and (not isinstance(content["labels"], list) or len(content["labels"]) > 10 or any(not isinstance(label, str) or len(label.encode()) > 128 for label in content["labels"])): raise MaterializationHold("hold_materialization_privacy")
+        if "title" in content and (not isinstance(content["title"], str) or len(content["title"].encode()) > 256): raise MaterializationHold("hold_materialization_privacy")
+        if "labels" in content and (not isinstance(content["labels"], list) or len(content["labels"]) > 10 or any(not isinstance(label, str) or len(label.encode()) > 128 for label in content["labels"])): raise MaterializationHold("hold_materialization_privacy")
     idem_input = [VERSION, pid, intent, attempt, request["operation"], request["repository_id"], request["desired_effect_digest"], request["approved_content_digest"]]
     return {"project_id": pid, "intent_id": intent, "attempt_sequence": attempt,
             "idempotency_key": str(uuid.uuid5(NAMESPACE, _canon(idem_input))), **dict(request)}

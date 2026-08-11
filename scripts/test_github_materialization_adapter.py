@@ -178,6 +178,9 @@ def test_schema_runtime_variants():
     invalid({**optional, "capability": {"junk": True}}); invalid({**optional, "readback_only": False})
     invalid({**req(), "capability": {**req()["capability"], "supported_operations": []}})
     invalid({**req(), "approved_remote_content": {"title": "é" * 129}})
+    with pytest.raises(MaterializationHold): plan_materialization(req(occurred_at="2026-02-30T00:00:00Z"), state())
+    with pytest.raises(MaterializationHold): plan_materialization(req(approved_remote_content="raw"), state())
+    with pytest.raises(MaterializationHold): plan_materialization(req(approved_remote_content={"body": 1}), state())
     with pytest.raises(MaterializationHold): plan_materialization({**optional, "capability": req()["capability"]}, state())
     with pytest.raises(MaterializationHold): plan_materialization({**optional, "scheduler_state": "forbidden"}, state())
 
