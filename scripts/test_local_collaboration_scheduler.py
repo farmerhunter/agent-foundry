@@ -117,6 +117,45 @@ def test_retry_requires_receipt_and_advances_only_after_failed_attempt():
         assert sc.replay_scheduler_state(root, pid)["attempt_sequence"] == 2
 
 
+def test_readback_future_attempt_holds_before_append():
+    """A readback for attempt N+1 cannot mutate an attempt-N authority."""
+    with tempfile.TemporaryDirectory() as root:
+        pid = _setup(root)
+        sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "initialize", "occurred_at": "2026-08-11T00:00:01Z"})
+        intent = str(uuid.uuid4())
+        sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "intent", "intent_id": intent, "intent_kind": "issue", "desired_effect": {"kind": "issue"}, "occurred_at": "2026-08-11T00:00:02Z"})
+        desired = sc.replay_scheduler_state(root, pid)["desired_effect_digest"]
+        expected = {"kind": "issue", "ref": "opaque-issue", "digest": "a" * 64, "version": "v1"}
+        sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "pending", "intent_id": intent, "expected_remote_kind": expected["kind"], "expected_remote_ref": expected["ref"], "expected_remote_digest": expected["digest"], "expected_remote_version": expected["version"], "occurred_at": "2026-08-11T00:00:03Z"})
+        ledger_path = Path(root) / pid / "collaboration.db"
+        ledger = LocalCollaborationLedger.open_existing(ledger_path, expected_project_id=pid)
+        before = ledger.list_events(); before_head = before[-1].event_hash
+        ledger.close()
+
+        class Adapter:
+            def readback(self, request):
+                return {"project_id": pid, "intent_id": intent, "confirmed": True,
+                    "adapter_id": "test-adapter", "adapter_version": "1",
+                    "expected_remote_kind": expected["kind"], "expected_remote_ref": expected["ref"],
+                    "expected_remote_digest": expected["digest"], "expected_remote_version": expected["version"],
+                    "readback_digest": "b" * 64, "opaque_receipt_ref": "receipt:1",
+                    "occurred_at": "2026-08-11T00:00:04Z", "read_timestamp": "2026-08-11T00:00:04Z",
+                    "readback_nonce": "nonce-1", "request_digest": request["request_digest"],
+                    "desired_effect_digest": desired}
+
+        request = {"project_id": pid, "work_id": "w1", "operation": "readback", "intent_id": intent,
+            "attempt_sequence": 2, "request_digest": "c" * 64, "occurred_at": "2026-08-11T00:00:04Z"}
+        try:
+            sc.apply_remote_readback(root, pid, intent, Adapter(), request)
+        except sc.SchedulerHold as exc:
+            assert str(exc) == "hold_transition_order"
+        else:
+            raise AssertionError("future readback attempt must hold")
+        ledger = LocalCollaborationLedger.open_existing(ledger_path, expected_project_id=pid)
+        after = ledger.list_events(); assert len(after) == len(before); assert after[-1].event_hash == before_head
+        ledger.close()
+
+
 def test_closed_payload_and_resume_gate():
     with tempfile.TemporaryDirectory() as root:
         pid = _setup(root)

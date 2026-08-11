@@ -469,6 +469,15 @@ def apply_remote_readback(projects_root: str | Path, project_id: str, intent_id:
         current = ledger.list_events()
         if len(current) != len(before) or (current and current[-1].event_hash != before_head):
             raise SchedulerHold("hold_stale_ledger_head")
+        # Validate predecessor and attempt semantics before append_batch. The
+        # LedgerStore enforces event identity, but only the scheduler reducer
+        # can reject a readback that tries to advance beyond the current
+        # materialization attempt. Keeping this check pre-append guarantees a
+        # rejected adapter response has zero event/sequence mutation.
+        reduce_scheduler_state(
+            cstate,
+            [e for e in current if e.event_type.startswith("scheduler.")] + [event],
+        )
         ledger.append_batch([event]); after = ledger.list_events(); return {"decision": "confirmed", "project_id": pid, "mutation_performed": len(after) > len(before), "appended_count": len(after) - len(before), "replay": replay_scheduler_state(projects_root, pid)}
     except SchedulerHold: raise
     except Exception as exc: raise SchedulerHold("hold_readback_unavailable") from exc
