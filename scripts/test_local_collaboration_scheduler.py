@@ -55,6 +55,37 @@ def test_exact_retry_and_divergence_hold():
         else: raise AssertionError("divergence must hold")
 
 
+def test_replay_uses_one_authority_snapshot_and_receipts_expose_pair():
+    with tempfile.TemporaryDirectory() as root:
+        pid = _setup(root)
+        original = LocalCollaborationLedger.authority_snapshot
+        calls = []
+
+        def counted(db_path, *, expected_project_id):
+            snapshot = original(db_path, expected_project_id=expected_project_id)
+            calls.append(snapshot)
+            return snapshot
+
+        LocalCollaborationLedger.authority_snapshot = counted
+        try:
+            first = sc.replay_scheduler_state(root, pid)
+        finally:
+            LocalCollaborationLedger.authority_snapshot = original
+        assert len(calls) == 1
+        assert (first["authority_generation"], first["authority_head"]) == (calls[0].authority_generation, calls[0].authority_head)
+        request = {"project_id": pid, "work_id": "w1", "operation": "initialize", "occurred_at": "2026-08-11T00:00:01Z"}
+        applied = sc.apply_scheduler_request(root, pid, request)
+        assert applied["replay"]["authority_generation"] > first["authority_generation"]
+        assert applied["replay"]["authority_head"] != first["authority_head"]
+        duplicate = sc.apply_scheduler_request(root, pid, request)
+        assert duplicate["decision"] == "duplicate"
+        assert (duplicate["replay"]["authority_generation"], duplicate["replay"]["authority_head"]) == (applied["replay"]["authority_generation"], applied["replay"]["authority_head"])
+        sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "transition", "from_state": "registered", "to_state": "queued", "transition_sequence": 1, "occurred_at": "2026-08-11T00:00:02Z"})
+        changed = sc.replay_scheduler_state(root, pid)
+        assert changed["authority_generation"] > applied["replay"]["authority_generation"]
+        assert changed["authority_head"] != applied["replay"]["authority_head"]
+
+
 def test_remote_never_confirmed_by_observation():
     with tempfile.TemporaryDirectory() as root:
         pid = _setup(root); sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "initialize", "occurred_at": "2026-08-11T00:00:01Z"}); result = sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "intent", "intent_id": str(uuid.uuid4()), "intent_kind": "issue", "desired_effect": {"kind": "issue"}, "occurred_at": "2026-08-11T00:00:02Z"}); assert result["mutation_performed"]; state = sc.replay_scheduler_state(root, pid); assert state["remote_intent_state"] == "accepted_local"
@@ -347,4 +378,4 @@ def test_pending_materialization_to_privacy_hold_preserves_all_bindings():
 
 
 if __name__ == "__main__":
-    test_initialize_and_offline_transitions(); test_exact_retry_and_divergence_hold(); test_remote_never_confirmed_by_observation(); test_remote_predecessor_guards(); test_observation_and_terminal_use_current_attempt(); test_closed_payload_and_resume_gate(); test_caller_project_binding_and_disabled_gate(); test_reducer_version_mismatch_is_preappend_hold(); test_planner_observation_version_mismatch_is_preappend_hold(); test_privacy_binding_mismatch_is_preappend_hold(); test_adapter_version_mismatch_is_preappend_hold(); test_observed_unverified_to_privacy_hold_preserves_all_bindings(); test_pending_materialization_to_privacy_hold_preserves_all_bindings(); print("ok")
+    test_initialize_and_offline_transitions(); test_exact_retry_and_divergence_hold(); test_replay_uses_one_authority_snapshot_and_receipts_expose_pair(); test_remote_never_confirmed_by_observation(); test_remote_predecessor_guards(); test_observation_and_terminal_use_current_attempt(); test_closed_payload_and_resume_gate(); test_caller_project_binding_and_disabled_gate(); test_reducer_version_mismatch_is_preappend_hold(); test_planner_observation_version_mismatch_is_preappend_hold(); test_privacy_binding_mismatch_is_preappend_hold(); test_adapter_version_mismatch_is_preappend_hold(); test_observed_unverified_to_privacy_hold_preserves_all_bindings(); test_pending_materialization_to_privacy_hold_preserves_all_bindings(); print("ok")

@@ -12,7 +12,7 @@ import time
 import unittest
 from pathlib import Path
 
-from local_collaboration_ledger import LedgerBackupError, LedgerBusyError, LedgerConflictError, LedgerIntegrityError, LedgerPermissionError, LedgerSchemaError, LocalCollaborationLedger
+from local_collaboration_ledger import LedgerBackupError, LedgerBusyError, LedgerConflictError, LedgerIdentityError, LedgerIntegrityError, LedgerPermissionError, LedgerSchemaError, LocalCollaborationLedger
 
 
 class LedgerTests(unittest.TestCase):
@@ -308,6 +308,95 @@ class LedgerTests(unittest.TestCase):
         result = subprocess.run([sys.executable, "-c", code], env={**os.environ, "PYTHONPATH": "scripts"}, capture_output=True, text=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertFalse(missing.exists())
+
+    def _business_rows(self):
+        tables = ("ledger_metadata", "events", "holds", "project_bindings", "binding_decisions", "projections")
+        return {table: [tuple(row) for row in self.ledger._conn.execute(f"SELECT * FROM {table} ORDER BY 1")]
+                for table in tables}
+
+    def test_authority_snapshot_is_wal_aware_and_does_not_change_business_rows(self):
+        self.ledger.bind_project("path", "/tmp/snapshot")
+        self.ledger.append_event("snapshot.probe", {"safe": True}, event_id="66666666-6666-6666-6666-666666666666")
+        self.ledger.checkpoint_projection("snapshot", 1, {"ok": True})
+        self.assertTrue(Path(str(self.ledger.path) + "-wal").exists())
+        self.assertTrue(Path(str(self.ledger.path) + "-shm").exists())
+        before = self._business_rows()
+        snapshot = LocalCollaborationLedger.authority_snapshot(self.ledger.path, expected_project_id=self.ledger.project_id)
+        self.assertEqual(snapshot.project_id, self.ledger.project_id)
+        self.assertEqual(snapshot.schema_version, "1.0.0")
+        self.assertEqual(snapshot.authority_generation, 1)
+        self.assertEqual(snapshot.authority_head, snapshot.events[-1].event_hash)
+        self.assertEqual(before, self._business_rows())
+        self.ledger.close()
+        # A clean WAL authority remains readable without immutable mode.  Its
+        # SQLite coordination sidecars are intentionally not an assertion.
+        self.assertFalse(Path(str(self.ledger.path) + "-wal").exists())
+        self.assertFalse(Path(str(self.ledger.path) + "-shm").exists())
+        fresh = LocalCollaborationLedger.authority_snapshot(self.ledger.path, expected_project_id=self.ledger.project_id)
+        self.assertEqual((fresh.authority_generation, fresh.authority_head), (1, snapshot.authority_head))
+        self.ledger = LocalCollaborationLedger.open_existing(self.ledger.path, expected_project_id=self.ledger.project_id)
+
+    def test_authority_snapshot_isolation_duplicate_and_restart(self):
+        first = self.ledger.append_event("snapshot.before", {"n": 1}, event_id="77777777-7777-7777-7777-777777777777")
+        started = []
+
+        def append_after_snapshot_start():
+            writer = LocalCollaborationLedger.open_existing(self.ledger.path, expected_project_id=self.ledger.project_id)
+            try:
+                writer.append_event("snapshot.after", {"n": 2}, event_id="88888888-8888-8888-8888-888888888888")
+            finally:
+                writer.close()
+            started.append(True)
+
+        snapshot = LocalCollaborationLedger._authority_snapshot(self.ledger.path, expected_project_id=self.ledger.project_id, _after_started=append_after_snapshot_start)
+        self.assertTrue(started)
+        self.assertEqual(snapshot.authority_generation, 1)
+        self.assertEqual(snapshot.authority_head, first.event_hash)
+        next_snapshot = LocalCollaborationLedger.authority_snapshot(self.ledger.path, expected_project_id=self.ledger.project_id)
+        self.assertEqual(next_snapshot.authority_generation, 2)
+        duplicate = self.ledger.append_event("snapshot.before", {"n": 1}, event_id="77777777-7777-7777-7777-777777777777")
+        unchanged = LocalCollaborationLedger.authority_snapshot(self.ledger.path, expected_project_id=self.ledger.project_id)
+        self.assertEqual(duplicate.event_hash, first.event_hash)
+        self.assertEqual((unchanged.authority_generation, unchanged.authority_head), (next_snapshot.authority_generation, next_snapshot.authority_head))
+        self.ledger.close()
+        restart = LocalCollaborationLedger.authority_snapshot(self.ledger.path, expected_project_id=self.ledger.project_id)
+        self.assertEqual((restart.authority_generation, restart.authority_head), (unchanged.authority_generation, unchanged.authority_head))
+        self.ledger = LocalCollaborationLedger.open_existing(self.ledger.path, expected_project_id=self.ledger.project_id)
+
+    def test_authority_snapshot_maps_project_schema_integrity_and_permission_holds(self):
+        with self.assertRaises(LedgerIdentityError):
+            LocalCollaborationLedger.authority_snapshot(self.ledger.path, expected_project_id=str(__import__("uuid").uuid4()))
+        with sqlite3.connect(self.ledger.path) as conn:
+            conn.execute("UPDATE ledger_metadata SET value='9.9.9' WHERE key='schema_version'")
+        with self.assertRaises(LedgerSchemaError):
+            LocalCollaborationLedger.authority_snapshot(self.ledger.path, expected_project_id=self.ledger.project_id)
+        with sqlite3.connect(self.ledger.path) as conn:
+            conn.execute("UPDATE ledger_metadata SET value='1.0.0' WHERE key='schema_version'")
+            conn.execute("INSERT INTO events VALUES(1, '99999999-9999-9999-9999-999999999999', 'snapshot.bad', '{}', 'x', '0', 'x', '2026-08-11T00:00:00Z', NULL, NULL, ?)", (self.ledger.project_id,))
+        with self.assertRaises(LedgerIntegrityError):
+            LocalCollaborationLedger.authority_snapshot(self.ledger.path, expected_project_id=self.ledger.project_id)
+        os.chmod(self.ledger.path, 0o644)
+        try:
+            with self.assertRaises(LedgerPermissionError):
+                LocalCollaborationLedger.authority_snapshot(self.ledger.path, expected_project_id=self.ledger.project_id)
+        finally:
+            os.chmod(self.ledger.path, 0o600)
+
+    def test_authority_snapshot_busy_is_bounded_and_classified(self):
+        path, project_id = self.ledger.path, self.ledger.project_id
+        self.ledger.close()
+        lock = sqlite3.connect(path, timeout=0, isolation_level=None)
+        lock.execute("PRAGMA locking_mode=EXCLUSIVE")
+        lock.execute("BEGIN EXCLUSIVE")
+        started = time.monotonic()
+        try:
+            with self.assertRaises(LedgerBusyError):
+                LocalCollaborationLedger.authority_snapshot(path, expected_project_id=project_id)
+        finally:
+            lock.execute("ROLLBACK")
+            lock.close()
+        self.assertLess(time.monotonic() - started, 8)
+        self.ledger = LocalCollaborationLedger.open_existing(path, expected_project_id=project_id)
 
 
 if __name__ == "__main__": unittest.main()

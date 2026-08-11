@@ -17,6 +17,17 @@ storage:
   wal_autocheckpoint: 1000
   existing_write_open: mode_rw_only
   missing_authority: hold
+authority_snapshot:
+  api: authority_snapshot
+  connection: existing_authority_mode_ro_wal_aware_read_transaction
+  receipt: [project_id, schema_version, authority_generation, authority_head, events]
+  authority_generation: last_committed_event_sequence_or_0
+  authority_head: last_committed_event_hash_or_genesis
+  validation: [project_identity, schema_version, contiguous_sequence, payload_hash, event_hash_chain]
+  business_state_mutation: forbidden
+  sqlite_coordination_files: permitted
+  latest_at_return: false
+  failure: fail_closed
 identity:
   project_id: opaque_uuid
   bindings_non_authoritative: [path, remote, thread, issue]

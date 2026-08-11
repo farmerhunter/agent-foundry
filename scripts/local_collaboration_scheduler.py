@@ -306,21 +306,19 @@ def reduce_scheduler_state(control_state: Mapping[str, Any], scheduler_events: I
     return state
 
 
-def _control_events(ledger: LocalCollaborationLedger) -> list[Any]:
-    return [e for e in ledger.list_events() if e.event_type.startswith("control.")]
-
-
-def _scheduler_events(ledger: LocalCollaborationLedger) -> list[Any]:
-    return [e for e in ledger.list_events() if e.event_type.startswith("scheduler.")]
-
-
 def replay_scheduler_state(projects_root: str | Path, project_id: str) -> dict[str, Any]:
     pid = _project(project_id); path = Path(projects_root).expanduser() / pid / "collaboration.db"
-    ledger = LocalCollaborationLedger.open_existing(path, expected_project_id=pid)
     try:
-        if ledger.project_id != pid: raise SchedulerHold("hold_control_plane_unready")
-        cstate = control.reduce_control_events(_control_events(ledger)); return reduce_scheduler_state(cstate, _scheduler_events(ledger))
-    finally: ledger.close()
+        snapshot = LocalCollaborationLedger.authority_snapshot(path, expected_project_id=pid)
+        cstate = control.reduce_control_events([event for event in snapshot.events if event.event_type.startswith("control.")])
+        state = reduce_scheduler_state(cstate, [event for event in snapshot.events if event.event_type.startswith("scheduler.")])
+        state["authority_generation"] = snapshot.authority_generation
+        state["authority_head"] = snapshot.authority_head
+        return state
+    except LedgerBusyError as exc: raise SchedulerHold("hold_ledger_busy") from exc
+    except LedgerPermissionError as exc: raise SchedulerHold("hold_ledger_permission") from exc
+    except LedgerSchemaError as exc: raise SchedulerHold("hold_ledger_schema") from exc
+    except (LedgerIntegrityError, LedgerError, OSError) as exc: raise SchedulerHold("hold_ledger_integrity") from exc
 
 
 def _request_base(request: Mapping[str, Any], cstate: Mapping[str, Any], sstate: Mapping[str, Any], caller_project_id: str | None = None) -> tuple[str, str]:
@@ -448,7 +446,9 @@ def apply_scheduler_request(projects_root: str | Path, project_id: str, request:
     ledger = LocalCollaborationLedger.open_existing(path, expected_project_id=pid)
     try:
         before = ledger.list_events(); cstate = control.reduce_control_events([e for e in before if e.event_type.startswith("control.")]); sstate = reduce_scheduler_state(cstate, [e for e in before if e.event_type.startswith("scheduler.")]); result = plan_scheduler_request(request, cstate, sstate, caller_project_id=pid); batch = result["event_batch"]
-        if not batch: result["replay"] = sstate; return result
+        if not batch:
+            result["replay"] = replay_scheduler_state(projects_root, pid)
+            return result
         # Recheck the source head immediately before the atomic LedgerStore append.
         current = ledger.list_events();
         if len(current) != len(before) or (current and before and current[-1].event_hash != before[-1].event_hash): raise SchedulerHold("hold_stale_ledger_head")
@@ -456,7 +456,7 @@ def apply_scheduler_request(projects_root: str | Path, project_id: str, request:
         # before writing.  A malformed or out-of-order event must not leave a
         # durable hold or partial append behind when the reducer rejects it.
         reduce_scheduler_state(cstate, [e for e in before if e.event_type.startswith("scheduler.")] + batch)
-        rows = ledger.append_batch(batch); after = ledger.list_events(); result["mutation_performed"] = len(after) > len(before); result["appended_count"] = len(after) - len(before); result["duplicate_count"] = len(batch) - result["appended_count"]; result["generation"] = len(after); result["replay"] = reduce_scheduler_state(cstate, [e for e in after if e.event_type.startswith("scheduler.")]); return result
+        rows = ledger.append_batch(batch); after = ledger.list_events(); result["mutation_performed"] = len(after) > len(before); result["appended_count"] = len(after) - len(before); result["duplicate_count"] = len(batch) - result["appended_count"]; result["generation"] = len(after); result["replay"] = replay_scheduler_state(projects_root, pid); return result
     except SchedulerHold: raise
     except LedgerBusyError as exc: raise SchedulerHold("hold_ledger_busy") from exc
     except LedgerPermissionError as exc: raise SchedulerHold("hold_ledger_permission") from exc

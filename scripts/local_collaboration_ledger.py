@@ -68,6 +68,16 @@ class LedgerEvent:
     root: str
 
 
+@dataclass(frozen=True)
+class LedgerSnapshot:
+    """One verified, committed read view of an existing ledger authority."""
+    project_id: str
+    schema_version: str
+    authority_generation: int
+    authority_head: str
+    events: tuple[LedgerEvent, ...]
+
+
 def _canonical(value: Any) -> str:
     _validate_json(value)
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
@@ -216,6 +226,120 @@ class LocalCollaborationLedger:
 
     def close(self):
         self._conn.close()
+
+    @classmethod
+    def authority_snapshot(cls, db_path: str | Path, *, expected_project_id: str) -> LedgerSnapshot:
+        """Return one verified WAL-aware, read-only authority snapshot.
+
+        This never creates or repairs an authority.  SQLite may perform its
+        normal WAL/SHM reader coordination, but Agent Foundry does not change
+        business rows, bindings, holds, projections, metadata, or schema.
+        """
+        return cls._authority_snapshot(db_path, expected_project_id=expected_project_id)
+
+    @classmethod
+    def _authority_snapshot(cls, db_path: str | Path, *, expected_project_id: str,
+                            _after_started=None) -> LedgerSnapshot:
+        """Private implementation seam used only for deterministic tests."""
+        try:
+            expected = str(uuid.UUID(str(expected_project_id)))
+        except (ValueError, TypeError, AttributeError) as exc:
+            raise LedgerIdentityError("expected project identity is invalid") from exc
+        path = Path(db_path).expanduser()
+        try:
+            if path.is_symlink() or not path.is_file():
+                raise LedgerIntegrityError("existing regular database is required")
+            directory = path.parent
+            if directory.is_symlink() or not directory.is_dir() or _mode(directory) != 0o700 or _mode(path) != 0o600:
+                raise LedgerPermissionError("authority storage permissions are invalid")
+            conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=5, isolation_level=None)
+            conn.row_factory = sqlite3.Row
+        except LedgerError:
+            raise
+        except (OSError, PermissionError, sqlite3.OperationalError) as exc:
+            if "busy" in str(exc).lower() or "locked" in str(exc).lower():
+                raise LedgerBusyError("database busy") from None
+            raise LedgerPermissionError("authority cannot be opened read-only") from None
+
+        try:
+            # Connection-local settings only.  No journal-mode change, DDL,
+            # checkpoint, migration, or repair request is issued here.
+            conn.execute("PRAGMA query_only=ON")
+            conn.execute("PRAGMA foreign_keys=ON")
+            conn.execute("PRAGMA trusted_schema=OFF")
+            conn.execute("PRAGMA busy_timeout=5000")
+            conn.execute("BEGIN")
+            tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            required = {"ledger_metadata", "events", "holds", "project_bindings", "binding_decisions", "projections"}
+            if not required.issubset(tables):
+                raise LedgerSchemaError("authority schema is incomplete")
+            metadata = {row["key"]: row["value"] for row in conn.execute("SELECT key,value FROM ledger_metadata")}
+            if metadata.get("schema_version") != SCHEMA_VERSION:
+                raise LedgerSchemaError("authority schema version mismatch")
+            if metadata.get("project_id") != expected:
+                raise LedgerIdentityError("authority project identity mismatch")
+            # The metadata read above establishes this connection's SQLite
+            # read view.  A later writer is deliberately outside this view.
+            if _after_started is not None:
+                _after_started()
+            rows = list(conn.execute("SELECT * FROM events ORDER BY sequence"))
+            events = tuple(cls._verified_snapshot_events(rows, expected))
+            generation = events[-1].sequence if events else 0
+            head = events[-1].event_hash if events else GENESIS
+            conn.execute("COMMIT")
+            return LedgerSnapshot(expected, SCHEMA_VERSION, generation, head, events)
+        except LedgerError:
+            if conn.in_transaction:
+                conn.execute("ROLLBACK")
+            raise
+        except (sqlite3.DatabaseError, json.JSONDecodeError, UnicodeDecodeError, ValueError) as exc:
+            if conn.in_transaction:
+                conn.execute("ROLLBACK")
+            message = str(exc).lower()
+            if "busy" in message or "locked" in message:
+                raise LedgerBusyError("database busy") from None
+            if "readonly" in message or "permission" in message or "unable to open" in message:
+                raise LedgerPermissionError("authority read permission failed") from None
+            raise LedgerIntegrityError("authority snapshot integrity failed") from None
+        except OSError:
+            if conn.in_transaction:
+                conn.execute("ROLLBACK")
+            raise LedgerPermissionError("authority read permission failed") from None
+        finally:
+            conn.close()
+
+    @classmethod
+    def _verified_snapshot_events(cls, rows, expected_project_id):
+        previous = GENESIS
+        expected_sequence = 1
+        result = []
+        for row in rows:
+            try:
+                sequence = row["sequence"]
+                event_id = row["event_id"]
+                event_type = row["event_type"]
+                payload = json.loads(row["payload"])
+                if (not isinstance(sequence, int) or isinstance(sequence, bool) or sequence != expected_sequence
+                        or not isinstance(event_id, str) or str(uuid.UUID(event_id)) != event_id
+                        or not isinstance(event_type, str) or not _TYPE.fullmatch(event_type)
+                        or not isinstance(payload, Mapping) or _contains_forbidden(payload)
+                        or row["root"] != expected_project_id
+                        or row["previous_hash"] != previous
+                        or row["payload_hash"] != _hash(payload)):
+                    raise LedgerIntegrityError("authority event chain is invalid")
+                computed = _hash([sequence, event_id, event_type, row["payload_hash"], row["previous_hash"],
+                                  row["created_at"], row["actor"], row["source"], row["root"]])
+                if computed != row["event_hash"]:
+                    raise LedgerIntegrityError("authority event hash is invalid")
+                event = LedgerEvent(sequence, event_id, event_type, payload, row["payload_hash"], row["previous_hash"], row["event_hash"], row["created_at"], row["actor"], row["source"], row["root"])
+            except LedgerError:
+                raise
+            except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+                raise LedgerIntegrityError("authority event chain is invalid") from None
+            result.append(event)
+            previous = event.event_hash
+            expected_sequence += 1
+        return result
 
     def _assert_private(self):
         if not self.directory.exists() or _mode(self.directory) != 0o700:
@@ -537,4 +661,4 @@ class LocalCollaborationLedger:
         self.integrity_check_path(self.path); self.verify(); return "ok"
 
 
-__all__=["LocalCollaborationLedger","LedgerEvent","LedgerError","LedgerIntegrityError","LedgerConflictError","LedgerPermissionError","LedgerBusyError","LedgerSchemaError","LedgerIdentityError","LedgerBackupError"]
+__all__=["LocalCollaborationLedger","LedgerEvent","LedgerSnapshot","LedgerError","LedgerIntegrityError","LedgerConflictError","LedgerPermissionError","LedgerBusyError","LedgerSchemaError","LedgerIdentityError","LedgerBackupError"]
