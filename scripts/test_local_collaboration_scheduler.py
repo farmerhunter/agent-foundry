@@ -68,6 +68,20 @@ def test_remote_predecessor_guards():
             raise AssertionError("observed state must not silently re-enter pending")
 
 
+def test_observation_and_terminal_use_current_attempt():
+    with tempfile.TemporaryDirectory() as root:
+        pid = _setup(root)
+        sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "initialize", "occurred_at": "2026-08-11T00:00:01Z"})
+        intent = str(uuid.uuid4())
+        sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "intent", "intent_id": intent, "intent_kind": "issue", "desired_effect": {"kind": "issue"}, "occurred_at": "2026-08-11T00:00:02Z"})
+        sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "pending", "intent_id": intent, "occurred_at": "2026-08-11T00:00:03Z"})
+        observed = sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "observe", "intent_id": intent, "observed_remote_state": "open", "occurred_at": "2026-08-11T00:00:04Z"})
+        assert observed["event_batch"][0]["payload"]["payload"]["attempt_sequence"] == 1
+        terminal = sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "conflict", "intent_id": intent, "occurred_at": "2026-08-11T00:00:05Z"})
+        assert terminal["event_batch"][0]["payload"]["payload"]["attempt_sequence"] == 1
+        assert sc.replay_scheduler_state(root, pid)["remote_intent_state"] == "conflict"
+
+
 def test_closed_payload_and_resume_gate():
     with tempfile.TemporaryDirectory() as root:
         pid = _setup(root)
@@ -108,4 +122,4 @@ def test_caller_project_binding_and_disabled_gate():
 
 
 if __name__ == "__main__":
-    test_initialize_and_offline_transitions(); test_exact_retry_and_divergence_hold(); test_remote_never_confirmed_by_observation(); test_remote_predecessor_guards(); test_closed_payload_and_resume_gate(); test_caller_project_binding_and_disabled_gate(); print("ok")
+    test_initialize_and_offline_transitions(); test_exact_retry_and_divergence_hold(); test_remote_never_confirmed_by_observation(); test_remote_predecessor_guards(); test_observation_and_terminal_use_current_attempt(); test_closed_payload_and_resume_gate(); test_caller_project_binding_and_disabled_gate(); print("ok")

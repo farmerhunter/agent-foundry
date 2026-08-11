@@ -32,18 +32,18 @@ FORBIDDEN = {"prompt", "transcript", "raw_transcript", "tool_output", "raw_tool_
 RFC3339 = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:\d{2})$")
 LOCAL_STATES = {"registered", "queued", "claimed", "active", "hold", "successor_required", "completed", "canceled", "disabled"}
 REMOTE_STATES = {"not_requested", "accepted_local", "pending_materialization", "observed_unverified", "readback_unavailable", "confirmed", "failed", "conflict", "privacy_held", "canceled"}
-# The remote-intent lifecycle is deliberately one-way.  A local intent must
+# The remote-intent lifecycle is deliberately explicit. A local intent must
 # first be marked pending before any adapter observation or terminal outcome
-# can be recorded.  There is no implicit retry transition in this slice; a
-# later retry requires a separately defined intent contract.
+# can be recorded. Observation/outcome events describe the current attempt by
+# default; only an explicitly supplied next attempt number advances it.
 REMOTE_PREDECESSORS = {
     "remote_materialization_pending": {"accepted_local"},
     "remote_observation_recorded": {"pending_materialization"},
-    "remote_confirmation_recorded": {"pending_materialization"},
-    "remote_failure_recorded": {"pending_materialization"},
-    "remote_conflict_recorded": {"pending_materialization"},
-    "remote_intent_canceled": {"pending_materialization"},
-    "privacy_hold_recorded": {"pending_materialization"},
+    "remote_confirmation_recorded": {"pending_materialization", "observed_unverified"},
+    "remote_failure_recorded": {"pending_materialization", "observed_unverified"},
+    "remote_conflict_recorded": {"pending_materialization", "observed_unverified"},
+    "remote_intent_canceled": {"pending_materialization", "observed_unverified"},
+    "privacy_hold_recorded": {"pending_materialization", "observed_unverified"},
 }
 LOCAL_TRANSITIONS = {
     "registered": {"queued"}, "queued": {"claimed", "canceled", "disabled", "hold"},
@@ -256,7 +256,14 @@ def reduce_scheduler_state(control_state: Mapping[str, Any], scheduler_events: I
             if state["remote_intent_state"] not in REMOTE_PREDECESSORS[kind]:
                 raise SchedulerHold("hold_transition_order")
             attempt = p.get("attempt_sequence")
-            if not isinstance(attempt, int) or attempt != state["attempt_sequence"] + 1: raise SchedulerHold("hold_transition_order")
+            if not isinstance(attempt, int):
+                raise SchedulerHold("hold_transition_order")
+            current_attempt = state["attempt_sequence"]
+            if kind == "remote_materialization_pending":
+                if attempt != current_attempt + 1:
+                    raise SchedulerHold("hold_transition_order")
+            elif attempt not in {current_attempt, current_attempt + 1}:
+                raise SchedulerHold("hold_transition_order")
             if p.get("desired_effect_digest") != state["desired_effect_digest"]: raise SchedulerHold("hold_readback_binding_conflict")
             for key in ("expected_remote_kind", "expected_remote_ref", "expected_remote_digest"):
                 if key in p and state.get(key) is not None and p.get(key) != state[key]: raise SchedulerHold("hold_readback_binding_conflict")
@@ -378,7 +385,7 @@ def plan_scheduler_request(request: Mapping[str, Any], control_state: Mapping[st
         if request.get("observed_remote_state") is None: raise SchedulerHold("hold_readback_unavailable")
         if sstate.get("remote_intent_state") not in REMOTE_PREDECESSORS["remote_observation_recorded"]:
             raise SchedulerHold("hold_transition_order")
-        events.append(_event(pid, "remote_observation_recorded", {"work_id": work_id, **base, "intent_id": request.get("intent_id", sstate.get("intent_id")), "desired_effect_digest": sstate.get("desired_effect_digest"), "attempt_sequence": request.get("attempt_sequence", sstate.get("attempt_sequence", 0) + 1), "expected_remote_kind": request.get("expected_remote_kind", sstate.get("expected_remote_kind")), "expected_remote_ref": request.get("expected_remote_ref", sstate.get("expected_remote_ref")), "expected_remote_digest": request.get("expected_remote_digest", sstate.get("expected_remote_digest")), "expected_remote_version": request.get("expected_remote_version", sstate.get("expected_remote_version")), "observed_remote_state": request.get("observed_remote_state"), "classification": "observed_unverified", "next_action": "trusted_adapter_readback"}, occurred))
+        events.append(_event(pid, "remote_observation_recorded", {"work_id": work_id, **base, "intent_id": request.get("intent_id", sstate.get("intent_id")), "desired_effect_digest": sstate.get("desired_effect_digest"), "attempt_sequence": request.get("attempt_sequence", sstate.get("attempt_sequence", 0)), "expected_remote_kind": request.get("expected_remote_kind", sstate.get("expected_remote_kind")), "expected_remote_ref": request.get("expected_remote_ref", sstate.get("expected_remote_ref")), "expected_remote_digest": request.get("expected_remote_digest", sstate.get("expected_remote_digest")), "expected_remote_version": request.get("expected_remote_version", sstate.get("expected_remote_version")), "observed_remote_state": request.get("observed_remote_state"), "classification": "observed_unverified", "next_action": "trusted_adapter_readback"}, occurred))
     elif op in {"cancel", "privacy_hold", "failure", "conflict"}:
         if op == "privacy_hold": kind, cls = "privacy_hold_recorded", "hold_privacy"
         elif op == "cancel": kind, cls = "remote_intent_canceled", "canceled"
@@ -387,7 +394,7 @@ def plan_scheduler_request(request: Mapping[str, Any], control_state: Mapping[st
         if cls not in FAILURE_CODES and op != "cancel": raise SchedulerHold("hold_unknown_version_or_state")
         if sstate.get("remote_intent_state") not in REMOTE_PREDECESSORS[kind]:
             raise SchedulerHold("hold_transition_order")
-        events.append(_event(pid, kind, {"work_id": work_id, **base, "intent_id": request.get("intent_id", sstate.get("intent_id")), "desired_effect_digest": sstate.get("desired_effect_digest"), "attempt_sequence": request.get("attempt_sequence", sstate.get("attempt_sequence", 0) + 1), "expected_remote_kind": request.get("expected_remote_kind", sstate.get("expected_remote_kind")), "expected_remote_ref": request.get("expected_remote_ref", sstate.get("expected_remote_ref")), "expected_remote_digest": request.get("expected_remote_digest", sstate.get("expected_remote_digest")), "expected_remote_version": request.get("expected_remote_version", sstate.get("expected_remote_version")), "classification": cls, "next_action": request.get("next_action", "human_review")}, occurred))
+        events.append(_event(pid, kind, {"work_id": work_id, **base, "intent_id": request.get("intent_id", sstate.get("intent_id")), "desired_effect_digest": sstate.get("desired_effect_digest"), "attempt_sequence": request.get("attempt_sequence", sstate.get("attempt_sequence", 0)), "expected_remote_kind": request.get("expected_remote_kind", sstate.get("expected_remote_kind")), "expected_remote_ref": request.get("expected_remote_ref", sstate.get("expected_remote_ref")), "expected_remote_digest": request.get("expected_remote_digest", sstate.get("expected_remote_digest")), "expected_remote_version": request.get("expected_remote_version", sstate.get("expected_remote_version")), "classification": cls, "next_action": request.get("next_action", "human_review")}, occurred))
     else: raise SchedulerHold("hold_unknown_version_or_state")
     return {"project_id": pid, "decision": "allow", "event_batch": events, "mutation_performed": False, "dispatch_performed": False}
 
@@ -431,7 +438,7 @@ def apply_remote_readback(projects_root: str | Path, project_id: str, intent_id:
             raise SchedulerHold("hold_readback_binding_conflict")
         for key in ("expected_remote_kind", "expected_remote_ref", "expected_remote_digest"):
             if sstate.get(key) is not None and response[key] != sstate[key]: raise SchedulerHold("hold_readback_binding_conflict")
-        payload = {"work_id": sstate["work_id"], "intent_id": intent_id, "desired_effect_digest": response["desired_effect_digest"], "attempt_sequence": int(request.get("attempt_sequence", sstate.get("attempt_sequence", 0) + 1)), "expected_remote_kind": response["expected_remote_kind"], "expected_remote_ref": response["expected_remote_ref"], "expected_remote_digest": response["expected_remote_digest"], "expected_remote_version": response["expected_remote_version"], "adapter_id": response["adapter_id"], "adapter_version": response["adapter_version"], "readback_digest": response["readback_digest"], "read_timestamp": _timestamp(response["read_timestamp"]), "readback_nonce": response["readback_nonce"], "request_digest": response["request_digest"], "opaque_receipt_ref": response["opaque_receipt_ref"], "classification": "confirmed", "next_action": "none"}
+        payload = {"work_id": sstate["work_id"], "intent_id": intent_id, "desired_effect_digest": response["desired_effect_digest"], "attempt_sequence": int(request.get("attempt_sequence", sstate.get("attempt_sequence", 0))), "expected_remote_kind": response["expected_remote_kind"], "expected_remote_ref": response["expected_remote_ref"], "expected_remote_digest": response["expected_remote_digest"], "expected_remote_version": response["expected_remote_version"], "adapter_id": response["adapter_id"], "adapter_version": response["adapter_version"], "readback_digest": response["readback_digest"], "read_timestamp": _timestamp(response["read_timestamp"]), "readback_nonce": response["readback_nonce"], "request_digest": response["request_digest"], "opaque_receipt_ref": response["opaque_receipt_ref"], "classification": "confirmed", "next_action": "none"}
         event = _event(pid, "remote_confirmation_recorded", payload, _timestamp(response["occurred_at"]))
         before = ledger.list_events(); before_head = before[-1].event_hash if before else None
         ledger.close(); ledger = LocalCollaborationLedger.open_existing(path, expected_project_id=pid)
