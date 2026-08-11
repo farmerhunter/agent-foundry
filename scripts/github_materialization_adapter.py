@@ -1,0 +1,237 @@
+"""Hermetic selective GitHub materialization boundary.
+
+This module is intentionally a planner and an injected same-process fake
+connector.  It never opens a socket, invokes a host command, reads a
+credential, or writes a ledger.  The scheduler's ``pending_materialization``
+event remains the sole durable outbox; callers must pass its replay state.
+"""
+from __future__ import annotations
+
+import hashlib
+import json
+import re
+import uuid
+from collections.abc import Mapping
+from typing import Any
+
+VERSION = "GitHubMaterializationAdapter-v1"
+ADAPTER_ID = "github-materialization-hermetic"
+ADAPTER_VERSION = "1"
+NAMESPACE = uuid.UUID("f5c27bf1-0c2e-4f96-b87f-7dc4a43e1bf1")
+OPERATIONS = {"issue_create", "issue_comment", "pull_request_comment"}
+CLASSIFICATIONS = {"local_only", "must_publish", "optional_sync"}
+OUTCOMES = {"materialization_not_required", "materialization_plan_ready",
+            "materialization_approval_required", "materialization_duplicate",
+            "materialization_simulated", "materialization_readback_verified",
+            "materialization_readback_unavailable",
+            "materialization_recovery_readback_required", "materialization_canceled"}
+HOLDS = {"hold_materialization_policy", "hold_materialization_scheduler_state",
+         "hold_materialization_binding", "hold_materialization_approval",
+         "hold_materialization_connector_untrusted", "hold_materialization_operation_unsupported",
+         "hold_materialization_privacy", "hold_materialization_duplicate_or_divergent",
+         "hold_materialization_remote_conflict", "hold_materialization_readback_unavailable",
+         "hold_materialization_retry_required", "hold_materialization_stale_basis",
+         "hold_materialization_schema"}
+RFC3339 = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:\d{2})$")
+HEX64 = re.compile(r"^[0-9a-f]{64}$")
+FORBIDDEN = {"prompt", "transcript", "raw_transcript", "tool_output", "raw_tool_output",
+             "secret", "credential", "token", "native_history", "body", "raw_response",
+             "response_body", "exception", "path", "absolute_path", "local_path"}
+
+
+class MaterializationError(ValueError):
+    def __init__(self, classification: str):
+        self.classification = classification if classification in HOLDS else "hold_materialization_schema"
+        super().__init__(self.classification)
+
+
+class MaterializationHold(MaterializationError):
+    pass
+
+
+def _canon(value: Any) -> str:
+    try:
+        return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
+    except (TypeError, ValueError):
+        raise MaterializationHold("hold_materialization_schema") from None
+
+
+def _digest(value: Any) -> str:
+    return hashlib.sha256(_canon(value).encode()).hexdigest()
+
+
+def _walk(value: Any, depth: int = 0, count: list[int] | None = None) -> None:
+    count = count or [0]; count[0] += 1
+    if depth > 10 or count[0] > 2000:
+        raise MaterializationHold("hold_materialization_schema")
+
+
+def _walk_content(value: Any, depth: int = 0, count: list[int] | None = None) -> None:
+    """Validate synthetic content separately; raw content never enters results."""
+    count = count or [0]; count[0] += 1
+    if depth > 5 or count[0] > 500: raise MaterializationHold("hold_materialization_privacy")
+    if isinstance(value, Mapping):
+        if any(not isinstance(k, str) or k not in {"title", "body", "summary", "labels"} for k in value):
+            raise MaterializationHold("hold_materialization_privacy")
+        for child in value.values(): _walk_content(child, depth + 1, count)
+    elif isinstance(value, list):
+        for child in value: _walk_content(child, depth + 1, count)
+    elif isinstance(value, str):
+        if len(value.encode()) > 8192 or any(word in value.lower() for word in {"password", "token", "credential", "secret", "transcript", "tool_output"}):
+            raise MaterializationHold("hold_materialization_privacy")
+    elif value is not None and not isinstance(value, (int, bool)):
+        raise MaterializationHold("hold_materialization_privacy")
+    if isinstance(value, Mapping):
+        for key, child in value.items():
+            if not isinstance(key, str) or key.lower() in FORBIDDEN:
+                raise MaterializationHold("hold_materialization_privacy")
+            if isinstance(child, str) and any(word in child.lower() for word in FORBIDDEN):
+                raise MaterializationHold("hold_materialization_privacy")
+            _walk(child, depth + 1, count)
+    elif isinstance(value, (list, tuple)):
+        for child in value: _walk(child, depth + 1, count)
+    elif value is not None and not isinstance(value, (str, int, bool)):
+        raise MaterializationHold("hold_materialization_schema")
+
+
+def _uuid(value: Any) -> str:
+    try: return str(uuid.UUID(str(value)))
+    except (ValueError, TypeError, AttributeError): raise MaterializationHold("hold_materialization_binding") from None
+
+
+def _ts(value: Any) -> str:
+    if not isinstance(value, str) or not RFC3339.fullmatch(value):
+        raise MaterializationHold("hold_materialization_schema")
+    return value
+
+
+def _hex(value: Any, classification: str = "hold_materialization_binding") -> str:
+    if not isinstance(value, str) or not HEX64.fullmatch(value): raise MaterializationHold(classification)
+    return value
+
+
+def _result(operation: str, outcome: str, *, classification: str | None = None, **fields: Any) -> dict[str, Any]:
+    if outcome not in OUTCOMES: raise MaterializationHold("hold_materialization_schema")
+    out = {"schema_version": VERSION, "operation": operation, "outcome": outcome,
+           "simulation_only": True, "remote_mutation_performed": False,
+           "authoritative": False, "confirmation_eligible": False}
+    if classification: out["classification"] = classification
+    out.update(fields); return out
+
+
+def _base(request: Mapping[str, Any]) -> dict[str, Any]:
+    allowed = {"schema_version", "project_id", "work_id", "intent_id", "attempt_sequence",
+               "scheduler_generation", "scheduler_head", "scheduler_state", "desired_effect_digest",
+               "classification", "operation", "repository_id", "repository_locator_digest",
+               "auth_scope_digest", "expected_remote_kind", "expected_remote_ref", "expected_remote_version",
+               "expected_remote_digest", "approved_content_digest", "privacy_class", "adapter_id",
+               "adapter_version", "gate", "capability", "occurred_at", "timestamp_provenance",
+               "nonce", "approved_remote_content", "connector", "readback_only"}
+    if not isinstance(request, Mapping) or set(request) - allowed:
+        raise MaterializationHold("hold_materialization_schema")
+    safe_request = dict(request); safe_request.pop("approved_remote_content", None); _walk(safe_request)
+    if request.get("schema_version", VERSION) != VERSION: raise MaterializationHold("hold_materialization_schema")
+    pid = _uuid(request.get("project_id")); intent = _uuid(request.get("intent_id"))
+    if not isinstance(request.get("work_id"), str) or not request["work_id"]: raise MaterializationHold("hold_materialization_binding")
+    attempt = request.get("attempt_sequence")
+    if not isinstance(attempt, int) or isinstance(attempt, bool) or attempt < 1: raise MaterializationHold("hold_materialization_binding")
+    if not isinstance(request.get("scheduler_generation"), int) or request["scheduler_generation"] < 0: raise MaterializationHold("hold_materialization_stale_basis")
+    _hex(request.get("scheduler_head")); _hex(request.get("desired_effect_digest")); _hex(request.get("approved_content_digest"))
+    if request.get("classification") not in CLASSIFICATIONS: raise MaterializationHold("hold_materialization_policy")
+    if request.get("operation") not in OPERATIONS: raise MaterializationHold("hold_materialization_operation_unsupported")
+    for key in ("repository_id", "repository_locator_digest", "auth_scope_digest"):
+        _hex(request.get(key))
+    if request.get("privacy_class") not in {"public_metadata", "metadata_only", "repository_internal_redacted"}:
+        raise MaterializationHold("hold_materialization_privacy")
+    _ts(request.get("occurred_at")); _ts(request.get("nonce")) if request.get("nonce") else None
+    if request.get("timestamp_provenance") != "explicit": raise MaterializationHold("hold_materialization_schema")
+    for key in ("expected_remote_kind", "expected_remote_ref", "expected_remote_version"):
+        if request.get(key) is not None and (not isinstance(request[key], str) or not request[key]): raise MaterializationHold("hold_materialization_binding")
+    if request.get("expected_remote_digest") is not None: _hex(request["expected_remote_digest"])
+    content = request.get("approved_remote_content")
+    if content is not None:
+        _walk_content(content); encoded = json.dumps(content, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+        if hashlib.sha256(encoded).hexdigest() != request["approved_content_digest"]:
+            raise MaterializationHold("hold_materialization_binding")
+        if len(encoded) > 8192: raise MaterializationHold("hold_materialization_privacy")
+        if request["operation"] == "issue_create" and isinstance(content, Mapping) and len(content.get("labels", [])) > 10: raise MaterializationHold("hold_materialization_privacy")
+    idem_input = [VERSION, pid, intent, attempt, request["operation"], request["repository_id"], request["desired_effect_digest"], request["approved_content_digest"]]
+    return {"project_id": pid, "intent_id": intent, "attempt_sequence": attempt,
+            "idempotency_key": str(uuid.uuid5(NAMESPACE, _canon(idem_input))), **dict(request)}
+
+
+def _state_check(req: Mapping[str, Any], scheduler_state: Mapping[str, Any]) -> None:
+    if not isinstance(scheduler_state, Mapping): raise MaterializationHold("hold_materialization_scheduler_state")
+    if scheduler_state.get("project_id") not in (None, req["project_id"]): raise MaterializationHold("hold_materialization_binding")
+    if scheduler_state.get("remote_intent_state") != "pending_materialization": raise MaterializationHold("hold_materialization_scheduler_state")
+    if str(scheduler_state.get("intent_id")) != req["intent_id"] or scheduler_state.get("attempt_sequence") != req["attempt_sequence"]: raise MaterializationHold("hold_materialization_stale_basis")
+    if scheduler_state.get("desired_effect_digest") != req["desired_effect_digest"]: raise MaterializationHold("hold_materialization_stale_basis")
+
+
+def _gate_capability(req: Mapping[str, Any]) -> None:
+    gate, cap = req.get("gate"), req.get("capability")
+    if not isinstance(gate, Mapping) or set(gate) != {"kind", "production_eligibility", "project_id", "intent_id", "attempt_sequence", "operation", "repository_id", "effect_digest", "content_digest"}:
+        raise MaterializationHold("hold_materialization_approval")
+    if gate.get("kind") != "fixture_only" or gate.get("production_eligibility") is not False: raise MaterializationHold("hold_materialization_approval")
+    if any(gate.get(k) != v for k, v in {"project_id": req["project_id"], "intent_id": req["intent_id"], "attempt_sequence": req["attempt_sequence"], "operation": req["operation"], "repository_id": req["repository_id"], "effect_digest": req["desired_effect_digest"], "content_digest": req["approved_content_digest"]}.items()): raise MaterializationHold("hold_materialization_approval")
+    required = {"trust_domain": "same_process_reference", "production_eligibility": False, "network_capability": False}
+    if not isinstance(cap, Mapping) or any(cap.get(k) != v for k, v in required.items() for _ in [0]): raise MaterializationHold("hold_materialization_connector_untrusted")
+    if cap.get("adapter_id") != req.get("adapter_id") or cap.get("adapter_version") != req.get("adapter_version") or req["operation"] not in set(cap.get("supported_operations", [])): raise MaterializationHold("hold_materialization_connector_untrusted")
+
+
+def plan_materialization(request: Mapping[str, Any], scheduler_state: Mapping[str, Any], cache_observation: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    req = _base(request)
+    if req["classification"] == "local_only": return _result(req["operation"], "materialization_not_required", classification="local_only", project_id=req["project_id"], intent_id=req["intent_id"], idempotency_key=req["idempotency_key"])
+    _state_check(req, scheduler_state)
+    if req["classification"] == "must_publish" or req.get("gate") is not None:
+        _gate_capability(req)
+    elif req["classification"] == "optional_sync":
+        return _result(req["operation"], "materialization_plan_ready", classification="optional_sync", project_id=req["project_id"], intent_id=req["intent_id"], attempt_sequence=req["attempt_sequence"], idempotency_key=req["idempotency_key"], desired_effect_digest=req["desired_effect_digest"])
+    return _result(req["operation"], "materialization_plan_ready", classification=req["classification"], project_id=req["project_id"], intent_id=req["intent_id"], attempt_sequence=req["attempt_sequence"], idempotency_key=req["idempotency_key"], desired_effect_digest=req["desired_effect_digest"], cache_confirmation_eligible=False)
+
+
+class FakeConnector:
+    """Deterministic in-memory connector used only by tests and callers."""
+    trust_domain = "same_process_reference"; production_eligibility = False; network_capability = False
+    def __init__(self, state: Mapping[str, Any] | None = None, *, crash_after_write: bool = False):
+        self.state = dict(state or {}); self.calls: list[tuple[str, str]] = []; self.crash_after_write = crash_after_write
+    def readback(self, request: Mapping[str, Any]) -> Mapping[str, Any]:
+        self.calls.append(("readback", request["idempotency_key"]))
+        return dict(self.state.get(request["idempotency_key"], {}))
+    def write(self, request: Mapping[str, Any]) -> Mapping[str, Any]:
+        self.calls.append(("write", request["idempotency_key"]))
+        self.state[request["idempotency_key"]] = {"effect_digest": request["desired_effect_digest"], "content_digest": request["approved_content_digest"], "remote_kind": request.get("expected_remote_kind"), "remote_ref": request.get("expected_remote_ref"), "remote_version": request.get("expected_remote_version"), "remote_digest": request.get("expected_remote_digest")}
+        if self.crash_after_write: raise CrashAfterWrite
+        return self.state[request["idempotency_key"]]
+
+
+class CrashAfterWrite(Exception):
+    """Test-only boundary representing process loss after the fake write."""
+
+
+def execute_materialization(request: Mapping[str, Any], scheduler_state: Mapping[str, Any], connector: Any, cache_observation: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    planned = plan_materialization(request, scheduler_state, cache_observation)
+    if planned["outcome"] != "materialization_plan_ready": return planned
+    req = _base(request)
+    if req["classification"] == "optional_sync" and req.get("gate") is None:
+        return planned
+    _gate_capability(req)
+    if not isinstance(connector, FakeConnector) and not (getattr(connector, "trust_domain", None) == "same_process_reference" and getattr(connector, "production_eligibility", True) is False and getattr(connector, "network_capability", True) is False): raise MaterializationHold("hold_materialization_connector_untrusted")
+    if not hasattr(connector, "readback") or not hasattr(connector, "write"): raise MaterializationHold("hold_materialization_connector_untrusted")
+    try: pre = connector.readback(req)
+    except Exception: raise MaterializationHold("hold_materialization_readback_unavailable") from None
+    if isinstance(pre, Mapping) and pre:
+        if pre.get("effect_digest") == req["desired_effect_digest"] and pre.get("content_digest") == req["approved_content_digest"]: return _result(req["operation"], "materialization_duplicate", classification=req["classification"], project_id=req["project_id"], intent_id=req["intent_id"], attempt_sequence=req["attempt_sequence"], idempotency_key=req["idempotency_key"])
+        raise MaterializationHold("hold_materialization_remote_conflict")
+    try: connector.write(req)
+    except CrashAfterWrite:
+        return _result(req["operation"], "materialization_recovery_readback_required", classification=req["classification"], project_id=req["project_id"], intent_id=req["intent_id"], attempt_sequence=req["attempt_sequence"], idempotency_key=req["idempotency_key"])
+    except MaterializationHold: raise
+    except Exception: raise MaterializationHold("hold_materialization_readback_unavailable") from None
+    try: post = connector.readback(req)
+    except Exception: raise MaterializationHold("hold_materialization_retry_required") from None
+    if not isinstance(post, Mapping) or post.get("effect_digest") != req["desired_effect_digest"] or post.get("content_digest") != req["approved_content_digest"]: raise MaterializationHold("hold_materialization_readback_unavailable")
+    return _result(req["operation"], "materialization_readback_verified", classification=req["classification"], project_id=req["project_id"], intent_id=req["intent_id"], attempt_sequence=req["attempt_sequence"], idempotency_key=req["idempotency_key"], readback_digest=_digest(post), opaque_receipt_ref="fake:" + req["idempotency_key"])
+
+
+__all__ = ["VERSION", "FakeConnector", "MaterializationError", "MaterializationHold", "plan_materialization", "execute_materialization"]

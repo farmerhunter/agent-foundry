@@ -1,0 +1,23 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://agent-foundry.dev/schemas/github-materialization-adapter.schema.yaml
+title: GitHubMaterializationAdapter-v1
+type: object
+additionalProperties: false
+required: [schema_version, operation, outcome, simulation_only, remote_mutation_performed, authoritative, confirmation_eligible]
+properties:
+  schema_version: {const: GitHubMaterializationAdapter-v1}
+  operation: {enum: [issue_create, issue_comment, pull_request_comment]}
+  outcome:
+    enum: [materialization_not_required, materialization_plan_ready, materialization_approval_required, materialization_duplicate, materialization_simulated, materialization_readback_verified, materialization_readback_unavailable, materialization_recovery_readback_required, materialization_canceled]
+  classification: {enum: [local_only, must_publish, optional_sync]}
+  simulation_only: {const: true}
+  remote_mutation_performed: {const: false}
+  authoritative: {const: false}
+  confirmation_eligible: {const: false}
+  project_id: {type: string, format: uuid}
+  intent_id: {type: string, format: uuid}
+  attempt_sequence: {type: integer, minimum: 1}
+  idempotency_key: {type: string, format: uuid}
+  desired_effect_digest: {type: string, pattern: '^[0-9a-f]{64}$'}
+  readback_digest: {type: string, pattern: '^[0-9a-f]{64}$'}
+  opaque_receipt_ref: {type: string, maxLength: 256}
