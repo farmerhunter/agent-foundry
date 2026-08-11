@@ -201,6 +201,8 @@ def test_every_terminal_receipt_is_schema_closed_and_runtime_closed():
         {**candidate, "authority_generation": "1"},
         {**fixtures[5], "authority_level": "current_validation_only"},
         {**candidate, "held_identities": [ident]},
+        {key: value for key, value in fixtures[8].items() if key != "held_identities"},
+        {**fixtures[8], "held_identities": []},
     ]
     for value in invalid:
         assert list(validator.iter_errors(value))

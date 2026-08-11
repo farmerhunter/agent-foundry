@@ -147,7 +147,7 @@ $defs:
       - required: [schema_version, outcome, project_id, authority_generation, authority_head, reason_code, flags]
         properties: {outcome: {const: replica_offline}, reason_code: {const: replica_offline}}
         not: {anyOf: [{required: [bundle_digest]}, {required: [shared_view_digest]}, {required: [candidate_identities]}, {required: [converged_identities]}, {required: [duplicate_identities]}, {required: [held_identities]}, {required: [authority_level]}, {required: [owner_enrollment_verified]}, {required: [import_authorized]}, {required: [requires_owner_verification]}]}
-      - required: [schema_version, outcome, project_id, reason_code, flags]
+      - required: [schema_version, outcome, project_id, reason_code, held_identities, flags]
         properties: {outcome: {const: hold_semantic_conflict}, reason_code: {const: semantic_conflict}, held_identities: {minItems: 1}}
         not: {anyOf: [{required: [bundle_digest]}, {required: [shared_view_digest]}, {required: [candidate_identities]}, {required: [converged_identities]}, {required: [duplicate_identities]}, {required: [authority_level]}, {required: [owner_enrollment_verified]}, {required: [import_authorized]}, {required: [requires_owner_verification]}]}
       - required: [schema_version, outcome, project_id, reason_code, flags]
