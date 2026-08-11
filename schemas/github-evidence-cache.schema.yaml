@@ -1,0 +1,22 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://agent-foundry.local/schemas/github-evidence-cache.schema.yaml
+title: GitHubEvidenceCache-v1
+type: object
+additionalProperties: false
+required: [schema_version]
+properties:
+  schema_version:
+    const: GitHubEvidenceCache-v1
+  evidence_kind:
+    enum: [issue_metadata, pull_request_metadata, comment_summary, project_item_summary]
+  freshness:
+    enum: [fresh_as_of_fetch, stale, partial, unavailable, privacy_held, invalidated, conflict]
+  privacy_class:
+    enum: [public_metadata, repository_internal_redacted, metadata_only, privacy_held]
+  coverage:
+    enum: [complete, partial, unavailable, privacy_held]
+  authoritative:
+    const: false
+  confirmation_eligible:
+    const: false
+additionalProperties: false
