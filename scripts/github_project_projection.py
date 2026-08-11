@@ -165,7 +165,7 @@ def _state_binding(request: Mapping[str, Any], state: Mapping[str, Any], *, pair
         raise ProjectProjectionHold("hold_stale_authority")
     if state.get("remote_intent_state") != "pending_materialization":
         raise ProjectProjectionHold("hold_dependency")
-    if state.get("work", {}).get("work_id") not in (None, request["work_id"]) and state.get("work_id") != request["work_id"]:
+    if state.get("work_id") != request["work_id"]:
         raise ProjectProjectionHold("hold_dependency")
     for key in ("intent_id", "attempt_sequence", "desired_effect_digest"):
         if state.get(key) != request[key]:

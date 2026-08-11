@@ -157,6 +157,13 @@ def test_representative_cache_holds_and_actual_scheduler_negative_states(monkeyp
     foreign = copy.deepcopy(request); foreign["project_id"] = str(uuid.uuid4()); foreign["materialization_result"]["project_id"] = foreign["project_id"]
     with pytest.raises(projection.ProjectProjectionHold):
         projection.plan_project_projection(foreign, projects_root=root)
+    cache_calls = []
+    monkeypatch.setattr(projection.evidence_cache, "project_cache_readout", lambda **_kwargs: cache_calls.append("cache"))
+    wrong_work = copy.deepcopy(request); wrong_work["work_id"] = "wrong-work"
+    with pytest.raises(projection.ProjectProjectionHold) as held:
+        projection.plan_project_projection(wrong_work, projects_root=root)
+    assert held.value.classification == "hold_dependency" and cache_calls == []
+    monkeypatch.setattr(projection.evidence_cache, "project_cache_readout", original_readout)
     wrong_attempt = copy.deepcopy(request); wrong_attempt["attempt_sequence"] = 2; wrong_attempt["materialization_result"]["attempt_sequence"] = 2
     with pytest.raises(projection.ProjectProjectionHold):
         projection.plan_project_projection(wrong_attempt, projects_root=root)
@@ -178,6 +185,24 @@ def test_immediate_authority_drift_holds_before_fake_write():
     connector = projection.FakeProjectConnector(on_pre_read=commit)
     result = projection.execute_project_projection(plan, connector, projects_root=root)
     assert result["outcome"] == "project_projection_stale_authority_hold" and connector.calls == ["pre_read"]
+
+
+def test_execute_rechecks_top_level_work_binding_before_each_effect_boundary(monkeypatch):
+    root, _, _, request = setup()
+    plan = projection.plan_project_projection(request, projects_root=root)
+    original = projection.replay_scheduler_state
+    calls = []
+    def replay(projects_root, project_id):
+        state = original(projects_root, project_id)
+        calls.append(state)
+        if len(calls) == 2:
+            state = {**state, "work_id": "wrong-work"}
+        return state
+    monkeypatch.setattr(projection, "replay_scheduler_state", replay)
+    connector = projection.FakeProjectConnector()
+    held = projection.execute_project_projection(plan, connector, projects_root=root)
+    assert held["outcome"] == "project_projection_dependency_hold"
+    assert connector.calls == ["pre_read"] and len(calls) == 2
 
 
 def test_conflict_and_recovery_are_readback_only():
