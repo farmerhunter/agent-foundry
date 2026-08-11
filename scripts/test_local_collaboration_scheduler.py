@@ -7,6 +7,22 @@ import local_collaboration_control_plane as cp
 import local_collaboration_scheduler as sc
 
 
+def _filesystem_snapshot(path):
+    """Capture authority and SQLite sidecars for zero-side-effect probes."""
+    snapshot = {}
+    for candidate in (path, Path(str(path) + "-wal"), Path(str(path) + "-shm")):
+        if candidate.exists():
+            stat = candidate.stat()
+            snapshot[str(candidate)] = (True, stat.st_mtime_ns, stat.st_size, candidate.read_bytes())
+        else:
+            snapshot[str(candidate)] = (False, None, None, None)
+    return snapshot
+
+
+def _assert_filesystem_unchanged(path, before):
+    assert _filesystem_snapshot(path) == before
+
+
 def _control_request(pid):
     return {"project_id": pid, "occurred_at": "2026-08-11T00:00:00Z", "timestamp_provenance": "explicit",
       "work": {"project_id": pid, "work_id": "w1", "issue": 404, "objective": "local scheduler", "stage": "implementation", "phase": "orch-03", "role": "Implementer", "root_budget_tokens": 100, "remaining_budget_tokens": 100, "issue_anchor": {"issue": 404, "scope": "local scheduler", "risk": "low", "acceptance": "bounded", "durable_anchor": "issue:404", "human_gates": ["none"]}, "durable_anchors": ["issue:404"], "stop_conditions": ["scope drift"]},
@@ -203,18 +219,44 @@ def _remote_setup(root, expected):
     return pid, intent
 
 
-def test_expected_version_binding_and_privacy_zero_mutation():
+def test_reducer_version_mismatch_is_preappend_hold():
+    """Reducer binding rejects a changed version without touching authority files."""
+    expected = {"expected_remote_kind": "issue", "expected_remote_ref": "opaque-1", "expected_remote_digest": "a" * 64, "expected_remote_version": "v1"}
+    with tempfile.TemporaryDirectory() as root:
+        pid, intent = _remote_setup(root, expected); path = Path(root) / pid / "collaboration.db"
+        ledger = LocalCollaborationLedger.open_existing(path, expected_project_id=pid)
+        before_events = ledger.list_events(); before_head = before_events[-1].event_hash
+        control_state = cp.reduce_control_events([e for e in before_events if e.event_type.startswith("control.")])
+        scheduler_events = [e for e in before_events if e.event_type.startswith("scheduler.")]
+        pending = scheduler_events[-1]
+        altered = sc._event(pid, "remote_observation_recorded", {**pending.payload["payload"], "expected_remote_version": "v2", "observed_remote_state": "open", "classification": "observed_unverified"}, "2026-08-11T00:00:04Z")
+        ledger.close()
+        before_files = _filesystem_snapshot(path)
+        try:
+            sc.reduce_scheduler_state(control_state, scheduler_events + [altered])
+        except sc.SchedulerHold as exc:
+            assert str(exc) == "hold_readback_binding_conflict"
+        else:
+            raise AssertionError("reducer version mismatch must hold")
+        check = LocalCollaborationLedger.open_existing(path, expected_project_id=pid)
+        after_events = check.list_events(); check.close()
+        assert len(after_events) == len(before_events) and after_events[-1].event_hash == before_head
+        _assert_filesystem_unchanged(path, before_files)
+
+
+def test_planner_observation_version_mismatch_is_preappend_hold():
+    """Observation planning rejects a changed expected version before append."""
     expected = {"expected_remote_kind": "issue", "expected_remote_ref": "opaque-1", "expected_remote_digest": "a" * 64, "expected_remote_version": "v1"}
     with tempfile.TemporaryDirectory() as root:
         pid, intent = _remote_setup(root, expected); path = Path(root) / pid / "collaboration.db"
         ledger = LocalCollaborationLedger.open_existing(path, expected_project_id=pid); before = ledger.list_events(); head = before[-1].event_hash; ledger.close()
+        before_files = _filesystem_snapshot(path)
         try:
             sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "observe", "intent_id": intent, "observed_remote_state": "open", **{**expected, "expected_remote_version": "v2"}, "occurred_at": "2026-08-11T00:00:04Z"})
         except sc.SchedulerHold as exc: assert str(exc) == "hold_readback_binding_conflict"
         else: raise AssertionError("planner version mismatch must hold")
         ledger = LocalCollaborationLedger.open_existing(path, expected_project_id=pid); after = ledger.list_events(); assert len(after) == len(before) and after[-1].event_hash == head; ledger.close()
-        result = sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "privacy_hold", "intent_id": intent, **expected, "occurred_at": "2026-08-11T00:00:04Z"})
-        assert result["mutation_performed"] and sc.replay_scheduler_state(root, pid)["remote_intent_state"] == "privacy_held"
+        _assert_filesystem_unchanged(path, before_files)
 
 
 def test_privacy_binding_mismatch_is_preappend_hold():
@@ -222,12 +264,14 @@ def test_privacy_binding_mismatch_is_preappend_hold():
     with tempfile.TemporaryDirectory() as root:
         pid, intent = _remote_setup(root, expected); path = Path(root) / pid / "collaboration.db"
         ledger = LocalCollaborationLedger.open_existing(path, expected_project_id=pid); before = ledger.list_events(); head = before[-1].event_hash; ledger.close()
+        before_files = _filesystem_snapshot(path)
         for bad in ({"intent_id": str(uuid.uuid4())}, {"attempt_sequence": 2}, {"expected_remote_version": "v2"}, {"unknown": "x"}):
             request = {"project_id": pid, "work_id": "w1", "operation": "privacy_hold", "intent_id": intent, **expected, "occurred_at": "2026-08-11T00:00:04Z", **bad}
             try: sc.apply_scheduler_request(root, pid, request)
             except sc.SchedulerHold: pass
             else: raise AssertionError("invalid privacy payload must hold")
             ledger = LocalCollaborationLedger.open_existing(path, expected_project_id=pid); after = ledger.list_events(); assert len(after) == len(before) and after[-1].event_hash == head; ledger.close()
+            _assert_filesystem_unchanged(path, before_files)
 
 
 def test_adapter_version_mismatch_is_preappend_hold():
@@ -238,11 +282,41 @@ def test_adapter_version_mismatch_is_preappend_hold():
             def readback(self, request):
                 return {"project_id": pid, "intent_id": intent, "confirmed": True, "adapter_id": "adapter", "adapter_version": "1", "expected_remote_kind": "issue", "expected_remote_ref": "opaque-1", "expected_remote_digest": "a" * 64, "expected_remote_version": "v2", "readback_digest": "b" * 64, "opaque_receipt_ref": "receipt:1", "occurred_at": "2026-08-11T00:00:04Z", "read_timestamp": "2026-08-11T00:00:04Z", "readback_nonce": "nonce", "request_digest": request["request_digest"], "desired_effect_digest": desired}
         ledger = LocalCollaborationLedger.open_existing(path, expected_project_id=pid); before = ledger.list_events(); head = before[-1].event_hash; ledger.close()
+        before_files = _filesystem_snapshot(path)
         try: sc.apply_remote_readback(root, pid, intent, Adapter(), {"project_id": pid, "work_id": "w1", "operation": "readback", "intent_id": intent, "attempt_sequence": 1, "request_digest": "c" * 64, "occurred_at": "2026-08-11T00:00:04Z"})
         except sc.SchedulerHold as exc: assert str(exc) == "hold_readback_binding_conflict"
         else: raise AssertionError("adapter version mismatch must hold")
         ledger = LocalCollaborationLedger.open_existing(path, expected_project_id=pid); after = ledger.list_events(); assert len(after) == len(before) and after[-1].event_hash == head; ledger.close()
+        _assert_filesystem_unchanged(path, before_files)
+
+
+def test_observed_unverified_to_privacy_hold_preserves_all_bindings():
+    """A valid observed attempt can become a durable privacy hold."""
+    expected = {"expected_remote_kind": "issue", "expected_remote_ref": "opaque-1", "expected_remote_digest": "a" * 64, "expected_remote_version": "v1"}
+    with tempfile.TemporaryDirectory() as root:
+        pid, intent = _remote_setup(root, expected)
+        observed = sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "observe", "intent_id": intent, "observed_remote_state": "open", **expected, "occurred_at": "2026-08-11T00:00:04Z"})
+        assert observed["mutation_performed"]
+        state = sc.replay_scheduler_state(root, pid)
+        assert state["remote_intent_state"] == "observed_unverified"
+        assert state["attempt_sequence"] == 1
+        desired = state["desired_effect_digest"]
+        result = sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "privacy_hold", "intent_id": intent, "attempt_sequence": 1, "desired_effect_digest": desired, **expected, "occurred_at": "2026-08-11T00:00:05Z"})
+        assert result["mutation_performed"]
+        state = sc.replay_scheduler_state(root, pid)
+        assert state["remote_intent_state"] == "privacy_held"
+        assert state["local_state"] == "hold"
+        assert state["intent_id"] == intent and state["attempt_sequence"] == 1
+        assert state["desired_effect_digest"] == desired
+        assert all(state[key] == expected[key] for key in ("expected_remote_kind", "expected_remote_ref", "expected_remote_digest", "expected_remote_version"))
+        path = Path(root) / pid / "collaboration.db"
+        ledger = LocalCollaborationLedger.open_existing(path, expected_project_id=pid)
+        privacy = [event for event in ledger.list_events() if event.event_type == "scheduler.privacy_hold_recorded"][-1]
+        payload = privacy.payload["payload"]
+        assert payload["intent_id"] == intent and payload["attempt_sequence"] == 1 and payload["desired_effect_digest"] == desired
+        assert all(payload[key] == expected[key] for key in ("expected_remote_kind", "expected_remote_ref", "expected_remote_digest", "expected_remote_version"))
+        ledger.close()
 
 
 if __name__ == "__main__":
-    test_initialize_and_offline_transitions(); test_exact_retry_and_divergence_hold(); test_remote_never_confirmed_by_observation(); test_remote_predecessor_guards(); test_observation_and_terminal_use_current_attempt(); test_closed_payload_and_resume_gate(); test_caller_project_binding_and_disabled_gate(); test_expected_version_binding_and_privacy_zero_mutation(); test_privacy_binding_mismatch_is_preappend_hold(); test_adapter_version_mismatch_is_preappend_hold(); print("ok")
+    test_initialize_and_offline_transitions(); test_exact_retry_and_divergence_hold(); test_remote_never_confirmed_by_observation(); test_remote_predecessor_guards(); test_observation_and_terminal_use_current_attempt(); test_closed_payload_and_resume_gate(); test_caller_project_binding_and_disabled_gate(); test_reducer_version_mismatch_is_preappend_hold(); test_planner_observation_version_mismatch_is_preappend_hold(); test_privacy_binding_mismatch_is_preappend_hold(); test_adapter_version_mismatch_is_preappend_hold(); test_observed_unverified_to_privacy_hold_preserves_all_bindings(); print("ok")
