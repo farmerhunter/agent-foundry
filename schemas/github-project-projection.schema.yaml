@@ -1,0 +1,211 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://agent-foundry.dev/schemas/github-project-projection.schema.yaml
+title: GitHubProjectProjection-v1
+oneOf:
+  - $ref: '#/$defs/request'
+  - $ref: '#/$defs/result'
+$defs:
+  digest: {type: string, pattern: '^[0-9a-f]{64}$'}
+  uuid: {type: string, format: uuid}
+  timestamp: {type: string, pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$'}
+  request:
+    type: object
+    additionalProperties: false
+    required: [schema_version, project_id, work_id, intent_id, attempt_sequence, effect_kind, desired_effect_digest, repository_id, repository_locator_digest, auth_scope_digest, cache_entry_key, opaque_item_ref, expected_remote_kind, expected_remote_ref, expected_remote_digest, expected_remote_version, materialization_request, materialization_result, evaluated_at, max_age_seconds, fixture_capability]
+    properties:
+      schema_version: {const: GitHubProjectProjection-v1}
+      project_id: {$ref: '#/$defs/uuid'}
+      work_id: {type: string, minLength: 1, maxLength: 128}
+      intent_id: {$ref: '#/$defs/uuid'}
+      attempt_sequence: {type: integer, minimum: 1, maximum: 1000000}
+      effect_kind: {enum: [project_item_add, project_field_set]}
+      desired_effect_digest: {$ref: '#/$defs/digest'}
+      repository_id: {type: string, minLength: 1, maxLength: 256}
+      repository_locator_digest: {$ref: '#/$defs/digest'}
+      auth_scope_digest: {$ref: '#/$defs/digest'}
+      cache_entry_key: {$ref: '#/$defs/digest'}
+      opaque_item_ref: {type: string, minLength: 1, maxLength: 256}
+      expected_remote_kind: {type: string, minLength: 1, maxLength: 128}
+      expected_remote_ref: {type: string, minLength: 1, maxLength: 256}
+      expected_remote_digest: {$ref: '#/$defs/digest'}
+      expected_remote_version: {type: string, minLength: 1, maxLength: 128}
+      materialization_request: {type: object}
+      materialization_result: {type: object}
+      evaluated_at: {$ref: '#/$defs/timestamp'}
+      max_age_seconds: {type: integer, minimum: 0, maximum: 604800}
+      fixture_capability:
+        type: object
+        additionalProperties: false
+        required: [trust_domain, simulation_only, production_eligibility, network_capability]
+        properties:
+          trust_domain: {const: same_process_reference}
+          simulation_only: {const: true}
+          production_eligibility: {const: false}
+          network_capability: {const: false}
+  result_common:
+    type: object
+    required: [schema_version, operation, outcome, simulation_only, production_eligibility, network_capability, remote_mutation_performed, authoritative, confirmed]
+    properties:
+      schema_version: {const: GitHubProjectProjection-v1}
+      operation: {enum: [plan_project_projection, execute_project_projection, recover_project_projection]}
+      outcome:
+        enum: [project_projection_not_required, project_projection_plan_ready, project_projection_approval_required, project_projection_duplicate, hold_project_projection_stale_authority, hold_project_projection_conflict, hold_project_projection_dependency, hold_project_projection_privacy, project_projection_recovery_readback_required, project_projection_readback_verified, project_projection_canceled]
+      simulation_only: {const: true}
+      production_eligibility: {const: false}
+      network_capability: {const: false}
+      remote_mutation_performed: {const: false}
+      authoritative: {const: false}
+      confirmed: {type: boolean}
+      classification: {type: string, maxLength: 128}
+      project_id: {$ref: '#/$defs/uuid'}
+      work_id: {type: string, minLength: 1, maxLength: 128}
+      intent_id: {$ref: '#/$defs/uuid'}
+      attempt_sequence: {type: integer, minimum: 1}
+      authority_generation: {type: integer, minimum: 0}
+      authority_head: {$ref: '#/$defs/digest'}
+      request_digest: {$ref: '#/$defs/digest'}
+      plan_digest: {$ref: '#/$defs/digest'}
+      readback_digest: {$ref: '#/$defs/digest'}
+      opaque_receipt_ref: {type: string, minLength: 1, maxLength: 256}
+      adapter_id: {type: string, minLength: 1, maxLength: 128}
+      adapter_version: {type: string, minLength: 1, maxLength: 128}
+      occurred_at: {$ref: '#/$defs/timestamp'}
+      read_timestamp: {$ref: '#/$defs/timestamp'}
+      readback_nonce: {$ref: '#/$defs/timestamp'}
+      expected_remote_kind: {type: string, minLength: 1, maxLength: 128}
+      expected_remote_ref: {type: string, minLength: 1, maxLength: 256}
+      expected_remote_digest: {$ref: '#/$defs/digest'}
+      expected_remote_version: {type: string, minLength: 1, maxLength: 128}
+      desired_effect_digest: {$ref: '#/$defs/digest'}
+      opaque_item_ref: {type: string, minLength: 1, maxLength: 256}
+      plan:
+        type: object
+        additionalProperties: false
+        required: [request, cache_basis, materialization_result]
+        properties:
+          request: {$ref: '#/$defs/request'}
+          cache_basis:
+            type: object
+            additionalProperties: false
+            required: [entry_key, entry_digest]
+            properties:
+              entry_key: {$ref: '#/$defs/digest'}
+              entry_digest: {$ref: '#/$defs/digest'}
+              cache_generation: {type: string, pattern: '^[0-9]+$'}
+          materialization_result: {type: object}
+  result_plan:
+    allOf:
+      - $ref: '#/$defs/result_no_receipt'
+      - $ref: '#/$defs/result_no_classification'
+      - type: object
+        required: [project_id, work_id, intent_id, attempt_sequence, authority_generation, authority_head, desired_effect_digest, opaque_item_ref, request_digest, plan_digest, expected_remote_kind, expected_remote_ref, expected_remote_digest, expected_remote_version, plan]
+        properties:
+          operation: {const: plan_project_projection}
+          outcome: {const: project_projection_plan_ready}
+          confirmed: {const: false}
+  result_duplicate:
+    allOf:
+      - $ref: '#/$defs/result_no_receipt'
+      - $ref: '#/$defs/result_no_plan'
+      - $ref: '#/$defs/result_no_expected_remote'
+      - $ref: '#/$defs/result_no_classification'
+      - type: object
+        required: [project_id, work_id, intent_id, attempt_sequence, authority_generation, authority_head, desired_effect_digest, opaque_item_ref, request_digest, plan_digest]
+        properties:
+          operation: {const: execute_project_projection}
+          outcome: {const: project_projection_duplicate}
+          confirmed: {const: false}
+  result_execute_hold:
+    allOf:
+      - $ref: '#/$defs/result_no_extended'
+      - type: object
+        required: [project_id, work_id, intent_id, attempt_sequence, authority_generation, authority_head]
+        properties:
+          operation: {const: execute_project_projection}
+          outcome: {enum: [hold_project_projection_stale_authority, hold_project_projection_conflict]}
+          confirmed: {const: false}
+  result_execute_verified:
+    allOf:
+      - $ref: '#/$defs/result_no_plan'
+      - $ref: '#/$defs/result_no_classification'
+      - type: object
+        required: [project_id, work_id, intent_id, attempt_sequence, authority_generation, authority_head, desired_effect_digest, opaque_item_ref, request_digest, plan_digest, readback_digest, opaque_receipt_ref, adapter_id, adapter_version, occurred_at, read_timestamp, readback_nonce, expected_remote_kind, expected_remote_ref, expected_remote_digest, expected_remote_version]
+        properties:
+          operation: {const: execute_project_projection}
+          outcome: {const: project_projection_readback_verified}
+          confirmed: {const: true}
+  result_recovery_required:
+    allOf:
+      - $ref: '#/$defs/result_no_extended'
+      - type: object
+        required: [project_id, work_id, intent_id, attempt_sequence, authority_generation, authority_head]
+        properties:
+          operation: {const: recover_project_projection}
+          outcome: {const: project_projection_recovery_readback_required}
+          confirmed: {const: false}
+  result_recovery_conflict:
+    allOf:
+      - $ref: '#/$defs/result_no_extended'
+      - type: object
+        required: [project_id, work_id, intent_id, attempt_sequence, authority_generation, authority_head]
+        properties:
+          operation: {const: recover_project_projection}
+          outcome: {const: hold_project_projection_conflict}
+          confirmed: {const: false}
+  result_recovery_verified:
+    allOf:
+      - $ref: '#/$defs/result_no_plan'
+      - $ref: '#/$defs/result_no_opaque_item'
+      - $ref: '#/$defs/result_no_classification'
+      - type: object
+        required: [project_id, work_id, intent_id, attempt_sequence, authority_generation, authority_head, desired_effect_digest, request_digest, plan_digest, readback_digest, opaque_receipt_ref, adapter_id, adapter_version, occurred_at, read_timestamp, readback_nonce, expected_remote_kind, expected_remote_ref, expected_remote_digest, expected_remote_version]
+        properties:
+          operation: {const: recover_project_projection}
+          outcome: {const: project_projection_readback_verified}
+          confirmed: {const: true}
+  result_no_receipt:
+    not:
+      anyOf:
+        - {required: [readback_digest]}
+        - {required: [opaque_receipt_ref]}
+        - {required: [adapter_id]}
+        - {required: [adapter_version]}
+        - {required: [occurred_at]}
+        - {required: [read_timestamp]}
+        - {required: [readback_nonce]}
+  result_no_plan:
+    not: {required: [plan]}
+  result_no_expected_remote:
+    not:
+      anyOf:
+        - {required: [expected_remote_kind]}
+        - {required: [expected_remote_ref]}
+        - {required: [expected_remote_digest]}
+        - {required: [expected_remote_version]}
+  result_no_opaque_item:
+    not: {required: [opaque_item_ref]}
+  result_no_classification:
+    not: {required: [classification]}
+  result_no_extended:
+    allOf:
+      - $ref: '#/$defs/result_no_receipt'
+      - $ref: '#/$defs/result_no_plan'
+      - $ref: '#/$defs/result_no_opaque_item'
+      - $ref: '#/$defs/result_no_expected_remote'
+      - $ref: '#/$defs/result_no_classification'
+      - not:
+          anyOf:
+            - {required: [desired_effect_digest]}
+            - {required: [request_digest]}
+            - {required: [plan_digest]}
+  result:
+    type: object
+    unevaluatedProperties: false
+    oneOf:
+      - allOf: [{$ref: '#/$defs/result_common'}, {$ref: '#/$defs/result_plan'}]
+      - allOf: [{$ref: '#/$defs/result_common'}, {$ref: '#/$defs/result_duplicate'}]
+      - allOf: [{$ref: '#/$defs/result_common'}, {$ref: '#/$defs/result_execute_hold'}]
+      - allOf: [{$ref: '#/$defs/result_common'}, {$ref: '#/$defs/result_execute_verified'}]
+      - allOf: [{$ref: '#/$defs/result_common'}, {$ref: '#/$defs/result_recovery_required'}]
+      - allOf: [{$ref: '#/$defs/result_common'}, {$ref: '#/$defs/result_recovery_conflict'}]
+      - allOf: [{$ref: '#/$defs/result_common'}, {$ref: '#/$defs/result_recovery_verified'}]
