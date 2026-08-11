@@ -16,7 +16,7 @@ from typing import Any, Iterable, Mapping
 
 from local_collaboration_ledger import (LedgerBusyError, LedgerConflictError,
     LedgerError, LedgerIntegrityError, LedgerPermissionError, LedgerSchemaError,
-    LocalCollaborationLedger)
+    LocalCollaborationLedger, GENESIS)
 import local_collaboration_control_plane as control
 
 VERSION = "LocalCollaborationScheduler-v1"
@@ -314,13 +314,73 @@ def _scheduler_events(ledger: LocalCollaborationLedger) -> list[Any]:
     return [e for e in ledger.list_events() if e.event_type.startswith("scheduler.")]
 
 
+def _authority_snapshot(events: list[Any]) -> dict[str, Any]:
+    """Return the committed identity for the exact event snapshot being reduced."""
+    if events:
+        last = events[-1]
+        if not isinstance(last.sequence, int) or last.sequence < 1 or not isinstance(last.event_hash, str):
+            raise SchedulerHold("hold_ledger_integrity")
+        return {"authority_generation": last.sequence, "authority_head": last.event_hash}
+    return {"authority_generation": 0, "authority_head": GENESIS}
+
+
+def _decorate_replay(control_state: Mapping[str, Any], events: list[Any]) -> dict[str, Any]:
+    """Reduce a concrete ledger snapshot and attach only its committed identity."""
+    state = reduce_scheduler_state(
+        control_state, [event for event in events if event.event_type.startswith("scheduler.")]
+    )
+    return {**state, **_authority_snapshot(events)}
+
+
+def _hold_from_ledger(exc: Exception) -> SchedulerHold:
+    if isinstance(exc, LedgerBusyError):
+        return SchedulerHold("hold_ledger_busy")
+    if isinstance(exc, LedgerPermissionError):
+        return SchedulerHold("hold_ledger_permission")
+    if isinstance(exc, LedgerSchemaError):
+        return SchedulerHold("hold_ledger_schema")
+    return SchedulerHold("hold_ledger_integrity")
+
+
 def replay_scheduler_state(projects_root: str | Path, project_id: str) -> dict[str, Any]:
+    """Replay one integrity-checked, read-only SQLite snapshot.
+
+    The snapshot identity is intentionally derived from the complete event list,
+    rather than from scheduler/control payloads.  This is the value consumers
+    bind to before attempting a later materialization.
+    """
     pid = _project(project_id); path = Path(projects_root).expanduser() / pid / "collaboration.db"
-    ledger = LocalCollaborationLedger.open_existing(path, expected_project_id=pid)
+    ledger: LocalCollaborationLedger | None = None
     try:
-        if ledger.project_id != pid: raise SchedulerHold("hold_control_plane_unready")
-        cstate = control.reduce_control_events(_control_events(ledger)); return reduce_scheduler_state(cstate, _scheduler_events(ledger))
-    finally: ledger.close()
+        # ``create=False`` uses SQLite URI mode=ro (and immutable mode where
+        # possible), so replay cannot initialize, checkpoint, or create
+        # authority sidecars.  An explicit read transaction pins the event
+        # list and the derived last sequence/hash to one snapshot.
+        ledger = LocalCollaborationLedger(db_path=path, create=False)
+        if ledger.project_id != pid:
+            raise SchedulerHold("hold_control_plane_unready")
+        ledger._conn.execute("BEGIN")
+        ledger.verify()
+        events = ledger.list_events()
+        cstate = control.reduce_control_events(
+            [event for event in events if event.event_type.startswith("control.")]
+        )
+        return _decorate_replay(cstate, events)
+    except SchedulerHold:
+        raise
+    except (LedgerError, OSError) as exc:
+        raise _hold_from_ledger(exc) from exc
+    except Exception as exc:
+        # A malformed, foreign, or unreadable authority must never become a
+        # best-effort replay.
+        raise SchedulerHold("hold_ledger_integrity") from exc
+    finally:
+        if ledger is not None:
+            try:
+                if ledger._conn.in_transaction:
+                    ledger._conn.execute("ROLLBACK")
+            finally:
+                ledger.close()
 
 
 def _request_base(request: Mapping[str, Any], cstate: Mapping[str, Any], sstate: Mapping[str, Any], caller_project_id: str | None = None) -> tuple[str, str]:
@@ -448,7 +508,9 @@ def apply_scheduler_request(projects_root: str | Path, project_id: str, request:
     ledger = LocalCollaborationLedger.open_existing(path, expected_project_id=pid)
     try:
         before = ledger.list_events(); cstate = control.reduce_control_events([e for e in before if e.event_type.startswith("control.")]); sstate = reduce_scheduler_state(cstate, [e for e in before if e.event_type.startswith("scheduler.")]); result = plan_scheduler_request(request, cstate, sstate, caller_project_id=pid); batch = result["event_batch"]
-        if not batch: result["replay"] = sstate; return result
+        if not batch:
+            result["replay"] = _decorate_replay(cstate, before)
+            return result
         # Recheck the source head immediately before the atomic LedgerStore append.
         current = ledger.list_events();
         if len(current) != len(before) or (current and before and current[-1].event_hash != before[-1].event_hash): raise SchedulerHold("hold_stale_ledger_head")
@@ -456,7 +518,7 @@ def apply_scheduler_request(projects_root: str | Path, project_id: str, request:
         # before writing.  A malformed or out-of-order event must not leave a
         # durable hold or partial append behind when the reducer rejects it.
         reduce_scheduler_state(cstate, [e for e in before if e.event_type.startswith("scheduler.")] + batch)
-        rows = ledger.append_batch(batch); after = ledger.list_events(); result["mutation_performed"] = len(after) > len(before); result["appended_count"] = len(after) - len(before); result["duplicate_count"] = len(batch) - result["appended_count"]; result["generation"] = len(after); result["replay"] = reduce_scheduler_state(cstate, [e for e in after if e.event_type.startswith("scheduler.")]); return result
+        rows = ledger.append_batch(batch); after = ledger.list_events(); result["mutation_performed"] = len(after) > len(before); result["appended_count"] = len(after) - len(before); result["duplicate_count"] = len(batch) - result["appended_count"]; result["generation"] = len(after); result["replay"] = _decorate_replay(cstate, after); return result
     except SchedulerHold: raise
     except LedgerBusyError as exc: raise SchedulerHold("hold_ledger_busy") from exc
     except LedgerPermissionError as exc: raise SchedulerHold("hold_ledger_permission") from exc

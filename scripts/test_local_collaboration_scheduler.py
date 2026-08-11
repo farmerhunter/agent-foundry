@@ -1,3 +1,8 @@
+import json
+import os
+import sqlite3
+import subprocess
+import sys
 import tempfile
 import uuid
 from pathlib import Path
@@ -346,5 +351,142 @@ def test_pending_materialization_to_privacy_hold_preserves_all_bindings():
         assert all(replayed[key] == expected[key] for key in ("expected_remote_kind", "expected_remote_ref", "expected_remote_digest", "expected_remote_version"))
 
 
+def _ledger_authority(path, pid):
+    ledger = LocalCollaborationLedger.open_existing(path, expected_project_id=pid)
+    try:
+        events = ledger.list_events()
+        return (events[-1].sequence if events else 0,
+                events[-1].event_hash if events else "0" * 64)
+    finally:
+        ledger.close()
+
+
+def test_replay_exposes_committed_authority_snapshot_without_side_effects():
+    """The replay pair covers control+scheduler events, never event payload claims."""
+    with tempfile.TemporaryDirectory() as root:
+        pid = _setup(root)
+        path = Path(root) / pid / "collaboration.db"
+        sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "initialize", "occurred_at": "2026-08-11T00:00:01Z"})
+        expected = _ledger_authority(path, pid)
+        before = _filesystem_snapshot(path)
+        replay = sc.replay_scheduler_state(root, pid)
+        assert (replay["authority_generation"], replay["authority_head"]) == expected
+        assert replay["authority_generation"] > replay["events"]
+        _assert_filesystem_unchanged(path, before)
+
+        # A duplicate is not a commit and therefore preserves the pair.
+        duplicate = sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "initialize", "occurred_at": "2026-08-11T00:00:01Z"})
+        assert duplicate["decision"] == "duplicate"
+        assert (duplicate["replay"]["authority_generation"], duplicate["replay"]["authority_head"]) == expected
+
+        changed = sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "transition", "from_state": "registered", "to_state": "queued", "transition_sequence": 1, "occurred_at": "2026-08-11T00:00:02Z"})
+        assert changed["mutation_performed"]
+        assert (changed["replay"]["authority_generation"], changed["replay"]["authority_head"]) == _ledger_authority(path, pid)
+        assert (changed["replay"]["authority_generation"], changed["replay"]["authority_head"]) != expected
+
+        # Prove a separate process observes the same committed pair.
+        env = {**os.environ, "PYTHONPATH": str(Path(__file__).parent)}
+        code = "import json,local_collaboration_scheduler as s; print(json.dumps(s.replay_scheduler_state(%r,%r)))" % (root, pid)
+        output = subprocess.check_output([sys.executable, "-c", code], text=True, env=env)
+        other = json.loads(output)
+        assert (other["authority_generation"], other["authority_head"]) == _ledger_authority(path, pid)
+
+
+def test_replay_authority_snapshot_negative_paths_hold_without_mutation():
+    """Read-only replay never turns invalid authorities into a nullable snapshot."""
+    with tempfile.TemporaryDirectory() as root:
+        pid = _setup(root); path = Path(root) / pid / "collaboration.db"
+        before = _filesystem_snapshot(path)
+        try:
+            sc.replay_scheduler_state(root, str(uuid.uuid4()))
+        except sc.SchedulerHold as exc:
+            assert str(exc) == "hold_ledger_integrity"
+        else:
+            raise AssertionError("missing/foreign authority must hold")
+        _assert_filesystem_unchanged(path, before)
+
+        # A non-canonical metadata schema remains a schema hold without a
+        # replay connection writing WAL/SHM or fixing it.
+        connection = sqlite3.connect(path)
+        connection.execute("UPDATE ledger_metadata SET value='unsupported' WHERE key='schema_version'")
+        connection.commit(); connection.close()
+        damaged_before = _filesystem_snapshot(path)
+        try:
+            sc.replay_scheduler_state(root, pid)
+        except sc.SchedulerHold as exc:
+            assert str(exc) == "hold_ledger_schema"
+        else:
+            raise AssertionError("schema drift must hold")
+        _assert_filesystem_unchanged(path, damaged_before)
+
+
+def test_replay_authority_snapshot_corruption_and_permissions_hold():
+    with tempfile.TemporaryDirectory() as root:
+        pid = _setup(root); path = Path(root) / pid / "collaboration.db"
+        connection = sqlite3.connect(path)
+        connection.execute("UPDATE events SET event_hash=? WHERE sequence=1", ("f" * 64,))
+        connection.commit(); connection.close()
+        try:
+            sc.replay_scheduler_state(root, pid)
+        except sc.SchedulerHold as exc:
+            assert str(exc) == "hold_ledger_integrity"
+        else:
+            raise AssertionError("hash-chain corruption must hold")
+
+    with tempfile.TemporaryDirectory() as root:
+        pid = _setup(root); path = Path(root) / pid / "collaboration.db"
+        path.chmod(0o644)
+        try:
+            sc.replay_scheduler_state(root, pid)
+        except sc.SchedulerHold as exc:
+            assert str(exc) == "hold_ledger_permission"
+        else:
+            raise AssertionError("permission drift must hold")
+
+
+def test_replay_authority_snapshot_busy_and_symlink_holds():
+    """Busy and symlink failures are classified, never downgraded to null data."""
+    with tempfile.TemporaryDirectory() as root:
+        pid = _setup(root)
+        original = sc.LocalCollaborationLedger
+
+        class BusyLedger:
+            def __init__(self, *args, **kwargs):
+                from local_collaboration_ledger import LedgerBusyError
+                raise LedgerBusyError("test busy")
+
+        sc.LocalCollaborationLedger = BusyLedger
+        try:
+            try:
+                sc.replay_scheduler_state(root, pid)
+            except sc.SchedulerHold as exc:
+                assert str(exc) == "hold_ledger_busy"
+            else:
+                raise AssertionError("busy authority must hold")
+        finally:
+            sc.LocalCollaborationLedger = original
+
+    with tempfile.TemporaryDirectory() as root:
+        pid = _setup(root); path = Path(root) / pid / "collaboration.db"
+        target = Path(root) / "authority-target.db"
+        path.rename(target); path.symlink_to(target)
+        before = _filesystem_snapshot(target)
+        try:
+            sc.replay_scheduler_state(root, pid)
+        except sc.SchedulerHold as exc:
+            assert str(exc) == "hold_ledger_integrity"
+        else:
+            raise AssertionError("symlink authority must hold")
+        _assert_filesystem_unchanged(target, before)
+
+
+def test_authority_snapshot_schema_definition_is_closed():
+    schema = Path(__file__).parent.parent / "schemas" / "local-collaboration-scheduler.schema.yaml"
+    text = schema.read_text()
+    assert "authority_snapshot:" in text
+    assert "required: [authority_generation, authority_head]" in text
+    assert "additionalProperties: false" in text
+
+
 if __name__ == "__main__":
-    test_initialize_and_offline_transitions(); test_exact_retry_and_divergence_hold(); test_remote_never_confirmed_by_observation(); test_remote_predecessor_guards(); test_observation_and_terminal_use_current_attempt(); test_closed_payload_and_resume_gate(); test_caller_project_binding_and_disabled_gate(); test_reducer_version_mismatch_is_preappend_hold(); test_planner_observation_version_mismatch_is_preappend_hold(); test_privacy_binding_mismatch_is_preappend_hold(); test_adapter_version_mismatch_is_preappend_hold(); test_observed_unverified_to_privacy_hold_preserves_all_bindings(); test_pending_materialization_to_privacy_hold_preserves_all_bindings(); print("ok")
+    test_initialize_and_offline_transitions(); test_exact_retry_and_divergence_hold(); test_remote_never_confirmed_by_observation(); test_remote_predecessor_guards(); test_observation_and_terminal_use_current_attempt(); test_closed_payload_and_resume_gate(); test_caller_project_binding_and_disabled_gate(); test_reducer_version_mismatch_is_preappend_hold(); test_planner_observation_version_mismatch_is_preappend_hold(); test_privacy_binding_mismatch_is_preappend_hold(); test_adapter_version_mismatch_is_preappend_hold(); test_observed_unverified_to_privacy_hold_preserves_all_bindings(); test_pending_materialization_to_privacy_hold_preserves_all_bindings(); test_replay_exposes_committed_authority_snapshot_without_side_effects(); test_replay_authority_snapshot_negative_paths_hold_without_mutation(); test_replay_authority_snapshot_corruption_and_permissions_hold(); test_replay_authority_snapshot_busy_and_symlink_holds(); test_authority_snapshot_schema_definition_is_closed(); print("ok")

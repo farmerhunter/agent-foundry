@@ -1,6 +1,14 @@
 $schema: https://json-schema.org/draft/2020-12/schema
 $id: https://agent-foundry.local/schemas/local-collaboration-scheduler.schema.yaml
 title: LocalCollaborationScheduler-v1
+$defs:
+  authority_snapshot:
+    type: object
+    additionalProperties: false
+    required: [authority_generation, authority_head]
+    properties:
+      authority_generation: {type: integer, minimum: 0}
+      authority_head: {type: string, pattern: '^[0-9a-f]{64}$'}
 type: object
 additionalProperties: false
 required: [version, project_id, kind, occurred_at, timestamp_provenance, payload]
