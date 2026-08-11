@@ -682,10 +682,17 @@ def invalidate_cache_entries(*, projects_root, project_id, entry_keys, reason, e
         repository_id, repository_locator_digest, auth_scope_digest)
     ledger, lm = _authority(projects_root, project_id); path = _cache_path(projects_root, project_id); cache = None
     try:
-        cache = _open_existing(path); meta = cache._meta()
-        _binding(meta, lm["project_id"], repository_id, locator, auth_scope_digest)
-        before = int(meta.get("generation", "0")); _ledger_recheck(projects_root, project_id, lm); cache.db.execute("BEGIN IMMEDIATE")
-        if int(cache._meta().get("generation", "0")) != before: raise CacheHold("hold_cache_generation_conflict")
+        # Binding is deliberately proven through immutable read-only mode
+        # before opening `mode=rw`; a wrong caller cannot create WAL/SHM or
+        # alter mtime merely by attempting an invalidation.
+        _, before = _read_preflight(path, lm, repository_id, locator, auth_scope_digest)
+        _ledger_recheck(projects_root, project_id, lm)
+        cache = _open_existing(path)
+        cache.db.execute("BEGIN IMMEDIATE")
+        current = cache._meta()
+        _binding(current, lm["project_id"], repository_id, locator, auth_scope_digest)
+        if int(current.get("generation", "0")) != before: raise CacheHold("hold_cache_generation_conflict")
+        _ledger_recheck(projects_root, project_id, lm)
         for key in keys:
             cache.db.execute("UPDATE entries SET invalidated=1,state='invalidated' WHERE entry_key=?", (key,))
         rid = cache._receipt("invalidate", {"count": len(keys), "reason_digest": _hash(reason), "generation": before}, created_at=evaluated_at, provenance="caller_evaluated_at"); cache.db.execute("COMMIT")

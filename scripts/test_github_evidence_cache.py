@@ -103,9 +103,13 @@ def test_public_read_and_invalidate_require_full_binding_before_open():
     try: read_cache(projects_root=root,project_id=pid,evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10,repository_id="other",repository_locator_digest="repo-locator",auth_scope_digest="a"*64)
     except CacheHold as exc: assert exc.classification == "hold_cache_binding_mismatch"
     else: raise AssertionError("wrong read binding must hold")
-    try: invalidate_cache_entries(projects_root=root,project_id=pid,entry_keys=[],reason="x",evaluated_at="2026-08-11T00:00:00Z",repository_id="other",repository_locator_digest="repo-locator",auth_scope_digest="a"*64)
+    original_open=cache_module._open_existing
+    try:
+        cache_module._open_existing=lambda _path: (_ for _ in ()).throw(AssertionError("wrong binding opened rw cache"))
+        invalidate_cache_entries(projects_root=root,project_id=pid,entry_keys=[],reason="x",evaluated_at="2026-08-11T00:00:00Z",repository_id="other",repository_locator_digest="repo-locator",auth_scope_digest="a"*64)
     except CacheHold as exc: assert exc.classification == "hold_cache_binding_mismatch"
     else: raise AssertionError("wrong invalidate binding must hold")
+    finally: cache_module._open_existing=original_open
     assert _files_snapshot(path) == before and path.stat().st_mtime_ns == mtime
 
 def test_corrupt_cache_is_fail_closed_without_delete():
