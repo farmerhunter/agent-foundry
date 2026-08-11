@@ -44,6 +44,30 @@ def test_remote_never_confirmed_by_observation():
         pid = _setup(root); sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "initialize", "occurred_at": "2026-08-11T00:00:01Z"}); result = sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "intent", "intent_id": str(uuid.uuid4()), "intent_kind": "issue", "desired_effect": {"kind": "issue"}, "occurred_at": "2026-08-11T00:00:02Z"}); assert result["mutation_performed"]; state = sc.replay_scheduler_state(root, pid); assert state["remote_intent_state"] == "accepted_local"
 
 
+def test_remote_predecessor_guards():
+    """Remote outcomes require the explicit pending materialization step."""
+    with tempfile.TemporaryDirectory() as root:
+        pid = _setup(root)
+        sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "initialize", "occurred_at": "2026-08-11T00:00:01Z"})
+        intent = str(uuid.uuid4())
+        sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "intent", "intent_id": intent, "intent_kind": "issue", "desired_effect": {"kind": "issue"}, "occurred_at": "2026-08-11T00:00:02Z"})
+        for operation, extra in (("observe", {"observed_remote_state": "open"}), ("failure", {}), ("conflict", {}), ("cancel", {})):
+            try:
+                sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": operation, "intent_id": intent, **extra, "occurred_at": "2026-08-11T00:00:03Z"})
+            except sc.SchedulerHold as exc:
+                assert str(exc) == "hold_transition_order"
+            else:
+                raise AssertionError(f"{operation} must require pending materialization")
+        sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "pending", "intent_id": intent, "occurred_at": "2026-08-11T00:00:04Z"})
+        sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "observe", "intent_id": intent, "observed_remote_state": "open", "occurred_at": "2026-08-11T00:00:05Z"})
+        try:
+            sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "pending", "intent_id": intent, "occurred_at": "2026-08-11T00:00:06Z"})
+        except sc.SchedulerHold as exc:
+            assert str(exc) == "hold_transition_order"
+        else:
+            raise AssertionError("observed state must not silently re-enter pending")
+
+
 def test_closed_payload_and_resume_gate():
     with tempfile.TemporaryDirectory() as root:
         pid = _setup(root)
@@ -84,4 +108,4 @@ def test_caller_project_binding_and_disabled_gate():
 
 
 if __name__ == "__main__":
-    test_initialize_and_offline_transitions(); test_exact_retry_and_divergence_hold(); test_remote_never_confirmed_by_observation(); test_closed_payload_and_resume_gate(); test_caller_project_binding_and_disabled_gate(); print("ok")
+    test_initialize_and_offline_transitions(); test_exact_retry_and_divergence_hold(); test_remote_never_confirmed_by_observation(); test_remote_predecessor_guards(); test_closed_payload_and_resume_gate(); test_caller_project_binding_and_disabled_gate(); print("ok")
