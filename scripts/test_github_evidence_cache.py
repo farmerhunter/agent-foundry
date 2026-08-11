@@ -1,5 +1,5 @@
 from __future__ import annotations
-import os, sys, tempfile, uuid
+import os, sys, tempfile, uuid, sqlite3, json, subprocess, time
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 from local_collaboration_ledger import LocalCollaborationLedger
@@ -29,6 +29,43 @@ def test_miss_is_non_mutating():
     root,pid=setup(); path=Path(root)/pid/"github-evidence-cache.db"; before=path.stat().st_mtime_ns
     result=read_cache(projects_root=root,project_id=pid,evaluated_at="2026-08-11T00:00:01Z",max_age_seconds=10)
     assert result["outcome"] == "cache_hit" and result["entries"] == [] and path.stat().st_mtime_ns == before
+
+def test_closed_nested_model_and_prewrite_rejection():
+    root,pid=setup(); path=Path(root)/pid/"github-evidence-cache.db"; before=path.read_bytes(); before_mtime=path.stat().st_mtime_ns
+    for bad, classification in [({**entry(), "facts":{"unknown": "x"}}, "hold_cache_schema"), ({**entry(), "facts":{"raw_body": "x"}}, "hold_cache_privacy"), ({**entry(), "fetched_at":"2026-08-11T00:00:02Z"}, "hold_cache_clock_or_freshness")]:
+        try:
+            refresh_cache(projects_root=root,project_id=pid,repository_id="repo-opaque",repository_locator_digest="repo-locator",selectors=["123"],evaluated_at="2026-08-11T00:00:01Z",max_age_seconds=10,producer=Producer([bad]))
+        except CacheHold as exc: assert exc.classification == classification
+        else: raise AssertionError("invalid entry must hold")
+    assert path.read_bytes() == before and path.stat().st_mtime_ns == before_mtime
+
+def test_duplicate_is_zero_mutation_and_metrics_are_separate():
+    root,pid=setup(); producer=Producer([entry()]); kwargs=dict(projects_root=root,project_id=pid,repository_id="repo-opaque",repository_locator_digest="repo-locator",selectors=["123"],evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10,producer=producer)
+    first=refresh_cache(**kwargs); path=Path(root)/pid/"github-evidence-cache.db"; snapshot=path.read_bytes(); second=refresh_cache(**kwargs)
+    assert first["outcome"] == "cache_refreshed" and second["outcome"] == "cache_duplicate" and second["receipt_id"] is None and path.read_bytes() == snapshot
+
+def test_read_future_and_binding_holds():
+    root,pid=setup(); producer=Producer([entry()]); kwargs=dict(projects_root=root,project_id=pid,repository_id="repo-opaque",repository_locator_digest="repo-locator",selectors=["123"],evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10,producer=producer)
+    refresh_cache(**kwargs)
+    try: read_cache(projects_root=root,project_id=pid,evaluated_at="2025-01-01T00:00:00Z",max_age_seconds=10)
+    except CacheHold as exc: assert exc.classification == "hold_cache_clock_or_freshness"
+    else: raise AssertionError("future cache age must hold")
+    try: read_cache(projects_root=root,project_id=pid,evaluated_at="2026-08-11T00:00:01Z",max_age_seconds=10,repository_id="other",repository_locator_digest="repo-locator")
+    except CacheHold as exc: assert exc.classification == "hold_cache_binding_mismatch"
+    else: raise AssertionError("wrong repository must hold")
+
+def test_corrupt_cache_is_fail_closed_without_delete():
+    root,pid=setup(); path=Path(root)/pid/"github-evidence-cache.db"; path.write_bytes(b"not sqlite"); before=path.read_bytes()
+    try: read_cache(projects_root=root,project_id=pid,evaluated_at="2026-08-11T00:00:01Z",max_age_seconds=10)
+    except CacheHold as exc: assert exc.classification in {"hold_cache_integrity", "hold_cache_schema"}
+    else: raise AssertionError("corrupt cache must hold")
+    assert path.read_bytes() == before
+
+def test_rebuild_and_invalidate_require_existing_cache():
+    root,pid=setup(); path=Path(root)/pid/"github-evidence-cache.db"; path.unlink()
+    try: invalidate_cache_entries(projects_root=root,project_id=pid,entry_keys=[],reason="x",evaluated_at="2026-08-11T00:00:00Z")
+    except CacheHold as exc: assert exc.classification == "hold_cache_authority_unready"
+    else: raise AssertionError("invalidate must not create cache")
 
 def test_refresh_once_duplicate_and_divergence():
     root,pid=setup(); p=Producer([entry()]); kwargs=dict(projects_root=root,project_id=pid,repository_id="repo-opaque",repository_locator_digest="repo-locator",selectors=["123"],evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10,producer=p)

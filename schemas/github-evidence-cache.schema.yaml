@@ -5,18 +5,101 @@ type: object
 additionalProperties: false
 required: [schema_version]
 properties:
-  schema_version:
-    const: GitHubEvidenceCache-v1
-  evidence_kind:
-    enum: [issue_metadata, pull_request_metadata, comment_summary, project_item_summary]
-  freshness:
-    enum: [fresh_as_of_fetch, stale, partial, unavailable, privacy_held, invalidated, conflict]
-  privacy_class:
-    enum: [public_metadata, repository_internal_redacted, metadata_only, privacy_held]
-  coverage:
-    enum: [complete, partial, unavailable, privacy_held]
-  authoritative:
-    const: false
-  confirmation_eligible:
-    const: false
-additionalProperties: false
+  schema_version: {const: GitHubEvidenceCache-v1}
+  project_id: {type: string, format: uuid}
+  repository_id: {type: string, minLength: 1, maxLength: 256}
+  repository_locator_digest: {type: string, pattern: '^[0-9a-f]{64}$'}
+  host_kind: {const: github}
+  producer_contract: {type: string, minLength: 1, maxLength: 256}
+  producer_version: {type: string, minLength: 1, maxLength: 128}
+  generation: {type: integer, minimum: 0}
+  ledger_head: {type: string, pattern: '^[0-9a-f]{64}$'}
+  timestamp_provenance: {enum: [caller_supplied, caller_evaluated_at, not_collected]}
+  evidence_kind: {enum: [issue_metadata, pull_request_metadata, comment_summary, project_item_summary]}
+  freshness: {enum: [fresh_as_of_fetch, stale, partial, unavailable, privacy_held, invalidated, conflict]}
+  privacy_class: {enum: [public_metadata, repository_internal_redacted, metadata_only, privacy_held]}
+  coverage: {enum: [complete, partial, unavailable, privacy_held]}
+  authoritative: {const: false}
+  confirmation_eligible: {const: false}
+  entries:
+    type: array
+    maxItems: 25
+    items: {$ref: '#/$defs/entry'}
+  receipt: {$ref: '#/$defs/receipt'}
+  metadata: {$ref: '#/$defs/metadata'}
+  readout: {$ref: '#/$defs/readout'}
+$defs:
+  timestamp: {type: string, pattern: '^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?Z$'}
+  digest: {type: string, pattern: '^[0-9a-f]{64}$'}
+  facts:
+    type: object
+    additionalProperties: false
+    properties:
+      state: {type: string, enum: [open, closed, merged, draft, unknown]}
+      number: {type: integer, minimum: 1}
+      title: {type: string, maxLength: 256}
+      labels: {type: array, maxItems: 25, items: {type: string, maxLength: 128}}
+      disposition: {type: string, maxLength: 128}
+      category: {type: string, maxLength: 128}
+      count: {type: integer, minimum: 0}
+      updated_at: {$ref: '#/$defs/timestamp'}
+  entry:
+    type: object
+    additionalProperties: false
+    required: [evidence_kind, opaque_object_ref, selector_digest, representation_version, facts, summary, anchors, source_revision, fetched_at, coverage, privacy_class]
+    properties:
+      entry_key: {$ref: '#/$defs/digest'}
+      evidence_kind: {enum: [issue_metadata, pull_request_metadata, comment_summary, project_item_summary]}
+      opaque_object_ref: {type: string, minLength: 1, maxLength: 256}
+      selector_digest: {$ref: '#/$defs/digest'}
+      representation_version: {type: string, minLength: 1, maxLength: 64}
+      facts: {$ref: '#/$defs/facts'}
+      summary: {type: string, maxLength: 1024}
+      anchors: {type: array, maxItems: 16, items: {type: string, maxLength: 256}}
+      source_revision: {type: string, minLength: 1, maxLength: 512}
+      source_updated_at: {$ref: '#/$defs/timestamp'}
+      fetched_at: {$ref: '#/$defs/timestamp'}
+      coverage: {enum: [complete, partial, unavailable, privacy_held]}
+      privacy_class: {enum: [public_metadata, repository_internal_redacted, metadata_only, privacy_held]}
+      producer_id: {type: string, maxLength: 256}
+      producer_version: {type: string, maxLength: 128}
+      provenance: {type: string, enum: [same_process_reference, adapter_receipt]}
+      metadata: {type: object, additionalProperties: false, properties: {scope: {type: string, maxLength: 128}, selector_count: {type: integer, minimum: 0}}}
+      payload_hash: {$ref: '#/$defs/digest'}
+  receipt:
+    type: object
+    additionalProperties: false
+    required: [operation, provenance]
+    properties:
+      operation: {type: string, enum: [refresh, invalidate, rebuild, cleanup_plan, cleanup_apply]}
+      provenance: {enum: [caller_supplied, caller_evaluated_at]}
+      created_at: {$ref: '#/$defs/timestamp'}
+      generation: {type: integer, minimum: 0}
+      changed: {type: integer, minimum: 0}
+      duplicates: {type: integer, minimum: 0}
+      count: {type: integer, minimum: 0}
+      reason_digest: {$ref: '#/$defs/digest'}
+  metadata:
+    type: object
+    additionalProperties: false
+    properties:
+      schema_version: {const: GitHubEvidenceCache-v1}
+      project_id: {type: string, format: uuid}
+      repository_id: {type: string, minLength: 1}
+      repository_locator_digest: {$ref: '#/$defs/digest'}
+      generation: {type: integer, minimum: 0}
+      ledger_head: {$ref: '#/$defs/digest'}
+      producer_contract: {type: string}
+      producer_version: {type: string}
+      timestamp_provenance: {enum: [caller_supplied, caller_evaluated_at, not_collected]}
+  readout:
+    type: object
+    additionalProperties: false
+    required: [as_of, authoritative, confirmation_eligible]
+    properties:
+      as_of: {$ref: '#/$defs/timestamp'}
+      age_seconds: {type: integer, minimum: 0}
+      offline: {type: boolean}
+      authoritative: {const: false}
+      confirmation_eligible: {const: false}
+      next_action: {type: string}
