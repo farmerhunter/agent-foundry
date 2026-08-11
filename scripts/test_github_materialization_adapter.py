@@ -85,7 +85,7 @@ def test_recovery_readback_only_and_closed_content_limits():
     recovered = execute_materialization({**req(), "readback_only": True}, state(), connector)
     assert recovered["outcome"] == "materialization_duplicate" and len(connector.calls) == calls + 1
     with pytest.raises(MaterializationHold): plan_materialization(req(approved_remote_content={"title": "x" * 257}), state())
-    unicode_content = {"title": "é" * 200}
+    unicode_content = {"title": "é" * 120}
     unicode_digest = hashlib.sha256(json.dumps(unicode_content, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     unicode_request = req(approved_remote_content=unicode_content, approved_content_digest=unicode_digest)
     unicode_request["gate"] = {**unicode_request["gate"], "content_digest": unicode_digest}
@@ -157,15 +157,27 @@ def test_schema_runtime_variants():
         schema = yaml.safe_load(open("schemas/github-materialization-adapter.schema.yaml"))
     except ImportError:
         pytest.skip("schema validator unavailable")
+    checker = jsonschema.FormatChecker()
+    @checker.checks("utf8-256")
+    def utf8_256(value): return isinstance(value, str) and len(value.encode()) <= 256
+    @checker.checks("utf8-8192")
+    def utf8_8192(value): return isinstance(value, str) and len(value.encode()) <= 8192
+    @checker.checks("utf8-128")
+    def utf8_128(value): return isinstance(value, str) and len(value.encode()) <= 128
+    @checker.checks("utf8-content")
+    def utf8_content(value):
+        return isinstance(value, dict) and len(json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()) <= 8192
+    validator = jsonschema.Draft202012Validator(schema, format_checker=checker)
+    def valid(value): validator.validate(value)
+    def invalid(value):
+        with pytest.raises(jsonschema.ValidationError): validator.validate(value)
     local = req(classification="local_only"); local.pop("gate"); local.pop("capability")
     optional = req(classification="optional_sync"); optional.pop("gate"); optional.pop("capability")
-    jsonschema.validate(local, schema); jsonschema.validate(optional, schema); jsonschema.validate(req(), schema)
-    jsonschema.validate(plan_materialization(req(), state()), schema)
-    with pytest.raises(jsonschema.ValidationError): jsonschema.validate({**optional, "gate": req()["gate"]}, schema)
-    with pytest.raises(jsonschema.ValidationError): jsonschema.validate({**optional, "capability": req()["capability"]}, schema)
-    with pytest.raises(jsonschema.ValidationError): jsonschema.validate({**optional, "capability": {"junk": True}}, schema)
-    with pytest.raises(jsonschema.ValidationError): jsonschema.validate({**optional, "readback_only": False}, schema)
-    with pytest.raises(jsonschema.ValidationError): jsonschema.validate({**req(), "capability": {**req()["capability"], "supported_operations": []}}, schema)
+    valid(local); valid(optional); valid(req()); valid(plan_materialization(req(), state()))
+    invalid({**optional, "gate": req()["gate"]}); invalid({**optional, "capability": req()["capability"]})
+    invalid({**optional, "capability": {"junk": True}}); invalid({**optional, "readback_only": False})
+    invalid({**req(), "capability": {**req()["capability"], "supported_operations": []}})
+    invalid({**req(), "approved_remote_content": {"title": "é" * 129}})
     with pytest.raises(MaterializationHold): plan_materialization({**optional, "capability": req()["capability"]}, state())
     with pytest.raises(MaterializationHold): plan_materialization({**optional, "scheduler_state": "forbidden"}, state())
 

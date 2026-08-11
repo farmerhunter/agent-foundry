@@ -38,12 +38,13 @@ $defs:
         items: {enum: [issue_create, issue_comment, pull_request_comment]}
   content:
     type: object
+    format: utf8-content
     additionalProperties: false
     properties:
-      title: {type: string, maxLength: 256}
-      body: {type: string, maxLength: 8192}
-      summary: {type: string, maxLength: 8192}
-      labels: {type: array, maxItems: 10, items: {type: string, maxLength: 128}}
+      title: {type: string, format: utf8-256}
+      body: {type: string, format: utf8-8192}
+      summary: {type: string, format: utf8-8192}
+      labels: {type: array, maxItems: 10, items: {type: string, format: utf8-128}}
   request:
     type: object
     additionalProperties: false

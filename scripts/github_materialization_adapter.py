@@ -114,7 +114,7 @@ def _result(operation: str, outcome: str, *, classification: str | None = None, 
            "simulation_only": True, "remote_mutation_performed": False,
            "authoritative": False, "confirmation_eligible": False}
     if classification: out["classification"] = classification
-    out.update(fields); return out
+    out.update({key: value for key, value in fields.items() if value is not None}); return out
 
 
 def _base(request: Mapping[str, Any]) -> dict[str, Any]:
@@ -155,8 +155,8 @@ def _base(request: Mapping[str, Any]) -> dict[str, Any]:
             raise MaterializationHold("hold_materialization_binding")
         if len(encoded) > 8192 or sum(len(item) for item in content.values() if isinstance(item, str)) > 8192: raise MaterializationHold("hold_materialization_privacy")
         if isinstance(content, Mapping):
-            if "title" in content and (not isinstance(content["title"], str) or len(content["title"]) > 256): raise MaterializationHold("hold_materialization_privacy")
-            if "labels" in content and (not isinstance(content["labels"], list) or len(content["labels"]) > 10 or any(not isinstance(label, str) or len(label) > 128 for label in content["labels"])): raise MaterializationHold("hold_materialization_privacy")
+            if "title" in content and (not isinstance(content["title"], str) or len(content["title"].encode()) > 256): raise MaterializationHold("hold_materialization_privacy")
+            if "labels" in content and (not isinstance(content["labels"], list) or len(content["labels"]) > 10 or any(not isinstance(label, str) or len(label.encode()) > 128 for label in content["labels"])): raise MaterializationHold("hold_materialization_privacy")
     idem_input = [VERSION, pid, intent, attempt, request["operation"], request["repository_id"], request["desired_effect_digest"], request["approved_content_digest"]]
     return {"project_id": pid, "intent_id": intent, "attempt_sequence": attempt,
             "idempotency_key": str(uuid.uuid5(NAMESPACE, _canon(idem_input))), **dict(request)}
