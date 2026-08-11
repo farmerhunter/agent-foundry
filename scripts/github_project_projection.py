@@ -155,7 +155,7 @@ def plan_project_projection(*, projects_root: str, request: Mapping[str,Any], ma
     except Exception:
         return _result(req["operation"],"project_projection_approval_required",project_id=req["project_id"],intent_id=req["intent_id"],classification="cache_evidence_unavailable")
     if not _cache(req,cache_readout): return _result(req["operation"],"project_projection_approval_required",project_id=req["project_id"],intent_id=req["intent_id"],classification="cache_evidence_unavailable")
-    return _result(req["operation"],"project_projection_plan_ready",project_id=req["project_id"],intent_id=req["intent_id"],request_digest=_digest(_request_receipt(req)),readback_nonce=req.get("readback_nonce"))
+    return _result(req["operation"],"project_projection_plan_ready",project_id=req["project_id"],intent_id=req["intent_id"],request_digest=_digest(_request_receipt(req)))
 
 def _request_receipt(req): return {k:req[k] for k in ("project_id","intent_id","attempt_sequence","operation","remote_project_digest","desired_effect_digest","scheduler_generation","scheduler_head","policy_digest","item_basis")}
 

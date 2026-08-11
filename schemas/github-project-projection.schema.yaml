@@ -139,3 +139,11 @@ $defs:
       occurred_at: {$ref: '#/$defs/time'}
       read_timestamp: {$ref: '#/$defs/time'}
       opaque_receipt_ref: {type: string, maxLength: 256}
+    allOf:
+      - if: {properties: {outcome: {const: project_projection_plan_ready}}}
+        then:
+          required: [project_id, intent_id, request_digest]
+          not: {anyOf: [{required: [confirmed]}, {required: [readback_digest]}, {required: [readback_nonce]}, {required: [adapter_id]}]}
+      - if: {properties: {outcome: {const: project_projection_readback_verified}}}
+        then:
+          required: [project_id, intent_id, request_digest, desired_effect_digest, readback_digest, readback_nonce, confirmed, adapter_id, adapter_version, expected_remote_kind, expected_remote_ref, expected_remote_version, expected_remote_digest, occurred_at, read_timestamp, opaque_receipt_ref]
