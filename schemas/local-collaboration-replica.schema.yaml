@@ -1,0 +1,109 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://agent-foundry.local/schemas/local-collaboration-replica.schema.yaml
+title: LocalCollaborationReplica-v1
+oneOf:
+  - $ref: '#/$defs/bundle'
+  - $ref: '#/$defs/receipt'
+$defs:
+  digest: {type: string, pattern: '^[0-9a-f]{64}$'}
+  uuid: {type: string, format: uuid}
+  opaque: {type: string, pattern: '^[A-Za-z0-9._-]{1,128}$'}
+  flags:
+    type: object
+    additionalProperties: false
+    required: [simulation_only, network_capability, authoritative, confirmation_eligible, remote_mutation_performed]
+    properties:
+      simulation_only: {const: true}
+      network_capability: {const: false}
+      authoritative: {const: false}
+      confirmation_eligible: {const: false}
+      remote_mutation_performed: {const: false}
+  identity:
+    type: object
+    additionalProperties: false
+    required: [replica_id, replica_epoch, origin_sequence, event_id]
+    properties:
+      replica_id: {$ref: '#/$defs/opaque'}
+      replica_epoch: {type: integer, minimum: 1}
+      origin_sequence: {type: integer, minimum: 1}
+      event_id: {$ref: '#/$defs/uuid'}
+  enrollment_receipt:
+    type: object
+    additionalProperties: false
+    required: [receipt_id, receipt_digest, outcome]
+    properties:
+      receipt_id: {$ref: '#/$defs/opaque'}
+      receipt_digest: {$ref: '#/$defs/digest'}
+      outcome: {const: enrollment_accepted}
+  replica_identity:
+    type: object
+    additionalProperties: false
+    required: [project_id, replica_id, replica_epoch, enrollment_receipt]
+    properties:
+      project_id: {$ref: '#/$defs/uuid'}
+      replica_id: {$ref: '#/$defs/opaque'}
+      replica_epoch: {type: integer, minimum: 1}
+      enrollment_receipt: {$ref: '#/$defs/enrollment_receipt'}
+  event:
+    type: object
+    additionalProperties: false
+    required: [project_id, replica_id, replica_epoch, origin_sequence, event_id, event_type, causal_parents, event_digest]
+    properties:
+      project_id: {$ref: '#/$defs/uuid'}
+      replica_id: {$ref: '#/$defs/opaque'}
+      replica_epoch: {type: integer, minimum: 1}
+      origin_sequence: {type: integer, minimum: 1}
+      event_id: {$ref: '#/$defs/uuid'}
+      event_type: {enum: [work_decision, work_resolution, replica_note]}
+      work_id: {$ref: '#/$defs/opaque'}
+      decision: {enum: [accept, reject, hold]}
+      resolution: {enum: [accept, reject, hold]}
+      human_decision_receipt: {$ref: '#/$defs/enrollment_receipt'}
+      conflict_references:
+        type: array
+        maxItems: 32
+        items: {$ref: '#/$defs/identity'}
+      causal_parents:
+        type: array
+        maxItems: 32
+        items: {$ref: '#/$defs/identity'}
+      event_digest: {$ref: '#/$defs/digest'}
+  bundle:
+    type: object
+    additionalProperties: false
+    required: [schema_version, outcome, project_id, replica_identity, authority_generation, authority_head, frontier, events, bundle_digest, flags]
+    properties:
+      schema_version: {const: LocalCollaborationReplica-v1}
+      outcome: {const: replica_export_ready}
+      project_id: {$ref: '#/$defs/uuid'}
+      replica_identity: {$ref: '#/$defs/replica_identity'}
+      authority_generation: {type: integer, minimum: 0}
+      authority_head: {$ref: '#/$defs/digest'}
+      frontier:
+        type: array
+        maxItems: 100
+        items: {$ref: '#/$defs/identity'}
+      events:
+        type: array
+        maxItems: 100
+        items: {$ref: '#/$defs/event'}
+      bundle_digest: {$ref: '#/$defs/digest'}
+      flags: {$ref: '#/$defs/flags'}
+  receipt:
+    type: object
+    additionalProperties: false
+    required: [schema_version, outcome, project_id, flags]
+    properties:
+      schema_version: {const: LocalCollaborationReplica-v1}
+      outcome:
+        enum: [replica_export_ready, replica_import_plan_ready, replica_converged, replica_duplicate, replica_offline, hold_replica_identity, hold_transport_integrity, hold_missing_dependency, hold_semantic_conflict, hold_privacy, hold_schema, hold_recovery_readback]
+      project_id: {$ref: '#/$defs/uuid'}
+      authority_generation: {type: integer, minimum: 0}
+      authority_head: {$ref: '#/$defs/digest'}
+      bundle_digest: {$ref: '#/$defs/digest'}
+      shared_view_digest: {$ref: '#/$defs/digest'}
+      accepted_identities: {type: array, items: {$ref: '#/$defs/identity'}}
+      duplicate_identities: {type: array, items: {$ref: '#/$defs/identity'}}
+      held_identities: {type: array, items: {$ref: '#/$defs/identity'}}
+      reason_code: {enum: [replica_offline, replica_identity_invalid, transport_integrity_invalid, missing_dependency, semantic_conflict, privacy_rejected, schema_invalid, recovery_readback_required]}
+      flags: {$ref: '#/$defs/flags'}
