@@ -119,7 +119,7 @@ def _result(operation: str, outcome: str, *, classification: str | None = None, 
 
 def _base(request: Mapping[str, Any]) -> dict[str, Any]:
     allowed = {"schema_version", "project_id", "work_id", "intent_id", "attempt_sequence",
-               "scheduler_generation", "scheduler_head", "scheduler_state", "desired_effect_digest",
+                   "scheduler_generation", "scheduler_head", "desired_effect_digest",
                "classification", "operation", "repository_id", "repository_locator_digest",
                "auth_scope_digest", "expected_remote_kind", "expected_remote_ref", "expected_remote_version",
                "expected_remote_digest", "approved_content_digest", "privacy_class", "adapter_id",
@@ -153,7 +153,7 @@ def _base(request: Mapping[str, Any]) -> dict[str, Any]:
             raise MaterializationHold("hold_materialization_binding")
         if len(encoded) > 8192: raise MaterializationHold("hold_materialization_privacy")
         if isinstance(content, Mapping):
-            if "title" in content and (not isinstance(content["title"], str) or len(content["title"].encode()) > 256): raise MaterializationHold("hold_materialization_privacy")
+            if "title" in content and (not isinstance(content["title"], str) or len(content["title"]) > 256): raise MaterializationHold("hold_materialization_privacy")
             if "labels" in content and (not isinstance(content["labels"], list) or len(content["labels"]) > 10 or any(not isinstance(label, str) or len(label.encode()) > 128 for label in content["labels"])): raise MaterializationHold("hold_materialization_privacy")
     idem_input = [VERSION, pid, intent, attempt, request["operation"], request["repository_id"], request["desired_effect_digest"], request["approved_content_digest"]]
     return {"project_id": pid, "intent_id": intent, "attempt_sequence": attempt,
@@ -199,7 +199,7 @@ def plan_materialization(request: Mapping[str, Any], scheduler_state: Mapping[st
         _gate_capability(req)
     elif req["classification"] == "optional_sync":
         return _result(req["operation"], "materialization_plan_ready", classification="optional_sync", project_id=req["project_id"], intent_id=req["intent_id"], attempt_sequence=req["attempt_sequence"], idempotency_key=req["idempotency_key"], desired_effect_digest=req["desired_effect_digest"])
-    return _result(req["operation"], "materialization_plan_ready", classification=req["classification"], project_id=req["project_id"], intent_id=req["intent_id"], attempt_sequence=req["attempt_sequence"], idempotency_key=req["idempotency_key"], desired_effect_digest=req["desired_effect_digest"], cache_confirmation_eligible=False)
+    return _result(req["operation"], "materialization_plan_ready", classification=req["classification"], project_id=req["project_id"], intent_id=req["intent_id"], attempt_sequence=req["attempt_sequence"], idempotency_key=req["idempotency_key"], desired_effect_digest=req["desired_effect_digest"])
 
 
 class FakeConnector:

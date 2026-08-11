@@ -85,6 +85,11 @@ def test_recovery_readback_only_and_closed_content_limits():
     recovered = execute_materialization({**req(), "readback_only": True}, state(), connector)
     assert recovered["outcome"] == "materialization_duplicate" and len(connector.calls) == calls + 1
     with pytest.raises(MaterializationHold): plan_materialization(req(approved_remote_content={"title": "x" * 257}), state())
+    unicode_content = {"title": "é" * 200}
+    unicode_digest = hashlib.sha256(json.dumps(unicode_content, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    unicode_request = req(approved_remote_content=unicode_content, approved_content_digest=unicode_digest)
+    unicode_request["gate"] = {**unicode_request["gate"], "content_digest": unicode_digest}
+    assert plan_materialization(unicode_request, state())["outcome"] == "materialization_plan_ready"
 
 def test_readback_result_has_404_boundary_fields():
     result = execute_materialization(req(), state(), FakeConnector())
@@ -150,10 +155,12 @@ def test_schema_runtime_variants():
     local = req(classification="local_only"); local.pop("gate"); local.pop("capability")
     optional = req(classification="optional_sync"); optional.pop("gate"); optional.pop("capability")
     jsonschema.validate(local, schema); jsonschema.validate(optional, schema); jsonschema.validate(req(), schema)
+    jsonschema.validate(plan_materialization(req(), state()), schema)
     with pytest.raises(jsonschema.ValidationError): jsonschema.validate({**optional, "gate": req()["gate"]}, schema)
     with pytest.raises(jsonschema.ValidationError): jsonschema.validate({**optional, "capability": req()["capability"]}, schema)
     with pytest.raises(jsonschema.ValidationError): jsonschema.validate({**optional, "capability": {"junk": True}}, schema)
     with pytest.raises(MaterializationHold): plan_materialization({**optional, "capability": req()["capability"]}, state())
+    with pytest.raises(MaterializationHold): plan_materialization({**optional, "scheduler_state": "forbidden"}, state())
 
 def test_no_host_io_and_external_holds_fixture_stability(monkeypatch):
     def blocked(*args, **kwargs): raise AssertionError("host I/O invoked")
