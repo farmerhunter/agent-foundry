@@ -12,6 +12,7 @@ import json
 import re
 import uuid
 from datetime import datetime
+from pathlib import Path
 from collections.abc import Mapping
 from typing import Any
 
@@ -119,7 +120,30 @@ def _result(operation: str, outcome: str, *, classification: str | None = None, 
            "simulation_only": True, "remote_mutation_performed": False,
            "authoritative": False, "confirmation_eligible": False}
     if classification: out["classification"] = classification
-    out.update({key: value for key, value in fields.items() if value is not None}); return out
+    out.update({key: value for key, value in fields.items() if value is not None}); _schema_validate(out, "result"); return out
+
+
+def _schema_validate(value: Any, definition: str) -> None:
+    try:
+        import yaml, jsonschema
+        schema = yaml.safe_load((Path(__file__).resolve().parent.parent / "schemas" / "github-materialization-adapter.schema.yaml").read_text())
+        checker = jsonschema.FormatChecker()
+        @checker.checks("strict-rfc3339")
+        def strict(value):
+            if not isinstance(value, str) or not RFC3339.fullmatch(value): return False
+            try: datetime.fromisoformat(value.replace("Z", "+00:00")); return True
+            except ValueError: return False
+        @checker.checks("utf8-256")
+        def f256(value): return isinstance(value, str) and len(value.encode()) <= 256
+        @checker.checks("utf8-8192")
+        def f8192(value): return isinstance(value, str) and len(value.encode()) <= 8192
+        @checker.checks("utf8-128")
+        def f128(value): return isinstance(value, str) and len(value.encode()) <= 128
+        @checker.checks("utf8-content")
+        def fcontent(value): return isinstance(value, Mapping) and len(json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()) <= 8192
+        jsonschema.Draft202012Validator(schema, format_checker=checker).validate(value)
+    except Exception:
+        raise MaterializationHold("hold_materialization_schema") from None
 
 
 def _base(request: Mapping[str, Any]) -> dict[str, Any]:
@@ -132,6 +156,7 @@ def _base(request: Mapping[str, Any]) -> dict[str, Any]:
                "nonce", "approved_remote_content", "readback_only", "canceled", "compensation"}
     if not isinstance(request, Mapping) or set(request) - allowed:
         raise MaterializationHold("hold_materialization_schema")
+    _schema_validate(request, "request")
     safe_request = dict(request); safe_request.pop("approved_remote_content", None); _walk(safe_request)
     if request.get("schema_version") != VERSION: raise MaterializationHold("hold_materialization_schema")
     for flag in ("canceled", "compensation", "readback_only"):
@@ -167,8 +192,12 @@ def _base(request: Mapping[str, Any]) -> dict[str, Any]:
         if "title" in content and (not isinstance(content["title"], str) or len(content["title"].encode()) > 256): raise MaterializationHold("hold_materialization_privacy")
         if "labels" in content and (not isinstance(content["labels"], list) or len(content["labels"]) > 10 or any(not isinstance(label, str) or len(label.encode()) > 128 for label in content["labels"])): raise MaterializationHold("hold_materialization_privacy")
     idem_input = [VERSION, pid, intent, attempt, request["operation"], request["repository_id"], request["desired_effect_digest"], request["approved_content_digest"]]
-    return {"project_id": pid, "intent_id": intent, "attempt_sequence": attempt,
-            "idempotency_key": str(uuid.uuid5(NAMESPACE, _canon(idem_input))), **dict(request)}
+    normalized = dict(request); normalized["project_id"] = pid; normalized["intent_id"] = intent
+    if isinstance(normalized.get("gate"), Mapping):
+        gate = dict(normalized["gate"])
+        gate["project_id"] = _uuid(gate.get("project_id")); gate["intent_id"] = _uuid(gate.get("intent_id")); normalized["gate"] = gate
+    return {**normalized, "project_id": pid, "intent_id": intent, "attempt_sequence": attempt,
+            "idempotency_key": str(uuid.uuid5(NAMESPACE, _canon(idem_input)))}
 
 
 def _state_check(req: Mapping[str, Any], scheduler_state: Mapping[str, Any]) -> None:

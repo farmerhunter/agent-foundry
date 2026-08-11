@@ -59,7 +59,7 @@ def test_stale_scheduler_binding_and_closed_capability_hold():
     assert str(e.value) == "hold_materialization_stale_basis"
     bad = req(capability={**req()["capability"], "junk": True})
     with pytest.raises(MaterializationHold) as e: execute_materialization(bad, state(), FakeConnector())
-    assert str(e.value) == "hold_materialization_connector_untrusted"
+    assert str(e.value) == "hold_materialization_schema"
 
 def test_bounded_approved_body_and_wrong_remote_identity():
     content = {"body": "synthetic comment", "summary": "short"}
