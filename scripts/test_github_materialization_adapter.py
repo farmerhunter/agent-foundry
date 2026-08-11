@@ -103,8 +103,9 @@ def test_readback_result_has_404_boundary_fields():
     assert result["confirmed"] is True and result["simulation_only"] is True
 
 def test_real_404_injected_readback_boundary():
-    """Use the accepted scheduler boundary in a disposable SQLite fixture."""
+    """The real #403 hermetic result is valid but never confirmation authority."""
     from test_local_collaboration_scheduler import _setup
+    from local_collaboration_ledger import LocalCollaborationLedger
     class Adapter:
         def __init__(self, response): self.response = response
         def readback(self, request): return self.response
@@ -119,9 +120,34 @@ def test_real_404_injected_readback_boundary():
         request["gate"] = {**request["gate"], "project_id": pid, "intent_id": intent, "effect_digest": request["desired_effect_digest"]}
         request["gate"]["content_digest"] = C
         response = execute_materialization(request, {**current, "project_id": pid, "remote_intent_state": "pending_materialization", "intent_id": intent, "attempt_sequence": 1, "scheduler_generation": current.get("control_generation") or 4, "scheduler_head": current.get("control_head") or H}, FakeConnector())
-        response["request_digest"] = response["request_digest"]
-        result = sc.apply_remote_readback(root, pid, intent, Adapter(response), {"project_id": pid, "intent_id": intent, "operation": "confirm", "attempt_sequence": 1, "request_digest": response["request_digest"]})
-        assert result["decision"] == "confirmed"
+        readback_request = {"project_id": pid, "work_id": "w1", "operation": "confirm", "intent_id": intent,
+            "attempt_sequence": 1, "request_digest": response["request_digest"],
+            "occurred_at": "2026-08-11T00:00:04Z", "desired_effect_digest": current["desired_effect_digest"],
+            "expected_remote_kind": "issue", "expected_remote_ref": "opaque-1",
+            "expected_remote_digest": H, "expected_remote_version": "v1"}
+        path = Path(root) / pid / "collaboration.db"
+        ledger = LocalCollaborationLedger.open_existing(path, expected_project_id=pid)
+        before = ledger.list_events(); before_head = before[-1].event_hash
+        before_business = tuple(ledger._conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+                                for table in ("holds", "project_bindings", "projections"))
+        ledger.close()
+        with pytest.raises(sc.SchedulerHold) as held:
+            sc.apply_remote_readback(root, pid, intent, Adapter(response), readback_request)
+        assert str(held.value) == "hold_untrusted_readback"
+        ledger = LocalCollaborationLedger.open_existing(path, expected_project_id=pid)
+        after = ledger.list_events()
+        after_business = tuple(ledger._conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+                               for table in ("holds", "project_bindings", "projections"))
+        ledger.close()
+        assert len(after) == len(before) and after[-1].event_hash == before_head
+        assert after_business == before_business
+        rejected = sc.replay_scheduler_state(root, pid)
+        assert rejected["remote_intent_state"] == "pending_materialization"
+        assert not any(event.event_type == "scheduler.remote_confirmation_recorded" for event in after)
+        observed = sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "observe",
+            "intent_id": intent, "observed_remote_state": "open", "occurred_at": "2026-08-11T00:00:05Z"})
+        assert observed["mutation_performed"]
+        assert sc.replay_scheduler_state(root, pid)["remote_intent_state"] == "observed_unverified"
 
 def test_integration_boundaries_and_cache_observations_are_non_confirming():
     # These are the accepted #522/#404/#405 replay shapes: the adapter sees a
