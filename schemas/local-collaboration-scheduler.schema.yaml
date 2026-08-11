@@ -1,0 +1,44 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://agent-foundry.local/schemas/local-collaboration-scheduler.schema.yaml
+title: LocalCollaborationScheduler-v1
+type: object
+additionalProperties: false
+required: [version, project_id, kind, occurred_at, timestamp_provenance, payload]
+properties:
+  version: {const: LocalCollaborationScheduler-v1}
+  project_id: {type: string, format: uuid}
+  kind:
+    enum: [scheduler_initialized, work_transition_recorded, scheduler_disabled, remote_intent_recorded, remote_materialization_pending, remote_observation_recorded, remote_confirmation_recorded, remote_failure_recorded, remote_conflict_recorded, remote_intent_canceled, privacy_hold_recorded]
+  occurred_at: {type: string, format: date-time}
+  timestamp_provenance: {enum: [explicit, estimated, unavailable, not_exposed]}
+  payload:
+    type: object
+    additionalProperties: false
+    properties:
+      work_id: {type: string}
+      run_id: {type: string}
+      owner_role: {type: string}
+      control_generation: {type: integer, minimum: 0}
+      control_head: {type: string}
+      durable_anchor_digest: {type: string, pattern: '^[0-9a-f]{64}$'}
+      budget_digest: {type: string, pattern: '^[0-9a-f]{64}$'}
+      transition_sequence: {type: integer, minimum: 1}
+      from_state: {type: string}
+      to_state: {type: string}
+      intent_id: {type: string, pattern: '^[0-9a-fA-F-]{36}$'}
+      intent_kind: {type: string}
+      desired_effect_digest: {type: string, pattern: '^[0-9a-f]{64}$'}
+      human_gate_class: {type: string}
+      attempt_sequence: {type: integer, minimum: 1}
+      expected_remote_kind: {type: string}
+      expected_remote_ref: {type: string}
+      expected_remote_digest: {type: string, pattern: '^[0-9a-f]{64}$'}
+      adapter_id: {type: string}
+      adapter_version: {type: string}
+      request_digest: {type: string, pattern: '^[0-9a-f]{64}$'}
+      readback_digest: {type: string, pattern: '^[0-9a-f]{64}$'}
+      observed_remote_state: {type: string}
+      opaque_receipt_ref: {type: string}
+      classification: {type: string}
+      next_action: {type: string}
+      explicit_sequence: {type: integer, minimum: 1}
