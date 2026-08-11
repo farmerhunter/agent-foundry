@@ -318,5 +318,33 @@ def test_observed_unverified_to_privacy_hold_preserves_all_bindings():
         ledger.close()
 
 
+def test_pending_materialization_to_privacy_hold_preserves_all_bindings():
+    """A pending attempt can become a durable privacy hold without observation."""
+    expected = {"expected_remote_kind": "issue", "expected_remote_ref": "opaque-2", "expected_remote_digest": "c" * 64, "expected_remote_version": "v2"}
+    with tempfile.TemporaryDirectory() as root:
+        pid, intent = _remote_setup(root, expected)
+        pending_state = sc.replay_scheduler_state(root, pid)
+        assert pending_state["remote_intent_state"] == "pending_materialization"
+        desired = pending_state["desired_effect_digest"]
+        result = sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "privacy_hold", "intent_id": intent, "attempt_sequence": 1, "desired_effect_digest": desired, **expected, "occurred_at": "2026-08-11T00:00:04Z"})
+        assert result["mutation_performed"]
+        path = Path(root) / pid / "collaboration.db"
+        ledger = LocalCollaborationLedger.open_existing(path, expected_project_id=pid)
+        privacy = [event for event in ledger.list_events() if event.event_type == "scheduler.privacy_hold_recorded"][-1]
+        payload = privacy.payload["payload"]
+        assert payload["intent_id"] == intent
+        assert payload["attempt_sequence"] == 1
+        assert payload["desired_effect_digest"] == desired
+        assert all(payload[key] == expected[key] for key in ("expected_remote_kind", "expected_remote_ref", "expected_remote_digest", "expected_remote_version"))
+        ledger.close()
+        replayed = sc.replay_scheduler_state(root, pid)
+        assert replayed["remote_intent_state"] == "privacy_held"
+        assert replayed["local_state"] == "hold"
+        assert replayed["intent_id"] == intent
+        assert replayed["attempt_sequence"] == 1
+        assert replayed["desired_effect_digest"] == desired
+        assert all(replayed[key] == expected[key] for key in ("expected_remote_kind", "expected_remote_ref", "expected_remote_digest", "expected_remote_version"))
+
+
 if __name__ == "__main__":
-    test_initialize_and_offline_transitions(); test_exact_retry_and_divergence_hold(); test_remote_never_confirmed_by_observation(); test_remote_predecessor_guards(); test_observation_and_terminal_use_current_attempt(); test_closed_payload_and_resume_gate(); test_caller_project_binding_and_disabled_gate(); test_reducer_version_mismatch_is_preappend_hold(); test_planner_observation_version_mismatch_is_preappend_hold(); test_privacy_binding_mismatch_is_preappend_hold(); test_adapter_version_mismatch_is_preappend_hold(); test_observed_unverified_to_privacy_hold_preserves_all_bindings(); print("ok")
+    test_initialize_and_offline_transitions(); test_exact_retry_and_divergence_hold(); test_remote_never_confirmed_by_observation(); test_remote_predecessor_guards(); test_observation_and_terminal_use_current_attempt(); test_closed_payload_and_resume_gate(); test_caller_project_binding_and_disabled_gate(); test_reducer_version_mismatch_is_preappend_hold(); test_planner_observation_version_mismatch_is_preappend_hold(); test_privacy_binding_mismatch_is_preappend_hold(); test_adapter_version_mismatch_is_preappend_hold(); test_observed_unverified_to_privacy_hold_preserves_all_bindings(); test_pending_materialization_to_privacy_hold_preserves_all_bindings(); print("ok")
