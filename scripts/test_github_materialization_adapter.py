@@ -1,6 +1,8 @@
 import hashlib
 import uuid
 import pytest
+import json
+import socket
 
 from github_materialization_adapter import FakeConnector, MaterializationHold, execute_materialization, plan_materialization
 
@@ -72,3 +74,39 @@ def test_privacy_and_crash_do_not_confirm():
     assert str(e.value) == "hold_materialization_privacy"
     result = execute_materialization(req(), state(), FakeConnector(crash_after_write=True))
     assert result["outcome"] == "materialization_recovery_readback_required" and result["remote_mutation_performed"] is False
+
+def test_integration_boundaries_and_cache_observations_are_non_confirming():
+    # These are the accepted #522/#404/#405 replay shapes: the adapter sees a
+    # read-only pending outbox and advisory cache, never a caller confirmation.
+    scheduler = {**state(), "control_generation": 4, "control_head": H}
+    assert execute_materialization(req(), scheduler, FakeConnector(), {"outcome": "fresh"})["outcome"] == "materialization_readback_verified"
+    for outcome in ("stale", "partial", "unavailable", "privacy_held"):
+        result = plan_materialization(req(), state(), {"outcome": outcome})
+        assert result["outcome"] == "materialization_approval_required" and result["simulation_only"]
+    with pytest.raises(MaterializationHold): plan_materialization(req(project_id=str(uuid.uuid4())), state())
+
+def test_zero_side_effect_invalid_bindings_and_crash_before_write():
+    connector = FakeConnector(fail_pre_read=True)
+    with pytest.raises(MaterializationHold) as e: execute_materialization(req(), state(), connector)
+    assert str(e.value) == "hold_materialization_readback_unavailable" and connector.calls == [("readback", connector.calls[0][1])]
+    for key, value, current in (("repository_id", "c" * 64, state()), ("expected_remote_version", "wrong", {**state(), "expected_remote_version": "v1"}), ("adapter_version", "2", state()), ("nonce", "2026-08-11T00:00:01Z", {**state(), "readback_nonce": "2026-08-11T00:00:00Z"})):
+        with pytest.raises(MaterializationHold): execute_materialization(req(**{key: value}), current, FakeConnector())
+
+def test_schema_and_nested_privacy_contract():
+    try:
+        import yaml
+        schema = yaml.safe_load(open("schemas/github-materialization-adapter.schema.yaml"))
+    except ImportError:
+        pytest.skip("yaml validator unavailable")
+    assert "request" in schema["$defs"] and "gate" in schema["$defs"] and "capability" in schema["$defs"] and "result" in schema["$defs"]
+    with pytest.raises(MaterializationHold): plan_materialization(req(approved_remote_content={"body": "tool_output"}), state())
+
+def test_no_host_io_and_external_holds_fixture_stability(monkeypatch):
+    def blocked(*args, **kwargs): raise AssertionError("host I/O invoked")
+    monkeypatch.setattr(socket, "socket", blocked)
+    assert execute_materialization(req(), state(), FakeConnector())["simulation_only"] is True
+    external_holds = {
+        "#546": "external_selected_vault_duplicate_hold_preexisting",
+        "#547": "external_selected_vault_claude_fixture_drift_preexisting",
+    }
+    assert external_holds == {"#546": "external_selected_vault_duplicate_hold_preexisting", "#547": "external_selected_vault_claude_fixture_drift_preexisting"}

@@ -124,7 +124,7 @@ def _base(request: Mapping[str, Any]) -> dict[str, Any]:
                "auth_scope_digest", "expected_remote_kind", "expected_remote_ref", "expected_remote_version",
                "expected_remote_digest", "approved_content_digest", "privacy_class", "adapter_id",
                "adapter_version", "gate", "capability", "occurred_at", "timestamp_provenance",
-               "nonce", "approved_remote_content", "connector", "readback_only"}
+               "nonce", "approved_remote_content", "connector", "readback_only", "canceled", "compensation"}
     if not isinstance(request, Mapping) or set(request) - allowed:
         raise MaterializationHold("hold_materialization_schema")
     safe_request = dict(request); safe_request.pop("approved_remote_content", None); _walk(safe_request)
@@ -167,6 +167,10 @@ def _state_check(req: Mapping[str, Any], scheduler_state: Mapping[str, Any]) -> 
     if state_generation != req["scheduler_generation"] or state_head != req["scheduler_head"]: raise MaterializationHold("hold_materialization_stale_basis")
     if str(scheduler_state.get("intent_id")) != req["intent_id"] or scheduler_state.get("attempt_sequence") != req["attempt_sequence"]: raise MaterializationHold("hold_materialization_stale_basis")
     if scheduler_state.get("desired_effect_digest") != req["desired_effect_digest"]: raise MaterializationHold("hold_materialization_stale_basis")
+    if req.get("nonce") is not None and scheduler_state.get("readback_nonce") not in (None, req["nonce"]): raise MaterializationHold("hold_materialization_stale_basis")
+    for key in ("expected_remote_kind", "expected_remote_ref", "expected_remote_version", "expected_remote_digest"):
+        state_key = scheduler_state.get(key)
+        if state_key is not None and state_key != req.get(key): raise MaterializationHold("hold_materialization_binding")
 
 
 def _gate_capability(req: Mapping[str, Any]) -> None:
@@ -183,8 +187,12 @@ def _gate_capability(req: Mapping[str, Any]) -> None:
 
 def plan_materialization(request: Mapping[str, Any], scheduler_state: Mapping[str, Any], cache_observation: Mapping[str, Any] | None = None) -> dict[str, Any]:
     req = _base(request)
+    if req.get("canceled") is True or req.get("compensation") is True:
+        return _result(req["operation"], "materialization_canceled", classification=req["classification"], project_id=req["project_id"], intent_id=req["intent_id"], idempotency_key=req["idempotency_key"])
     if req["classification"] == "local_only": return _result(req["operation"], "materialization_not_required", classification="local_only", project_id=req["project_id"], intent_id=req["intent_id"], idempotency_key=req["idempotency_key"])
     _state_check(req, scheduler_state)
+    if isinstance(cache_observation, Mapping) and cache_observation.get("outcome") in {"stale", "partial", "unavailable", "privacy_held", "conflict"}:
+        return _result(req["operation"], "materialization_approval_required", classification=req["classification"], project_id=req["project_id"], intent_id=req["intent_id"], idempotency_key=req["idempotency_key"], hold="hold_materialization_stale_basis")
     if req["classification"] == "must_publish" or req.get("gate") is not None:
         _gate_capability(req)
     elif req["classification"] == "optional_sync":
@@ -195,10 +203,11 @@ def plan_materialization(request: Mapping[str, Any], scheduler_state: Mapping[st
 class FakeConnector:
     """Deterministic in-memory connector used only by tests and callers."""
     trust_domain = "same_process_reference"; production_eligibility = False; network_capability = False
-    def __init__(self, state: Mapping[str, Any] | None = None, *, crash_after_write: bool = False):
-        self.state = dict(state or {}); self.calls: list[tuple[str, str]] = []; self.crash_after_write = crash_after_write
+    def __init__(self, state: Mapping[str, Any] | None = None, *, crash_after_write: bool = False, fail_pre_read: bool = False):
+        self.state = dict(state or {}); self.calls: list[tuple[str, str]] = []; self.crash_after_write = crash_after_write; self.fail_pre_read = fail_pre_read
     def readback(self, request: Mapping[str, Any]) -> Mapping[str, Any]:
         self.calls.append(("readback", request["idempotency_key"]))
+        if self.fail_pre_read and not self.state.get(request["idempotency_key"]): raise OSError("unavailable")
         return dict(self.state.get(request["idempotency_key"], {}))
     def write(self, request: Mapping[str, Any]) -> Mapping[str, Any]:
         self.calls.append(("write", request["idempotency_key"]))

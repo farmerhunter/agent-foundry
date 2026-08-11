@@ -1,23 +1,100 @@
 $schema: https://json-schema.org/draft/2020-12/schema
 $id: https://agent-foundry.dev/schemas/github-materialization-adapter.schema.yaml
 title: GitHubMaterializationAdapter-v1
-type: object
-additionalProperties: false
-required: [schema_version, operation, outcome, simulation_only, remote_mutation_performed, authoritative, confirmation_eligible]
-properties:
-  schema_version: {const: GitHubMaterializationAdapter-v1}
-  operation: {enum: [issue_create, issue_comment, pull_request_comment]}
-  outcome:
-    enum: [materialization_not_required, materialization_plan_ready, materialization_approval_required, materialization_duplicate, materialization_simulated, materialization_readback_verified, materialization_readback_unavailable, materialization_recovery_readback_required, materialization_canceled]
-  classification: {enum: [local_only, must_publish, optional_sync]}
-  simulation_only: {const: true}
-  remote_mutation_performed: {const: false}
-  authoritative: {const: false}
-  confirmation_eligible: {const: false}
-  project_id: {type: string, format: uuid}
-  intent_id: {type: string, format: uuid}
-  attempt_sequence: {type: integer, minimum: 1}
-  idempotency_key: {type: string, format: uuid}
-  desired_effect_digest: {type: string, pattern: '^[0-9a-f]{64}$'}
-  readback_digest: {type: string, pattern: '^[0-9a-f]{64}$'}
-  opaque_receipt_ref: {type: string, maxLength: 256}
+oneOf:
+  - $ref: '#/$defs/request'
+  - $ref: '#/$defs/result'
+$defs:
+  digest: {type: string, pattern: '^[0-9a-f]{64}$'}
+  uuid: {type: string, format: uuid}
+  gate:
+    type: object
+    additionalProperties: false
+    required: [kind, production_eligibility, project_id, intent_id, attempt_sequence, operation, repository_id, effect_digest, content_digest]
+    properties:
+      kind: {const: fixture_only}
+      production_eligibility: {const: false}
+      project_id: {$ref: '#/$defs/uuid'}
+      intent_id: {$ref: '#/$defs/uuid'}
+      attempt_sequence: {type: integer, minimum: 1}
+      operation: {enum: [issue_create, issue_comment, pull_request_comment]}
+      repository_id: {$ref: '#/$defs/digest'}
+      effect_digest: {$ref: '#/$defs/digest'}
+      content_digest: {$ref: '#/$defs/digest'}
+  capability:
+    type: object
+    additionalProperties: false
+    required: [trust_domain, production_eligibility, network_capability, adapter_id, adapter_version, supported_operations]
+    properties:
+      trust_domain: {const: same_process_reference}
+      production_eligibility: {const: false}
+      network_capability: {const: false}
+      adapter_id: {type: string, minLength: 1}
+      adapter_version: {type: string, minLength: 1}
+      supported_operations:
+        type: array
+        uniqueItems: true
+        items: {enum: [issue_create, issue_comment, pull_request_comment]}
+  content:
+    type: object
+    additionalProperties: false
+    properties:
+      title: {type: string, maxLength: 256}
+      body: {type: string, maxLength: 8192}
+      summary: {type: string, maxLength: 8192}
+      labels: {type: array, maxItems: 10, items: {type: string, maxLength: 128}}
+  request:
+    type: object
+    additionalProperties: false
+    required: [project_id, work_id, intent_id, attempt_sequence, scheduler_generation, scheduler_head, desired_effect_digest, approved_content_digest, classification, operation, repository_id, repository_locator_digest, auth_scope_digest, privacy_class, adapter_id, adapter_version, timestamp_provenance, occurred_at, gate, capability]
+    properties:
+      schema_version: {const: GitHubMaterializationAdapter-v1}
+      project_id: {$ref: '#/$defs/uuid'}
+      work_id: {type: string, minLength: 1}
+      intent_id: {$ref: '#/$defs/uuid'}
+      attempt_sequence: {type: integer, minimum: 1}
+      scheduler_generation: {type: integer, minimum: 0}
+      scheduler_head: {$ref: '#/$defs/digest'}
+      desired_effect_digest: {$ref: '#/$defs/digest'}
+      approved_content_digest: {$ref: '#/$defs/digest'}
+      classification: {enum: [local_only, must_publish, optional_sync]}
+      operation: {enum: [issue_create, issue_comment, pull_request_comment]}
+      repository_id: {$ref: '#/$defs/digest'}
+      repository_locator_digest: {$ref: '#/$defs/digest'}
+      auth_scope_digest: {$ref: '#/$defs/digest'}
+      expected_remote_kind: {type: string, minLength: 1}
+      expected_remote_ref: {type: string, minLength: 1}
+      expected_remote_version: {type: string, minLength: 1}
+      expected_remote_digest: {$ref: '#/$defs/digest'}
+      privacy_class: {enum: [public_metadata, metadata_only, repository_internal_redacted]}
+      adapter_id: {type: string, minLength: 1}
+      adapter_version: {type: string, minLength: 1}
+      gate: {$ref: '#/$defs/gate'}
+      capability: {$ref: '#/$defs/capability'}
+      occurred_at: {type: string, format: date-time}
+      timestamp_provenance: {const: explicit}
+      nonce: {type: string, format: date-time}
+      approved_remote_content: {$ref: '#/$defs/content'}
+      canceled: {const: true}
+      compensation: {const: true}
+  result:
+    type: object
+    additionalProperties: false
+    required: [schema_version, operation, outcome, simulation_only, remote_mutation_performed, authoritative, confirmation_eligible]
+    properties:
+      schema_version: {const: GitHubMaterializationAdapter-v1}
+      operation: {enum: [issue_create, issue_comment, pull_request_comment]}
+      outcome: {enum: [materialization_not_required, materialization_plan_ready, materialization_approval_required, materialization_duplicate, materialization_simulated, materialization_readback_verified, materialization_readback_unavailable, materialization_recovery_readback_required, materialization_canceled]}
+      classification: {enum: [local_only, must_publish, optional_sync]}
+      simulation_only: {const: true}
+      remote_mutation_performed: {const: false}
+      authoritative: {const: false}
+      confirmation_eligible: {const: false}
+      project_id: {$ref: '#/$defs/uuid'}
+      intent_id: {$ref: '#/$defs/uuid'}
+      attempt_sequence: {type: integer, minimum: 1}
+      idempotency_key: {$ref: '#/$defs/uuid'}
+      desired_effect_digest: {$ref: '#/$defs/digest'}
+      readback_digest: {$ref: '#/$defs/digest'}
+      opaque_receipt_ref: {type: string, maxLength: 256}
+      hold: {enum: [hold_materialization_stale_basis]}
