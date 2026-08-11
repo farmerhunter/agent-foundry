@@ -114,6 +114,7 @@ def test_schema_runtime_variants():
     with pytest.raises(jsonschema.ValidationError): jsonschema.validate({**optional, "gate": req()["gate"]}, schema)
     with pytest.raises(jsonschema.ValidationError): jsonschema.validate({**optional, "capability": req()["capability"]}, schema)
     with pytest.raises(jsonschema.ValidationError): jsonschema.validate({**optional, "capability": {"junk": True}}, schema)
+    with pytest.raises(MaterializationHold): plan_materialization({**optional, "capability": req()["capability"]}, state())
 
 def test_no_host_io_and_external_holds_fixture_stability(monkeypatch):
     def blocked(*args, **kwargs): raise AssertionError("host I/O invoked")

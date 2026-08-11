@@ -193,7 +193,7 @@ def plan_materialization(request: Mapping[str, Any], scheduler_state: Mapping[st
     _state_check(req, scheduler_state)
     if isinstance(cache_observation, Mapping) and cache_observation.get("outcome") in {"stale", "partial", "unavailable", "privacy_held", "conflict"}:
         return _result(req["operation"], "materialization_approval_required", classification=req["classification"], project_id=req["project_id"], intent_id=req["intent_id"], idempotency_key=req["idempotency_key"], hold="hold_materialization_stale_basis")
-    if req["classification"] == "must_publish" or req.get("gate") is not None:
+    if req["classification"] == "must_publish" or req.get("gate") is not None or req.get("capability") is not None:
         _gate_capability(req)
     elif req["classification"] == "optional_sync":
         return _result(req["operation"], "materialization_plan_ready", classification="optional_sync", project_id=req["project_id"], intent_id=req["intent_id"], attempt_sequence=req["attempt_sequence"], idempotency_key=req["idempotency_key"], desired_effect_digest=req["desired_effect_digest"])
