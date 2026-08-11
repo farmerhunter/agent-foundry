@@ -158,8 +158,15 @@ def reduce_control_events(events: Iterable[Any]) -> dict[str, Any]:
 
 def replay_control_state(projects_root: str | Path, project_id: str) -> dict[str, Any]:
     pid = _project(project_id); path = Path(projects_root).expanduser() / pid / "collaboration.db"
-    ledger = LocalCollaborationLedger(db_path=path, project_id=pid, create=False)
-    try: return reduce_control_events([e for e in ledger.list_events() if e.event_type.startswith("control.")])
+    # The LedgerStore read-only constructor accepts a database path or a
+    # project-id discovery root, but never both.  Opening by path keeps this
+    # route read-only; identity is checked against the requested path after
+    # the store has validated the existing authority metadata.
+    ledger = LocalCollaborationLedger(db_path=path, create=False)
+    try:
+        if ledger.project_id != pid:
+            raise ControlPlaneHold("hold_project_identity")
+        return reduce_control_events([e for e in ledger.list_events() if e.event_type.startswith("control.")])
     finally: ledger.close()
 
 def plan_control_request(request: Mapping[str, Any], replay_state: Mapping[str, Any] | None = None) -> dict[str, Any]:

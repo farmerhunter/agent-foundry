@@ -22,6 +22,25 @@ def test_existing_append_and_retry():
         first=apply_control_request(d,pid,request(pid)); second=apply_control_request(d,pid,request(pid))
         assert first["mutation_performed"] and not second["mutation_performed"]
 
+def test_read_only_replay_uses_existing_authority():
+    pid=str(uuid.uuid4())
+    with tempfile.TemporaryDirectory() as d:
+        ledger=LocalCollaborationLedger.create_project(projects_root=d, project_id=pid)
+        ledger.close()
+        first=apply_control_request(d,pid,request(pid))
+        state=cp.replay_control_state(d,pid)
+        assert first["mutation_performed"] and state["initialized"]
+        assert state["work"]["work_id"] == "w1"
+
+def test_read_only_replay_rejects_wrong_identity():
+    pid=str(uuid.uuid4()); wrong=str(uuid.uuid4())
+    with tempfile.TemporaryDirectory() as d:
+        ledger=LocalCollaborationLedger.create_project(projects_root=d, project_id=pid)
+        ledger.close()
+        try: cp.replay_control_state(Path(d) / wrong, wrong)
+        except (ControlPlaneHold, LedgerError): pass
+        else: assert False
+
 def test_divergent_same_identity_is_held():
     pid=str(uuid.uuid4())
     with tempfile.TemporaryDirectory() as d:
