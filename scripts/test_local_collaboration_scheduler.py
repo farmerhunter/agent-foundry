@@ -82,6 +82,35 @@ def test_observation_and_terminal_use_current_attempt():
         assert sc.replay_scheduler_state(root, pid)["remote_intent_state"] == "conflict"
 
 
+def test_retry_requires_receipt_and_advances_only_after_failed_attempt():
+    with tempfile.TemporaryDirectory() as root:
+        pid = _setup(root)
+        sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "initialize", "occurred_at": "2026-08-11T00:00:01Z"})
+        intent = str(uuid.uuid4())
+        sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "intent", "intent_id": intent, "intent_kind": "issue", "desired_effect": {"kind": "issue"}, "occurred_at": "2026-08-11T00:00:02Z"})
+        sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "pending", "intent_id": intent, "occurred_at": "2026-08-11T00:00:03Z"})
+        # An outcome belongs to attempt 1; an arbitrary attempt 2 is not a retry.
+        try:
+            sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "observe", "intent_id": intent, "attempt_sequence": 2, "observed_remote_state": "open", "occurred_at": "2026-08-11T00:00:04Z"})
+        except sc.SchedulerHold as exc:
+            assert str(exc) == "hold_transition_order"
+        else:
+            raise AssertionError("observation cannot invent a new attempt")
+        sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "failure", "intent_id": intent, "classification": "hold_readback_unavailable", "occurred_at": "2026-08-11T00:00:04Z"})
+        assert sc.replay_scheduler_state(root, pid)["remote_intent_state"] == "readback_unavailable"
+        retry = {"project_id": pid, "work_id": "w1", "operation": "pending", "intent_id": intent, "attempt_sequence": 2, "occurred_at": "2026-08-11T00:00:05Z"}
+        try:
+            sc.apply_scheduler_request(root, pid, retry)
+        except sc.SchedulerHold as exc:
+            assert str(exc) == "hold_retry_receipt_required"
+        else:
+            raise AssertionError("retry without authorization must hold")
+        retry.update({"retry_receipt_ref": "issue:404/retry-1", "retry_receipt_digest": "a" * 64, "retry_authority": "Human"})
+        result = sc.apply_scheduler_request(root, pid, retry)
+        assert result["mutation_performed"]
+        assert sc.replay_scheduler_state(root, pid)["attempt_sequence"] == 2
+
+
 def test_closed_payload_and_resume_gate():
     with tempfile.TemporaryDirectory() as root:
         pid = _setup(root)

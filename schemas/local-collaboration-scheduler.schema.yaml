@@ -45,6 +45,9 @@ properties:
       resume_receipt_ref: {type: string, minLength: 1}
       resume_receipt_digest: {type: string, pattern: '^[0-9a-f]{64}$'}
       resume_authority: {type: string, minLength: 1}
+      retry_receipt_ref: {type: string, minLength: 1}
+      retry_receipt_digest: {type: string, pattern: '^[0-9a-f]{64}$'}
+      retry_authority: {type: string, minLength: 1}
       successor_readiness_ref: {type: string, minLength: 1}
       successor_readiness_digest: {type: string, pattern: '^[0-9a-f]{64}$'}
       successor_id: {type: string, minLength: 1}
