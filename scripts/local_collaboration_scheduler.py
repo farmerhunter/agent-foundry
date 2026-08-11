@@ -60,6 +60,21 @@ FAILURE_CODES = {"hold_scheduler_not_enabled", "hold_control_plane_unready", "ho
     "hold_retry_receipt_required",
     "hold_ledger_busy", "hold_ledger_integrity", "hold_ledger_permission", "hold_ledger_schema"}
 
+# A confirmation is an authority transition.  The only currently available
+# materialization boundary is deliberately hermetic, so it can never supply
+# trusted confirmation evidence.  Keep the request/response envelopes closed
+# nonetheless: this prevents malformed evidence from reaching an adapter and
+# makes the future trust-boundary contract explicit rather than implicit.
+READBACK_REQUEST_KEYS = {"project_id", "work_id", "operation", "intent_id", "attempt_sequence",
+    "request_digest", "occurred_at", "desired_effect_digest", "expected_remote_kind",
+    "expected_remote_ref", "expected_remote_digest", "expected_remote_version"}
+READBACK_RESPONSE_KEYS = {"schema_version", "operation", "outcome", "simulation_only",
+    "remote_mutation_performed", "authoritative", "confirmation_eligible", "classification",
+    "project_id", "intent_id", "attempt_sequence", "idempotency_key", "readback_digest",
+    "opaque_receipt_ref", "confirmed", "adapter_id", "adapter_version", "expected_remote_kind",
+    "expected_remote_ref", "expected_remote_digest", "expected_remote_version",
+    "desired_effect_digest", "request_digest", "occurred_at", "read_timestamp", "readback_nonce"}
+
 COMMON_PAYLOAD_KEYS = {"work_id", "run_id", "owner_role", "control_generation", "control_head",
     "durable_anchor_digest", "budget_digest", "intent_id", "attempt_sequence", "classification",
     "next_action", "explicit_sequence", "request_digest", "resume_receipt_ref", "resume_receipt_digest",
@@ -479,42 +494,75 @@ def apply_scheduler_request(projects_root: str | Path, project_id: str, request:
     finally: ledger.close()
 
 
+def _validate_readback_request(request: Any, pid: str, intent_id: str, sstate: Mapping[str, Any]) -> None:
+    if not isinstance(request, Mapping) or set(request) - READBACK_REQUEST_KEYS:
+        raise SchedulerHold("hold_readback_binding_conflict")
+    required = {"project_id", "work_id", "operation", "intent_id", "attempt_sequence", "request_digest", "occurred_at"}
+    if not required.issubset(request) or _project(request.get("project_id")) != pid:
+        raise SchedulerHold("hold_readback_binding_conflict")
+    if request.get("operation") not in {"confirm", "readback"} or request.get("intent_id") != intent_id:
+        raise SchedulerHold("hold_readback_binding_conflict")
+    if request.get("work_id") != sstate.get("work_id") or request.get("attempt_sequence") != sstate.get("attempt_sequence"):
+        raise SchedulerHold("hold_readback_binding_conflict")
+    _timestamp(request.get("occurred_at"))
+    if not isinstance(request.get("request_digest"), str) or not re.fullmatch(r"[0-9a-f]{64}", request["request_digest"]):
+        raise SchedulerHold("hold_readback_binding_conflict")
+    for key in ("desired_effect_digest", "expected_remote_digest"):
+        if key in request and (not isinstance(request[key], str) or not re.fullmatch(r"[0-9a-f]{64}", request[key])):
+            raise SchedulerHold("hold_readback_binding_conflict")
+    for key in ("expected_remote_kind", "expected_remote_ref", "expected_remote_version"):
+        if key in request and (not isinstance(request[key], str) or not request[key]):
+            raise SchedulerHold("hold_readback_binding_conflict")
+    for key in ("desired_effect_digest", "expected_remote_kind", "expected_remote_ref", "expected_remote_digest", "expected_remote_version"):
+        if key in request and request[key] != sstate.get(key):
+            raise SchedulerHold("hold_readback_binding_conflict")
+
+
+def _validate_readback_response(response: Any, request: Mapping[str, Any], pid: str, intent_id: str, sstate: Mapping[str, Any]) -> None:
+    """Validate a hermetic readback result without granting it authority."""
+    if not isinstance(response, Mapping) or set(response) != READBACK_RESPONSE_KEYS:
+        raise SchedulerHold("hold_schema_or_version")
+    _walk(response)
+    required_strings = ("schema_version", "operation", "outcome", "classification", "idempotency_key",
+        "readback_digest", "opaque_receipt_ref", "adapter_id", "adapter_version", "expected_remote_kind",
+        "expected_remote_ref", "expected_remote_digest", "expected_remote_version", "desired_effect_digest",
+        "request_digest", "occurred_at", "read_timestamp", "readback_nonce")
+    if any(not isinstance(response.get(key), str) or not response[key] for key in required_strings):
+        raise SchedulerHold("hold_schema_or_version")
+    if response.get("schema_version") != "GitHubMaterializationAdapter-v1" or response.get("outcome") != "materialization_readback_verified":
+        raise SchedulerHold("hold_schema_or_version")
+    if any(response.get(key) is not value for key, value in {
+        "simulation_only": True, "remote_mutation_performed": False, "authoritative": False,
+        "confirmation_eligible": False, "confirmed": True}.items()):
+        raise SchedulerHold("hold_untrusted_readback")
+    if response.get("project_id") != pid or response.get("intent_id") != intent_id or response.get("attempt_sequence") != sstate.get("attempt_sequence"):
+        raise SchedulerHold("hold_readback_binding_conflict")
+    for key in ("readback_digest", "expected_remote_digest", "desired_effect_digest", "request_digest"):
+        if not re.fullmatch(r"[0-9a-f]{64}", response[key]):
+            raise SchedulerHold("hold_schema_or_version")
+    _timestamp(response["occurred_at"]); _timestamp(response["read_timestamp"])
+    if response["request_digest"] != request["request_digest"] or response["desired_effect_digest"] != sstate.get("desired_effect_digest"):
+        raise SchedulerHold("hold_readback_binding_conflict")
+    for key in ("expected_remote_kind", "expected_remote_ref", "expected_remote_digest", "expected_remote_version"):
+        if response[key] != sstate.get(key):
+            raise SchedulerHold("hold_readback_binding_conflict")
+
+
 def apply_remote_readback(projects_root: str | Path, project_id: str, intent_id: str, adapter: Any, request: Mapping[str, Any]) -> dict[str, Any]:
     if not hasattr(adapter, "readback") or not callable(adapter.readback): raise SchedulerHold("hold_untrusted_readback")
-    if not isinstance(request, Mapping) or request.get("intent_id", intent_id) != intent_id or request.get("operation") not in {"confirm", "readback"}: raise SchedulerHold("hold_untrusted_readback")
     pid = _project(project_id)
-    if not isinstance(request, Mapping) or _project(request.get("project_id")) != pid: raise SchedulerHold("hold_control_plane_unready")
-    if not isinstance(request.get("request_digest"), str) or not re.fullmatch(r"[0-9a-f]{64}", request["request_digest"]): raise SchedulerHold("hold_readback_binding_conflict")
     path = Path(projects_root).expanduser() / pid / "collaboration.db"
     ledger = LocalCollaborationLedger.open_existing(path, expected_project_id=pid)
     try:
         all_events = ledger.list_events(); cstate = control.reduce_control_events([e for e in all_events if e.event_type.startswith("control.")]); sstate = reduce_scheduler_state(cstate, [e for e in all_events if e.event_type.startswith("scheduler.")]);
         if sstate.get("intent_id") != intent_id or sstate.get("remote_intent_state") not in REMOTE_PREDECESSORS["remote_confirmation_recorded"]: raise SchedulerHold("hold_readback_binding_conflict")
+        _validate_readback_request(request, pid, intent_id, sstate)
         response = adapter.readback(dict(request))
-        if not isinstance(response, Mapping) or response.get("project_id") != pid or response.get("intent_id") != intent_id or response.get("confirmed") is not True: raise SchedulerHold("hold_untrusted_readback")
-        required = ("adapter_id", "adapter_version", "expected_remote_kind", "expected_remote_ref", "expected_remote_digest", "expected_remote_version", "readback_digest", "opaque_receipt_ref", "occurred_at", "read_timestamp", "readback_nonce", "request_digest", "desired_effect_digest")
-        if any(not response.get(k) for k in required): raise SchedulerHold("hold_readback_binding_conflict")
-        if response["request_digest"] != request["request_digest"] or response["desired_effect_digest"] != sstate.get("desired_effect_digest"):
-            raise SchedulerHold("hold_readback_binding_conflict")
-        for key in ("expected_remote_kind", "expected_remote_ref", "expected_remote_digest", "expected_remote_version"):
-            if sstate.get(key) is not None and response[key] != sstate[key]: raise SchedulerHold("hold_readback_binding_conflict")
-        payload = {"work_id": sstate["work_id"], "intent_id": intent_id, "desired_effect_digest": response["desired_effect_digest"], "attempt_sequence": int(request.get("attempt_sequence", sstate.get("attempt_sequence", 0))), "expected_remote_kind": response["expected_remote_kind"], "expected_remote_ref": response["expected_remote_ref"], "expected_remote_digest": response["expected_remote_digest"], "expected_remote_version": response["expected_remote_version"], "adapter_id": response["adapter_id"], "adapter_version": response["adapter_version"], "readback_digest": response["readback_digest"], "read_timestamp": _timestamp(response["read_timestamp"]), "readback_nonce": response["readback_nonce"], "request_digest": response["request_digest"], "opaque_receipt_ref": response["opaque_receipt_ref"], "classification": "confirmed", "next_action": "none"}
-        event = _event(pid, "remote_confirmation_recorded", payload, _timestamp(response["occurred_at"]))
-        before = ledger.list_events(); before_head = before[-1].event_hash if before else None
-        ledger.close(); ledger = LocalCollaborationLedger.open_existing(path, expected_project_id=pid)
-        current = ledger.list_events()
-        if len(current) != len(before) or (current and current[-1].event_hash != before_head):
-            raise SchedulerHold("hold_stale_ledger_head")
-        # Validate predecessor and attempt semantics before append_batch. The
-        # LedgerStore enforces event identity, but only the scheduler reducer
-        # can reject a readback that tries to advance beyond the current
-        # materialization attempt. Keeping this check pre-append guarantees a
-        # rejected adapter response has zero event/sequence mutation.
-        reduce_scheduler_state(
-            cstate,
-            [e for e in current if e.event_type.startswith("scheduler.")] + [event],
-        )
-        ledger.append_batch([event]); after = ledger.list_events(); return {"decision": "confirmed", "project_id": pid, "mutation_performed": len(after) > len(before), "appended_count": len(after) - len(before), "replay": replay_scheduler_state(projects_root, pid)}
+        _validate_readback_response(response, request, pid, intent_id, sstate)
+        # This is the complete current trust decision.  The adapter is a
+        # same-process hermetic simulation and cannot authorize an authority
+        # transition, even if it self-attests to stronger properties.
+        raise SchedulerHold("hold_untrusted_readback")
     except SchedulerHold: raise
     except Exception as exc: raise SchedulerHold("hold_readback_unavailable") from exc
     finally: ledger.close()
