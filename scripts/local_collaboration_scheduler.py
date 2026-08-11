@@ -9,6 +9,7 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import json
+import os
 import re
 import sqlite3
 import uuid
@@ -356,7 +357,10 @@ def _read_only_sidecar_preflight(path: Path) -> None:
     """
     wal = Path(str(path) + "-wal")
     shm = Path(str(path) + "-shm")
-    if wal.exists() or shm.exists():
+    # ``Path.exists`` intentionally returns false for a dangling symlink.
+    # That is still an authority-directory entry and must not be allowed to
+    # bypass this pre-open safety boundary.
+    if os.path.lexists(wal) or os.path.lexists(shm):
         raise SchedulerHold("hold_ledger_integrity")
 
 

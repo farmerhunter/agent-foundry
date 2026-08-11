@@ -18,9 +18,10 @@ def _filesystem_snapshot(path):
     """Capture authority and SQLite sidecars for zero-side-effect probes."""
     snapshot = {}
     for candidate in (path, Path(str(path) + "-wal"), Path(str(path) + "-shm")):
-        if candidate.exists():
-            stat = candidate.stat()
-            snapshot[str(candidate)] = (True, stat.st_mtime_ns, stat.st_size, candidate.read_bytes())
+        if os.path.lexists(candidate):
+            stat = candidate.lstat()
+            content = ("symlink", os.readlink(candidate)) if candidate.is_symlink() else candidate.read_bytes()
+            snapshot[str(candidate)] = (True, stat.st_mtime_ns, stat.st_size, content)
         else:
             snapshot[str(candidate)] = (False, None, None, None)
     return snapshot
@@ -552,6 +553,24 @@ def test_replay_wal_sidecar_states_hold_without_source_mutation():
             writer.close()
 
 
+def test_replay_dangling_sidecar_symlinks_hold_without_mutation():
+    """Dangling WAL/SHM entries are sidecars, even though Path.exists is false."""
+    with tempfile.TemporaryDirectory() as root:
+        pid = _setup(root); path = Path(root) / pid / "collaboration.db"
+        for suffix in ("-wal", "-shm"):
+            sidecar = Path(str(path) + suffix)
+            sidecar.symlink_to("missing" + suffix)
+            before = _filesystem_snapshot(path)
+            try:
+                sc.replay_scheduler_state(root, pid)
+            except sc.SchedulerHold as exc:
+                assert str(exc) == "hold_ledger_integrity"
+            else:
+                raise AssertionError("dangling sidecar symlink must hold")
+            _assert_filesystem_unchanged(path, before)
+            sidecar.unlink()
+
+
 def test_authority_snapshot_schema_definition_is_closed():
     schema = Path(__file__).parent.parent / "schemas" / "local-collaboration-scheduler.schema.yaml"
     text = schema.read_text()
@@ -561,4 +580,4 @@ def test_authority_snapshot_schema_definition_is_closed():
 
 
 if __name__ == "__main__":
-    test_initialize_and_offline_transitions(); test_exact_retry_and_divergence_hold(); test_remote_never_confirmed_by_observation(); test_remote_predecessor_guards(); test_observation_and_terminal_use_current_attempt(); test_closed_payload_and_resume_gate(); test_caller_project_binding_and_disabled_gate(); test_reducer_version_mismatch_is_preappend_hold(); test_planner_observation_version_mismatch_is_preappend_hold(); test_privacy_binding_mismatch_is_preappend_hold(); test_adapter_version_mismatch_is_preappend_hold(); test_observed_unverified_to_privacy_hold_preserves_all_bindings(); test_pending_materialization_to_privacy_hold_preserves_all_bindings(); test_replay_exposes_committed_authority_snapshot_without_side_effects(); test_replay_authority_snapshot_negative_paths_hold_without_mutation(); test_replay_authority_snapshot_corruption_and_permissions_hold(); test_replay_authority_snapshot_busy_and_symlink_holds(); test_replay_wal_sidecar_states_hold_without_source_mutation(); test_authority_snapshot_schema_definition_is_closed(); print("ok")
+    test_initialize_and_offline_transitions(); test_exact_retry_and_divergence_hold(); test_remote_never_confirmed_by_observation(); test_remote_predecessor_guards(); test_observation_and_terminal_use_current_attempt(); test_closed_payload_and_resume_gate(); test_caller_project_binding_and_disabled_gate(); test_reducer_version_mismatch_is_preappend_hold(); test_planner_observation_version_mismatch_is_preappend_hold(); test_privacy_binding_mismatch_is_preappend_hold(); test_adapter_version_mismatch_is_preappend_hold(); test_observed_unverified_to_privacy_hold_preserves_all_bindings(); test_pending_materialization_to_privacy_hold_preserves_all_bindings(); test_replay_exposes_committed_authority_snapshot_without_side_effects(); test_replay_authority_snapshot_negative_paths_hold_without_mutation(); test_replay_authority_snapshot_corruption_and_permissions_hold(); test_replay_authority_snapshot_busy_and_symlink_holds(); test_replay_wal_sidecar_states_hold_without_source_mutation(); test_replay_dangling_sidecar_symlinks_hold_without_mutation(); test_authority_snapshot_schema_definition_is_closed(); print("ok")
