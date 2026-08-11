@@ -202,7 +202,9 @@ def plan_materialization(request: Mapping[str, Any], scheduler_state: Mapping[st
     req = _base(request)
     if req.get("canceled") is True or req.get("compensation") is True:
         return _result(req["operation"], "materialization_canceled", classification=req["classification"], project_id=req["project_id"], intent_id=req["intent_id"], idempotency_key=req["idempotency_key"])
-    if req["classification"] == "local_only": return _result(req["operation"], "materialization_not_required", classification="local_only", project_id=req["project_id"], intent_id=req["intent_id"], idempotency_key=req["idempotency_key"])
+    if req["classification"] == "local_only":
+        if req.get("gate") is not None or req.get("capability") is not None: _gate_capability(req)
+        return _result(req["operation"], "materialization_not_required", classification="local_only", project_id=req["project_id"], intent_id=req["intent_id"], idempotency_key=req["idempotency_key"])
     _state_check(req, scheduler_state)
     if isinstance(cache_observation, Mapping) and (cache_observation.get("outcome") not in {"cache_hit", "cache_miss"} or cache_observation.get("freshness") != "fresh_as_of_fetch" or cache_observation.get("coverage") != "complete" or cache_observation.get("authoritative") is not False or cache_observation.get("confirmation_eligible") is not False):
         return _result(req["operation"], "materialization_approval_required", classification=req["classification"], project_id=req["project_id"], intent_id=req["intent_id"], idempotency_key=req["idempotency_key"], hold="hold_materialization_stale_basis")

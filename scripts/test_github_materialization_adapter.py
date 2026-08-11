@@ -167,6 +167,12 @@ def test_schema_runtime_variants():
     @checker.checks("utf8-content")
     def utf8_content(value):
         return isinstance(value, dict) and len(json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()) <= 8192
+    @checker.checks("strict-rfc3339")
+    def strict_rfc3339(value):
+        import datetime
+        if not isinstance(value, str) or not __import__("re").fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})", value): return False
+        try: datetime.datetime.fromisoformat(value.replace("Z", "+00:00")); return True
+        except ValueError: return False
     validator = jsonschema.Draft202012Validator(schema, format_checker=checker)
     def valid(value): validator.validate(value)
     def invalid(value):
@@ -184,6 +190,8 @@ def test_schema_runtime_variants():
     with pytest.raises(MaterializationHold): plan_materialization(req(occurred_at="2026-02-30T00:00:00Z"), state())
     with pytest.raises(MaterializationHold): plan_materialization(req(approved_remote_content="raw"), state())
     with pytest.raises(MaterializationHold): plan_materialization(req(approved_remote_content={"body": 1}), state())
+    invalid({**req(), "occurred_at": "2026-02-30T00:00:00Z"})
+    with pytest.raises(MaterializationHold): plan_materialization({**req(classification="local_only"), "gate": {"junk": True}}, state())
     with pytest.raises(MaterializationHold): plan_materialization({**optional, "capability": req()["capability"]}, state())
     with pytest.raises(MaterializationHold): plan_materialization({**optional, "scheduler_state": "forbidden"}, state())
 
