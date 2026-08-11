@@ -194,6 +194,11 @@ def test_schema_runtime_variants():
     with pytest.raises(MaterializationHold): plan_materialization({**req(classification="local_only"), "gate": {"junk": True}}, state())
     with pytest.raises(MaterializationHold): plan_materialization({**optional, "capability": req()["capability"]}, state())
     with pytest.raises(MaterializationHold): plan_materialization({**optional, "scheduler_state": "forbidden"}, state())
+    for classification in ("local_only", "optional_sync"):
+        variant = req(classification=classification); variant.pop("gate"); variant.pop("capability")
+        for key in ("gate", "capability"):
+            invalid({**variant, key: None})
+            with pytest.raises(MaterializationHold): execute_materialization({**variant, key: None}, state(), FakeConnector())
 
 def test_no_host_io_and_external_holds_fixture_stability(monkeypatch):
     def blocked(*args, **kwargs): raise AssertionError("host I/O invoked")
