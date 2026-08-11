@@ -37,6 +37,16 @@ CLEANUP_DECISION_KEYS = {
     "project_id", "repository_id", "repository_locator_digest", "auth_scope_digest",
     "cache_path_digest", "metadata_digest", "reason_digest", "decided_at",
 }
+OPERATION_OUTCOMES = {
+    "read_cache": {"cache_hit", "cache_miss"},
+    "project_cache_readout": {"cache_hit", "cache_miss"},
+    "initialize_cache": {"cache_initialized"},
+    "refresh_cache": {"cache_unavailable", "cache_privacy_held", "cache_duplicate", "cache_partial", "cache_refreshed"},
+    "invalidate_cache_entries": {"cache_invalidated"},
+    "rebuild_cache": {"cache_rebuilt"},
+    "plan_cache_cleanup": {"cache_cleanup_planned"},
+    "apply_cache_cleanup": {"cache_cleaned"},
+}
 
 
 class CacheError(RuntimeError):
@@ -182,6 +192,8 @@ def _cleanup_decision(value: Any, *, project_id: str, repository_id: str,
 
 def _result(*, operation: str, outcome: str, **fields: Any) -> dict[str, Any]:
     """Closed outer result shared by all public operation APIs."""
+    if operation not in OPERATION_OUTCOMES or outcome not in OPERATION_OUTCOMES[operation]:
+        raise CacheHold("hold_cache_schema")
     return {
         "schema_version": VERSION, "operation": operation, "outcome": outcome,
         "authoritative": False, "confirmation_eligible": False, **fields,
@@ -488,11 +500,16 @@ def _read_preflight(path: Path, lm: Mapping[str, Any], repository_id: str, locat
 
 
 def initialize_cache(*, projects_root, project_id, repository_id, repository_locator_digest, auth_scope_digest, producer_contract="unknown", producer_version="unknown", receipt_at=None):
-    ledger, lm = _authority(projects_root, project_id); path = _cache_path(projects_root, project_id); locator = _digest_locator(repository_locator_digest)
+    # Complete caller validation is intentionally before `GitHubEvidenceCache`
+    # construction: a malformed binding must never create an orphan DB/WAL/SHM.
+    repository_id, locator, scope = _required_binding(
+        repository_id, repository_locator_digest, auth_scope_digest)
+    if not isinstance(producer_contract, str) or not producer_contract or not isinstance(producer_version, str) or not producer_version:
+        raise CacheHold("hold_cache_schema")
+    if receipt_at is not None:
+        _ts(receipt_at)
+    ledger, lm = _authority(projects_root, project_id); path = _cache_path(projects_root, project_id)
     try:
-        scope = _auth_scope_digest(auth_scope_digest)
-        if not isinstance(producer_contract, str) or not producer_contract or not isinstance(producer_version, str) or not producer_version:
-            raise CacheHold("hold_cache_schema")
         cache = GitHubEvidenceCache(path)
         try:
             old = cache._meta(); fresh_projection = set(old) == {"schema_version", "durability"}
@@ -500,7 +517,6 @@ def initialize_cache(*, projects_root, project_id, repository_id, repository_loc
                 raise CacheHold("hold_cache_scope")
             _binding({**old, "project_id": lm["project_id"], "repository_id": repository_id, "repository_locator_digest": locator, "auth_scope_digest": scope}, lm["project_id"], repository_id, locator, scope)
             values = {"project_id": lm["project_id"], "repository_id": str(repository_id), "repository_locator_digest": locator, "auth_scope_digest": scope, "host_kind": "github", "producer_contract": str(producer_contract), "producer_version": str(producer_version), "generation": old.get("generation", "0"), "ledger_head": lm["head"], "created_at": receipt_at or old.get("created_at", ""), "timestamp_provenance": "caller_supplied" if receipt_at else "not_collected"}
-            if receipt_at: _ts(receipt_at)
             for key, value in values.items():
                 if key in old and old[key] != str(value) and key not in {"ledger_head", "created_at", "timestamp_provenance"}: raise CacheHold("hold_cache_binding_mismatch")
                 cache._setmeta(key, value)
@@ -642,7 +658,7 @@ def refresh_cache(*, projects_root, project_id, repository_id, repository_locato
             # observation of this request.
             cache._counter("cache_hit"); cache._counter("refresh_requests"); cache._counter("producer_invocations")
             cache.db.execute("COMMIT")
-            return _result(operation="refresh_cache", outcome="cache_partial_preserved" if preserved_complete else "cache_duplicate", generation=before, changed_count=0, duplicate_count=duplicates, receipt_id=None)
+            return _result(operation="refresh_cache", outcome="cache_partial" if preserved_complete else "cache_duplicate", generation=before, changed_count=0, duplicate_count=duplicates, receipt_id=None)
         newgen = before + changed; cache._setmeta("generation", newgen); cache._setmeta("ledger_head", lm["head"])
         cache._counter("cache_hit"); cache._counter("refresh_requests"); cache._counter("producer_invocations")
         rid = cache._receipt("refresh", {"generation": newgen, "changed": changed, "duplicates": duplicates, "producer_id": result["producer_id"], "coverage": producer_coverage}, created_at=evaluated_at, provenance="caller_evaluated_at")

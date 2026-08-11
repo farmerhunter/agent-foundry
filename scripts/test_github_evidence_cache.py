@@ -150,6 +150,20 @@ def test_authority_mismatch_no_orphan():
     else: raise AssertionError("missing authority must hold")
     assert not (Path(root)/pid/"github-evidence-cache.db").exists()
 
+def test_initialize_prevalidates_binding_before_cache_creation():
+    root=tempfile.mkdtemp(prefix="evidence-cache-init-"); pid=str(uuid.uuid4())
+    ledger=LocalCollaborationLedger.create_project(projects_root=root, project_id=pid); ledger.close()
+    path=Path(root)/pid/"github-evidence-cache.db"
+    for kwargs in [
+        dict(repository_id="", repository_locator_digest="repo-locator", auth_scope_digest="a"*64),
+        dict(repository_id="repo-opaque", repository_locator_digest="", auth_scope_digest="a"*64),
+        dict(repository_id="repo-opaque", repository_locator_digest="repo-locator", auth_scope_digest="not-a-digest"),
+    ]:
+        try: initialize_cache(projects_root=root,project_id=pid,**kwargs)
+        except CacheHold as exc: assert exc.classification in {"hold_cache_binding_mismatch", "hold_cache_scope"}
+        else: raise AssertionError("invalid initialization binding must hold")
+        assert not any(Path(str(path)+suffix).exists() for suffix in ("", "-wal", "-shm"))
+
 def test_cleanup_is_explicit_and_local():
     root,pid=setup(); path=Path(root)/pid/"github-evidence-cache.db"
     metadata=project_cache_readout(**readout_kwargs(root,pid))["metadata"]
@@ -180,7 +194,7 @@ def test_partial_cannot_replace_complete_and_receipts_validate():
     refresh_cache(**kwargs, producer=Producer([entry(revision="complete")]))
     partial=refresh_cache(**kwargs, producer=Producer([entry(revision="partial",coverage="partial")], coverage="partial"))
     read=bound_read(projects_root=root,project_id=pid,evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10)
-    assert partial["outcome"] == "cache_partial_preserved" and read["entries"][0]["source_revision"] == "complete"
+    assert partial["outcome"] == "cache_partial" and read["entries"][0]["source_revision"] == "complete"
     path=Path(root)/pid/"github-evidence-cache.db"
     db=sqlite3.connect(path); db.execute("UPDATE receipts SET payload='{}' WHERE operation='refresh'"); db.commit(); db.close()
     try: bound_read(projects_root=root,project_id=pid,evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10)
@@ -357,10 +371,16 @@ def test_published_schema_conforms_to_runtime_public_envelopes():
     def valid(value):
         errors=list(validator.iter_errors(value))
         assert not errors, errors[0].message
+    def invalid(value):
+        assert list(validator.iter_errors(value)), "undeclared outcome must fail schema"
     root,pid=setup(); path=Path(root)/pid/"github-evidence-cache.db"
     valid(project_cache_readout(**readout_kwargs(root,pid)))
     refreshed=refresh_cache(projects_root=root,project_id=pid,repository_id="repo-opaque",repository_locator_digest="repo-locator",auth_scope_digest="a"*64,selectors=["123"],evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10,producer=Producer([entry()]))
     valid(refreshed); valid(bound_read(projects_root=root,project_id=pid,evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10))
+    invalid({**refreshed, "outcome":"undeclared_terminal_state"})
+    try: cache_module._result(operation="refresh_cache", outcome="undeclared_terminal_state")
+    except CacheHold as exc: assert exc.classification == "hold_cache_schema"
+    else: raise AssertionError("runtime outcome set must be closed")
     invalidated=bound_invalidate(projects_root=root,project_id=pid,entry_keys=[],reason="reason",evaluated_at="2026-08-11T00:00:00Z")
     valid(invalidated)
     try:

@@ -155,7 +155,7 @@ $defs:
     properties:
       schema_version: {const: GitHubEvidenceCache-v1}
       operation: {enum: [initialize_cache, refresh_cache, invalidate_cache_entries, rebuild_cache, plan_cache_cleanup, apply_cache_cleanup]}
-      outcome: {type: string, minLength: 1, maxLength: 128}
+      outcome: {enum: [cache_initialized, cache_unavailable, cache_privacy_held, cache_duplicate, cache_partial, cache_refreshed, cache_invalidated, cache_rebuilt, cache_cleanup_planned, cache_cleaned]}
       authoritative: {const: false}
       confirmation_eligible: {const: false}
       project_id: {type: string, format: uuid}
@@ -172,3 +172,16 @@ $defs:
       duplicate_count: {type: integer, minimum: 0}
       count: {type: integer, minimum: 0}
       receipt_id: {type: [string, 'null'], maxLength: 128}
+    allOf:
+      - if: {properties: {operation: {const: initialize_cache}}}
+        then: {properties: {outcome: {const: cache_initialized}}}
+      - if: {properties: {operation: {const: refresh_cache}}}
+        then: {properties: {outcome: {enum: [cache_unavailable, cache_privacy_held, cache_duplicate, cache_partial, cache_refreshed]}}}
+      - if: {properties: {operation: {const: invalidate_cache_entries}}}
+        then: {properties: {outcome: {const: cache_invalidated}}}
+      - if: {properties: {operation: {const: rebuild_cache}}}
+        then: {properties: {outcome: {const: cache_rebuilt}}}
+      - if: {properties: {operation: {const: plan_cache_cleanup}}}
+        then: {properties: {outcome: {const: cache_cleanup_planned}}}
+      - if: {properties: {operation: {const: apply_cache_cleanup}}}
+        then: {properties: {outcome: {const: cache_cleaned}}}
