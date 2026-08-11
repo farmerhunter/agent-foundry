@@ -28,6 +28,16 @@ def readout_kwargs(root, pid):
         repository_locator_digest="repo-locator", auth_scope_digest="a"*64,
         evaluated_at="2026-08-11T00:00:00Z", max_age_seconds=10)
 
+def bound_read(*, projects_root, project_id, **kwargs):
+    binding={"repository_id":"repo-opaque", "repository_locator_digest":"repo-locator", "auth_scope_digest":"a"*64}
+    binding.update(kwargs)
+    return read_cache(projects_root=projects_root, project_id=project_id, **binding)
+
+def bound_invalidate(*, projects_root, project_id, **kwargs):
+    binding={"repository_id":"repo-opaque", "repository_locator_digest":"repo-locator", "auth_scope_digest":"a"*64}
+    binding.update(kwargs)
+    return invalidate_cache_entries(projects_root=projects_root, project_id=project_id, **binding)
+
 def disposal_decision(*, project_id, metadata_digest, cache_path_digest, reason="test"):
     return {
         "schema_version":"GitHubEvidenceCache-v1", "operation":"cache_cleanup_disposal",
@@ -47,7 +57,7 @@ def entry(revision="r1", summary="bounded", coverage="complete", ref="123"):
 
 def test_miss_is_non_mutating():
     root,pid=setup(); path=Path(root)/pid/"github-evidence-cache.db"; before=path.stat().st_mtime_ns
-    result=read_cache(projects_root=root,project_id=pid,evaluated_at="2026-08-11T00:00:01Z",max_age_seconds=10)
+    result=bound_read(projects_root=root,project_id=pid,evaluated_at="2026-08-11T00:00:01Z",max_age_seconds=10)
     assert result["outcome"] == "cache_hit" and result["entries"] == [] and path.stat().st_mtime_ns == before
 
 def test_closed_nested_model_and_prewrite_rejection():
@@ -62,7 +72,7 @@ def test_closed_nested_model_and_prewrite_rejection():
 def test_duplicate_is_zero_mutation_and_metrics_are_separate():
     root,pid=setup(); producer=Producer([entry()]); kwargs=dict(projects_root=root,project_id=pid,repository_id="repo-opaque",repository_locator_digest="repo-locator",auth_scope_digest="a"*64,selectors=["123"],evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10,producer=producer)
     first=refresh_cache(**kwargs); path=Path(root)/pid/"github-evidence-cache.db"; snapshot=path.read_bytes(); second=refresh_cache(**kwargs)
-    readout=read_cache(projects_root=root,project_id=pid,evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10,auth_scope_digest="a"*64)
+    readout=bound_read(projects_root=root,project_id=pid,evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10,auth_scope_digest="a"*64)
     assert first["outcome"] == "cache_refreshed" and second["outcome"] == "cache_duplicate" and second["receipt_id"] is None
     assert readout["entries"][0]["opaque_object_ref"] == "123" and readout["metadata"]["generation"] == "1"
     assert readout["counters"]["cache_hit"] == 2 and readout["counters"]["refresh_requests"] == 2 and readout["counters"]["producer_invocations"] == 2
@@ -70,23 +80,44 @@ def test_duplicate_is_zero_mutation_and_metrics_are_separate():
 def test_read_future_and_binding_holds():
     root,pid=setup(); producer=Producer([entry()]); kwargs=dict(projects_root=root,project_id=pid,repository_id="repo-opaque",repository_locator_digest="repo-locator",auth_scope_digest="a"*64,selectors=["123"],evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10,producer=producer)
     refresh_cache(**kwargs)
-    try: read_cache(projects_root=root,project_id=pid,evaluated_at="2025-01-01T00:00:00Z",max_age_seconds=10)
+    try: bound_read(projects_root=root,project_id=pid,evaluated_at="2025-01-01T00:00:00Z",max_age_seconds=10)
     except CacheHold as exc: assert exc.classification == "hold_cache_clock_or_freshness"
     else: raise AssertionError("future cache age must hold")
-    try: read_cache(projects_root=root,project_id=pid,evaluated_at="2026-08-11T00:00:01Z",max_age_seconds=10,repository_id="other",repository_locator_digest="repo-locator")
+    try: bound_read(projects_root=root,project_id=pid,evaluated_at="2026-08-11T00:00:01Z",max_age_seconds=10,repository_id="other",repository_locator_digest="repo-locator")
     except CacheHold as exc: assert exc.classification == "hold_cache_binding_mismatch"
     else: raise AssertionError("wrong repository must hold")
 
+def test_public_read_and_invalidate_require_full_binding_before_open():
+    root,pid=setup(); path=Path(root)/pid/"github-evidence-cache.db"
+    before=_files_snapshot(path); mtime=path.stat().st_mtime_ns
+    for fn, kwargs in [
+        (read_cache, dict(projects_root=root,project_id=pid,evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10)),
+        (read_cache, dict(projects_root=root,project_id=pid,evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10,repository_id="repo-opaque",repository_locator_digest="repo-locator")),
+        (invalidate_cache_entries, dict(projects_root=root,project_id=pid,entry_keys=[],reason="x",evaluated_at="2026-08-11T00:00:00Z")),
+        (invalidate_cache_entries, dict(projects_root=root,project_id=pid,entry_keys=[],reason="x",evaluated_at="2026-08-11T00:00:00Z",repository_id="repo-opaque",repository_locator_digest="repo-locator")),
+    ]:
+        try: fn(**kwargs)
+        except CacheHold as exc: assert exc.classification in {"hold_cache_binding_mismatch", "hold_cache_scope"}
+        else: raise AssertionError("missing public binding must hold")
+        assert _files_snapshot(path) == before and path.stat().st_mtime_ns == mtime
+    try: read_cache(projects_root=root,project_id=pid,evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10,repository_id="other",repository_locator_digest="repo-locator",auth_scope_digest="a"*64)
+    except CacheHold as exc: assert exc.classification == "hold_cache_binding_mismatch"
+    else: raise AssertionError("wrong read binding must hold")
+    try: invalidate_cache_entries(projects_root=root,project_id=pid,entry_keys=[],reason="x",evaluated_at="2026-08-11T00:00:00Z",repository_id="other",repository_locator_digest="repo-locator",auth_scope_digest="a"*64)
+    except CacheHold as exc: assert exc.classification == "hold_cache_binding_mismatch"
+    else: raise AssertionError("wrong invalidate binding must hold")
+    assert _files_snapshot(path) == before and path.stat().st_mtime_ns == mtime
+
 def test_corrupt_cache_is_fail_closed_without_delete():
     root,pid=setup(); path=Path(root)/pid/"github-evidence-cache.db"; path.write_bytes(b"not sqlite"); before=path.read_bytes()
-    try: read_cache(projects_root=root,project_id=pid,evaluated_at="2026-08-11T00:00:01Z",max_age_seconds=10)
+    try: bound_read(projects_root=root,project_id=pid,evaluated_at="2026-08-11T00:00:01Z",max_age_seconds=10)
     except CacheHold as exc: assert exc.classification in {"hold_cache_integrity", "hold_cache_schema"}
     else: raise AssertionError("corrupt cache must hold")
     assert path.read_bytes() == before
 
 def test_rebuild_and_invalidate_require_existing_cache():
     root,pid=setup(); path=Path(root)/pid/"github-evidence-cache.db"; path.unlink()
-    try: invalidate_cache_entries(projects_root=root,project_id=pid,entry_keys=[],reason="x",evaluated_at="2026-08-11T00:00:00Z")
+    try: bound_invalidate(projects_root=root,project_id=pid,entry_keys=[],reason="x",evaluated_at="2026-08-11T00:00:00Z")
     except CacheHold as exc: assert exc.classification == "hold_cache_authority_unready"
     else: raise AssertionError("invalidate must not create cache")
 
@@ -101,7 +132,7 @@ def test_refresh_once_duplicate_and_divergence():
 
 def test_freshness_and_privacy():
     root,pid=setup(); p=Producer([entry()]); refresh_cache(projects_root=root,project_id=pid,repository_id="repo-opaque",repository_locator_digest="repo-locator",auth_scope_digest="a"*64,selectors=["123"],evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10,producer=p)
-    rows=read_cache(projects_root=root,project_id=pid,evaluated_at="2026-08-11T00:00:11Z",max_age_seconds=10)["entries"]
+    rows=bound_read(projects_root=root,project_id=pid,evaluated_at="2026-08-11T00:00:11Z",max_age_seconds=10)["entries"]
     assert rows[0]["freshness"] == "stale" and rows[0]["authoritative"] is False and rows[0]["confirmation_eligible"] is False
     bad=Producer([{**entry(), "opaque_object_ref":"124", "facts":{"raw_body":"secret"}}])
     try: refresh_cache(projects_root=root,project_id=pid,repository_id="repo-opaque",repository_locator_digest="repo-locator",auth_scope_digest="a"*64,selectors=["123"],evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10,producer=bad)
@@ -144,11 +175,11 @@ def test_partial_cannot_replace_complete_and_receipts_validate():
     root,pid=setup(); kwargs=dict(projects_root=root,project_id=pid,repository_id="repo-opaque",repository_locator_digest="repo-locator",auth_scope_digest="a"*64,selectors=["123"],evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10)
     refresh_cache(**kwargs, producer=Producer([entry(revision="complete")]))
     partial=refresh_cache(**kwargs, producer=Producer([entry(revision="partial",coverage="partial")], coverage="partial"))
-    read=read_cache(projects_root=root,project_id=pid,evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10)
+    read=bound_read(projects_root=root,project_id=pid,evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10)
     assert partial["outcome"] == "cache_partial_preserved" and read["entries"][0]["source_revision"] == "complete"
     path=Path(root)/pid/"github-evidence-cache.db"
     db=sqlite3.connect(path); db.execute("UPDATE receipts SET payload='{}' WHERE operation='refresh'"); db.commit(); db.close()
-    try: read_cache(projects_root=root,project_id=pid,evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10)
+    try: bound_read(projects_root=root,project_id=pid,evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10)
     except CacheHold as exc: assert exc.classification == "hold_cache_integrity"
     else: raise AssertionError("tampered receipt must hold")
 
@@ -159,7 +190,7 @@ def test_closed_runtime_limits_and_preflight_do_not_touch_cache():
         try: refresh_cache(**kwargs, producer=Producer([bad]))
         except CacheHold: pass
         else: raise AssertionError("runtime limits must hold")
-    try: invalidate_cache_entries(projects_root=root,project_id=pid,entry_keys=["bad"],reason="x",evaluated_at="2026-08-11T00:00:00Z")
+    try: bound_invalidate(projects_root=root,project_id=pid,entry_keys=["bad"],reason="x",evaluated_at="2026-08-11T00:00:00Z")
     except CacheHold as exc: assert exc.classification == "hold_cache_schema"
     else: raise AssertionError("invalid invalidate key must hold")
     try: rebuild_cache(projects_root=root,project_id=pid,repository_id="repo-opaque",repository_locator_digest="repo-locator",auth_scope_digest="a"*64,entries=[{**entry(),"summary":"bad\nsummary"}],evaluated_at="2026-08-11T00:00:00Z")
@@ -203,7 +234,7 @@ def test_rebuild_future_and_receipt_data_are_closed_prewrite():
     assert path.read_bytes() == before and path.stat().st_mtime_ns == mtime
     refresh_cache(projects_root=root,project_id=pid,repository_id="repo-opaque",repository_locator_digest="repo-locator",auth_scope_digest="a"*64,selectors=["123"],evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10,producer=Producer([entry()]))
     db=sqlite3.connect(path); payload=json.loads(db.execute("SELECT payload FROM receipts WHERE operation='refresh'").fetchone()[0]); payload["data"]["bogus"]=1; db.execute("UPDATE receipts SET payload=?",(json.dumps(payload),)); db.commit(); db.close()
-    try: read_cache(projects_root=root,project_id=pid,evaluated_at="2026-08-11T00:00:01Z",max_age_seconds=10)
+    try: bound_read(projects_root=root,project_id=pid,evaluated_at="2026-08-11T00:00:01Z",max_age_seconds=10)
     except CacheHold as exc: assert exc.classification == "hold_cache_integrity"
     else: raise AssertionError("unknown receipt data must hold")
 
@@ -229,7 +260,7 @@ refresh_cache(projects_root=sys.argv[2],project_id=sys.argv[3],repository_id="re
     retry_entry={**entry(ref="post",revision="post",summary="post-commit"), "anchors":["issue:post"]}
     retry=refresh_cache(projects_root=root,project_id=pid,repository_id="repo-opaque",repository_locator_digest="repo-locator",auth_scope_digest="a"*64,selectors=["post"],evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10,producer=Producer([retry_entry]))
     assert retry["outcome"] == "cache_duplicate" and retry["receipt_id"] is None
-    rows=read_cache(projects_root=root,project_id=pid,evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10)["entries"]
+    rows=bound_read(projects_root=root,project_id=pid,evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10)["entries"]
     assert [row["opaque_object_ref"] for row in rows] == ["post"] and _ledger_state(ledger_path) == before
 
 def _subprocess_cache(root, pid, summary, sleep_seconds=0):
@@ -254,7 +285,7 @@ def test_two_process_race_busy_and_crash_recovery():
     else: raise AssertionError("bounded busy must hold")
     locker.wait(timeout=10)
     before_crash_files=_files_snapshot(path)
-    before_crash=read_cache(projects_root=root,project_id=pid,evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10)
+    before_crash=bound_read(projects_root=root,project_id=pid,evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10)
     crash_code = '''import os,signal,sys; sys.path.insert(0,sys.argv[1]); import github_evidence_cache as m
 def kill(self,*a,**kw): os.kill(os.getpid(),signal.SIGKILL)
 m.GitHubEvidenceCache._receipt=kill
@@ -264,7 +295,7 @@ m.refresh_cache(projects_root=sys.argv[2],project_id=sys.argv[3],repository_id="
     crash = subprocess.run([sys.executable,"-c",crash_code,str(Path(__file__).parent),root,pid])
     assert crash.returncode == -signal.SIGKILL
     out=project_cache_readout(**readout_kwargs(root,pid))
-    after_crash=read_cache(projects_root=root,project_id=pid,evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10)
+    after_crash=bound_read(projects_root=root,project_id=pid,evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10)
     assert ledger_path.read_bytes() == ledger_before and after_crash["entries"] == before_crash["entries"]
     assert after_crash["metadata"]["generation"] == before_crash["metadata"]["generation"]
     # The killed writer may leave uncommitted WAL frames.  They are not part of
@@ -282,11 +313,11 @@ def test_read_envelope_scope_and_true_ro_preflight_are_closed():
     except CacheHold as exc: assert exc.classification == "hold_cache_privacy"
     else: raise AssertionError("forbidden producer content must hold")
     assert _files_snapshot(path) == before and path.stat().st_mtime_ns == before_mtime
-    hit=read_cache(projects_root=root,project_id=pid,evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10,offline=True,repository_id="repo-opaque",repository_locator_digest="repo-locator",auth_scope_digest="a"*64)
+    hit=bound_read(projects_root=root,project_id=pid,evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10,offline=True,repository_id="repo-opaque",repository_locator_digest="repo-locator",auth_scope_digest="a"*64)
     assert set(("as_of","age_seconds","coverage","freshness","authoritative","confirmation_eligible","next_action")) <= set(hit)
     assert hit["authoritative"] is False and hit["confirmation_eligible"] is False and hit["age_seconds"] is None
     try:
-        read_cache(projects_root=root,project_id=pid,evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10,repository_id="repo-opaque",repository_locator_digest="repo-locator",auth_scope_digest="b"*64)
+        bound_read(projects_root=root,project_id=pid,evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10,repository_id="repo-opaque",repository_locator_digest="repo-locator",auth_scope_digest="b"*64)
     except CacheHold as exc: assert exc.classification == "hold_cache_scope"
     else: raise AssertionError("scope mismatch must hold")
     assert _files_snapshot(path) == before
@@ -296,11 +327,11 @@ def test_read_miss_validates_policy_without_creating_cache():
     root=tempfile.mkdtemp(prefix="evidence-cache-miss-"); pid=str(uuid.uuid4())
     ledger=LocalCollaborationLedger.create_project(projects_root=root, project_id=pid); ledger.close()
     path=Path(root)/pid/"github-evidence-cache.db"
-    try: read_cache(projects_root=root,project_id=pid,evaluated_at="invalid",max_age_seconds=10)
+    try: bound_read(projects_root=root,project_id=pid,evaluated_at="invalid",max_age_seconds=10)
     except CacheHold as exc: assert exc.classification == "hold_cache_clock_or_freshness"
     else: raise AssertionError("miss must validate freshness policy")
     assert not path.exists()
-    miss=read_cache(projects_root=root,project_id=pid,evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10,offline=True)
+    miss=bound_read(projects_root=root,project_id=pid,evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10,offline=True)
     assert miss == {**miss, "outcome":"cache_miss", "entries":[], "as_of":"2026-08-11T00:00:00Z", "age_seconds":None, "coverage":"unavailable", "freshness":"unavailable", "offline":True, "authoritative":False, "confirmation_eligible":False, "next_action":"initialize_cache", "metadata":None, "counters":{"cache_miss":1}}
     assert not path.exists()
 
@@ -313,7 +344,7 @@ def test_failed_producer_does_not_claim_durable_invocation():
         refresh_cache(projects_root=root,project_id=pid,repository_id="repo-opaque",repository_locator_digest="repo-locator",auth_scope_digest="a"*64,selectors=["123"],evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10,producer=Explodes())
     except CacheHold as exc: assert exc.classification == "hold_cache_producer_untrusted"
     else: raise AssertionError("producer failure must hold")
-    readout=read_cache(projects_root=root,project_id=pid,evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10)
+    readout=bound_read(projects_root=root,project_id=pid,evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10)
     assert readout["counters"] == {"cache_miss":1} and _files_snapshot(path) == before
 
 def test_published_schema_conforms_to_runtime_public_envelopes():
@@ -325,8 +356,8 @@ def test_published_schema_conforms_to_runtime_public_envelopes():
     root,pid=setup(); path=Path(root)/pid/"github-evidence-cache.db"
     valid(project_cache_readout(**readout_kwargs(root,pid)))
     refreshed=refresh_cache(projects_root=root,project_id=pid,repository_id="repo-opaque",repository_locator_digest="repo-locator",auth_scope_digest="a"*64,selectors=["123"],evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10,producer=Producer([entry()]))
-    valid(refreshed); valid(read_cache(projects_root=root,project_id=pid,evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10))
-    invalidated=invalidate_cache_entries(projects_root=root,project_id=pid,entry_keys=[],reason="reason",evaluated_at="2026-08-11T00:00:00Z")
+    valid(refreshed); valid(bound_read(projects_root=root,project_id=pid,evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10))
+    invalidated=bound_invalidate(projects_root=root,project_id=pid,entry_keys=[],reason="reason",evaluated_at="2026-08-11T00:00:00Z")
     valid(invalidated)
     try:
         refresh_cache(projects_root=root,project_id=pid,repository_id="repo-opaque",repository_locator_digest="repo-locator",auth_scope_digest="a"*64,selectors=["123"],evaluated_at="2026-08-11T00:00:00Z",max_age_seconds=10,producer=Producer([{**entry(),"facts":{"raw_body":"x"}}]))

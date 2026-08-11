@@ -520,25 +520,28 @@ def _read_envelope(*, outcome, entries, evaluated_at, offline, metadata, counter
         offline=bool(offline), next_action=next_action, metadata=metadata, counters=counters)
 
 
+def _required_binding(repository_id: Any, repository_locator_digest: Any,
+                      auth_scope_digest: Any) -> tuple[str, str, str]:
+    """Require all public cache operations to state the opaque authority binding."""
+    if not isinstance(repository_id, str) or not repository_id:
+        raise CacheHold("hold_cache_binding_mismatch")
+    return repository_id, _digest_locator(repository_locator_digest), _auth_scope_digest(auth_scope_digest)
+
+
 def read_cache(*, projects_root, project_id, evaluated_at, max_age_seconds, offline=False, repository_id=None, repository_locator_digest=None, auth_scope_digest=None):
     # Validate caller freshness policy before even deciding whether this is a miss.
     _ts(evaluated_at)
     if not isinstance(max_age_seconds, int) or isinstance(max_age_seconds, bool) or not 0 <= max_age_seconds <= 604800:
         raise CacheHold("hold_cache_clock_or_freshness")
-    if (repository_id is None) != (repository_locator_digest is None):
-        raise CacheHold("hold_cache_binding_mismatch")
-    if auth_scope_digest is not None:
-        auth_scope_digest = _auth_scope_digest(auth_scope_digest)
+    repository_id, repository_locator_digest, auth_scope_digest = _required_binding(
+        repository_id, repository_locator_digest, auth_scope_digest)
     ledger, lm = _authority(projects_root, project_id); path = _cache_path(projects_root, project_id); cache = None
     try:
         if not path.is_file():
             return _read_envelope(outcome="cache_miss", entries=[], evaluated_at=evaluated_at, offline=offline, metadata=None, counters={"cache_miss": 1}, coverage="unavailable", freshness="unavailable", age_seconds=None, next_action="initialize_cache")
         cache = GitHubEvidenceCache(path, read_only=True); meta = cache._meta()
         try:
-            if repository_id is not None:
-                _binding(meta, lm["project_id"], repository_id, _digest_locator(repository_locator_digest), auth_scope_digest)
-            elif auth_scope_digest is not None and meta.get("auth_scope_digest") != auth_scope_digest:
-                raise CacheHold("hold_cache_scope")
+            _binding(meta, lm["project_id"], repository_id, repository_locator_digest, auth_scope_digest)
             entries = cache.read(evaluated_at=evaluated_at, max_age_seconds=max_age_seconds, offline=offline)
             freshness = "unavailable" if not entries else ("stale" if any(e["freshness"] == "stale" for e in entries) else entries[0]["freshness"])
             coverage = "unavailable" if not entries else ("partial" if any(e["coverage"] == "partial" for e in entries) else entries[0]["coverage"])
@@ -675,17 +678,12 @@ def invalidate_cache_entries(*, projects_root, project_id, entry_keys, reason, e
     keys = list(entry_keys)
     if not all(isinstance(key, str) and HEX64.fullmatch(key) for key in keys):
         raise CacheHold("hold_cache_schema")
-    locator = _digest_locator(repository_locator_digest) if repository_locator_digest is not None else None
-    if (repository_id is None) != (repository_locator_digest is None):
-        raise CacheHold("hold_cache_binding_mismatch")
-    if (repository_id is None) != (auth_scope_digest is None):
-        raise CacheHold("hold_cache_binding_mismatch")
-    if auth_scope_digest is not None:
-        auth_scope_digest = _auth_scope_digest(auth_scope_digest)
+    repository_id, locator, auth_scope_digest = _required_binding(
+        repository_id, repository_locator_digest, auth_scope_digest)
     ledger, lm = _authority(projects_root, project_id); path = _cache_path(projects_root, project_id); cache = None
     try:
         cache = _open_existing(path); meta = cache._meta()
-        if repository_id is not None: _binding(meta, lm["project_id"], repository_id, locator, auth_scope_digest)
+        _binding(meta, lm["project_id"], repository_id, locator, auth_scope_digest)
         before = int(meta.get("generation", "0")); _ledger_recheck(projects_root, project_id, lm); cache.db.execute("BEGIN IMMEDIATE")
         if int(cache._meta().get("generation", "0")) != before: raise CacheHold("hold_cache_generation_conflict")
         for key in keys:
