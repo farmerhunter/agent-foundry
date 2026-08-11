@@ -54,7 +54,7 @@ $defs:
       selector_digest: {$ref: '#/$defs/digest'}
       representation_version: {type: string, minLength: 1, maxLength: 64}
       facts: {$ref: '#/$defs/facts'}
-      summary: {type: string, maxLength: 1024}
+      summary: {type: string, maxLength: 1024, pattern: '^[^\\r\\n]*$'}
       anchors: {type: array, maxItems: 16, items: {type: string, maxLength: 256}}
       source_revision: {type: string, minLength: 1, maxLength: 512}
       source_updated_at: {$ref: '#/$defs/timestamp'}
@@ -69,7 +69,7 @@ $defs:
   receipt:
     type: object
     additionalProperties: false
-    required: [operation, provenance]
+    required: [operation, provenance, durability]
     properties:
       operation: {type: string, enum: [refresh, invalidate, rebuild, cleanup_plan, cleanup_apply]}
       provenance: {enum: [caller_supplied, caller_evaluated_at]}
@@ -79,6 +79,7 @@ $defs:
       duplicates: {type: integer, minimum: 0}
       count: {type: integer, minimum: 0}
       reason_digest: {$ref: '#/$defs/digest'}
+      durability: {const: wal_synchronous_normal}
   metadata:
     type: object
     additionalProperties: false
@@ -92,6 +93,7 @@ $defs:
       producer_contract: {type: string}
       producer_version: {type: string}
       timestamp_provenance: {enum: [caller_supplied, caller_evaluated_at, not_collected]}
+      durability: {const: wal_synchronous_normal}
   readout:
     type: object
     additionalProperties: false

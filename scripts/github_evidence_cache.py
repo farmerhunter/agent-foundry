@@ -25,6 +25,8 @@ FORBIDDEN = {"prompt", "transcript", "raw_transcript", "tool_output", "raw_tool_
 RFC3339 = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z$")
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 HOLDS = {"hold_cache_authority_unready", "hold_cache_binding_mismatch", "hold_cache_schema", "hold_cache_permission", "hold_cache_integrity", "hold_cache_busy", "hold_cache_stale_basis", "hold_cache_divergent_revision", "hold_cache_generation_conflict", "hold_cache_clock_or_freshness", "hold_cache_scope", "hold_cache_privacy", "hold_cache_producer_untrusted", "hold_cache_cleanup_gate"}
+DURABILITY = "wal_synchronous_normal"
+META_REQUIRED = {"schema_version", "project_id", "repository_id", "repository_locator_digest", "host_kind", "producer_contract", "producer_version", "generation", "ledger_head", "created_at", "timestamp_provenance", "durability"}
 
 
 class CacheError(RuntimeError):
@@ -165,11 +167,22 @@ def _entry(entry: Any, project_id: str, repository_id: str) -> dict[str, Any]:
     unknown_facts = set(entry["facts"]) - fact_allowed
     if unknown_facts:
         raise CacheHold("hold_cache_privacy" if any(str(k).lower() in FORBIDDEN for k in unknown_facts) else "hold_cache_schema")
-    if not all(isinstance(anchor, str) and anchor and len(anchor) <= 256 for anchor in entry["anchors"]):
+    if len(entry["anchors"]) > 16 or not all(isinstance(anchor, str) and anchor and len(anchor) <= 256 for anchor in entry["anchors"]):
         raise CacheHold("hold_cache_schema")
+    if "\n" in entry["summary"] or "\r" in entry["summary"]:
+        raise CacheHold("hold_cache_schema")
+    for fact_key, fact_value in entry["facts"].items():
+        if fact_key in {"title"} and (not isinstance(fact_value, str) or len(fact_value) > 256):
+            raise CacheHold("hold_cache_schema")
+        if fact_key in {"disposition", "category"} and (not isinstance(fact_value, str) or len(fact_value) > 128):
+            raise CacheHold("hold_cache_schema")
+        if fact_key == "number" and (not isinstance(fact_value, int) or isinstance(fact_value, bool) or fact_value < 1):
+            raise CacheHold("hold_cache_schema")
+        if fact_key == "count" and (not isinstance(fact_value, int) or isinstance(fact_value, bool) or fact_value < 0):
+            raise CacheHold("hold_cache_schema")
     if "state" in entry["facts"] and entry["facts"]["state"] not in {"open", "closed", "merged", "draft", "unknown"}:
         raise CacheHold("hold_cache_schema")
-    if "labels" in entry["facts"] and (not isinstance(entry["facts"]["labels"], list) or len(entry["facts"]["labels"]) > 25 or not all(isinstance(x, str) for x in entry["facts"]["labels"])):
+    if "labels" in entry["facts"] and (not isinstance(entry["facts"]["labels"], list) or len(entry["facts"]["labels"]) > 25 or not all(isinstance(x, str) and len(x) <= 128 for x in entry["facts"]["labels"])):
         raise CacheHold("hold_cache_schema")
     if "updated_at" in entry["facts"]: _ts(entry["facts"]["updated_at"])
     metadata = entry.get("metadata")
@@ -257,17 +270,39 @@ class GitHubEvidenceCache:
         CREATE TABLE IF NOT EXISTS counters (name TEXT PRIMARY KEY, value INTEGER NOT NULL);
         """)
         self.db.execute("INSERT OR IGNORE INTO metadata VALUES ('schema_version',?)", (VERSION,))
+        self.db.execute("INSERT OR IGNORE INTO metadata VALUES ('durability',?)", (DURABILITY,))
 
     def _validate(self) -> None:
         try:
+            meta = self._meta()
             row = self.db.execute("SELECT value FROM metadata WHERE key='schema_version'").fetchone()
             if row is None or row[0] != VERSION:
                 raise CacheHold("hold_cache_schema")
+            # A just-created cache has no binding yet; only initialize_cache may
+            # turn it into a usable authority-bound projection.
+            if set(meta) != {"schema_version", "durability"}:
+                if set(meta) != META_REQUIRED or meta.get("durability") != DURABILITY or meta.get("host_kind") != "github":
+                    raise CacheHold("hold_cache_schema")
+                str(uuid.UUID(meta["project_id"]))
+                if not meta["repository_id"] or not HEX64.fullmatch(meta["repository_locator_digest"]) or not meta["producer_contract"] or not meta["producer_version"]:
+                    raise CacheHold("hold_cache_schema")
+                if not meta["generation"].isdigit() or not HEX64.fullmatch(meta["ledger_head"]) or meta["timestamp_provenance"] not in {"caller_supplied", "caller_evaluated_at", "not_collected"}:
+                    raise CacheHold("hold_cache_schema")
+                if meta["created_at"]:
+                    _ts(meta["created_at"])
             for row in self.db.execute("SELECT entry_key,payload,payload_hash,state FROM entries"):
                 payload = json.loads(row[1]); claimed = payload.pop("payload_hash", None)
-                _walk(payload)
-                if row[3] not in STATES or claimed != row[2] or _hash(payload) != row[2] or payload.get("evidence_kind") not in KINDS or payload.get("coverage") not in COVERAGE or payload.get("privacy_class") not in PRIVACY:
+                entry_key = payload.pop("entry_key", None)
+                normalized = _entry(payload, meta["project_id"], meta["repository_id"])
+                if row[3] not in STATES or entry_key != row[0] or normalized["entry_key"] != row[0] or claimed != row[2] or normalized["payload_hash"] != row[2]:
                     raise CacheHold("hold_cache_integrity")
+            for row in self.db.execute("SELECT receipt_id,operation,payload,created_at,provenance FROM receipts"):
+                body = json.loads(row[2])
+                if not isinstance(body, Mapping) or set(body) != {"schema_version", "operation", "data", "created_at", "provenance", "durability"} or body["schema_version"] != VERSION or body["operation"] != row[1] or body["created_at"] != row[3] or body["provenance"] != row[4] or body["durability"] != DURABILITY:
+                    raise CacheHold("hold_cache_integrity")
+                if row[1] not in {"refresh", "invalidate", "rebuild"} or row[4] not in {"caller_supplied", "caller_evaluated_at"} or (row[3] is not None and _ts(row[3]) != row[3]) or not isinstance(body["data"], Mapping):
+                    raise CacheHold("hold_cache_integrity")
+                _walk(body["data"])
         except CacheHold:
             raise
         except (sqlite3.Error, ValueError, TypeError):
@@ -288,7 +323,9 @@ class GitHubEvidenceCache:
     def _receipt(self, operation, data, *, created_at=None, provenance="caller_supplied"):
         if created_at is not None: _ts(created_at)
         if not isinstance(provenance, str) or not provenance or provenance in {"wall_clock", "implicit"}: raise CacheHold("hold_cache_clock_or_freshness")
-        payload = _canon(data)
+        if operation not in {"refresh", "invalidate", "rebuild"} or not isinstance(data, Mapping):
+            raise CacheHold("hold_cache_schema")
+        payload = _canon({"schema_version": VERSION, "operation": operation, "data": dict(data), "created_at": created_at, "provenance": provenance, "durability": DURABILITY})
         rid = str(uuid.uuid4())
         self.db.execute("INSERT INTO receipts VALUES (?,?,?,?,?)", (rid, operation, payload, created_at, provenance))
         return rid
@@ -372,7 +409,7 @@ def _producer_result(result: Any, project_id: str, repository_id: str, selectors
     allowed = {"trust_domain", "production_eligibility", "project_id", "repository_id", "producer_id", "producer_version", "coverage", "entries", "source_revision", "fetched_at"}
     if set(result) - allowed:
         raise CacheHold("hold_cache_schema")
-    if result.get("coverage") is not None and result["coverage"] not in COVERAGE:
+    if "coverage" not in result or result["coverage"] not in COVERAGE:
         raise CacheHold("hold_cache_schema")
     for key in ("producer_id", "producer_version"):
         if key in result and (not isinstance(result[key], str) or not result[key]): raise CacheHold("hold_cache_schema")
@@ -382,6 +419,13 @@ def _producer_result(result: Any, project_id: str, repository_id: str, selectors
     if not isinstance(result.get("entries"), list): raise CacheHold("hold_cache_schema")
     entries = [_entry(e, project_id, repository_id) for e in result["entries"]]
     if len(entries) > 25 or sum(len(_canon(e).encode()) for e in entries) > 256 * 1024: raise CacheHold("hold_cache_scope")
+    coverage = result["coverage"]
+    if coverage in {"unavailable", "privacy_held"} and entries:
+        raise CacheHold("hold_cache_schema")
+    if coverage in {"complete", "partial"} and not entries:
+        raise CacheHold("hold_cache_schema")
+    if any(entry["coverage"] != coverage for entry in entries):
+        raise CacheHold("hold_cache_schema")
     return entries, result
 
 
@@ -393,7 +437,8 @@ def refresh_cache(*, projects_root, project_id, repository_id, repository_locato
     if not isinstance(max_age_seconds, int) or isinstance(max_age_seconds, bool) or not 0 <= max_age_seconds <= 604800: raise CacheHold("hold_cache_clock_or_freshness")
     ledger, lm = _authority(projects_root, project_id); path = _cache_path(projects_root, project_id); cache = None
     try:
-        cache = _open_existing(path); meta = cache._meta(); locator = _digest_locator(repository_locator_digest); _binding(meta, lm["project_id"], repository_id, locator)
+        locator = _digest_locator(repository_locator_digest)
+        cache = _open_existing(path); meta = cache._meta(); _binding(meta, lm["project_id"], repository_id, locator)
         before = int(meta.get("generation", "0")); result = producer.fetch_evidence({"project_id": lm["project_id"], "repository_id": str(repository_id)}, list(selectors), {"trust_domain": "same_process_reference", "production_eligibility": False})
         entries, result = _producer_result(result, lm["project_id"], str(repository_id), list(selectors))
         evaluated_dt = datetime.fromisoformat(evaluated_at.replace("Z", "+00:00"))
@@ -404,19 +449,32 @@ def refresh_cache(*, projects_root, project_id, repository_id, repository_locato
         cache.db.execute("BEGIN IMMEDIATE")
         current = cache._meta();
         if int(current.get("generation", "0")) != before: raise CacheHold("hold_cache_generation_conflict")
-        changed = duplicates = 0
+        changed = duplicates = preserved_complete = 0
+        producer_coverage = result["coverage"]
+        if producer_coverage in {"unavailable", "privacy_held"}:
+            cache._counter("refresh_requests"); cache._counter("producer_invocations")
+            rid = cache._receipt("refresh", {"generation": before, "changed": 0, "duplicates": 0, "producer_id": str(result.get("producer_id", "unknown")), "coverage": producer_coverage}, created_at=evaluated_at, provenance="caller_evaluated_at")
+            cache.db.execute("COMMIT")
+            return {"outcome": "cache_unavailable" if producer_coverage == "unavailable" else "cache_privacy_held", "generation": before, "changed_count": 0, "duplicate_count": 0, "receipt_id": rid, "authoritative": False, "confirmation_eligible": False}
         for entry in entries:
-            old = cache.db.execute("SELECT payload_hash,source_revision FROM entries WHERE entry_key=?", (entry["entry_key"],)).fetchone()
+            old = cache.db.execute("SELECT payload_hash,source_revision,payload FROM entries WHERE entry_key=?", (entry["entry_key"],)).fetchone()
             if old and old["source_revision"] == entry["source_revision"]:
                 if old["payload_hash"] != entry["payload_hash"]: raise CacheHold("hold_cache_divergent_revision")
                 duplicates += 1; continue
+            if old:
+                old_payload = json.loads(old["payload"])
+                # A partial observation is not evidence that a complete record
+                # disappeared. Keep the complete projection until a complete
+                # replacement arrives.
+                if entry["coverage"] == "partial" and old_payload.get("coverage") == "complete":
+                    preserved_complete += 1; continue
             cache.db.execute("INSERT OR REPLACE INTO entries VALUES (?,?,?,?,?,?,0)", (entry["entry_key"], _canon(entry), entry["payload_hash"], entry["source_revision"], entry["fetched_at"], "partial" if entry["coverage"] == "partial" else "fresh_as_of_fetch")); changed += 1
         if not changed:
             cache.db.execute("ROLLBACK")
-            return {"outcome": "cache_duplicate", "generation": before, "changed_count": 0, "duplicate_count": duplicates, "receipt_id": None, "authoritative": False, "confirmation_eligible": False}
+            return {"outcome": "cache_partial_preserved" if preserved_complete else "cache_duplicate", "generation": before, "changed_count": 0, "duplicate_count": duplicates, "receipt_id": None, "authoritative": False, "confirmation_eligible": False}
         newgen = before + changed; cache._setmeta("generation", newgen); cache._setmeta("ledger_head", lm["head"])
         cache._counter("refresh_requests"); cache._counter("producer_invocations")
-        rid = cache._receipt("refresh", {"generation": newgen, "changed": changed, "duplicates": duplicates, "producer_id": str(result.get("producer_id", "unknown")), "coverage": str(result.get("coverage", "complete"))}, created_at=evaluated_at, provenance="caller_evaluated_at")
+        rid = cache._receipt("refresh", {"generation": newgen, "changed": changed, "duplicates": duplicates, "producer_id": str(result.get("producer_id", "unknown")), "coverage": producer_coverage}, created_at=evaluated_at, provenance="caller_evaluated_at")
         cache.db.execute("COMMIT")
         return {"outcome": "cache_duplicate" if not changed else ("cache_partial" if any(e["coverage"] != "complete" for e in entries) else "cache_refreshed"), "generation": newgen, "changed_count": changed, "duplicate_count": duplicates, "receipt_id": rid, "authoritative": False, "confirmation_eligible": False}
     except CacheHold:
@@ -444,17 +502,24 @@ def refresh_cache(*, projects_root, project_id, repository_id, repository_locato
 def invalidate_cache_entries(*, projects_root, project_id, entry_keys, reason, evaluated_at, repository_id=None, repository_locator_digest=None):
     _ts(evaluated_at)
     if not isinstance(entry_keys, Sequence) or isinstance(entry_keys, (str, bytes)) or len(entry_keys) > 25: raise CacheHold("hold_cache_scope")
+    if not isinstance(reason, str) or not reason or len(reason.encode("utf-8")) > 1024:
+        raise CacheHold("hold_cache_scope")
+    keys = list(entry_keys)
+    if not all(isinstance(key, str) and HEX64.fullmatch(key) for key in keys):
+        raise CacheHold("hold_cache_schema")
+    locator = _digest_locator(repository_locator_digest) if repository_locator_digest is not None else None
+    if (repository_id is None) != (repository_locator_digest is None):
+        raise CacheHold("hold_cache_binding_mismatch")
     ledger, lm = _authority(projects_root, project_id); path = _cache_path(projects_root, project_id); cache = None
     try:
         cache = _open_existing(path); meta = cache._meta()
-        if repository_id is not None and repository_locator_digest is not None: _binding(meta, lm["project_id"], repository_id, _digest_locator(repository_locator_digest))
+        if repository_id is not None: _binding(meta, lm["project_id"], repository_id, locator)
         before = int(meta.get("generation", "0")); _ledger_recheck(projects_root, project_id, lm); cache.db.execute("BEGIN IMMEDIATE")
         if int(cache._meta().get("generation", "0")) != before: raise CacheHold("hold_cache_generation_conflict")
-        for key in entry_keys:
-            if not isinstance(key, str) or not HEX64.fullmatch(key): raise CacheHold("hold_cache_schema")
+        for key in keys:
             cache.db.execute("UPDATE entries SET invalidated=1,state='invalidated' WHERE entry_key=?", (key,))
-        rid = cache._receipt("invalidate", {"count": len(entry_keys), "reason_digest": _hash(reason), "generation": before}, created_at=evaluated_at, provenance="caller_evaluated_at"); cache.db.execute("COMMIT")
-        return {"outcome": "cache_invalidated", "count": len(entry_keys), "receipt_id": rid, "generation": before}
+        rid = cache._receipt("invalidate", {"count": len(keys), "reason_digest": _hash(reason), "generation": before}, created_at=evaluated_at, provenance="caller_evaluated_at"); cache.db.execute("COMMIT")
+        return {"outcome": "cache_invalidated", "count": len(keys), "receipt_id": rid, "generation": before}
     except CacheHold:
         try:
             if cache is not None and cache.db.in_transaction: cache.db.execute("ROLLBACK")
@@ -480,13 +545,15 @@ def invalidate_cache_entries(*, projects_root, project_id, entry_keys, reason, e
 def rebuild_cache(*, projects_root, project_id, repository_id, repository_locator_digest, entries, evaluated_at, coverage="complete"):
     _ts(evaluated_at)
     if not isinstance(entries, Sequence) or isinstance(entries, (str, bytes)) or len(entries) > 25: raise CacheHold("hold_cache_scope")
+    if coverage not in COVERAGE: raise CacheHold("hold_cache_schema")
     ledger, lm = _authority(projects_root, project_id); path = _cache_path(projects_root, project_id); cache = None
     try:
-        cache = _open_existing(path); meta = cache._meta(); locator = _digest_locator(repository_locator_digest); _binding(meta, lm["project_id"], repository_id, locator)
         normalized = [_entry(e, lm["project_id"], str(repository_id)) for e in entries]
         if len(normalized) > 25 or sum(len(_canon(e).encode()) for e in normalized) > 256 * 1024: raise CacheHold("hold_cache_scope")
         if len({entry["entry_key"] for entry in normalized}) != len(normalized): raise CacheHold("hold_cache_divergent_revision")
-        if coverage not in COVERAGE: raise CacheHold("hold_cache_schema")
+        if any(entry["coverage"] != coverage for entry in normalized): raise CacheHold("hold_cache_schema")
+        locator = _digest_locator(repository_locator_digest)
+        cache = _open_existing(path); meta = cache._meta(); _binding(meta, lm["project_id"], repository_id, locator)
         before = int(meta.get("generation", "0")); _ledger_recheck(projects_root, project_id, lm); cache.db.execute("BEGIN IMMEDIATE")
         if int(cache._meta().get("generation", "0")) != before: raise CacheHold("hold_cache_generation_conflict")
         cache.db.execute("DELETE FROM entries")
