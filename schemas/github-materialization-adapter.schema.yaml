@@ -46,7 +46,7 @@ $defs:
   request:
     type: object
     additionalProperties: false
-    required: [project_id, work_id, intent_id, attempt_sequence, scheduler_generation, scheduler_head, desired_effect_digest, approved_content_digest, classification, operation, repository_id, repository_locator_digest, auth_scope_digest, privacy_class, adapter_id, adapter_version, timestamp_provenance, occurred_at]
+    required: [schema_version, project_id, work_id, intent_id, attempt_sequence, scheduler_generation, scheduler_head, desired_effect_digest, approved_content_digest, classification, operation, repository_id, repository_locator_digest, auth_scope_digest, privacy_class, adapter_id, adapter_version, timestamp_provenance, occurred_at]
     allOf:
       - if: {properties: {classification: {const: must_publish}}}
         then: {required: [gate, capability]}
@@ -85,6 +85,7 @@ $defs:
       approved_remote_content: {$ref: '#/$defs/content'}
       canceled: {const: true}
       compensation: {const: true}
+      readback_only: {const: true}
   result:
     type: object
     additionalProperties: false
@@ -106,3 +107,15 @@ $defs:
       readback_digest: {$ref: '#/$defs/digest'}
       opaque_receipt_ref: {type: string, maxLength: 256}
       hold: {enum: [hold_materialization_stale_basis]}
+      confirmed: {const: true}
+      adapter_id: {type: string, minLength: 1}
+      adapter_version: {type: string, minLength: 1}
+      expected_remote_kind: {type: string, minLength: 1}
+      expected_remote_ref: {type: string, minLength: 1}
+      expected_remote_digest: {$ref: '#/$defs/digest'}
+      expected_remote_version: {type: string, minLength: 1}
+      request_digest: {$ref: '#/$defs/digest'}
+      desired_effect_digest: {$ref: '#/$defs/digest'}
+      occurred_at: {type: string, format: date-time}
+      read_timestamp: {type: string, format: date-time}
+      readback_nonce: {type: string, format: date-time}

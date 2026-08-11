@@ -3,13 +3,16 @@ import uuid
 import pytest
 import json
 import socket
+import tempfile
+from pathlib import Path
+import local_collaboration_scheduler as sc
 
 from github_materialization_adapter import FakeConnector, MaterializationHold, execute_materialization, plan_materialization
 
 PID = str(uuid.uuid4()); INTENT = str(uuid.uuid4()); H = "a" * 64; C = "b" * 64
 
 def req(**extra):
-    base = {"project_id": PID, "work_id": "work-1", "intent_id": INTENT, "attempt_sequence": 1,
+    base = {"schema_version": "GitHubMaterializationAdapter-v1", "project_id": PID, "work_id": "work-1", "intent_id": INTENT, "attempt_sequence": 1,
             "scheduler_generation": 4, "scheduler_head": H, "desired_effect_digest": H,
             "approved_content_digest": C, "classification": "must_publish", "operation": "issue_comment",
             "repository_id": H, "repository_locator_digest": H, "auth_scope_digest": H,
@@ -75,13 +78,49 @@ def test_privacy_and_crash_do_not_confirm():
     result = execute_materialization(req(), state(), FakeConnector(crash_after_write=True))
     assert result["outcome"] == "materialization_recovery_readback_required" and result["remote_mutation_performed"] is False
 
+def test_recovery_readback_only_and_closed_content_limits():
+    connector = FakeConnector()
+    first = execute_materialization(req(), state(), connector)
+    calls = len(connector.calls)
+    recovered = execute_materialization({**req(), "readback_only": True}, state(), connector)
+    assert recovered["outcome"] == "materialization_duplicate" and len(connector.calls) == calls + 1
+    with pytest.raises(MaterializationHold): plan_materialization(req(approved_remote_content={"title": "x" * 257}), state())
+
+def test_readback_result_has_404_boundary_fields():
+    result = execute_materialization(req(), state(), FakeConnector())
+    for key in ("confirmed", "adapter_id", "adapter_version", "expected_remote_kind", "expected_remote_ref", "expected_remote_digest", "expected_remote_version", "request_digest", "desired_effect_digest", "occurred_at", "read_timestamp", "readback_nonce"):
+        assert key in result
+    assert result["confirmed"] is True and result["simulation_only"] is True
+
+def test_real_404_injected_readback_boundary():
+    """Use the accepted scheduler boundary in a disposable SQLite fixture."""
+    from test_local_collaboration_scheduler import _setup
+    class Adapter:
+        def __init__(self, response): self.response = response
+        def readback(self, request): return self.response
+    with tempfile.TemporaryDirectory() as root:
+        pid = _setup(root)
+        sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "initialize", "occurred_at": "2026-08-11T00:00:01Z"})
+        intent = str(uuid.uuid4())
+        sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "intent", "intent_id": intent, "intent_kind": "issue", "desired_effect": {"kind": "issue"}, "occurred_at": "2026-08-11T00:00:02Z"})
+        sc.apply_scheduler_request(root, pid, {"project_id": pid, "work_id": "w1", "operation": "pending", "intent_id": intent, "expected_remote_kind": "issue", "expected_remote_ref": "opaque-1", "expected_remote_digest": H, "expected_remote_version": "v1", "occurred_at": "2026-08-11T00:00:03Z"})
+        current = sc.replay_scheduler_state(root, pid)
+        request = req(project_id=pid, intent_id=intent, desired_effect_digest=current["desired_effect_digest"], approved_content_digest=C, expected_remote_kind="issue", expected_remote_ref="opaque-1", expected_remote_digest=H, expected_remote_version="v1", scheduler_generation=4, scheduler_head=H)
+        request["gate"] = {**request["gate"], "project_id": pid, "intent_id": intent, "effect_digest": request["desired_effect_digest"]}
+        request["gate"]["content_digest"] = C
+        response = execute_materialization(request, {**current, "project_id": pid, "remote_intent_state": "pending_materialization", "intent_id": intent, "attempt_sequence": 1, "scheduler_generation": current.get("control_generation") or 4, "scheduler_head": current.get("control_head") or H}, FakeConnector())
+        response["request_digest"] = response["request_digest"]
+        result = sc.apply_remote_readback(root, pid, intent, Adapter(response), {"project_id": pid, "intent_id": intent, "operation": "confirm", "attempt_sequence": 1, "request_digest": response["request_digest"]})
+        assert result["decision"] == "confirmed"
+
 def test_integration_boundaries_and_cache_observations_are_non_confirming():
     # These are the accepted #522/#404/#405 replay shapes: the adapter sees a
     # read-only pending outbox and advisory cache, never a caller confirmation.
     scheduler = {**state(), "control_generation": 4, "control_head": H}
-    assert execute_materialization(req(), scheduler, FakeConnector(), {"outcome": "fresh"})["outcome"] == "materialization_readback_verified"
-    for outcome in ("stale", "partial", "unavailable", "privacy_held"):
-        result = plan_materialization(req(), state(), {"outcome": outcome})
+    fresh = {"outcome": "cache_hit", "freshness": "fresh_as_of_fetch", "coverage": "complete", "authoritative": False, "confirmation_eligible": False}
+    assert execute_materialization(req(), scheduler, FakeConnector(), fresh)["outcome"] == "materialization_readback_verified"
+    for observation in ({"outcome": "cache_hit", "freshness": "stale", "coverage": "complete", "authoritative": False, "confirmation_eligible": False}, {"outcome": "cache_hit", "freshness": "fresh_as_of_fetch", "coverage": "partial", "authoritative": False, "confirmation_eligible": False}, {"outcome": "cache_miss", "freshness": "unavailable", "coverage": "unavailable", "authoritative": False, "confirmation_eligible": False}):
+        result = plan_materialization(req(), state(), observation)
         assert result["outcome"] == "materialization_approval_required" and result["simulation_only"]
     with pytest.raises(MaterializationHold): plan_materialization(req(project_id=str(uuid.uuid4())), state())
 
