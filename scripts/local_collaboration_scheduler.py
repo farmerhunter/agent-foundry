@@ -343,6 +343,22 @@ def _hold_from_ledger(exc: Exception) -> SchedulerHold:
     return SchedulerHold("hold_ledger_integrity")
 
 
+def _read_only_sidecar_preflight(path: Path) -> None:
+    """Reject incomplete WAL state before SQLite can create a missing SHM.
+
+    A normal ``mode=ro`` connection must consult a WAL when it is present.
+    SQLite may create its shared-memory companion as part of that consultation,
+    even though the connection has no write intent.  An incomplete pair is not
+    an authority snapshot we can verify without changing it, so it is held
+    before opening the database.  A complete pair remains available for a
+    correct WAL-aware read snapshot; no pair uses LedgerStore immutable mode.
+    """
+    wal = Path(str(path) + "-wal")
+    shm = Path(str(path) + "-shm")
+    if wal.exists() != shm.exists():
+        raise SchedulerHold("hold_ledger_integrity")
+
+
 def replay_scheduler_state(projects_root: str | Path, project_id: str) -> dict[str, Any]:
     """Replay one integrity-checked, read-only SQLite snapshot.
 
@@ -357,6 +373,7 @@ def replay_scheduler_state(projects_root: str | Path, project_id: str) -> dict[s
         # possible), so replay cannot initialize, checkpoint, or create
         # authority sidecars.  An explicit read transaction pins the event
         # list and the derived last sequence/hash to one snapshot.
+        _read_only_sidecar_preflight(path)
         ledger = LocalCollaborationLedger(db_path=path, create=False)
         if ledger.project_id != pid:
             raise SchedulerHold("hold_control_plane_unready")

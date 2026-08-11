@@ -514,6 +514,33 @@ def test_replay_authority_snapshot_busy_and_symlink_holds():
         _assert_filesystem_unchanged(path, before)
 
 
+def test_replay_db_wal_without_shm_holds_without_creating_sidecar():
+    """A valid copied WAL cannot cause a read-only replay to manufacture SHM."""
+    with tempfile.TemporaryDirectory() as source_root, tempfile.TemporaryDirectory() as target_root:
+        pid = _setup(source_root); source = Path(source_root) / pid / "collaboration.db"
+        writer = LocalCollaborationLedger.open_existing(source, expected_project_id=pid)
+        try:
+            writer.append_event("test.partial_wal", {"probe": "partial-wal"}, root=pid)
+            assert Path(str(source) + "-wal").exists()
+            assert Path(str(source) + "-shm").exists()
+            target_dir = Path(target_root) / pid; target_dir.mkdir(mode=0o700)
+            target = target_dir / "collaboration.db"
+            shutil.copy2(source, target); target.chmod(0o600)
+            shutil.copy2(Path(str(source) + "-wal"), Path(str(target) + "-wal"))
+            Path(str(target) + "-wal").chmod(0o600)
+            assert not Path(str(target) + "-shm").exists()
+            before = _filesystem_snapshot(target)
+            try:
+                sc.replay_scheduler_state(target_root, pid)
+            except sc.SchedulerHold as exc:
+                assert str(exc) == "hold_ledger_integrity"
+            else:
+                raise AssertionError("DB+WAL without SHM must fail closed")
+            _assert_filesystem_unchanged(target, before)
+        finally:
+            writer.close()
+
+
 def test_authority_snapshot_schema_definition_is_closed():
     schema = Path(__file__).parent.parent / "schemas" / "local-collaboration-scheduler.schema.yaml"
     text = schema.read_text()
@@ -523,4 +550,4 @@ def test_authority_snapshot_schema_definition_is_closed():
 
 
 if __name__ == "__main__":
-    test_initialize_and_offline_transitions(); test_exact_retry_and_divergence_hold(); test_remote_never_confirmed_by_observation(); test_remote_predecessor_guards(); test_observation_and_terminal_use_current_attempt(); test_closed_payload_and_resume_gate(); test_caller_project_binding_and_disabled_gate(); test_reducer_version_mismatch_is_preappend_hold(); test_planner_observation_version_mismatch_is_preappend_hold(); test_privacy_binding_mismatch_is_preappend_hold(); test_adapter_version_mismatch_is_preappend_hold(); test_observed_unverified_to_privacy_hold_preserves_all_bindings(); test_pending_materialization_to_privacy_hold_preserves_all_bindings(); test_replay_exposes_committed_authority_snapshot_without_side_effects(); test_replay_authority_snapshot_negative_paths_hold_without_mutation(); test_replay_authority_snapshot_corruption_and_permissions_hold(); test_replay_authority_snapshot_busy_and_symlink_holds(); test_authority_snapshot_schema_definition_is_closed(); print("ok")
+    test_initialize_and_offline_transitions(); test_exact_retry_and_divergence_hold(); test_remote_never_confirmed_by_observation(); test_remote_predecessor_guards(); test_observation_and_terminal_use_current_attempt(); test_closed_payload_and_resume_gate(); test_caller_project_binding_and_disabled_gate(); test_reducer_version_mismatch_is_preappend_hold(); test_planner_observation_version_mismatch_is_preappend_hold(); test_privacy_binding_mismatch_is_preappend_hold(); test_adapter_version_mismatch_is_preappend_hold(); test_observed_unverified_to_privacy_hold_preserves_all_bindings(); test_pending_materialization_to_privacy_hold_preserves_all_bindings(); test_replay_exposes_committed_authority_snapshot_without_side_effects(); test_replay_authority_snapshot_negative_paths_hold_without_mutation(); test_replay_authority_snapshot_corruption_and_permissions_hold(); test_replay_authority_snapshot_busy_and_symlink_holds(); test_replay_db_wal_without_shm_holds_without_creating_sidecar(); test_authority_snapshot_schema_definition_is_closed(); print("ok")
