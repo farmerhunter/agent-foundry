@@ -260,12 +260,14 @@ class BridgeStubRunner:
     def __init__(self, responses): self.responses, self.calls = list(responses), []
     def __call__(self, argv, **kwargs):
         self.calls.append((tuple(argv), kwargs))
+        if tuple(argv) == ("gh", "api", "--method", "GET", "repos/octo-org/demo", "--jq", ".permissions.issues"):
+            return {"returncode": 0, "stdout": "metadata\n", "stderr": ""}
         return self.responses.pop(0)
 
 
 def _bridge_capability():
     return {"connector_id": CONNECTOR_ID, "connector_version": CONNECTOR_VERSION, "provider": "github", "host": "github.com",
-            "repository_restriction": "octo-org/demo", "authenticated_principal": "octocat", "observable_scopes": ["issues:metadata"],
+            "repository_restriction": "octo-org/demo", "authenticated_principal": "octocat", "observable_scopes": ["repo"],
             "minimum_scopes": ["issues:metadata"], "repository_permission": {"repository": "octo-org/demo", "issues": "metadata"},
             "network_capability": True, "production_eligibility": True, "available": True}
 
@@ -294,30 +296,39 @@ def _bridge_state(request):
             "scheduler_generation": request["scheduler_generation"], "scheduler_head": request["scheduler_head"]}
 
 
-def _bridge_connector(responses, capability=_bridge_capability):
+def _bridge_connector(responses):
     runner = BridgeStubRunner(responses)
-    return GitHubCliIssueLabelConnector(repository_owner="octo-org", repository="demo", runner=runner, capability_resolver=capability, require_repository_capability=True), runner
+    return GitHubCliIssueLabelConnector(repository_owner="octo-org", repository="demo", runner=runner), runner
 
 
 def test_public_real_label_bridge_binds_scheduler_and_stays_nonconfirming():
     request = _bridge_request(); connector, runner = _bridge_connector([
-        {"returncode": 0, "stdout": "bug\n", "stderr": ""}, {"returncode": 0, "stdout": "", "stderr": ""},
+        {"returncode": 0, "stdout": '{"login":"octocat","scopes":["repo"]}', "stderr": ""}, {"returncode": 0, "stdout": "bug\n", "stderr": ""}, {"returncode": 0, "stdout": "", "stderr": ""},
         {"returncode": 0, "stdout": "bug\ntrial-label\n", "stderr": ""},
     ])
     result = execute_real_label_materialization(request, _bridge_state(request), connector)
     assert result["outcome"] == "real_label_added_observed_unverified" and result["mutation_count"] == 1
     assert result["authoritative"] is False and result["confirmation_eligible"] is False
     assert result["scheduler_confirmation_performed"] is False and result["observation_state"] == "observed_unverified"
-    assert len(runner.calls) == 3 and all(call[1]["shell"] is False for call in runner.calls)
+    assert len(runner.calls) == 5 and all(call[1]["shell"] is False for call in runner.calls)
 
 
 def test_public_real_label_bridge_rejects_forgery_and_capability_before_target():
     request = _bridge_request(); connector, runner = _bridge_connector([])
     result = execute_real_label_materialization({**request, "authority_pair": {"authority_generation": 4}}, _bridge_state(request), connector)
     assert result["outcome"] == "real_label_materialization_hold" and result["reason"] == "schema_or_privacy" and not runner.calls
-    connector, runner = _bridge_connector([], capability=lambda: {**_bridge_capability(), "repository_permission": {"repository": "octo-org/demo", "issues": "write"}})
+    with pytest.raises(TypeError):
+        GitHubCliIssueLabelConnector(repository_owner="octo-org", repository="demo", capability_resolver=lambda: _bridge_capability())
+    connector, runner = _bridge_connector([{"returncode": 0, "stdout": '{"login":"octocat","scopes":["repo"]}', "stderr": ""}])
+    original = runner.__call__
+    def bad_permission(argv, **kwargs):
+        if tuple(argv) == ("gh", "api", "--method", "GET", "repos/octo-org/demo", "--jq", ".permissions.issues"):
+            runner.calls.append((tuple(argv), kwargs)); return {"returncode": 0, "stdout": "write\n", "stderr": ""}
+        return original(argv, **kwargs)
+    connector._runner = bad_permission
     result = execute_real_label_materialization(request, _bridge_state(request), connector)
-    assert result["reason"] == "capability_broader_or_unobservable" and result["connector_called"] is True and not runner.calls
+    assert result["reason"] == "capability_broader_or_unobservable" and result["connector_called"] is True
+    assert not any("/issues/" in " ".join(call[0]) for call in runner.calls)
     connector, runner = _bridge_connector([])
     result = execute_real_label_materialization(request, {**_bridge_state(request), "scheduler_head": "c" * 64}, connector)
     assert result["reason"] == "scheduler_or_authority_drift" and not runner.calls
@@ -328,8 +339,8 @@ def test_public_real_label_bridge_duplicate_and_binding_budget_holds():
     target = request["target"]
     effect = {"version": "GitHubLabelMaterializationBridge-v1", "operation": "add_existing_label", "target": target, "label": request["label"], "preimage_digest": request["preimage_digest"], "project_id": PID, "intent_id": INTENT, "attempt_sequence": 1, "repository_id": C, "repository_locator_digest": request["repository_locator_digest"]}
     request["desired_effect_digest"] = hashlib.sha256(json.dumps(effect, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-    connector, runner = _bridge_connector([{"returncode": 0, "stdout": "bug\ntrial-label\n", "stderr": ""}])
+    connector, runner = _bridge_connector([{"returncode": 0, "stdout": '{"login":"octocat","scopes":["repo"]}', "stderr": ""}, {"returncode": 0, "stdout": "bug\ntrial-label\n", "stderr": ""}])
     result = execute_real_label_materialization(request, _bridge_state(request), connector)
-    assert result["outcome"] == "real_label_duplicate_observed_unverified" and result["mutation_count"] == 0 and len(runner.calls) == 1
+    assert result["outcome"] == "real_label_duplicate_observed_unverified" and result["mutation_count"] == 0 and len(runner.calls) == 3
     result = execute_real_label_materialization(_bridge_request(write_budget=2), _bridge_state(_bridge_request(write_budget=2)), connector)
-    assert result["reason"] == "schema_or_privacy" and len(runner.calls) == 1
+    assert result["reason"] == "schema_or_privacy" and len(runner.calls) == 3

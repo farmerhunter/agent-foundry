@@ -17,7 +17,7 @@ def digest(value):
 
 
 def observed(login="octocat", scopes=None):
-    return {"connector_id": CONNECTOR_ID, "connector_version": CONNECTOR_VERSION, "provider": "github", "host": "github.com", "repository_restriction": "octo-org/demo", "authenticated_principal": login, "observable_scopes": sorted(scopes or ["repo"]), "minimum_scopes": ["repo"], "network_capability": True, "production_eligibility": True, "available": True}
+    return {"connector_id": CONNECTOR_ID, "connector_version": CONNECTOR_VERSION, "provider": "github", "host": "github.com", "repository_restriction": "octo-org/demo", "authenticated_principal": login, "observable_scopes": sorted(scopes or ["repo"]), "minimum_scopes": ["issues:metadata"], "repository_permission": {"repository": "octo-org/demo", "issues": "metadata"}, "network_capability": True, "production_eligibility": True, "available": True}
 
 
 def auth(login="octocat", scopes=None):
@@ -34,6 +34,8 @@ class StubRunner:
     def __init__(self, responses): self.responses, self.calls = list(responses), []
     def __call__(self, argv, **kwargs):
         self.calls.append((tuple(argv), kwargs))
+        if tuple(argv) == ("gh", "api", "--method", "GET", "repos/octo-org/demo", "--jq", ".permissions.issues"):
+            return ok("metadata\n")
         if not self.responses: raise AssertionError("unexpected subprocess call")
         return self.responses.pop(0)
 
@@ -61,8 +63,9 @@ def test_matching_owner_resolved_capability_uses_fixed_argv_and_nonconfirming_re
     assert result["network_capability"] is True and result["production_eligibility"] is True
     assert result["authoritative"] is False and result["confirmation_eligible"] is False
     assert runner.calls[0][0] == ("gh", "auth", "status", "--hostname", "github.com", "--json", "login,scopes")
-    assert runner.calls[1][0] == ("gh", "api", "--method", "GET", "repos/octo-org/demo/issues/12/labels", "--jq", ".[ ].name".replace(" ", ""))
-    assert runner.calls[2][0] == ("gh", "api", "--method", "POST", "repos/octo-org/demo/issues/12/labels", "-f", "labels[]=trial-label")
+    assert runner.calls[1][0] == ("gh", "api", "--method", "GET", "repos/octo-org/demo", "--jq", ".permissions.issues")
+    assert runner.calls[2][0] == ("gh", "api", "--method", "GET", "repos/octo-org/demo/issues/12/labels", "--jq", ".[ ].name".replace(" ", ""))
+    assert runner.calls[3][0] == ("gh", "api", "--method", "POST", "repos/octo-org/demo/issues/12/labels", "-f", "labels[]=trial-label")
     assert_runner_contract(runner)
 
 
@@ -86,7 +89,7 @@ def test_capability_digest_drift_and_extra_caller_claim_hold_before_target():
     c, runner = connector([auth()])
     with pytest.raises(GitHubCliConnectorHold) as held:
         c.add_existing_label(plan(expected_capability_digest="b" * 64), authority_pair={"authority_generation": 7, "authority_head": H})
-    assert str(held.value) == "hold_capability_untrusted" and len(runner.calls) == 1
+    assert str(held.value) == "hold_capability_untrusted" and len(runner.calls) == 2
     c, runner = connector([])
     with pytest.raises(GitHubCliConnectorHold) as held:
         c.add_existing_label({**plan(), "capability": {"observable_scopes": ["repo"]}}, authority_pair={"authority_generation": 7, "authority_head": H})
@@ -133,7 +136,7 @@ def test_bounded_rollback_and_process_loss_remain_incomplete_not_recovered():
     forward = c.add_existing_label(plan(), authority_pair={"authority_generation": 7, "authority_head": H})
     rollback = c.remove_same_label_if_added(forward)
     assert rollback["outcome"] == "rollback_complete"
-    assert runner.calls[5][0] == ("gh", "api", "--method", "DELETE", "repos/octo-org/demo/issues/12/labels/trial-label")
+    assert runner.calls[6][0] == ("gh", "api", "--method", "DELETE", "repos/octo-org/demo/issues/12/labels/trial-label")
     c, _ = connector([auth(), ok("bug\n"), ok(), ok("bug\ntrial-label\n")])
     result = c.add_existing_label(plan(), authority_pair={"authority_generation": 7, "authority_head": H})
     fresh, _ = connector([])
@@ -165,17 +168,22 @@ def test_schema_results_and_no_credential_environment_access():
 
 
 def test_repository_bound_capability_mode_rejects_unobservable_cli_scope_before_target():
-    c, runner = connector([])
-    c = GitHubCliIssueLabelConnector(repository_owner="octo-org", repository="demo", runner=runner, require_repository_capability=True)
+    c, runner = connector([auth()])
+    def no_permission(argv, **kwargs):
+        runner.calls.append((tuple(argv), kwargs))
+        if tuple(argv) == ("gh", "api", "--method", "GET", "repos/octo-org/demo", "--jq", ".permissions.issues"):
+            return {"returncode": 0, "stdout": "write\n", "stderr": ""}
+        return runner.responses.pop(0)
+    c._runner = no_permission
+    # A fixed owner query that does not return the literal metadata permission
+    # cannot reach the Issue endpoint.
     with pytest.raises(GitHubCliConnectorHold) as held:
         c.add_existing_label(plan(), authority_pair={"authority_generation": 7, "authority_head": H})
-    assert str(held.value) == "hold_capability_broader_or_unobservable" and not runner.calls
+    assert str(held.value) == "hold_capability_broader_or_unobservable" and not any("/issues/" in " ".join(call[0]) for call in runner.calls)
 
-    bound = {**observed(), "repository_permission": {"repository": "octo-org/demo", "issues": "metadata"}, "minimum_scopes": ["issues:metadata"], "observable_scopes": ["issues:metadata"]}
-    c, runner = connector([ok("bug\n"), ok(), ok("bug\ntrial-label\n")])
-    c = GitHubCliIssueLabelConnector(repository_owner="octo-org", repository="demo", runner=runner,
-                                     capability_resolver=lambda: bound, require_repository_capability=True)
+    bound = observed()
+    c, runner = connector([auth(), auth(), ok("bug\n"), ok(), ok("bug\ntrial-label\n")])
     actual = c.capability_metadata()
     assert actual == bound and c.repository_binding == {"owner": "octo-org", "repository": "demo"}
     receipt = c.add_existing_label(plan(expected_capability_digest=capability_digest(bound)), authority_pair={"authority_generation": 7, "authority_head": H})
-    assert receipt["outcome"] == "label_added" and all("/issues/" in " ".join(call[0]) for call in runner.calls)
+    assert receipt["outcome"] == "label_added" and any("/issues/" in " ".join(call[0]) for call in runner.calls)

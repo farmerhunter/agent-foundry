@@ -108,13 +108,9 @@ class GitHubCliIssueLabelConnector:
     trust_domain = "github_cli_managed_auth"
 
     def __init__(self, *, repository_owner: str, repository: str,
-                 runner: Callable[..., Any] | None = None,
-                 capability_resolver: Callable[[], Mapping[str, Any]] | None = None,
-                 require_repository_capability: bool = False) -> None:
+                 runner: Callable[..., Any] | None = None) -> None:
         self._repository = _validate_target({"owner": repository_owner, "repository": repository, "number": 1, "kind": "issue"})
         self._runner = runner or subprocess.run
-        self._capability_resolver = capability_resolver
-        self._require_repository_capability = require_repository_capability is True
         self._forward_receipts: dict[str, dict[str, Any]] = {}
 
     @property
@@ -124,12 +120,12 @@ class GitHubCliIssueLabelConnector:
 
     @property
     def repository_capability_required(self) -> bool:
-        return self._require_repository_capability
+        return True
 
     def capability_metadata(self) -> dict[str, Any]:
         """Resolve the same normalized capability fact execution will bind."""
         try:
-            return self._resolve_repository_capability() if self._require_repository_capability else self._resolve_capability()
+            return self._resolve_repository_capability()
         except GitHubCliConnectorHold:
             return self._unavailable_capability()
 
@@ -140,7 +136,7 @@ class GitHubCliIssueLabelConnector:
             raise GitHubCliConnectorHold("hold_auth_mismatch")
         if authority_pair != {"authority_generation": planned["authority_generation"], "authority_head": planned["authority_head"]}:
             raise GitHubCliConnectorHold("hold_authority_pair_stale")
-        capability = self._resolve_repository_capability() if self._require_repository_capability else self._resolve_capability()
+        capability = self._resolve_repository_capability()
         if capability_digest(capability) != planned["expected_capability_digest"]:
             raise GitHubCliConnectorHold("hold_capability_untrusted")
         receipt_id = _digest({key: planned[key] for key in ("human_authorization_ref", "operation", "target", "label", "preimage_digest", "authority_generation", "authority_head")})
@@ -182,40 +178,15 @@ class GitHubCliIssueLabelConnector:
         return {"connector_id": CONNECTOR_ID, "connector_version": CONNECTOR_VERSION, "provider": "github", "host": "github.com", "repository_restriction": f"{self._repository['owner']}/{self._repository['repository']}", "authenticated_principal": principal, "observable_scopes": sorted(scopes), "minimum_scopes": ["repo"], "network_capability": True, "production_eligibility": True, "available": True}
 
     def _resolve_repository_capability(self) -> dict[str, Any]:
-        if self._capability_resolver is None:
-            # The standard GitHub CLI OAuth scope view cannot prove the
-            # repository-bound permission envelope required by the bridge.
-            raise GitHubCliConnectorHold("hold_capability_broader_or_unobservable")
-        try:
-            return self._normalize_repository_capability(self._capability_resolver())
-        except GitHubCliConnectorHold:
-            raise
-        except Exception:
-            raise GitHubCliConnectorHold("hold_capability_unavailable") from None
-
-    def _normalize_repository_capability(self, value: Any) -> dict[str, Any]:
-        required = {"connector_id", "connector_version", "provider", "host", "repository_restriction", "authenticated_principal", "observable_scopes", "minimum_scopes", "repository_permission", "network_capability", "production_eligibility", "available"}
-        if not isinstance(value, Mapping) or set(value) != required:
-            raise GitHubCliConnectorHold("hold_capability_untrusted")
+        auth = self._resolve_capability()
         expected_repository = f"{self._repository['owner']}/{self._repository['repository']}"
-        permission = value.get("repository_permission")
-        if (value.get("connector_id") != CONNECTOR_ID or value.get("connector_version") != CONNECTOR_VERSION
-                or value.get("provider") != "github" or value.get("host") != "github.com"
-                or value.get("repository_restriction") != expected_repository
-                or not isinstance(value.get("authenticated_principal"), str)
-                or not _PRINCIPAL.fullmatch(value["authenticated_principal"])
-                or not _scope_list(value.get("observable_scopes"))
-                or value.get("minimum_scopes") != ["issues:metadata"]
-                or value.get("network_capability") is not True
-                or value.get("production_eligibility") is not True
-                or value.get("available") is not True):
-            raise GitHubCliConnectorHold("hold_capability_untrusted")
-        if (not isinstance(permission, Mapping)
-                or set(permission) != {"repository", "issues"}
-                or permission.get("repository") != expected_repository
-                or permission.get("issues") != "metadata"):
+        result = self._call(("gh", "api", "--method", "GET", f"repos/{expected_repository}", "--jq", ".permissions.issues"))
+        if result["returncode"] != 0:
+            raise self._provider_hold(result["returncode"], result["stderr"])
+        if result["stdout"].strip() != "metadata":
             raise GitHubCliConnectorHold("hold_capability_broader_or_unobservable")
-        return {key: value[key] for key in required}
+        return {**auth, "minimum_scopes": ["issues:metadata"],
+                "repository_permission": {"repository": expected_repository, "issues": "metadata"}}
 
     def remove_same_label_if_added(self, receipt: Mapping[str, Any]) -> dict[str, Any]:
         if not isinstance(receipt, Mapping) or receipt.get("outcome") != "label_added" or not isinstance(receipt.get("receipt_id"), str):
