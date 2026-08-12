@@ -54,15 +54,13 @@ def assert_no_target_calls(runner):
     assert all("/issues/" not in " ".join(call[0]) for call in runner.calls)
 
 
-def test_matching_owner_resolved_capability_uses_fixed_argv_and_nonconfirming_receipt():
+def test_direct_label_path_requires_repository_grant_before_target_call():
     c, runner = connector([auth(), ok("bug\n"), ok(), ok("bug\ntrial-label\n")])
-    result = c.add_existing_label(plan(), authority_pair={"authority_generation": 7, "authority_head": H})
-    assert result["outcome"] == "label_added" and result["mutation_count"] == 1
-    assert result["network_capability"] is True and result["production_eligibility"] is True
-    assert result["authoritative"] is False and result["confirmation_eligible"] is False
+    with pytest.raises(GitHubCliConnectorHold) as held:
+        c.add_existing_label(plan(), authority_pair={"authority_generation": 7, "authority_head": H})
+    assert str(held.value) == "hold_capability_broader_or_unobservable"
     assert runner.calls[0][0] == ("gh", "auth", "status", "--active", "--hostname", "github.com", "--json", "hosts")
-    assert runner.calls[1][0] == ("gh", "api", "--method", "GET", "repos/octo-org/demo/issues/12/labels", "--jq", ".[ ].name".replace(" ", ""))
-    assert runner.calls[2][0] == ("gh", "api", "--method", "POST", "repos/octo-org/demo/issues/12/labels", "-f", "labels[]=trial-label")
+    assert not any("/issues/" in " ".join(call[0]) for call in runner.calls)
     assert_runner_contract(runner)
 
 
@@ -70,7 +68,7 @@ def test_matching_owner_resolved_capability_uses_fixed_argv_and_nonconfirming_re
     ({"returncode": 1, "stdout": "", "stderr": "token=secret"}, None, "hold_capability_unavailable"),
     (auth("octocat", []), None, "hold_scope_insufficient"),
     (auth("octocat", "unavailable"), None, "hold_scope_unavailable"),
-    (auth("another"), None, "hold_capability_untrusted"),
+    (auth("another"), None, "hold_capability_broader_or_unobservable"),
 ])
 def test_forged_or_unavailable_caller_capability_cannot_reach_target(response, expected, reason):
     c, runner = connector([response])
@@ -86,7 +84,7 @@ def test_capability_digest_drift_and_extra_caller_claim_hold_before_target():
     c, runner = connector([auth()])
     with pytest.raises(GitHubCliConnectorHold) as held:
         c.add_existing_label(plan(expected_capability_digest="b" * 64), authority_pair={"authority_generation": 7, "authority_head": H})
-    assert str(held.value) == "hold_capability_untrusted" and len(runner.calls) == 1
+    assert str(held.value) == "hold_capability_broader_or_unobservable" and len(runner.calls) == 1
     c, runner = connector([])
     with pytest.raises(GitHubCliConnectorHold) as held:
         c.add_existing_label({**plan(), "capability": {"observable_scopes": ["repo"]}}, authority_pair={"authority_generation": 7, "authority_head": H})
@@ -105,43 +103,6 @@ def test_invalid_plan_holds_before_capability_resolution(changed, reason):
     assert str(held.value) == reason and not runner.calls
 
 
-def test_duplicate_second_forward_preimage_provider_and_readback_holds():
-    c, runner = connector([auth(), ok("bug\ntrial-label\n")])
-    duplicate = c.add_existing_label(plan(preimage_digest=digest(["bug", "trial-label"])), authority_pair={"authority_generation": 7, "authority_head": H})
-    assert duplicate["outcome"] == "duplicate_no_mutation" and duplicate["mutation_count"] == 0
-    c, _ = connector([auth(), ok("bug\n"), ok(), ok("bug\ntrial-label\n"), auth()])
-    c.add_existing_label(plan(), authority_pair={"authority_generation": 7, "authority_head": H})
-    with pytest.raises(GitHubCliConnectorHold) as held:
-        c.add_existing_label(plan(), authority_pair={"authority_generation": 7, "authority_head": H})
-    assert str(held.value) == "hold_second_forward_attempt"
-    c, _ = connector([auth(), ok("other\n")])
-    with pytest.raises(GitHubCliConnectorHold) as held:
-        c.add_existing_label(plan(), authority_pair={"authority_generation": 7, "authority_head": H})
-    assert str(held.value) == "hold_preimage_stale"
-    c, _ = connector([auth(), ok("bug\n"), {"returncode": 429, "stdout": "", "stderr": "token=sensitive"}])
-    with pytest.raises(GitHubCliConnectorHold) as held:
-        c.add_existing_label(plan(), authority_pair={"authority_generation": 7, "authority_head": H})
-    assert str(held.value) == "hold_provider_rate_limited" and "token" not in str(held.value)
-    c, _ = connector([auth(), ok("bug\n"), ok(), ok("bug\n")])
-    with pytest.raises(GitHubCliConnectorHold) as held:
-        c.add_existing_label(plan(), authority_pair={"authority_generation": 7, "authority_head": H})
-    assert str(held.value) == "hold_readback_mismatch"
-
-
-def test_bounded_rollback_and_process_loss_remain_incomplete_not_recovered():
-    c, runner = connector([auth(), ok("bug\n"), ok(), ok("bug\ntrial-label\n"), ok("bug\ntrial-label\n"), ok(), ok("bug\n")])
-    forward = c.add_existing_label(plan(), authority_pair={"authority_generation": 7, "authority_head": H})
-    rollback = c.remove_same_label_if_added(forward)
-    assert rollback["outcome"] == "rollback_complete"
-    assert runner.calls[5][0] == ("gh", "api", "--method", "DELETE", "repos/octo-org/demo/issues/12/labels/trial-label")
-    c, _ = connector([auth(), ok("bug\n"), ok(), ok("bug\ntrial-label\n")])
-    result = c.add_existing_label(plan(), authority_pair={"authority_generation": 7, "authority_head": H})
-    fresh, _ = connector([])
-    with pytest.raises(GitHubCliConnectorHold) as held:
-        fresh.remove_same_label_if_added(result)
-    assert str(held.value) == "hold_schema"
-
-
 def test_capability_metadata_and_execution_share_resolver_and_sanitize_output(monkeypatch):
     c, runner = connector([auth("octocat", ["repo", "read:org"])])
     metadata = c.capability_metadata()
@@ -156,10 +117,10 @@ def test_schema_results_and_no_credential_environment_access():
     import jsonschema
     import yaml
     schema = yaml.safe_load(open("schemas/github-materialization-adapter.schema.yaml"))
-    c, _ = connector([auth(), ok("bug\ntrial-label\n")])
-    duplicate = c.add_existing_label(plan(preimage_digest=digest(["bug", "trial-label"])), authority_pair={"authority_generation": 7, "authority_head": H})
+    c, _ = connector([auth()])
+    with pytest.raises(GitHubCliConnectorHold):
+        c.add_existing_label(plan(preimage_digest=digest(["bug", "trial-label"])), authority_pair={"authority_generation": 7, "authority_head": H})
     jsonschema.Draft202012Validator(schema).validate(plan())
-    jsonschema.Draft202012Validator(schema).validate(duplicate)
 
 
 def test_repository_bound_capability_mode_rejects_unobservable_cli_scope_before_target():

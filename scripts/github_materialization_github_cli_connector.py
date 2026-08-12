@@ -136,7 +136,7 @@ class GitHubCliIssueLabelConnector:
             raise GitHubCliConnectorHold("hold_auth_mismatch")
         if authority_pair != {"authority_generation": planned["authority_generation"], "authority_head": planned["authority_head"]}:
             raise GitHubCliConnectorHold("hold_authority_pair_stale")
-        capability = self._resolve_capability()
+        capability = self._resolve_repository_capability()
         if capability_digest(capability) != planned["expected_capability_digest"]:
             raise GitHubCliConnectorHold("hold_capability_untrusted")
         receipt_id = _digest({key: planned[key] for key in ("human_authorization_ref", "operation", "target", "label", "preimage_digest", "authority_generation", "authority_head")})
