@@ -160,8 +160,8 @@ $defs:
     required: [schema_version, outcome, operation, receipt_id, target, label, readback_digest, mutation_count, network_capability, production_eligibility, authoritative, confirmation_eligible]
     properties:
       schema_version: {const: GitHubCliIssueLabelConnector-v1}
-      outcome: {enum: [duplicate_no_mutation, label_added, rollback_complete]}
-      operation: {enum: [add_existing_label, remove_same_label_if_added]}
+      outcome: {enum: [duplicate_no_mutation, label_added]}
+      operation: {const: add_existing_label}
       receipt_id: {$ref: '#/$defs/digest'}
       target: {$ref: '#/$defs/github_cli_target'}
       label: {type: string, minLength: 1, maxLength: 128, pattern: '^[^\x00-\x1f\x7f]+$'}

@@ -131,3 +131,5 @@ def test_repository_bound_capability_mode_rejects_unobservable_cli_scope_before_
     assert not any("/issues/" in " ".join(call[0]) for call in runner.calls)
     with pytest.raises(TypeError):
         GitHubCliIssueLabelConnector(repository_owner="octo-org", repository="demo", capability_resolver=lambda: observed())
+    assert not hasattr(c, "remove_same_label_if_added")
+    assert not any("DELETE" in call[0] for call in runner.calls)

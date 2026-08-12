@@ -11,7 +11,6 @@ import hashlib
 import json
 import re
 import subprocess
-import urllib.parse
 import uuid
 from collections.abc import Callable, Mapping
 from typing import Any
@@ -194,25 +193,6 @@ class GitHubCliIssueLabelConnector:
         # an API response field that GitHub does not provide.
         raise GitHubCliConnectorHold("hold_capability_broader_or_unobservable")
 
-    def remove_same_label_if_added(self, receipt: Mapping[str, Any]) -> dict[str, Any]:
-        if not isinstance(receipt, Mapping) or receipt.get("outcome") != "label_added" or not isinstance(receipt.get("receipt_id"), str):
-            raise GitHubCliConnectorHold("hold_schema")
-        stored = self._forward_receipts.get(receipt["receipt_id"])
-        if stored != dict(receipt):
-            raise GitHubCliConnectorHold("hold_schema")
-        target = _validate_target(receipt.get("target"))
-        label = receipt.get("label")
-        if not isinstance(label, str) or not _LABEL.fullmatch(label):
-            raise GitHubCliConnectorHold("hold_schema")
-        labels = self._read_labels(target)
-        if label not in labels:
-            raise GitHubCliConnectorHold("hold_rollback_incomplete")
-        self._write("DELETE", target, label)
-        readback = self._read_labels(target)
-        if label in readback:
-            raise GitHubCliConnectorHold("hold_rollback_incomplete")
-        return {"schema_version": "GitHubCliIssueLabelConnector-v1", "outcome": "rollback_complete", "operation": "remove_same_label_if_added", "receipt_id": receipt["receipt_id"], "target": target, "label": label, "readback_digest": _digest(readback), "mutation_count": 1, "network_capability": True, "production_eligibility": True, "authoritative": False, "confirmation_eligible": False}
-
     def _endpoint(self, target: Mapping[str, Any]) -> str:
         return f"repos/{target['owner']}/{target['repository']}/issues/{target['number']}/labels"
 
@@ -229,8 +209,6 @@ class GitHubCliIssueLabelConnector:
         endpoint = self._endpoint(target)
         if method == "POST":
             argv = ("gh", "api", "--method", "POST", endpoint, "-f", f"labels[]={label}")
-        elif method == "DELETE":
-            argv = ("gh", "api", "--method", "DELETE", endpoint + "/" + urllib.parse.quote(label, safe=""))
         else:
             raise GitHubCliConnectorHold("hold_schema")
         result = self._call(argv)
