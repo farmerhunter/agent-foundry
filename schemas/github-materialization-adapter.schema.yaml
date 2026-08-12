@@ -140,7 +140,7 @@ $defs:
   github_cli_label_plan:
     type: object
     additionalProperties: false
-    required: [schema_version, human_authorization_ref, operation, target, label, preimage_digest, authority_generation, authority_head, capability]
+    required: [schema_version, human_authorization_ref, operation, target, label, preimage_digest, authority_generation, authority_head, expected_capability_version, expected_capability_digest]
     properties:
       schema_version: {const: GitHubCliIssueLabelConnector-v1}
       human_authorization_ref: {type: string, minLength: 1, maxLength: 256}
@@ -150,32 +150,8 @@ $defs:
       preimage_digest: {$ref: '#/$defs/digest'}
       authority_generation: {type: integer, minimum: 0}
       authority_head: {$ref: '#/$defs/digest'}
-      capability:
-        type: object
-        additionalProperties: false
-        required: [connector_id, connector_version, provider, host, repository_restriction, authenticated_principal, observable_scopes, minimum_scopes, available]
-        properties:
-          connector_id: {const: github-cli-issue-label}
-          connector_version: {const: '1'}
-          provider: {const: github}
-          host: {const: github.com}
-          repository_restriction: {type: string, minLength: 3, maxLength: 140}
-          authenticated_principal: {type: string, pattern: '^[A-Za-z0-9-]{1,39}$'}
-          observable_scopes:
-            oneOf:
-              - {const: unavailable}
-              - type: array
-                minItems: 1
-                maxItems: 10
-                uniqueItems: true
-                items: {type: string, pattern: '^[A-Za-z0-9:_-]{1,64}$'}
-          minimum_scopes:
-            type: array
-            minItems: 1
-            maxItems: 10
-            uniqueItems: true
-            items: {type: string, pattern: '^[A-Za-z0-9:_-]{1,64}$'}
-          available: {const: true}
+      expected_capability_version: {const: '1'}
+      expected_capability_digest: {$ref: '#/$defs/digest'}
   github_cli_label_result:
     type: object
     additionalProperties: false

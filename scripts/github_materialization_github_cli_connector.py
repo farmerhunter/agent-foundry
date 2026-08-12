@@ -62,7 +62,7 @@ def _validate_target(value: Any) -> dict[str, Any]:
 
 
 def _validate_plan(value: Any) -> dict[str, Any]:
-    required = {"schema_version", "human_authorization_ref", "operation", "target", "label", "preimage_digest", "authority_generation", "authority_head", "capability"}
+    required = {"schema_version", "human_authorization_ref", "operation", "target", "label", "preimage_digest", "authority_generation", "authority_head", "expected_capability_version", "expected_capability_digest"}
     if not isinstance(value, Mapping) or set(value) != required:
         raise GitHubCliConnectorHold("hold_schema")
     if value.get("schema_version") != "GitHubCliIssueLabelConnector-v1" or value.get("operation") != "add_existing_label":
@@ -77,37 +77,22 @@ def _validate_plan(value: Any) -> dict[str, Any]:
         raise GitHubCliConnectorHold("hold_authority_pair_stale")
     if not isinstance(value.get("preimage_digest"), str) or not _DIGEST.fullmatch(value["preimage_digest"]):
         raise GitHubCliConnectorHold("hold_preimage_stale")
+    if value.get("expected_capability_version") != CONNECTOR_VERSION:
+        raise GitHubCliConnectorHold("hold_capability_untrusted")
+    if not isinstance(value.get("expected_capability_digest"), str) or not _DIGEST.fullmatch(value["expected_capability_digest"]):
+        raise GitHubCliConnectorHold("hold_capability_untrusted")
     target = _validate_target(value["target"])
-    return {**dict(value), "target": target, "capability": _validate_capability(value["capability"], target)}
-
-
-def _validate_capability(value: Any, target: Mapping[str, Any]) -> dict[str, Any]:
-    required = {"connector_id", "connector_version", "provider", "host", "repository_restriction", "authenticated_principal", "observable_scopes", "minimum_scopes", "available"}
-    if not isinstance(value, Mapping) or set(value) != required:
-        raise GitHubCliConnectorHold("hold_capability_untrusted")
-    if value.get("available") is not True:
-        raise GitHubCliConnectorHold("hold_capability_unavailable")
-    expected_repository = f"{target['owner']}/{target['repository']}"
-    if (value.get("connector_id") != CONNECTOR_ID or value.get("connector_version") != CONNECTOR_VERSION
-            or value.get("provider") != "github" or value.get("host") != "github.com"
-            or value.get("repository_restriction") != expected_repository):
-        raise GitHubCliConnectorHold("hold_capability_untrusted")
-    principal = value.get("authenticated_principal")
-    if not isinstance(principal, str) or not _PRINCIPAL.fullmatch(principal):
-        raise GitHubCliConnectorHold("hold_auth_mismatch")
-    observed, minimum = value.get("observable_scopes"), value.get("minimum_scopes")
-    if observed == "unavailable":
-        raise GitHubCliConnectorHold("hold_scope_unavailable")
-    if not _scope_list(observed) or not _scope_list(minimum):
-        raise GitHubCliConnectorHold("hold_scope_insufficient")
-    if not set(minimum).issubset(set(observed)):
-        raise GitHubCliConnectorHold("hold_scope_insufficient")
-    return dict(value)
+    return {**dict(value), "target": target}
 
 
 def _scope_list(value: Any) -> bool:
     return (isinstance(value, list) and bool(value) and len(value) <= 10
             and len(set(value)) == len(value) and all(isinstance(scope, str) and _SCOPE.fullmatch(scope) for scope in value))
+
+
+def capability_digest(value: Mapping[str, Any]) -> str:
+    """Digest the closed, connector-owned capability fact for Gate-1 binding."""
+    return _digest(value)
 
 
 class GitHubCliIssueLabelConnector:
@@ -127,15 +112,11 @@ class GitHubCliIssueLabelConnector:
         self._forward_receipts: dict[str, dict[str, Any]] = {}
 
     def capability_metadata(self) -> dict[str, Any]:
-        """Return only safe capability facts; scopes stay unavailable by default."""
-        argv = ("gh", "auth", "status", "--hostname", "github.com")
+        """Resolve the same normalized capability fact execution will bind."""
         try:
-            result = self._call(argv)
+            return self._resolve_capability()
         except GitHubCliConnectorHold:
-            return {"connector_id": CONNECTOR_ID, "connector_version": CONNECTOR_VERSION, "provider": "github", "host": "github.com", "repository_restriction": f"{self._repository['owner']}/{self._repository['repository']}", "authenticated_principal": "unavailable", "observable_scopes": "unavailable", "network_capability": True, "production_eligibility": True, "available": False}
-        if result["returncode"] != 0:
-            return {"connector_id": CONNECTOR_ID, "connector_version": CONNECTOR_VERSION, "provider": "github", "host": "github.com", "repository_restriction": f"{self._repository['owner']}/{self._repository['repository']}", "authenticated_principal": "unavailable", "observable_scopes": "unavailable", "network_capability": True, "production_eligibility": True, "available": False}
-        return {"connector_id": CONNECTOR_ID, "connector_version": CONNECTOR_VERSION, "provider": "github", "host": "github.com", "repository_restriction": f"{self._repository['owner']}/{self._repository['repository']}", "authenticated_principal": "available", "observable_scopes": "unavailable", "network_capability": True, "production_eligibility": True, "available": True}
+            return self._unavailable_capability()
 
     def add_existing_label(self, plan: Mapping[str, Any], *, authority_pair: Mapping[str, Any]) -> dict[str, Any]:
         planned = _validate_plan(plan)
@@ -144,6 +125,9 @@ class GitHubCliIssueLabelConnector:
             raise GitHubCliConnectorHold("hold_auth_mismatch")
         if authority_pair != {"authority_generation": planned["authority_generation"], "authority_head": planned["authority_head"]}:
             raise GitHubCliConnectorHold("hold_authority_pair_stale")
+        capability = self._resolve_capability()
+        if capability_digest(capability) != planned["expected_capability_digest"]:
+            raise GitHubCliConnectorHold("hold_capability_untrusted")
         receipt_id = _digest({key: planned[key] for key in ("human_authorization_ref", "operation", "target", "label", "preimage_digest", "authority_generation", "authority_head")})
         if receipt_id in self._forward_receipts:
             raise GitHubCliConnectorHold("hold_second_forward_attempt")
@@ -159,6 +143,28 @@ class GitHubCliIssueLabelConnector:
         receipt = self._result("label_added", planned, receipt_id, readback, mutation_count=1)
         self._forward_receipts[receipt_id] = receipt
         return receipt
+
+    def _unavailable_capability(self) -> dict[str, Any]:
+        return {"connector_id": CONNECTOR_ID, "connector_version": CONNECTOR_VERSION, "provider": "github", "host": "github.com", "repository_restriction": f"{self._repository['owner']}/{self._repository['repository']}", "authenticated_principal": "unavailable", "observable_scopes": "unavailable", "minimum_scopes": ["repo"], "network_capability": True, "production_eligibility": True, "available": False}
+
+    def _resolve_capability(self) -> dict[str, Any]:
+        result = self._call(("gh", "auth", "status", "--hostname", "github.com", "--json", "login,scopes"))
+        if result["returncode"] != 0:
+            raise GitHubCliConnectorHold("hold_capability_unavailable")
+        try:
+            parsed = json.loads(result["stdout"])
+        except (TypeError, ValueError):
+            raise GitHubCliConnectorHold("hold_capability_untrusted") from None
+        if not isinstance(parsed, Mapping) or set(parsed) != {"login", "scopes"}:
+            raise GitHubCliConnectorHold("hold_capability_untrusted")
+        principal, scopes = parsed.get("login"), parsed.get("scopes")
+        if not isinstance(principal, str) or not _PRINCIPAL.fullmatch(principal):
+            raise GitHubCliConnectorHold("hold_auth_mismatch")
+        if scopes == "unavailable":
+            raise GitHubCliConnectorHold("hold_scope_unavailable")
+        if not _scope_list(scopes) or "repo" not in set(scopes):
+            raise GitHubCliConnectorHold("hold_scope_insufficient")
+        return {"connector_id": CONNECTOR_ID, "connector_version": CONNECTOR_VERSION, "provider": "github", "host": "github.com", "repository_restriction": f"{self._repository['owner']}/{self._repository['repository']}", "authenticated_principal": principal, "observable_scopes": sorted(scopes), "minimum_scopes": ["repo"], "network_capability": True, "production_eligibility": True, "available": True}
 
     def remove_same_label_if_added(self, receipt: Mapping[str, Any]) -> dict[str, Any]:
         if not isinstance(receipt, Mapping) or receipt.get("outcome") != "label_added" or not isinstance(receipt.get("receipt_id"), str):
