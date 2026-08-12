@@ -7,7 +7,7 @@ import tempfile
 from pathlib import Path
 import local_collaboration_scheduler as sc
 
-from github_materialization_adapter import FakeConnector, MaterializationHold, execute_materialization, plan_materialization
+from github_materialization_adapter import REAL_CONNECTOR_OPERATION, FakeConnector, MaterializationHold, execute_materialization, plan_materialization
 
 PID = str(uuid.uuid4()); INTENT = str(uuid.uuid4()); H = "a" * 64; C = "b" * 64
 
@@ -246,3 +246,10 @@ def test_no_host_io_and_external_holds_fixture_stability(monkeypatch):
         "#547": "external_selected_vault_claude_fixture_drift_preexisting",
     }
     assert external_holds == {"#546": "external_selected_vault_duplicate_hold_preexisting", "#547": "external_selected_vault_claude_fixture_drift_preexisting"}
+
+
+def test_real_connector_operation_cannot_promote_hermetic_fake_path():
+    assert REAL_CONNECTOR_OPERATION == "add_existing_label"
+    with pytest.raises(MaterializationHold) as held:
+        plan_materialization(req(operation=REAL_CONNECTOR_OPERATION), state())
+    assert str(held.value) in {"hold_materialization_schema", "hold_materialization_operation_unsupported"}

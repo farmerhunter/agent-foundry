@@ -4,6 +4,8 @@ title: GitHubMaterializationAdapter-v1
 oneOf:
   - $ref: '#/$defs/request'
   - $ref: '#/$defs/result'
+  - $ref: '#/$defs/github_cli_label_plan'
+  - $ref: '#/$defs/github_cli_label_result'
 $defs:
   digest: {type: string, pattern: '^[0-9a-f]{64}$'}
   uuid: {type: string, format: uuid}
@@ -126,3 +128,43 @@ $defs:
       occurred_at: {type: string, format: strict-rfc3339}
       read_timestamp: {type: string, format: strict-rfc3339}
       readback_nonce: {type: string, format: strict-rfc3339}
+  github_cli_target:
+    type: object
+    additionalProperties: false
+    required: [owner, repository, number, kind]
+    properties:
+      owner: {type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9-]{0,37}$'}
+      repository: {type: string, pattern: '^[A-Za-z0-9._-]{1,100}$'}
+      number: {type: integer, minimum: 1}
+      kind: {enum: [issue, pull_request]}
+  github_cli_label_plan:
+    type: object
+    additionalProperties: false
+    required: [schema_version, human_authorization_ref, operation, target, label, preimage_digest, authority_generation, authority_head]
+    properties:
+      schema_version: {const: GitHubCliIssueLabelConnector-v1}
+      human_authorization_ref: {type: string, minLength: 1, maxLength: 256}
+      operation: {const: add_existing_label}
+      target: {$ref: '#/$defs/github_cli_target'}
+      label: {type: string, minLength: 1, maxLength: 128, pattern: '^[^\x00-\x1f\x7f]+$'}
+      preimage_digest: {$ref: '#/$defs/digest'}
+      authority_generation: {type: integer, minimum: 0}
+      authority_head: {$ref: '#/$defs/digest'}
+  github_cli_label_result:
+    type: object
+    additionalProperties: false
+    required: [schema_version, outcome, operation, receipt_id, target, label, readback_digest, mutation_count, network_capability, production_eligibility, authoritative, confirmation_eligible]
+    properties:
+      schema_version: {const: GitHubCliIssueLabelConnector-v1}
+      outcome: {enum: [duplicate_no_mutation, label_added, rollback_complete]}
+      operation: {enum: [add_existing_label, remove_same_label_if_added]}
+      receipt_id: {$ref: '#/$defs/digest'}
+      target: {$ref: '#/$defs/github_cli_target'}
+      label: {type: string, minLength: 1, maxLength: 128, pattern: '^[^\x00-\x1f\x7f]+$'}
+      preimage_digest: {$ref: '#/$defs/digest'}
+      readback_digest: {$ref: '#/$defs/digest'}
+      mutation_count: {type: integer, minimum: 0, maximum: 1}
+      network_capability: {const: true}
+      production_eligibility: {const: true}
+      authoritative: {const: false}
+      confirmation_eligible: {const: false}

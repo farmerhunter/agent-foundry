@@ -19,6 +19,10 @@ from typing import Any
 VERSION = "GitHubMaterializationAdapter-v1"
 ADAPTER_ID = "github-materialization-hermetic"
 ADAPTER_VERSION = "1"
+# This literal names the separately implemented production-capable seam.  It
+# is deliberately not added to the hermetic planner's OPERATIONS: callers
+# cannot turn FakeConnector into a live connector by changing a request.
+REAL_CONNECTOR_OPERATION = "add_existing_label"
 NAMESPACE = uuid.UUID("f5c27bf1-0c2e-4f96-b87f-7dc4a43e1bf1")
 OPERATIONS = {"issue_create", "issue_comment", "pull_request_comment"}
 CLASSIFICATIONS = {"local_only", "must_publish", "optional_sync"}
@@ -305,4 +309,4 @@ def execute_materialization(request: Mapping[str, Any], scheduler_state: Mapping
     return _result(req["operation"], "materialization_readback_verified", classification=req["classification"], project_id=req["project_id"], intent_id=req["intent_id"], attempt_sequence=req["attempt_sequence"], idempotency_key=req["idempotency_key"], readback_digest=_digest(post), opaque_receipt_ref="fake:" + req["idempotency_key"], confirmed=True, adapter_id=req["adapter_id"], adapter_version=req["adapter_version"], expected_remote_kind=req.get("expected_remote_kind"), expected_remote_ref=req.get("expected_remote_ref"), expected_remote_digest=req.get("expected_remote_digest"), expected_remote_version=req.get("expected_remote_version"), desired_effect_digest=req["desired_effect_digest"], request_digest=request_digest, occurred_at=req["occurred_at"], read_timestamp=read_at, readback_nonce=req.get("nonce") or req["occurred_at"])
 
 
-__all__ = ["VERSION", "FakeConnector", "MaterializationError", "MaterializationHold", "plan_materialization", "execute_materialization"]
+__all__ = ["VERSION", "REAL_CONNECTOR_OPERATION", "FakeConnector", "MaterializationError", "MaterializationHold", "plan_materialization", "execute_materialization"]
