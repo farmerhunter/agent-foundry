@@ -162,3 +162,20 @@ def test_schema_results_and_no_credential_environment_access():
     duplicate = c.add_existing_label(plan(preimage_digest=digest(["bug", "trial-label"])), authority_pair={"authority_generation": 7, "authority_head": H})
     jsonschema.Draft202012Validator(schema).validate(plan())
     jsonschema.Draft202012Validator(schema).validate(duplicate)
+
+
+def test_repository_bound_capability_mode_rejects_unobservable_cli_scope_before_target():
+    c, runner = connector([])
+    c = GitHubCliIssueLabelConnector(repository_owner="octo-org", repository="demo", runner=runner, require_repository_capability=True)
+    with pytest.raises(GitHubCliConnectorHold) as held:
+        c.add_existing_label(plan(), authority_pair={"authority_generation": 7, "authority_head": H})
+    assert str(held.value) == "hold_capability_broader_or_unobservable" and not runner.calls
+
+    bound = {**observed(), "repository_permission": {"repository": "octo-org/demo", "issues": "metadata"}, "minimum_scopes": ["issues:metadata"], "observable_scopes": ["issues:metadata"]}
+    c, runner = connector([ok("bug\n"), ok(), ok("bug\ntrial-label\n")])
+    c = GitHubCliIssueLabelConnector(repository_owner="octo-org", repository="demo", runner=runner,
+                                     capability_resolver=lambda: bound, require_repository_capability=True)
+    actual = c.capability_metadata()
+    assert actual == bound and c.repository_binding == {"owner": "octo-org", "repository": "demo"}
+    receipt = c.add_existing_label(plan(expected_capability_digest=capability_digest(bound)), authority_pair={"authority_generation": 7, "authority_head": H})
+    assert receipt["outcome"] == "label_added" and all("/issues/" in " ".join(call[0]) for call in runner.calls)

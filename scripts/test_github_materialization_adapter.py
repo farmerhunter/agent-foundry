@@ -7,7 +7,8 @@ import tempfile
 from pathlib import Path
 import local_collaboration_scheduler as sc
 
-from github_materialization_adapter import REAL_CONNECTOR_OPERATION, FakeConnector, MaterializationHold, execute_materialization, plan_materialization
+from github_materialization_adapter import REAL_CONNECTOR_OPERATION, FakeConnector, MaterializationHold, execute_materialization, execute_real_label_materialization, plan_materialization
+from github_materialization_github_cli_connector import CONNECTOR_ID, CONNECTOR_VERSION, GitHubCliIssueLabelConnector, capability_digest
 
 PID = str(uuid.uuid4()); INTENT = str(uuid.uuid4()); H = "a" * 64; C = "b" * 64
 
@@ -253,3 +254,82 @@ def test_real_connector_operation_cannot_promote_hermetic_fake_path():
     with pytest.raises(MaterializationHold) as held:
         plan_materialization(req(operation=REAL_CONNECTOR_OPERATION), state())
     assert str(held.value) in {"hold_materialization_schema", "hold_materialization_operation_unsupported"}
+
+
+class BridgeStubRunner:
+    def __init__(self, responses): self.responses, self.calls = list(responses), []
+    def __call__(self, argv, **kwargs):
+        self.calls.append((tuple(argv), kwargs))
+        return self.responses.pop(0)
+
+
+def _bridge_capability():
+    return {"connector_id": CONNECTOR_ID, "connector_version": CONNECTOR_VERSION, "provider": "github", "host": "github.com",
+            "repository_restriction": "octo-org/demo", "authenticated_principal": "octocat", "observable_scopes": ["issues:metadata"],
+            "minimum_scopes": ["issues:metadata"], "repository_permission": {"repository": "octo-org/demo", "issues": "metadata"},
+            "network_capability": True, "production_eligibility": True, "available": True}
+
+
+def _bridge_request(**extra):
+    target = {"owner": "octo-org", "repository": "demo", "number": 12, "kind": "issue"}
+    repository = {"owner": "octo-org", "repository": "demo"}
+    base = {"schema_version": "GitHubLabelMaterializationBridge-v1", "human_authorization_ref": "human-gate-2",
+            "project_id": PID, "work_id": "work-1", "intent_id": INTENT, "attempt_sequence": 1,
+            "scheduler_generation": 4, "scheduler_head": H, "repository_id": C,
+            "repository_locator_digest": hashlib.sha256(json.dumps(repository, sort_keys=True, separators=(",", ":")).encode()).hexdigest(),
+            "target": target, "label": "trial-label", "preimage_digest": hashlib.sha256(json.dumps(["bug"], separators=(",", ":")).encode()).hexdigest(),
+            "expected_capability_version": CONNECTOR_VERSION, "expected_capability_digest": capability_digest(_bridge_capability()),
+            "privacy_class": "metadata_only", "write_budget": 1, "retry_budget": 0,
+            "occurred_at": "2026-08-12T00:00:00Z", "timestamp_provenance": "explicit"}
+    effect = {"version": "GitHubLabelMaterializationBridge-v1", "operation": "add_existing_label", "target": target, "label": "trial-label",
+              "preimage_digest": base["preimage_digest"], "project_id": PID, "intent_id": INTENT, "attempt_sequence": 1,
+              "repository_id": C, "repository_locator_digest": base["repository_locator_digest"]}
+    base["desired_effect_digest"] = hashlib.sha256(json.dumps(effect, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()).hexdigest()
+    base.update(extra); return base
+
+
+def _bridge_state(request):
+    return {"project_id": request["project_id"], "remote_intent_state": "pending_materialization", "intent_id": request["intent_id"],
+            "attempt_sequence": request["attempt_sequence"], "desired_effect_digest": request["desired_effect_digest"],
+            "scheduler_generation": request["scheduler_generation"], "scheduler_head": request["scheduler_head"]}
+
+
+def _bridge_connector(responses, capability=_bridge_capability):
+    runner = BridgeStubRunner(responses)
+    return GitHubCliIssueLabelConnector(repository_owner="octo-org", repository="demo", runner=runner, capability_resolver=capability, require_repository_capability=True), runner
+
+
+def test_public_real_label_bridge_binds_scheduler_and_stays_nonconfirming():
+    request = _bridge_request(); connector, runner = _bridge_connector([
+        {"returncode": 0, "stdout": "bug\n", "stderr": ""}, {"returncode": 0, "stdout": "", "stderr": ""},
+        {"returncode": 0, "stdout": "bug\ntrial-label\n", "stderr": ""},
+    ])
+    result = execute_real_label_materialization(request, _bridge_state(request), connector)
+    assert result["outcome"] == "real_label_added_observed_unverified" and result["mutation_count"] == 1
+    assert result["authoritative"] is False and result["confirmation_eligible"] is False
+    assert result["scheduler_confirmation_performed"] is False and result["observation_state"] == "observed_unverified"
+    assert len(runner.calls) == 3 and all(call[1]["shell"] is False for call in runner.calls)
+
+
+def test_public_real_label_bridge_rejects_forgery_and_capability_before_target():
+    request = _bridge_request(); connector, runner = _bridge_connector([])
+    result = execute_real_label_materialization({**request, "authority_pair": {"authority_generation": 4}}, _bridge_state(request), connector)
+    assert result["outcome"] == "real_label_materialization_hold" and result["reason"] == "schema_or_privacy" and not runner.calls
+    connector, runner = _bridge_connector([], capability=lambda: {**_bridge_capability(), "repository_permission": {"repository": "octo-org/demo", "issues": "write"}})
+    result = execute_real_label_materialization(request, _bridge_state(request), connector)
+    assert result["reason"] == "capability_broader_or_unobservable" and result["connector_called"] is True and not runner.calls
+    connector, runner = _bridge_connector([])
+    result = execute_real_label_materialization(request, {**_bridge_state(request), "scheduler_head": "c" * 64}, connector)
+    assert result["reason"] == "scheduler_or_authority_drift" and not runner.calls
+
+
+def test_public_real_label_bridge_duplicate_and_binding_budget_holds():
+    request = _bridge_request(preimage_digest=hashlib.sha256(json.dumps(["bug", "trial-label"], separators=(",", ":")).encode()).hexdigest())
+    target = request["target"]
+    effect = {"version": "GitHubLabelMaterializationBridge-v1", "operation": "add_existing_label", "target": target, "label": request["label"], "preimage_digest": request["preimage_digest"], "project_id": PID, "intent_id": INTENT, "attempt_sequence": 1, "repository_id": C, "repository_locator_digest": request["repository_locator_digest"]}
+    request["desired_effect_digest"] = hashlib.sha256(json.dumps(effect, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    connector, runner = _bridge_connector([{"returncode": 0, "stdout": "bug\ntrial-label\n", "stderr": ""}])
+    result = execute_real_label_materialization(request, _bridge_state(request), connector)
+    assert result["outcome"] == "real_label_duplicate_observed_unverified" and result["mutation_count"] == 0 and len(runner.calls) == 1
+    result = execute_real_label_materialization(_bridge_request(write_budget=2), _bridge_state(_bridge_request(write_budget=2)), connector)
+    assert result["reason"] == "schema_or_privacy" and len(runner.calls) == 1
