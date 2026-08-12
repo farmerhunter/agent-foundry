@@ -441,6 +441,11 @@ def execute_real_label_materialization(request: Mapping[str, Any], scheduler_sta
             return _bridge_hold(req, "repository_or_target_binding")
         if req["expected_capability_version"] != CONNECTOR_VERSION:
             return _bridge_hold(req, "capability_unavailable_or_untrusted")
+        capability = connector.capability_metadata()
+        if capability.get("available") is not True:
+            return _bridge_hold(req, "capability_broader_or_unobservable", connector_called=True)
+        if capability.get("connector_version") != req["expected_capability_version"] or _digest(capability) != req["expected_capability_digest"]:
+            return _bridge_hold(req, "capability_unavailable_or_untrusted", connector_called=True)
         plan = {"schema_version": "GitHubCliIssueLabelConnector-v1", "human_authorization_ref": req["human_authorization_ref"],
                 "operation": "add_existing_label", "target": req["target"], "label": req["label"],
                 "preimage_digest": req["preimage_digest"], **authority_pair,

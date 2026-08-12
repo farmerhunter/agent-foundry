@@ -17,11 +17,11 @@ def digest(value):
 
 
 def observed(login="octocat", scopes=None):
-    return {"connector_id": CONNECTOR_ID, "connector_version": CONNECTOR_VERSION, "provider": "github", "host": "github.com", "repository_restriction": "octo-org/demo", "authenticated_principal": login, "observable_scopes": sorted(scopes or ["repo"]), "minimum_scopes": ["issues:metadata"], "repository_permission": {"repository": "octo-org/demo", "issues": "metadata"}, "network_capability": True, "production_eligibility": True, "available": True}
+    return {"connector_id": CONNECTOR_ID, "connector_version": CONNECTOR_VERSION, "provider": "github", "host": "github.com", "repository_restriction": "octo-org/demo", "authenticated_principal": login, "observable_scopes": sorted(scopes or ["repo"]), "minimum_scopes": ["repo"], "network_capability": True, "production_eligibility": True, "available": True}
 
 
 def auth(login="octocat", scopes=None):
-    return ok(json.dumps({"login": login, "scopes": scopes if scopes is not None else ["repo"]}))
+    return ok(json.dumps({"hosts": {"github.com": [{"login": login, "scopes": scopes if scopes is not None else ["repo"]}]}}))
 
 
 def plan(**extra):
@@ -34,8 +34,6 @@ class StubRunner:
     def __init__(self, responses): self.responses, self.calls = list(responses), []
     def __call__(self, argv, **kwargs):
         self.calls.append((tuple(argv), kwargs))
-        if tuple(argv) == ("gh", "api", "--method", "GET", "repos/octo-org/demo", "--jq", ".permissions.issues"):
-            return ok("metadata\n")
         if not self.responses: raise AssertionError("unexpected subprocess call")
         return self.responses.pop(0)
 
@@ -62,17 +60,16 @@ def test_matching_owner_resolved_capability_uses_fixed_argv_and_nonconfirming_re
     assert result["outcome"] == "label_added" and result["mutation_count"] == 1
     assert result["network_capability"] is True and result["production_eligibility"] is True
     assert result["authoritative"] is False and result["confirmation_eligible"] is False
-    assert runner.calls[0][0] == ("gh", "auth", "status", "--hostname", "github.com", "--json", "login,scopes")
-    assert runner.calls[1][0] == ("gh", "api", "--method", "GET", "repos/octo-org/demo", "--jq", ".permissions.issues")
-    assert runner.calls[2][0] == ("gh", "api", "--method", "GET", "repos/octo-org/demo/issues/12/labels", "--jq", ".[ ].name".replace(" ", ""))
-    assert runner.calls[3][0] == ("gh", "api", "--method", "POST", "repos/octo-org/demo/issues/12/labels", "-f", "labels[]=trial-label")
+    assert runner.calls[0][0] == ("gh", "auth", "status", "--active", "--hostname", "github.com", "--json", "hosts")
+    assert runner.calls[1][0] == ("gh", "api", "--method", "GET", "repos/octo-org/demo/issues/12/labels", "--jq", ".[ ].name".replace(" ", ""))
+    assert runner.calls[2][0] == ("gh", "api", "--method", "POST", "repos/octo-org/demo/issues/12/labels", "-f", "labels[]=trial-label")
     assert_runner_contract(runner)
 
 
 @pytest.mark.parametrize("response, expected, reason", [
     ({"returncode": 1, "stdout": "", "stderr": "token=secret"}, None, "hold_capability_unavailable"),
-    (ok(json.dumps({"login": "octocat", "scopes": []})), None, "hold_scope_insufficient"),
-    (ok(json.dumps({"login": "octocat", "scopes": "unavailable"})), None, "hold_scope_unavailable"),
+    (auth("octocat", []), None, "hold_scope_insufficient"),
+    (auth("octocat", "unavailable"), None, "hold_scope_unavailable"),
     (auth("another"), None, "hold_capability_untrusted"),
 ])
 def test_forged_or_unavailable_caller_capability_cannot_reach_target(response, expected, reason):
@@ -89,7 +86,7 @@ def test_capability_digest_drift_and_extra_caller_claim_hold_before_target():
     c, runner = connector([auth()])
     with pytest.raises(GitHubCliConnectorHold) as held:
         c.add_existing_label(plan(expected_capability_digest="b" * 64), authority_pair={"authority_generation": 7, "authority_head": H})
-    assert str(held.value) == "hold_capability_untrusted" and len(runner.calls) == 2
+    assert str(held.value) == "hold_capability_untrusted" and len(runner.calls) == 1
     c, runner = connector([])
     with pytest.raises(GitHubCliConnectorHold) as held:
         c.add_existing_label({**plan(), "capability": {"observable_scopes": ["repo"]}}, authority_pair={"authority_generation": 7, "authority_head": H})
@@ -136,7 +133,7 @@ def test_bounded_rollback_and_process_loss_remain_incomplete_not_recovered():
     forward = c.add_existing_label(plan(), authority_pair={"authority_generation": 7, "authority_head": H})
     rollback = c.remove_same_label_if_added(forward)
     assert rollback["outcome"] == "rollback_complete"
-    assert runner.calls[6][0] == ("gh", "api", "--method", "DELETE", "repos/octo-org/demo/issues/12/labels/trial-label")
+    assert runner.calls[5][0] == ("gh", "api", "--method", "DELETE", "repos/octo-org/demo/issues/12/labels/trial-label")
     c, _ = connector([auth(), ok("bug\n"), ok(), ok("bug\ntrial-label\n")])
     result = c.add_existing_label(plan(), authority_pair={"authority_generation": 7, "authority_head": H})
     fresh, _ = connector([])
@@ -146,14 +143,12 @@ def test_bounded_rollback_and_process_loss_remain_incomplete_not_recovered():
 
 
 def test_capability_metadata_and_execution_share_resolver_and_sanitize_output(monkeypatch):
-    c, runner = connector([auth("octocat", ["repo", "read:org"]), auth("octocat", ["repo", "read:org"]), ok("bug\n"), ok(), ok("bug\ntrial-label\n")])
+    c, runner = connector([auth("octocat", ["repo", "read:org"])])
     metadata = c.capability_metadata()
-    assert metadata == observed("octocat", ["repo", "read:org"])
-    result = c.add_existing_label(plan(expected_capability_digest=capability_digest(metadata)), authority_pair={"authority_generation": 7, "authority_head": H})
-    assert result["outcome"] == "label_added"
+    assert metadata["available"] is False
     def blocked(*args, **kwargs): raise AssertionError("socket invoked")
     monkeypatch.setattr(socket, "socket", blocked)
-    c, _ = connector([ok('{"login":"octocat","scopes":["repo"],"token":"secret"}')])
+    c, _ = connector([ok('{"hosts":{"github.com":[{"login":"octocat","scopes":["repo"],"token":"secret"}]}}')])
     assert c.capability_metadata()["available"] is False
 
 
@@ -169,21 +164,9 @@ def test_schema_results_and_no_credential_environment_access():
 
 def test_repository_bound_capability_mode_rejects_unobservable_cli_scope_before_target():
     c, runner = connector([auth()])
-    def no_permission(argv, **kwargs):
-        runner.calls.append((tuple(argv), kwargs))
-        if tuple(argv) == ("gh", "api", "--method", "GET", "repos/octo-org/demo", "--jq", ".permissions.issues"):
-            return {"returncode": 0, "stdout": "write\n", "stderr": ""}
-        return runner.responses.pop(0)
-    c._runner = no_permission
-    # A fixed owner query that does not return the literal metadata permission
-    # cannot reach the Issue endpoint.
-    with pytest.raises(GitHubCliConnectorHold) as held:
-        c.add_existing_label(plan(), authority_pair={"authority_generation": 7, "authority_head": H})
-    assert str(held.value) == "hold_capability_broader_or_unobservable" and not any("/issues/" in " ".join(call[0]) for call in runner.calls)
-
-    bound = observed()
-    c, runner = connector([auth(), auth(), ok("bug\n"), ok(), ok("bug\ntrial-label\n")])
-    actual = c.capability_metadata()
-    assert actual == bound and c.repository_binding == {"owner": "octo-org", "repository": "demo"}
-    receipt = c.add_existing_label(plan(expected_capability_digest=capability_digest(bound)), authority_pair={"authority_generation": 7, "authority_head": H})
-    assert receipt["outcome"] == "label_added" and any("/issues/" in " ".join(call[0]) for call in runner.calls)
+    # The documented host/account status shape has no repository-grant field;
+    # bridge capability metadata fails closed before an Issue endpoint.
+    assert c.capability_metadata()["available"] is False
+    assert not any("/issues/" in " ".join(call[0]) for call in runner.calls)
+    with pytest.raises(TypeError):
+        GitHubCliIssueLabelConnector(repository_owner="octo-org", repository="demo", capability_resolver=lambda: observed())

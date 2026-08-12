@@ -136,7 +136,7 @@ class GitHubCliIssueLabelConnector:
             raise GitHubCliConnectorHold("hold_auth_mismatch")
         if authority_pair != {"authority_generation": planned["authority_generation"], "authority_head": planned["authority_head"]}:
             raise GitHubCliConnectorHold("hold_authority_pair_stale")
-        capability = self._resolve_repository_capability()
+        capability = self._resolve_capability()
         if capability_digest(capability) != planned["expected_capability_digest"]:
             raise GitHubCliConnectorHold("hold_capability_untrusted")
         receipt_id = _digest({key: planned[key] for key in ("human_authorization_ref", "operation", "target", "label", "preimage_digest", "authority_generation", "authority_head")})
@@ -159,16 +159,24 @@ class GitHubCliIssueLabelConnector:
         return {"connector_id": CONNECTOR_ID, "connector_version": CONNECTOR_VERSION, "provider": "github", "host": "github.com", "repository_restriction": f"{self._repository['owner']}/{self._repository['repository']}", "authenticated_principal": "unavailable", "observable_scopes": "unavailable", "minimum_scopes": ["repo"], "network_capability": True, "production_eligibility": True, "available": False}
 
     def _resolve_capability(self) -> dict[str, Any]:
-        result = self._call(("gh", "auth", "status", "--hostname", "github.com", "--json", "login,scopes"))
+        # ``hosts`` is the documented JSON field for `gh auth status`; do not
+        # rely on unsupported login/scopes fields or token display output.
+        result = self._call(("gh", "auth", "status", "--active", "--hostname", "github.com", "--json", "hosts"))
         if result["returncode"] != 0:
             raise GitHubCliConnectorHold("hold_capability_unavailable")
         try:
             parsed = json.loads(result["stdout"])
         except (TypeError, ValueError):
             raise GitHubCliConnectorHold("hold_capability_untrusted") from None
-        if not isinstance(parsed, Mapping) or set(parsed) != {"login", "scopes"}:
+        if not isinstance(parsed, Mapping) or set(parsed) != {"hosts"} or not isinstance(parsed.get("hosts"), Mapping):
             raise GitHubCliConnectorHold("hold_capability_untrusted")
-        principal, scopes = parsed.get("login"), parsed.get("scopes")
+        host_accounts = parsed["hosts"].get("github.com")
+        if not isinstance(host_accounts, list) or len(host_accounts) != 1 or not isinstance(host_accounts[0], Mapping):
+            raise GitHubCliConnectorHold("hold_capability_untrusted")
+        account = host_accounts[0]
+        if set(account) != {"login", "scopes"}:
+            raise GitHubCliConnectorHold("hold_capability_untrusted")
+        principal, scopes = account.get("login"), account.get("scopes")
         if not isinstance(principal, str) or not _PRINCIPAL.fullmatch(principal):
             raise GitHubCliConnectorHold("hold_auth_mismatch")
         if scopes == "unavailable":
@@ -178,15 +186,13 @@ class GitHubCliIssueLabelConnector:
         return {"connector_id": CONNECTOR_ID, "connector_version": CONNECTOR_VERSION, "provider": "github", "host": "github.com", "repository_restriction": f"{self._repository['owner']}/{self._repository['repository']}", "authenticated_principal": principal, "observable_scopes": sorted(scopes), "minimum_scopes": ["repo"], "network_capability": True, "production_eligibility": True, "available": True}
 
     def _resolve_repository_capability(self) -> dict[str, Any]:
-        auth = self._resolve_capability()
-        expected_repository = f"{self._repository['owner']}/{self._repository['repository']}"
-        result = self._call(("gh", "api", "--method", "GET", f"repos/{expected_repository}", "--jq", ".permissions.issues"))
-        if result["returncode"] != 0:
-            raise self._provider_hold(result["returncode"], result["stderr"])
-        if result["stdout"].strip() != "metadata":
-            raise GitHubCliConnectorHold("hold_capability_broader_or_unobservable")
-        return {**auth, "minimum_scopes": ["issues:metadata"],
-                "repository_permission": {"repository": expected_repository, "issues": "metadata"}}
+        self._resolve_capability()
+        # GitHub CLI managed authentication exposes host/account state and
+        # OAuth scopes, but no credential-grant repository constraint nor an
+        # Issues-metadata permission envelope.  The public bridge must never
+        # manufacture that missing fact from a repository constructor value or
+        # an API response field that GitHub does not provide.
+        raise GitHubCliConnectorHold("hold_capability_broader_or_unobservable")
 
     def remove_same_label_if_added(self, receipt: Mapping[str, Any]) -> dict[str, Any]:
         if not isinstance(receipt, Mapping) or receipt.get("outcome") != "label_added" or not isinstance(receipt.get("receipt_id"), str):
