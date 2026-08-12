@@ -24,6 +24,7 @@ def plan(**extra):
         "preimage_digest": digest(["bug"]),
         "authority_generation": 7,
         "authority_head": H,
+        "capability": {"connector_id": "github-cli-issue-label", "connector_version": "1", "provider": "github", "host": "github.com", "repository_restriction": "octo-org/demo", "authenticated_principal": "octocat", "observable_scopes": ["repo"], "minimum_scopes": ["repo"], "available": True},
     }
     value.update(extra)
     return value
@@ -89,11 +90,25 @@ def test_invalid_target_or_label_holds_before_subprocess(changed, reason):
 def test_repository_and_authority_binding_hold_before_subprocess():
     c, runner = connector([])
     with pytest.raises(GitHubCliConnectorHold) as held:
-        c.add_existing_label(plan(target={"owner": "other", "repository": "demo", "number": 12, "kind": "issue"}), authority_pair={"authority_generation": 7, "authority_head": H})
+        c.add_existing_label(plan(target={"owner": "other", "repository": "demo", "number": 12, "kind": "issue"}, capability={**plan()["capability"], "repository_restriction": "other/demo"}), authority_pair={"authority_generation": 7, "authority_head": H})
     assert str(held.value) == "hold_auth_mismatch"
     with pytest.raises(GitHubCliConnectorHold) as held:
         c.add_existing_label(plan(), authority_pair={"authority_generation": 8, "authority_head": H})
     assert str(held.value) == "hold_authority_pair_stale" and not runner.calls
+
+
+@pytest.mark.parametrize("capability, reason", [
+    ({"connector_id": "other", "connector_version": "1", "provider": "github", "host": "github.com", "repository_restriction": "octo-org/demo", "authenticated_principal": "octocat", "observable_scopes": ["repo"], "minimum_scopes": ["repo"], "available": True}, "hold_capability_untrusted"),
+    ({"connector_id": "github-cli-issue-label", "connector_version": "1", "provider": "github", "host": "github.com", "repository_restriction": "other/demo", "authenticated_principal": "octocat", "observable_scopes": ["repo"], "minimum_scopes": ["repo"], "available": True}, "hold_capability_untrusted"),
+    ({"connector_id": "github-cli-issue-label", "connector_version": "1", "provider": "github", "host": "github.com", "repository_restriction": "octo-org/demo", "authenticated_principal": "octocat", "observable_scopes": ["repo"], "minimum_scopes": ["repo"], "available": False}, "hold_capability_unavailable"),
+    ({"connector_id": "github-cli-issue-label", "connector_version": "1", "provider": "github", "host": "github.com", "repository_restriction": "octo-org/demo", "authenticated_principal": "octocat", "observable_scopes": "unavailable", "minimum_scopes": ["repo"], "available": True}, "hold_scope_unavailable"),
+    ({"connector_id": "github-cli-issue-label", "connector_version": "1", "provider": "github", "host": "github.com", "repository_restriction": "octo-org/demo", "authenticated_principal": "octocat", "observable_scopes": ["read:org"], "minimum_scopes": ["repo"], "available": True}, "hold_scope_insufficient"),
+])
+def test_capability_binding_holds_before_pre_read(capability, reason):
+    c, runner = connector([])
+    with pytest.raises(GitHubCliConnectorHold) as held:
+        c.add_existing_label(plan(capability=capability), authority_pair={"authority_generation": 7, "authority_head": H})
+    assert str(held.value) == reason and not runner.calls
 
 
 def test_preimage_drift_provider_failures_and_readback_mismatch_are_typed_and_private():

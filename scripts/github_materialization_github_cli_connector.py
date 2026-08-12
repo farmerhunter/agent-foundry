@@ -23,6 +23,8 @@ _OWNER = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37})$")
 _REPOSITORY = re.compile(r"^[A-Za-z0-9._-]{1,100}$")
 _LABEL = re.compile(r"^[^\x00-\x1f\x7f]{1,128}$")
 _DIGEST = re.compile(r"^[0-9a-f]{64}$")
+_PRINCIPAL = re.compile(r"^[A-Za-z0-9-]{1,39}$")
+_SCOPE = re.compile(r"^[A-Za-z0-9:_-]{1,64}$")
 _REASONS = {
     "hold_capability_unavailable", "hold_capability_untrusted",
     "hold_auth_mismatch", "hold_scope_unavailable", "hold_scope_insufficient",
@@ -60,7 +62,7 @@ def _validate_target(value: Any) -> dict[str, Any]:
 
 
 def _validate_plan(value: Any) -> dict[str, Any]:
-    required = {"schema_version", "human_authorization_ref", "operation", "target", "label", "preimage_digest", "authority_generation", "authority_head"}
+    required = {"schema_version", "human_authorization_ref", "operation", "target", "label", "preimage_digest", "authority_generation", "authority_head", "capability"}
     if not isinstance(value, Mapping) or set(value) != required:
         raise GitHubCliConnectorHold("hold_schema")
     if value.get("schema_version") != "GitHubCliIssueLabelConnector-v1" or value.get("operation") != "add_existing_label":
@@ -75,7 +77,37 @@ def _validate_plan(value: Any) -> dict[str, Any]:
         raise GitHubCliConnectorHold("hold_authority_pair_stale")
     if not isinstance(value.get("preimage_digest"), str) or not _DIGEST.fullmatch(value["preimage_digest"]):
         raise GitHubCliConnectorHold("hold_preimage_stale")
-    return {**dict(value), "target": _validate_target(value["target"])}
+    target = _validate_target(value["target"])
+    return {**dict(value), "target": target, "capability": _validate_capability(value["capability"], target)}
+
+
+def _validate_capability(value: Any, target: Mapping[str, Any]) -> dict[str, Any]:
+    required = {"connector_id", "connector_version", "provider", "host", "repository_restriction", "authenticated_principal", "observable_scopes", "minimum_scopes", "available"}
+    if not isinstance(value, Mapping) or set(value) != required:
+        raise GitHubCliConnectorHold("hold_capability_untrusted")
+    if value.get("available") is not True:
+        raise GitHubCliConnectorHold("hold_capability_unavailable")
+    expected_repository = f"{target['owner']}/{target['repository']}"
+    if (value.get("connector_id") != CONNECTOR_ID or value.get("connector_version") != CONNECTOR_VERSION
+            or value.get("provider") != "github" or value.get("host") != "github.com"
+            or value.get("repository_restriction") != expected_repository):
+        raise GitHubCliConnectorHold("hold_capability_untrusted")
+    principal = value.get("authenticated_principal")
+    if not isinstance(principal, str) or not _PRINCIPAL.fullmatch(principal):
+        raise GitHubCliConnectorHold("hold_auth_mismatch")
+    observed, minimum = value.get("observable_scopes"), value.get("minimum_scopes")
+    if observed == "unavailable":
+        raise GitHubCliConnectorHold("hold_scope_unavailable")
+    if not _scope_list(observed) or not _scope_list(minimum):
+        raise GitHubCliConnectorHold("hold_scope_insufficient")
+    if not set(minimum).issubset(set(observed)):
+        raise GitHubCliConnectorHold("hold_scope_insufficient")
+    return dict(value)
+
+
+def _scope_list(value: Any) -> bool:
+    return (isinstance(value, list) and bool(value) and len(value) <= 10
+            and len(set(value)) == len(value) and all(isinstance(scope, str) and _SCOPE.fullmatch(scope) for scope in value))
 
 
 class GitHubCliIssueLabelConnector:
