@@ -341,6 +341,7 @@ def replay_scheduler_state(projects_root: str | Path, project_id: str) -> dict[s
         events = _snapshot_events_for_reducer(snapshot.events)
         cstate = control.reduce_control_events([event for event in events if event["event_type"].startswith("control.")])
         state = reduce_scheduler_state(cstate, [event for event in events if event["event_type"].startswith("scheduler.")])
+        state["project_id"] = pid
         state["authority_generation"] = snapshot.authority_generation
         state["authority_head"] = snapshot.authority_head
         return state

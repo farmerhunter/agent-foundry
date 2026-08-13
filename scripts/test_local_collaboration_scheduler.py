@@ -53,6 +53,7 @@ def test_replay_uses_one_authority_snapshot_and_receipts_expose_pair():
         LocalCollaborationLedger.authority_snapshot = counted
         try:
             first = sc.replay_scheduler_state(root, pid)
+            assert first["project_id"] == pid
         finally:
             LocalCollaborationLedger.authority_snapshot = original
         assert len(calls) == 1
