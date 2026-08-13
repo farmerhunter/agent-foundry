@@ -15,8 +15,13 @@ def auth(login="octocat", scopes=None):
     return {"returncode": 0, "stdout": json.dumps({"hosts": {"github.com": [{"login": login, "scopes": scopes or ["repo"]}]}}), "stderr": ""}
 
 
+def official_auth(login="octocat", scopes="repo"):
+    return {"returncode": 0, "stdout": json.dumps({"hosts": {"github.com": [{"state": "success", "active": True,
+        "host": "github.com", "login": login, "tokenSource": "keyring", "gitProtocol": "https", "scopes": scopes}]}}), "stderr": ""}
+
+
 def test_connector_only_exposes_metadata_and_private_execution():
-    runner = StubRunner([auth()])
+    runner = StubRunner([official_auth()])
     connector = GitHubCliIssueLabelConnector(repository_owner="octo-org", repository="demo", runner=runner)
     metadata = connector.capability_metadata()
     assert metadata["available"] is True
@@ -27,6 +32,27 @@ def test_connector_only_exposes_metadata_and_private_execution():
     assert not hasattr(connector, "remove_same_label_if_added")
     assert runner.calls[0][0] == ("gh", "auth", "status", "--active", "--hostname", "github.com", "--json", "hosts")
     assert runner.calls[0][1] == {"shell": False, "capture_output": True, "text": True, "timeout": 10}
+
+
+def test_connector_retains_explicit_legacy_sanitized_fixture_shape():
+    runner = StubRunner([auth()])
+    assert GitHubCliIssueLabelConnector(repository_owner="octo-org", repository="demo", runner=runner).capability_metadata()["available"] is True
+
+
+@pytest.mark.parametrize("response", [
+    {"returncode": 0, "stdout": json.dumps({"hosts": {"github.com": [{"state": "success", "active": True, "host": "github.com", "login": "octocat", "tokenSource": "keyring", "gitProtocol": "https", "scopes": "repo", "token": "forbidden"}]}}), "stderr": ""},
+    {"returncode": 0, "stdout": json.dumps({"hosts": {"github.com": [{"state": "success", "active": False, "host": "github.com", "login": "octocat", "tokenSource": "keyring", "gitProtocol": "https", "scopes": "repo"}]}}), "stderr": ""},
+    {"returncode": 0, "stdout": json.dumps({"hosts": {"github.com": [{"state": "success", "active": True, "host": "github.com", "login": "octocat", "tokenSource": "keyring", "gitProtocol": "https", "scopes": "gist"}]}}), "stderr": ""},
+    {"returncode": 0, "stdout": json.dumps({"hosts": {"github.com": [{"state": "success", "active": True, "host": "github.com", "login": "octocat", "tokenSource": "keyring", "gitProtocol": "https", "scopes": "repo", "error": "unavailable"}]}}), "stderr": ""},
+    {"returncode": 0, "stdout": json.dumps({"hosts": {"github.com": [
+        {"state": "success", "active": True, "host": "github.com", "login": "octocat", "tokenSource": "keyring", "gitProtocol": "https", "scopes": "repo"},
+        {"state": "success", "active": True, "host": "github.com", "login": "other", "tokenSource": "keyring", "gitProtocol": "https", "scopes": "repo"}]}}), "stderr": ""},
+])
+def test_current_auth_shape_invalid_classes_hold_before_target(response):
+    runner = StubRunner([response])
+    metadata = GitHubCliIssueLabelConnector(repository_owner="octo-org", repository="demo", runner=runner).capability_metadata()
+    assert metadata["available"] is False
+    assert len(runner.calls) == 1
 
 
 @pytest.mark.parametrize("response", [{"returncode": 1, "stdout": "", "stderr": "token=x"}, auth("bad user"), {"returncode": 0, "stdout": "{}", "stderr": ""}])
