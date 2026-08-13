@@ -1,0 +1,40 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://agent-foundry.local/schemas/local-collaboration-onboarding.schema.yaml
+title: LocalCollaborationOnboarding-v1
+type: object
+additionalProperties: false
+required: [schema_version, project_id, stage, next_operation, human_decision_required, mutation_performed, data_movement_performed, transport_performed, target_activation_visibility, source_unlock_performed, global_convergence_verified]
+properties:
+  schema_version: {const: LocalCollaborationOnboarding-v1}
+  project_id: {type: string, format: uuid}
+  stage: {enum: [source_ready, target_enrollment_review, handoff_prepare_review, source_lock_review, bundle_export_ready, manual_transfer_required, target_authority_create_review, target_import_review, target_import_verified, target_activation_review, target_active_source_locked, held]}
+  next_operation: {enum: [enroll_target, prepare_handoff, lock_source, export_bundle, manual_transfer, create_target_authority, import_bundle, activate_target, none, resolve_hold]}
+  human_decision_required: {type: boolean}
+  source_replica_id: {$ref: '#/$defs/opaque'}
+  target_replica_id: {$ref: '#/$defs/opaque'}
+  source_generation: {type: integer, minimum: 0}
+  source_head: {$ref: '#/$defs/digest'}
+  source_state_digest: {$ref: '#/$defs/digest'}
+  target_generation: {type: integer, minimum: 0}
+  target_head: {$ref: '#/$defs/digest'}
+  handoff_id: {$ref: '#/$defs/opaque'}
+  package_digest: {$ref: '#/$defs/digest'}
+  activation_visibility: {enum: [not_exposed, owner_verified_import_only, owner_verified_target_local]}
+  target_activation_visibility: {enum: [not_exposed, owner_verified_import_only, owner_verified_target_local]}
+  reason_code: {$ref: '#/$defs/opaque'}
+  summary_digest: {$ref: '#/$defs/digest'}
+  mutation_performed: {const: false}
+  data_movement_performed: {const: false}
+  transport_performed: {const: false}
+  source_unlock_performed: {const: false}
+  global_convergence_verified: {const: false}
+$defs:
+  digest: {type: string, pattern: '^[0-9a-f]{64}$'}
+  opaque: {type: string, minLength: 1, maxLength: 128, pattern: '^[A-Za-z0-9._-]+$'}
+allOf:
+  - if: {properties: {stage: {const: held}}, required: [stage]}
+    then: {required: [reason_code]}
+  - if: {properties: {stage: {const: manual_transfer_required}}, required: [stage]}
+    then: {properties: {next_operation: {const: manual_transfer}, human_decision_required: {const: false}}}
+  - if: {properties: {stage: {const: target_active_source_locked}}, required: [stage]}
+    then: {properties: {next_operation: {const: none}, human_decision_required: {const: false}, target_activation_visibility: {const: owner_verified_target_local}}}
