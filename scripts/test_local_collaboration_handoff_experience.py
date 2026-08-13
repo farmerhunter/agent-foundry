@@ -6,6 +6,7 @@ from pathlib import Path
 
 import yaml
 from jsonschema import Draft202012Validator
+import local_collaboration_handoff_experience as experience
 
 from local_collaboration_handoff import apply_handoff_transition, plan_handoff_transition, read_handoff_state
 from local_collaboration_handoff_bundle import apply_owner_import, plan_owner_import, prepare_manual_bundle
@@ -142,6 +143,34 @@ class HandoffExperienceTests(unittest.TestCase):
         self.assertFalse(list(Draft202012Validator(schema).iter_errors(result)))
         claimed = read_handoff_experience(self.source.path, expected_project_id=self.project_id, activation=True)
         self.assertEqual(claimed["experience_state"], "held")
+
+    def test_invalid_selection_and_closed_envelopes_do_not_call_either_owner(self):
+        calls = {"a1": 0, "a2": 0}
+        original_a1, original_a2 = experience.read_handoff_state, experience.read_owner_imported_handoff_projection
+        def a1(*args, **kwargs):
+            calls["a1"] += 1
+            raise AssertionError("A1 must not run")
+        def a2(*args, **kwargs):
+            calls["a2"] += 1
+            raise AssertionError("A2 must not run")
+        experience.read_handoff_state, experience.read_owner_imported_handoff_projection = a1, a2
+        locator = {"project_id": self.project_id, "receipt_event_id": str(uuid.uuid4()),
+                   "receipt_event_hash": digest("receipt"), "package_digest": digest("package")}
+        try:
+            invalids = [
+                {"bundle": {}, "proof_ref": locator},
+                {"bundle": {}, "proof_ref": {**locator, "unknown": True}},
+                {"bundle": {}, "proof_ref": {**locator, "receipt_event_id": "not-a-uuid"}},
+                {"bundle": {}, "proof_ref": None},
+                {"bundle": None, "proof_ref": None, "claims": {"mode": "imported_target"}},
+            ]
+            for item in invalids:
+                result = read_handoff_experience(self.source.path, expected_project_id=self.project_id,
+                                                 bundle=item["bundle"], proof_ref=item["proof_ref"], **item.get("claims", {}))
+                self.assertEqual(result["experience_state"], "held")
+            self.assertEqual(calls, {"a1": 0, "a2": 0})
+        finally:
+            experience.read_handoff_state, experience.read_owner_imported_handoff_projection = original_a1, original_a2
 
 
 if __name__ == "__main__":

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import uuid
+import re
 from typing import Any, Mapping
 
 from local_collaboration_handoff import HandoffHold, read_handoff_state
@@ -12,6 +13,10 @@ from local_collaboration_ledger import (
 )
 
 VERSION = "LocalCollaborationHandoffExperience-v1"
+HEX64 = re.compile(r"^[0-9a-f]{64}$")
+OPAQUE = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
+BUNDLE_KEYS = {"schema_version", "project_id", "bundle_id", "handoff_id", "source_replica_id", "target_replica_id", "source_replica_epoch", "target_replica_epoch", "source_enrollment_id", "source_enrollment_digest", "target_enrollment_id", "target_enrollment_digest", "source_generation", "source_head", "source_state_digest", "frontier_digest", "content_manifest_digest", "events", "export_marker", "package_digest", "flags"}
+PROOF_KEYS = {"project_id", "receipt_event_id", "receipt_event_hash", "package_digest"}
 
 
 class _FrozenDict(dict):
@@ -45,6 +50,38 @@ def _project_id(value: Any) -> str:
         return str(uuid.UUID(str(value)))
     except (ValueError, TypeError, AttributeError) as exc:
         raise ValueError("project_id_invalid") from exc
+
+
+def _hex(value: Any) -> bool:
+    return isinstance(value, str) and bool(HEX64.fullmatch(value))
+
+
+def _opaque(value: Any) -> bool:
+    return isinstance(value, str) and bool(OPAQUE.fullmatch(value))
+
+
+def _valid_proof_locator(proof_ref: Any, project_id: str) -> bool:
+    if not isinstance(proof_ref, Mapping) or set(proof_ref) != PROOF_KEYS or proof_ref.get("project_id") != project_id:
+        return False
+    try:
+        uuid.UUID(proof_ref["receipt_event_id"])
+    except (ValueError, TypeError, AttributeError):
+        return False
+    return _hex(proof_ref.get("receipt_event_hash")) and _hex(proof_ref.get("package_digest"))
+
+
+def _valid_bundle_shape(bundle: Any, project_id: str) -> bool:
+    if not isinstance(bundle, Mapping) or set(bundle) != BUNDLE_KEYS or bundle.get("schema_version") != "LocalCollaborationHandoffBundle-v1" or bundle.get("project_id") != project_id:
+        return False
+    if not all(_opaque(bundle.get(key)) for key in ("bundle_id", "handoff_id", "source_replica_id", "target_replica_id", "source_enrollment_id", "target_enrollment_id")):
+        return False
+    if not all(_hex(bundle.get(key)) for key in ("source_enrollment_digest", "target_enrollment_digest", "source_head", "source_state_digest", "frontier_digest", "content_manifest_digest", "package_digest")):
+        return False
+    if any(not isinstance(bundle.get(key), int) or isinstance(bundle[key], bool) or bundle[key] < minimum
+           for key, minimum in (("source_replica_epoch", 1), ("target_replica_epoch", 1), ("source_generation", 0))):
+        return False
+    return (isinstance(bundle.get("events"), (list, tuple)) and bool(bundle["events"])
+            and isinstance(bundle.get("export_marker"), Mapping) and isinstance(bundle.get("flags"), Mapping))
 
 
 def _local_projection(state) -> Mapping[str, Any]:
@@ -93,7 +130,7 @@ def read_handoff_experience(db_path, *, expected_project_id: str, bundle: Mappin
     try:
         if bundle is None:
             return _local_projection(read_handoff_state(db_path, expected_project_id=project_id))
-        if not isinstance(bundle, Mapping) or not isinstance(proof_ref, Mapping):
+        if not _valid_bundle_shape(bundle, project_id) or not _valid_proof_locator(proof_ref, project_id):
             return _hold(project_id, "import_bundle_or_locator_invalid")
         projection = read_owner_imported_handoff_projection(
             db_path, expected_project_id=project_id, bundle=bundle, proof_ref=proof_ref,
