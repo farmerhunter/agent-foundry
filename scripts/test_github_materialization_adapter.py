@@ -323,6 +323,17 @@ def test_private_auth_binding_drift_holds_before_target_and_never_leaks_auth():
     assert "active_principal" not in result and "observable_host_scopes" not in result
 
 
+def test_private_scope_only_binding_drift_holds_before_target():
+    request = _bridge_request(); connector, runner = _bridge_connector([
+        {"returncode": 0, "stdout": '{"hosts":{"github.com":[{"login":"octocat","scopes":["repo"]}]}}', "stderr": ""},
+        {"returncode": 0, "stdout": '{"hosts":{"github.com":[{"login":"octocat","scopes":["repo"]}]}}', "stderr": ""},
+        {"returncode": 0, "stdout": '{"hosts":{"github.com":[{"login":"octocat","scopes":["repo","read:org"]}]}}', "stderr": ""},
+    ])
+    result = execute_real_label_materialization(request, _bridge_state(request), connector)
+    assert result["outcome"] == "real_label_materialization_hold" and result["reason"] == "capability_unavailable_or_untrusted"
+    assert not any("/issues/" in " ".join(call[0]) or "POST" in call[0] for call in runner.calls)
+
+
 def test_public_real_label_bridge_rejects_forgery_and_capability_before_target():
     request = _bridge_request(); connector, runner = _bridge_connector([])
     result = execute_real_label_materialization({**request, "authority_pair": {"authority_generation": 4}}, _bridge_state(request), connector)
@@ -348,3 +359,18 @@ def test_public_real_label_bridge_duplicate_and_binding_budget_holds():
     assert result["reason"] == "capability_unavailable_or_untrusted" and len(runner.calls) == 2
     result = execute_real_label_materialization(_bridge_request(write_budget=2), _bridge_state(_bridge_request(write_budget=2)), connector)
     assert result["reason"] == "schema_or_privacy" and len(runner.calls) == 2
+
+
+def test_public_bridge_existing_label_returns_duplicate_without_post():
+    request = _bridge_request(preimage_digest=hashlib.sha256(json.dumps(["bug", "trial-label"], separators=(",", ":")).encode()).hexdigest())
+    target = request["target"]
+    request["desired_effect_digest"] = hashlib.sha256(json.dumps({"version": "GitHubLabelMaterializationBridge-v1", "operation": "add_existing_label", "target": target, "label": request["label"], "preimage_digest": request["preimage_digest"], "project_id": PID, "intent_id": INTENT, "attempt_sequence": 1, "repository_id": C, "repository_locator_digest": request["repository_locator_digest"]}, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    connector, runner = _bridge_connector([
+        {"returncode": 0, "stdout": '{"hosts":{"github.com":[{"login":"octocat","scopes":["repo"]}]}}', "stderr": ""},
+        {"returncode": 0, "stdout": '{"hosts":{"github.com":[{"login":"octocat","scopes":["repo"]}]}}', "stderr": ""},
+        {"returncode": 0, "stdout": '{"hosts":{"github.com":[{"login":"octocat","scopes":["repo"]}]}}', "stderr": ""},
+        {"returncode": 0, "stdout": "bug\ntrial-label\n", "stderr": ""},
+    ])
+    result = execute_real_label_materialization(request, _bridge_state(request), connector)
+    assert result["outcome"] == "real_label_duplicate_observed_unverified" and result["mutation_count"] == 0
+    assert not any("POST" in call[0] for call in runner.calls)
