@@ -344,6 +344,33 @@ class LedgerTests(unittest.TestCase):
                 self.ledger.conditional_append_batch(candidate, expected_generation=0, expected_head=GENESIS)
             self.assertEqual(before, self._business_rows())
 
+    def test_conditional_append_exact_current_mixed_or_duplicate_request_has_zero_mutation(self):
+        first = self.ledger.conditional_append_batch(
+            [{"event_type": "handoff.prepared", "payload": {"epoch": 41}, "event_id": "26262626-2626-2626-2626-262626262626"}],
+            expected_generation=0, expected_head=GENESIS)
+        before = self._business_rows()
+        mixed = [
+            {"event_type": "handoff.prepared", "payload": {"epoch": 41}, "event_id": "26262626-2626-2626-2626-262626262626"},
+            {"event_type": "handoff.locked", "payload": {"epoch": 41}, "event_id": "27272727-2727-2727-2727-272727272727"},
+        ]
+        repeated_id = [mixed[0], mixed[0]]
+        for candidate in (mixed, repeated_id):
+            with self.assertRaises(LedgerStaleSnapshotError):
+                self.ledger.conditional_append_batch(candidate, expected_generation=first.generation, expected_head=first.head)
+            self.assertEqual(before, self._business_rows())
+
+    def test_conditional_append_noncontiguous_existing_batch_has_zero_mutation(self):
+        first = self.ledger.append_event("other.first", {"n": 1}, event_id="28282828-2828-2828-2828-282828282828")
+        self.ledger.append_event("other.middle", {"n": 2}, event_id="29292929-2929-2929-2929-292929292929")
+        self.ledger.append_event("other.last", {"n": 3}, event_id="30303030-3030-3030-3030-303030303030")
+        before = self._business_rows()
+        with self.assertRaises(LedgerStaleSnapshotError):
+            self.ledger.conditional_append_batch([
+                {"event_type": "other.first", "payload": {"n": 1}, "event_id": first.event_id},
+                {"event_type": "other.last", "payload": {"n": 3}, "event_id": "30303030-3030-3030-3030-303030303030"},
+            ], expected_generation=0, expected_head=GENESIS)
+        self.assertEqual(before, self._business_rows())
+
     def test_conditional_append_concurrent_writers_allow_exactly_one_winner(self):
         results, failures = [], []
         def writer(event_id):

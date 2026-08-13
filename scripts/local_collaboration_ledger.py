@@ -522,17 +522,26 @@ class LocalCollaborationLedger:
         if (expected_generation == 0) != (expected_head == GENESIS):
             raise ValueError("expected generation/head pair is invalid")
 
-    def _conditional_duplicate(self, c, normalized, expected_generation, expected_head):
+    def _classify_conditional_batch(self, c, normalized, expected_generation, expected_head):
         rows = []
+        event_ids = set()
         for eid, etype, payload, actor, source, root in normalized:
+            if eid in event_ids or c.execute("SELECT 1 FROM holds WHERE event_id=?", (eid,)).fetchone():
+                return None
+            event_ids.add(eid)
             row = c.execute("SELECT * FROM events WHERE event_id=?", (eid,)).fetchone()
             if row is None:
-                return None
+                rows.append(None)
+                continue
             identity = self._identity_hash(_hash(payload), etype, actor, source, root)
             existing = self._identity_hash(row["payload_hash"], row["event_type"], row["actor"], row["source"], row["root"])
             if identity != existing:
                 return None
             rows.append(row)
+        if all(row is None for row in rows):
+            return "absent"
+        if any(row is None for row in rows):
+            return None
         if rows[0]["sequence"] != expected_generation + 1 or rows[0]["previous_hash"] != expected_head:
             return None
         if any(current["sequence"] != prior["sequence"] + 1 or current["previous_hash"] != prior["event_hash"]
@@ -554,38 +563,26 @@ class LocalCollaborationLedger:
             c.execute("BEGIN IMMEDIATE")
             last = c.execute("SELECT sequence,event_hash FROM events ORDER BY sequence DESC LIMIT 1").fetchone()
             generation, head = (last["sequence"], last["event_hash"]) if last else (0, GENESIS)
-            if (generation, head) != (expected_generation, expected_head):
-                duplicate = self._conditional_duplicate(c, normalized, expected_generation, expected_head)
-                if duplicate is None:
-                    raise LedgerStaleSnapshotError("stale_snapshot")
+            classification = self._classify_conditional_batch(c, normalized, expected_generation, expected_head)
+            if isinstance(classification, tuple):
                 c.execute("COMMIT")
-                return ConditionalAppendResult("duplicate", generation, head, duplicate, False)
+                return ConditionalAppendResult("duplicate", generation, head, classification, False)
+            if (generation, head) != (expected_generation, expected_head) or classification != "absent":
+                raise LedgerStaleSnapshotError("stale_snapshot")
 
             result = []
             sequence, previous = generation, head
-            mutation_performed = False
             for eid, etype, payload, actor, source, root in normalized:
                 payload_hash = _hash(payload)
-                identity = self._identity_hash(payload_hash, etype, actor, source, root)
-                if c.execute("SELECT 1 FROM holds WHERE event_id=?", (eid,)).fetchone():
-                    raise LedgerConflictError(f"event is held: {eid}")
-                existing = c.execute("SELECT * FROM events WHERE event_id=?", (eid,)).fetchone()
-                if existing:
-                    current_identity = self._identity_hash(existing["payload_hash"], existing["event_type"], existing["actor"], existing["source"], existing["root"])
-                    if current_identity != identity:
-                        raise LedgerConflictError(f"divergent duplicate held: {eid}")
-                    result.append(self._row(existing))
-                    continue
                 sequence += 1
                 created = _now()
                 event_hash = self._event_hash(sequence, eid, etype, payload_hash, previous, created, actor, source, root)
                 c.execute("INSERT INTO events VALUES(?,?,?,?,?,?,?,?,?,?,?)", (sequence, eid, etype, _canonical(payload), payload_hash, previous, event_hash, created, actor, source, root))
                 result.append(self._row(c.execute("SELECT * FROM events WHERE sequence=?", (sequence,)).fetchone()))
                 previous = event_hash
-                mutation_performed = True
             c.execute("COMMIT")
             self._enforce_sidecar_modes()
-            return ConditionalAppendResult("appended", sequence, previous, tuple(result), mutation_performed)
+            return ConditionalAppendResult("appended", sequence, previous, tuple(result), True)
         except LedgerStaleSnapshotError:
             if c.in_transaction: c.execute("ROLLBACK")
             raise
