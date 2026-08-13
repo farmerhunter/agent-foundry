@@ -72,6 +72,15 @@ def _opaque(value: Any, outcome="hold_schema") -> str:
     return value
 
 
+def _uuid(value: Any, outcome="hold_schema") -> str:
+    try:
+        if not isinstance(value, str):
+            raise ValueError("uuid must be a string")
+        return str(uuid.UUID(value))
+    except (ValueError, TypeError, AttributeError) as exc:
+        raise BundleHold(outcome, "uuid_invalid") from exc
+
+
 def _walk(value: Any, depth=0) -> None:
     if depth > MAX_DEPTH:
         raise BundleHold("hold_privacy", "privacy_rejected")
@@ -138,7 +147,7 @@ def _record_to_event(record: Any) -> LedgerEvent:
     if not isinstance(record["sequence"], int) or isinstance(record["sequence"], bool) or record["sequence"] < 1:
         raise BundleHold("hold_schema", "event_sequence_invalid")
     for key in ("event_id", "payload_hash", "previous_hash", "event_hash"):
-        _hex(record[key], "hold_package_integrity") if key != "event_id" else str(uuid.UUID(record[key]))
+        _hex(record[key], "hold_package_integrity") if key != "event_id" else _uuid(record[key])
     if _digest(record["payload"]) != record["payload_hash"]:
         raise BundleHold("hold_package_integrity", "payload_hash_invalid")
     if not isinstance(record["event_type"], str) or not isinstance(record["root"], str):
@@ -416,7 +425,7 @@ def _read_owner_imported_handoff_projection(snapshot, *, expected_project_id: st
         if proof_ref["project_id"] != expected_project_id:
             raise BundleHold("hold_project_identity", "proof_project_mismatch")
         _hex(proof_ref["receipt_event_hash"], "hold_proof_missing_or_stale"); _hex(proof_ref["package_digest"], "hold_proof_missing_or_stale")
-        str(uuid.UUID(proof_ref["receipt_event_id"]))
+        _uuid(proof_ref["receipt_event_id"])
         normalized, source_events, marker = _bundle_core(bundle)
         candidate = inspect_manual_bundle(normalized)
         if candidate.get("outcome") != "import_candidate" or normalized["project_id"] != expected_project_id:
@@ -581,6 +590,8 @@ def apply_owner_target_activation(target_ledger: LocalCollaborationLedger, plan:
                 verified = read_owner_target_activation(target_ledger.path, expected_project_id=project_id, bundle=bundle, proof_ref=proof_ref,
                                                         activation_ref={"project_id": project_id, "activation_receipt_event_id": current.events[-1].event_id,
                                                                         "activation_receipt_event_hash": current.events[-1].event_hash, "package_digest": plan.package_digest})
+                if verified.get("outcome") != "owner_target_activated":
+                    return verified
                 supplied = _decision(decision)
                 if (verified.get("outcome") == "owner_target_activated" and verified.get("request_digest") == plan.request_digest
                         and verified.get("decision_digest") == supplied["decision_digest"]
@@ -627,13 +638,13 @@ def read_owner_target_activation(db_path, *, expected_project_id: str, bundle: M
         if activation_ref["project_id"] != expected_project_id:
             raise BundleHold("hold_project_identity", "activation_project_mismatch")
         _hex(activation_ref["activation_receipt_event_hash"], "hold_proof_missing_or_stale"); _hex(activation_ref["package_digest"], "hold_proof_missing_or_stale")
-        str(uuid.UUID(activation_ref["activation_receipt_event_id"]))
+        _uuid(activation_ref["activation_receipt_event_id"])
         if not isinstance(proof_ref, Mapping) or set(proof_ref) != {"project_id", "receipt_event_id", "receipt_event_hash", "package_digest"}:
             raise BundleHold("hold_schema", "proof_locator_invalid")
         if proof_ref["project_id"] != expected_project_id:
             raise BundleHold("hold_project_identity", "proof_project_mismatch")
         _hex(proof_ref["receipt_event_hash"], "hold_proof_missing_or_stale"); _hex(proof_ref["package_digest"], "hold_proof_missing_or_stale")
-        str(uuid.UUID(proof_ref["receipt_event_id"]))
+        _uuid(proof_ref["receipt_event_id"])
         snapshot = LocalCollaborationLedger.authority_snapshot(db_path, expected_project_id=expected_project_id)
         if len(snapshot.events) < 2 or snapshot.events[-1].event_id != activation_ref["activation_receipt_event_id"] or snapshot.events[-1].event_hash != activation_ref["activation_receipt_event_hash"]:
             raise BundleHold("hold_proof_missing_or_stale", "activation_not_current_tail")

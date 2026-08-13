@@ -121,7 +121,7 @@ $defs:
     properties:
       schema_version: {const: LocalCollaborationHandoffBundle-v1}
       outcome:
-        enum: [hold_schema, hold_project_identity, hold_decision_invalid, hold_package_integrity, hold_proof_missing_or_stale, hold_target_stale, hold_enrollment, hold_owner_busy, hold_owner_permission, hold_owner_integrity, hold_readback_ambiguous, hold_activation_conflict]
+        enum: [hold_schema, hold_project_identity, hold_decision_invalid, hold_privacy, hold_package_integrity, hold_proof_missing_or_stale, hold_target_stale, hold_enrollment, hold_owner_busy, hold_owner_permission, hold_owner_integrity, hold_readback_ambiguous, hold_activation_conflict]
       project_id: {type: string, format: uuid}
       reason_code: {type: string, minLength: 1, maxLength: 128, pattern: '^[a-z0-9_]+$'}
       flags:

@@ -314,7 +314,7 @@ class ManualBundleTests(unittest.TestCase):
         self.assertEqual(read_owner_target_activation(self.target.path, expected_project_id=self.project_id, bundle=bundle, proof_ref=forged_locator, activation_ref=activation_ref)["outcome"], "hold_proof_missing_or_stale")
         with patch.object(self.target, "conditional_append_batch", wraps=self.target.conditional_append_batch) as cas:
             duplicate = apply_owner_target_activation(self.target, plan, bundle=bundle, proof_ref=forged_locator, decision=decision)
-        self.assertEqual(duplicate["outcome"], "hold_activation_conflict")
+        self.assertEqual(duplicate["outcome"], "hold_proof_missing_or_stale")
         self.assertEqual(cas.call_count, 0)
 
     def test_target_activation_readback_rejects_non_owner_lookalike(self):
@@ -345,6 +345,42 @@ class ManualBundleTests(unittest.TestCase):
         hold_schema = {"$schema": schema["$schema"], "$defs": schema["$defs"], **schema["$defs"]["owner_target_activation_hold"]}
         self.assertFalse(list(Draft202012Validator(hold_schema).iter_errors(held)))
         self.assertTrue(list(Draft202012Validator(hold_schema).iter_errors({**held, "forged": True})))
+
+    def test_target_activation_malformed_locators_hold_schema_without_cas(self):
+        bundle = self.exported()
+        before = LocalCollaborationLedger.authority_snapshot(self.target.path, expected_project_id=self.project_id)
+        proof = apply_owner_import(self.target, plan_owner_import(before, bundle), expected_before=before)
+        locator = {key: proof[key] for key in ("project_id", "receipt_event_id", "receipt_event_hash", "package_digest")}
+        decision = {"decision_id": "human-a2a", "decision_digest": digest("human-a2a")}
+        malformed = {**locator, "receipt_event_id": "not-a-uuid"}
+        with patch.object(self.target, "conditional_append_batch", wraps=self.target.conditional_append_batch) as cas:
+            planned = plan_owner_target_activation(self.target.path, expected_project_id=self.project_id, bundle=bundle, proof_ref=malformed, decision=decision)
+        self.assertEqual(planned["outcome"], "hold_schema")
+        self.assertEqual(cas.call_count, 0)
+        plan = plan_owner_target_activation(self.target.path, expected_project_id=self.project_id, bundle=bundle, proof_ref=locator, decision=decision)
+        committed = apply_owner_target_activation(self.target, plan, bundle=bundle, proof_ref=locator, decision=decision)
+        activation_ref = {key: committed[key] for key in ("project_id", "activation_receipt_event_id", "activation_receipt_event_hash", "package_digest")}
+        self.assertEqual(read_owner_target_activation(self.target.path, expected_project_id=self.project_id, bundle=bundle, proof_ref=locator,
+                                                      activation_ref={**activation_ref, "activation_receipt_event_id": "not-a-uuid"})["outcome"], "hold_schema")
+        with patch.object(self.target, "conditional_append_batch", wraps=self.target.conditional_append_batch) as cas:
+            duplicate = apply_owner_target_activation(self.target, plan, bundle=bundle, proof_ref=malformed, decision=decision)
+        self.assertEqual(duplicate["outcome"], "hold_schema")
+        self.assertEqual(cas.call_count, 0)
+
+    def test_target_activation_nested_privacy_hold_matches_closed_schema(self):
+        bundle = json.loads(json.dumps(self.exported()))
+        bundle["events"][0]["payload"]["nested"] = {"token": "forbidden"}
+        locator = {"project_id": self.project_id, "receipt_event_id": "00000000-0000-0000-0000-000000000001",
+                   "receipt_event_hash": "0" * 64, "package_digest": bundle["package_digest"]}
+        decision = {"decision_id": "human-a2a", "decision_digest": digest("human-a2a")}
+        with patch.object(self.target, "conditional_append_batch", wraps=self.target.conditional_append_batch) as cas:
+            held = plan_owner_target_activation(self.target.path, expected_project_id=self.project_id, bundle=bundle, proof_ref=locator, decision=decision)
+        self.assertEqual(held["outcome"], "hold_privacy")
+        self.assertEqual(cas.call_count, 0)
+        schema = yaml.safe_load((Path(__file__).parent.parent / "schemas" / "local-collaboration-handoff-bundle.schema.yaml").read_text())
+        hold_schema = {"$schema": schema["$schema"], "$defs": schema["$defs"], **schema["$defs"]["owner_target_activation_hold"]}
+        self.assertFalse(list(Draft202012Validator(hold_schema).iter_errors(held)))
+        self.assertTrue(list(Draft202012Validator(hold_schema).iter_errors({**held, "unknown": True})))
 
 
 if __name__ == "__main__":
