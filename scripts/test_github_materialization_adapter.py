@@ -354,6 +354,17 @@ def test_private_scope_only_binding_drift_holds_before_target():
     assert not any("/issues/" in " ".join(call[0]) or "POST" in call[0] for call in runner.calls)
 
 
+def test_private_surrogate_auth_source_holds_before_target():
+    request = _bridge_request(); connector, runner = _bridge_connector([
+        {"returncode": 0, "stdout": '{"hosts":{"github.com":[{"state":"success","active":true,"host":"github.com","login":"octocat","tokenSource":"\\ud800","gitProtocol":"https","scopes":"repo"}]}}', "stderr": ""},
+    ])
+    result = execute_real_label_materialization(request, _bridge_state(request), connector)
+    assert result["outcome"] == "real_label_materialization_hold"
+    assert result["reason"] == "capability_unavailable_or_untrusted"
+    assert len(runner.calls) == 1
+    assert not any("/issues/" in " ".join(call[0]) or "POST" in call[0] for call in runner.calls)
+
+
 def test_public_real_label_bridge_rejects_forgery_and_capability_before_target():
     request = _bridge_request(); connector, runner = _bridge_connector([])
     result = execute_real_label_materialization({**request, "authority_pair": {"authority_generation": 4}}, _bridge_state(request), connector)

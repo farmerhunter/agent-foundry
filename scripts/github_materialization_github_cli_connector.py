@@ -196,8 +196,13 @@ class GitHubCliIssueLabelConnector:
 
     @staticmethod
     def _private_text(value: Any) -> bool:
-        return (isinstance(value, str) and bool(value) and len(value.encode()) <= 512
-                and not any(unicodedata.category(character) == "Cc" for character in value))
+        if not isinstance(value, str) or not value:
+            return False
+        try:
+            encoded = value.encode()
+        except UnicodeError:
+            return False
+        return len(encoded) <= 512 and not any(unicodedata.category(character) == "Cc" for character in value)
 
     @staticmethod
     def _public_capability(value: Mapping[str, Any]) -> dict[str, Any]:
