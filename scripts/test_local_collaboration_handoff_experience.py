@@ -119,7 +119,14 @@ class HandoffExperienceTests(unittest.TestCase):
         self.assertNotEqual((result["source_generation"], result["source_head"]), (result["target_generation"], result["target_head"]))
         self.assertEqual(result["target_activation_visibility"], "owner_verified_import_only")
         schema = yaml.safe_load((Path(__file__).parent.parent / "schemas" / "local-collaboration-handoff-experience.schema.yaml").read_text())
-        self.assertFalse(list(Draft202012Validator(schema).iter_errors(result)))
+        validator = Draft202012Validator(schema)
+        self.assertFalse(list(validator.iter_errors(result)))
+        self.assertTrue(list(validator.iter_errors({
+            **result, "owner_target_activation_verified": True,
+            "activation_receipt_event_id": str(uuid.uuid4()),
+            "activation_receipt_event_hash": digest("forged-activation"),
+            "decision_digest": digest("forged-decision"),
+        })))
 
     def test_imported_requires_bundle_and_locator_and_caller_claims_do_not_help(self):
         self.assertEqual(read_handoff_experience(self.target.path, expected_project_id=self.project_id, bundle={})["experience_state"], "held")
@@ -178,6 +185,10 @@ class HandoffExperienceTests(unittest.TestCase):
         self.assertTrue(result["target_activation_authorized"])
         self.assertFalse(result["target_activation_performed"])
         self.assertEqual(result["target_activation_visibility"], "owner_verified_target_local")
+        self.assertEqual(
+            (result["source_generation"], result["source_head"], result["source_state_digest"], result["frontier_digest"]),
+            (bundle["source_generation"], bundle["source_head"], bundle["source_state_digest"], bundle["frontier_digest"]),
+        )
         self.assertFalse(result["source_unlock_performed"])
         self.assertFalse(result["global_convergence_verified"])
         self.assertEqual(self.local()["experience_state"], "bundle_ready_for_manual_transfer")

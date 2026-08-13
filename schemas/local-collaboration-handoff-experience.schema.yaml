@@ -57,9 +57,15 @@ allOf:
       properties:
         target_activation_authorized: {const: false}
         target_activation_visibility: {const: owner_verified_import_only}
+      not:
+        anyOf:
+          - required: [owner_target_activation_verified]
+          - required: [activation_receipt_event_id]
+          - required: [activation_receipt_event_hash]
+          - required: [decision_digest]
   - if: {properties: {experience_state: {const: target_active}}, required: [experience_state]}
     then:
-      required: [handoff_id, target_replica_id, target_generation, target_head, package_digest, decision_digest, import_receipt_event_id, import_receipt_event_hash, activation_receipt_event_id, activation_receipt_event_hash, owner_import_verified, owner_target_activation_verified, target_activation_authorized, target_activation_visibility, source_unlock_performed, global_convergence_verified]
+      required: [handoff_id, target_replica_id, source_generation, source_head, source_state_digest, frontier_digest, target_generation, target_head, package_digest, decision_digest, import_receipt_event_id, import_receipt_event_hash, activation_receipt_event_id, activation_receipt_event_hash, owner_import_verified, owner_target_activation_verified, target_activation_authorized, target_activation_visibility, source_unlock_performed, global_convergence_verified]
       properties:
         target_activation_authorized: {const: true}
         target_activation_visibility: {const: owner_verified_target_local}

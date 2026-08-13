@@ -168,6 +168,8 @@ def read_handoff_experience(db_path, *, expected_project_id: str, bundle: Mappin
                 project_id, "target_active", "continue_on_target_keep_source_locked",
                 handoff_id=activation["handoff_id"], target_replica_id=activation["target_replica_id"],
                 target_generation=activation["target_generation"], target_head=activation["target_head"],
+                source_generation=bundle["source_generation"], source_head=bundle["source_head"],
+                source_state_digest=bundle["source_state_digest"], frontier_digest=bundle["frontier_digest"],
                 package_digest=activation["package_digest"], decision_digest=activation["decision_digest"],
                 import_receipt_event_id=activation["import_receipt_event_id"],
                 import_receipt_event_hash=activation["import_receipt_event_hash"],
