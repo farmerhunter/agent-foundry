@@ -195,12 +195,16 @@ def _source_header(state) -> dict[str, Any]:
     source_entry, target_entry = enrollments.get(source), enrollments.get(target)
     if state.phase != "source_locked" or handoff.get("status") != "source_locked" or source_entry is None or target_entry is None or source_entry.revoked or target_entry.revoked:
         raise BundleHold("hold_handoff_state", "source_locked_required")
+    source_generation = handoff.get("source_generation")
+    if not isinstance(source_generation, int) or isinstance(source_generation, bool) or source_generation < 0:
+        raise BundleHold("hold_handoff_state", "source_frontier_generation_invalid")
+    source_head = _hex(handoff.get("source_head"), "hold_handoff_state")
     return {"project_id": state.project_id, "handoff_id": handoff["handoff_id"], "source_replica_id": source,
             "target_replica_id": target, "source_replica_epoch": source_entry.replica_epoch,
             "target_replica_epoch": target_entry.replica_epoch, "source_enrollment_id": source_entry.enrollment_id,
             "source_enrollment_digest": source_entry.enrollment_digest, "target_enrollment_id": target_entry.enrollment_id,
-            "target_enrollment_digest": target_entry.enrollment_digest, "source_generation": state.authority_generation,
-            "source_head": state.authority_head, "source_state_digest": state.state_digest,
+            "target_enrollment_digest": target_entry.enrollment_digest, "source_generation": source_generation,
+            "source_head": source_head, "source_state_digest": state.state_digest,
             "frontier_digest": handoff["frontier_digest"]}
 
 
@@ -387,7 +391,7 @@ def apply_owner_import(target_ledger: LocalCollaborationLedger, plan: OwnerImpor
         return _hold(project_id, "hold_owner_integrity", "owner_integrity")
 
 
-def verify_owner_import_proof(db_path, *, expected_project_id: str, bundle: Mapping[str, Any], proof_ref: Mapping[str, Any]) -> Mapping[str, Any]:
+def read_owner_imported_handoff_projection(db_path, *, expected_project_id: str, bundle: Mapping[str, Any], proof_ref: Mapping[str, Any]) -> Mapping[str, Any]:
     """Reconstruct an owner import proof from the bundle and current ledger.
 
     ``proof_ref`` is deliberately only a locator.  No caller-provided digest or
@@ -412,8 +416,8 @@ def verify_owner_import_proof(db_path, *, expected_project_id: str, bundle: Mapp
         exported = reduce_handoff_events(expected_project_id, source_events + [marker], marker.sequence, marker.event_hash)
         source_handoff, exported_handoff = source_locked.handoff or {}, exported.handoff or {}
         if (source_locked.phase != "source_locked" or source_handoff.get("status") != "source_locked"
-                or source_locked.authority_generation != normalized["source_generation"]
-                or source_locked.authority_head != normalized["source_head"]
+                or source_handoff.get("source_generation") != normalized["source_generation"]
+                or source_handoff.get("source_head") != normalized["source_head"]
                 or source_locked.state_digest != normalized["source_state_digest"]
                 or exported_handoff.get("status") != "bundle_exported"):
             raise BundleHold("hold_proof_missing_or_stale", "source_reduction_invalid")
@@ -463,14 +467,25 @@ def verify_owner_import_proof(db_path, *, expected_project_id: str, bundle: Mapp
             if entry is None or entry.revoked or entry.replica_epoch != normalized[prefix_name + "_replica_epoch"] or entry.enrollment_id != normalized[prefix_name + "_enrollment_id"] or entry.enrollment_digest != normalized[prefix_name + "_enrollment_digest"]:
                 raise BundleHold("hold_proof_missing_or_stale", "enrollment_binding_invalid")
         return {"schema_version": VERSION, "outcome": "owner_import_verified", "project_id": expected_project_id,
-                        "package_digest": proof_ref["package_digest"], "receipt_event_id": receipt.event_id,
-                        "target_generation": snapshot.authority_generation, "target_head": snapshot.authority_head,
-                        "owner_import_verified": True, "target_activation_authorized": False,
-                        "flags": _flags(owner_readback_verified=True)}
+                "bundle_id": normalized["bundle_id"], "handoff_id": normalized["handoff_id"],
+                "phase": exported.phase, "handoff_status": exported_handoff["status"],
+                "source_generation": normalized["source_generation"], "source_head": normalized["source_head"],
+                "source_state_digest": normalized["source_state_digest"], "frontier_digest": normalized["frontier_digest"],
+                "target_generation": snapshot.authority_generation, "target_head": snapshot.authority_head,
+                "receipt_event_id": receipt.event_id, "package_digest": proof_ref["package_digest"],
+                "owner_import_verified": True, "target_activation_authorized": False,
+                "flags": _flags(owner_readback_verified=True)}
     except BundleHold as exc:
         return _hold(expected_project_id, exc.outcome, exc.reason_code)
     except (LedgerBusyError, LedgerPermissionError, LedgerIntegrityError, LedgerSchemaError, LedgerIdentityError):
         return _hold(expected_project_id, "hold_proof_missing_or_stale", "owner_snapshot_failed")
 
 
-__all__ = ["BundleHold", "OwnerImportPlan", "apply_owner_import", "inspect_manual_bundle", "plan_owner_import", "prepare_manual_bundle", "verify_owner_import_proof"]
+def verify_owner_import_proof(db_path, *, expected_project_id: str, bundle: Mapping[str, Any], proof_ref: Mapping[str, Any]) -> Mapping[str, Any]:
+    """Compatibility name for the one owner-backed imported-handoff projection."""
+    return read_owner_imported_handoff_projection(
+        db_path, expected_project_id=expected_project_id, bundle=bundle, proof_ref=proof_ref,
+    )
+
+
+__all__ = ["BundleHold", "OwnerImportPlan", "apply_owner_import", "inspect_manual_bundle", "plan_owner_import", "prepare_manual_bundle", "read_owner_imported_handoff_projection", "verify_owner_import_proof"]

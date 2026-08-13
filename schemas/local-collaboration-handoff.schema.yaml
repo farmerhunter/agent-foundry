@@ -8,6 +8,22 @@ $defs:
   digest: {type: string, pattern: '^[0-9a-f]{64}$'}
   opaque: {type: string, minLength: 1, maxLength: 128, pattern: '^[A-Za-z0-9._-]+$'}
   uuid: {type: string, format: uuid}
+  durable_prepare_payload:
+    type: object
+    additionalProperties: false
+    required: [schema_version, transition, project_id, handoff_id, source_replica_id, target_replica_id, frontier_digest, source_generation, source_head, request_digest, before_state_digest]
+    properties:
+      schema_version: {const: LocalCollaborationHandoff-v1}
+      transition: {const: prepare}
+      project_id: {$ref: '#/$defs/uuid'}
+      handoff_id: {$ref: '#/$defs/opaque'}
+      source_replica_id: {$ref: '#/$defs/opaque'}
+      target_replica_id: {$ref: '#/$defs/opaque'}
+      frontier_digest: {$ref: '#/$defs/digest'}
+      source_generation: {type: integer, minimum: 0}
+      source_head: {$ref: '#/$defs/digest'}
+      request_digest: {$ref: '#/$defs/digest'}
+      before_state_digest: {$ref: '#/$defs/digest'}
   request:
     type: object
     additionalProperties: false
