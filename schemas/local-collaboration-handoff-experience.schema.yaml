@@ -8,7 +8,7 @@ properties:
   schema_version: {const: LocalCollaborationHandoffExperience-v1}
   project_id: {type: string, format: uuid}
   experience_state: {enum: [single_device_active, handoff_preparing, source_locked, bundle_ready_for_manual_transfer, target_import_verified_activation_deferred, cancelled, taken_over, target_active, held]}
-  next_action: {enum: [continue_single_device, lock_source_after_review, export_manual_bundle, transfer_and_owner_import_bundle, request_later_target_activation_gate, request_cancel_with_owner_evidence, request_human_takeover_decision, resolve_conflict_or_recover_owner_state, none]}
+  next_action: {enum: [continue_single_device, continue_on_target_keep_source_locked, lock_source_after_review, export_manual_bundle, transfer_and_owner_import_bundle, request_later_target_activation_gate, request_cancel_with_owner_evidence, request_human_takeover_decision, resolve_conflict_or_recover_owner_state, none]}
   active_replica_id: {$ref: '#/$defs/opaque'}
   source_replica_id: {$ref: '#/$defs/opaque'}
   target_replica_id: {$ref: '#/$defs/opaque'}
@@ -22,17 +22,44 @@ properties:
   frontier_digest: {$ref: '#/$defs/digest'}
   target_generation: {type: integer, minimum: 0}
   target_head: {$ref: '#/$defs/digest'}
+  package_digest: {$ref: '#/$defs/digest'}
+  decision_digest: {$ref: '#/$defs/digest'}
+  import_receipt_event_id: {type: string, format: uuid}
+  import_receipt_event_hash: {$ref: '#/$defs/digest'}
+  activation_receipt_event_id: {type: string, format: uuid}
+  activation_receipt_event_hash: {$ref: '#/$defs/digest'}
   owner_import_verified: {const: true}
-  target_activation_authorized: {const: false}
+  owner_target_activation_verified: {const: true}
+  target_activation_authorized: {type: boolean}
+  target_activation_visibility: {enum: [not_exposed, owner_verified_import_only, owner_verified_target_local]}
   reason_code: {$ref: '#/$defs/opaque'}
   status_only: {const: true}
   mutation_performed: {const: false}
   transport_performed: {const: false}
   target_activation_performed: {const: false}
   automatic_recovery_performed: {const: false}
+  source_unlock_performed: {const: false}
+  global_convergence_verified: {const: false}
 $defs:
   digest: {type: string, pattern: '^[0-9a-f]{64}$'}
   opaque: {type: string, minLength: 1, maxLength: 128, pattern: '^[A-Za-z0-9._-]+$'}
 allOf:
   - if: {properties: {experience_state: {const: held}}, required: [experience_state]}
     then: {required: [reason_code]}
+  - if: {properties: {experience_state: {const: bundle_ready_for_manual_transfer}}, required: [experience_state]}
+    then:
+      required: [authority_generation, authority_head, state_digest, handoff_id, target_activation_visibility, source_unlock_performed, global_convergence_verified]
+      properties:
+        target_activation_visibility: {const: not_exposed}
+  - if: {properties: {experience_state: {const: target_import_verified_activation_deferred}}, required: [experience_state]}
+    then:
+      required: [handoff_id, source_generation, source_head, source_state_digest, frontier_digest, target_generation, target_head, owner_import_verified, target_activation_authorized, target_activation_visibility, source_unlock_performed, global_convergence_verified]
+      properties:
+        target_activation_authorized: {const: false}
+        target_activation_visibility: {const: owner_verified_import_only}
+  - if: {properties: {experience_state: {const: target_active}}, required: [experience_state]}
+    then:
+      required: [handoff_id, target_replica_id, target_generation, target_head, package_digest, decision_digest, import_receipt_event_id, import_receipt_event_hash, activation_receipt_event_id, activation_receipt_event_hash, owner_import_verified, owner_target_activation_verified, target_activation_authorized, target_activation_visibility, source_unlock_performed, global_convergence_verified]
+      properties:
+        target_activation_authorized: {const: true}
+        target_activation_visibility: {const: owner_verified_target_local}

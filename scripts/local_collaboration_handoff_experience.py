@@ -6,7 +6,10 @@ import re
 from typing import Any, Mapping
 
 from local_collaboration_handoff import HandoffHold, read_handoff_state
-from local_collaboration_handoff_bundle import read_owner_imported_handoff_projection
+from local_collaboration_handoff_bundle import (
+    read_owner_imported_handoff_projection,
+    read_owner_target_activation,
+)
 from local_collaboration_ledger import (
     LedgerBusyError, LedgerIdentityError, LedgerIntegrityError, LedgerPermissionError,
     LedgerSchemaError,
@@ -17,6 +20,7 @@ HEX64 = re.compile(r"^[0-9a-f]{64}$")
 OPAQUE = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
 BUNDLE_KEYS = {"schema_version", "project_id", "bundle_id", "handoff_id", "source_replica_id", "target_replica_id", "source_replica_epoch", "target_replica_epoch", "source_enrollment_id", "source_enrollment_digest", "target_enrollment_id", "target_enrollment_digest", "source_generation", "source_head", "source_state_digest", "frontier_digest", "content_manifest_digest", "events", "export_marker", "package_digest", "flags"}
 PROOF_KEYS = {"project_id", "receipt_event_id", "receipt_event_hash", "package_digest"}
+ACTIVATION_KEYS = {"project_id", "activation_receipt_event_id", "activation_receipt_event_hash", "package_digest"}
 
 
 class _FrozenDict(dict):
@@ -70,6 +74,18 @@ def _valid_proof_locator(proof_ref: Any, project_id: str) -> bool:
     return _hex(proof_ref.get("receipt_event_hash")) and _hex(proof_ref.get("package_digest"))
 
 
+def _valid_activation_locator(activation_ref: Any, project_id: str) -> bool:
+    if (not isinstance(activation_ref, Mapping) or set(activation_ref) != ACTIVATION_KEYS
+            or activation_ref.get("project_id") != project_id):
+        return False
+    try:
+        uuid.UUID(activation_ref["activation_receipt_event_id"])
+    except (ValueError, TypeError, AttributeError):
+        return False
+    return (_hex(activation_ref.get("activation_receipt_event_hash"))
+            and _hex(activation_ref.get("package_digest")))
+
+
 def _valid_bundle_shape(bundle: Any, project_id: str) -> bool:
     if not isinstance(bundle, Mapping) or set(bundle) != BUNDLE_KEYS or bundle.get("schema_version") != "LocalCollaborationHandoffBundle-v1" or bundle.get("project_id") != project_id:
         return False
@@ -108,30 +124,60 @@ def _local_projection(state) -> Mapping[str, Any]:
     if state.phase == "preparing":
         return _base(state.project_id, "handoff_preparing", "lock_source_after_review", **common)
     if state.phase == "source_locked" and handoff.get("status") == "bundle_exported":
-        return _base(state.project_id, "bundle_ready_for_manual_transfer", "transfer_and_owner_import_bundle", **common)
+        return _base(state.project_id, "bundle_ready_for_manual_transfer", "transfer_and_owner_import_bundle",
+                     target_activation_visibility="not_exposed", global_convergence_verified=False,
+                     source_unlock_performed=False, **common)
     if state.phase == "source_locked":
         return _base(state.project_id, "source_locked", "export_manual_bundle", **common)
     return _hold(state.project_id, "owner_handoff_held")
 
 
 def read_handoff_experience(db_path, *, expected_project_id: str, bundle: Mapping[str, Any] | None = None,
-                            proof_ref: Mapping[str, Any] | None = None, **claims: Any) -> Mapping[str, Any]:
-    """Return local A1 state, or an A2 owner-verified imported projection.
-
-    Presence of *both* bundle and proof locator selects imported mode.  Caller
-    claims never select a mode or establish imported authority.
-    """
+                            proof_ref: Mapping[str, Any] | None = None,
+                            activation_ref: Mapping[str, Any] | None = None,
+                            **claims: Any) -> Mapping[str, Any]:
+    """Project one owner-verified local, imported, or target-activation state."""
     try:
         project_id = _project_id(expected_project_id)
     except ValueError:
         return _hold("00000000-0000-0000-0000-000000000000", "project_id_invalid")
-    if claims or (bundle is None) != (proof_ref is None):
+    local_mode = bundle is None and proof_ref is None and activation_ref is None
+    import_mode = bundle is not None and proof_ref is not None and activation_ref is None
+    activation_mode = bundle is not None and proof_ref is not None and activation_ref is not None
+    if claims or not (local_mode or import_mode or activation_mode):
         return _hold(project_id, "selection_or_claim_invalid")
     try:
-        if bundle is None:
+        if local_mode:
             return _local_projection(read_handoff_state(db_path, expected_project_id=project_id))
         if not _valid_bundle_shape(bundle, project_id) or not _valid_proof_locator(proof_ref, project_id):
             return _hold(project_id, "import_bundle_or_locator_invalid")
+        if activation_mode and not _valid_activation_locator(activation_ref, project_id):
+            return _hold(project_id, "activation_locator_invalid")
+        if activation_mode:
+            activation = read_owner_target_activation(
+                db_path, expected_project_id=project_id, bundle=bundle, proof_ref=proof_ref,
+                activation_ref=activation_ref,
+            )
+            if not isinstance(activation, Mapping) or activation.get("outcome") != "owner_target_activated":
+                return _hold(project_id, "owner_activation_proof_unavailable")
+            if (activation.get("project_id") != project_id
+                    or activation.get("target_activation_authorized") is not True
+                    or activation.get("owner_import_verified") is not True):
+                return _hold(project_id, "owner_activation_projection_invalid")
+            return _base(
+                project_id, "target_active", "continue_on_target_keep_source_locked",
+                handoff_id=activation["handoff_id"], target_replica_id=activation["target_replica_id"],
+                target_generation=activation["target_generation"], target_head=activation["target_head"],
+                package_digest=activation["package_digest"], decision_digest=activation["decision_digest"],
+                import_receipt_event_id=activation["import_receipt_event_id"],
+                import_receipt_event_hash=activation["import_receipt_event_hash"],
+                activation_receipt_event_id=activation["activation_receipt_event_id"],
+                activation_receipt_event_hash=activation["activation_receipt_event_hash"],
+                owner_import_verified=True, owner_target_activation_verified=True,
+                target_activation_authorized=True,
+                target_activation_visibility="owner_verified_target_local",
+                source_unlock_performed=False, global_convergence_verified=False,
+            )
         projection = read_owner_imported_handoff_projection(
             db_path, expected_project_id=project_id, bundle=bundle, proof_ref=proof_ref,
         )
@@ -144,9 +190,12 @@ def read_handoff_experience(db_path, *, expected_project_id: str, bundle: Mappin
                      source_head=projection["source_head"], source_state_digest=projection["source_state_digest"],
                      frontier_digest=projection["frontier_digest"], target_generation=projection["target_generation"],
                      target_head=projection["target_head"], owner_import_verified=True,
-                     target_activation_authorized=False)
+                     target_activation_authorized=False,
+                     target_activation_visibility="owner_verified_import_only",
+                     source_unlock_performed=False, global_convergence_verified=False)
     except (HandoffHold, ValueError, TypeError, KeyError):
-        return _hold(project_id, "owner_import_proof_unavailable" if bundle is not None else "owner_state_unavailable")
+        return _hold(project_id, "owner_activation_proof_unavailable" if activation_mode else
+                     "owner_import_proof_unavailable" if bundle is not None else "owner_state_unavailable")
     except (LedgerBusyError, LedgerPermissionError, LedgerIntegrityError, LedgerSchemaError, LedgerIdentityError):
         return _hold(project_id, "owner_state_unavailable")
 
