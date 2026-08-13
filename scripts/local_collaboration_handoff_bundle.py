@@ -17,7 +17,7 @@ from local_collaboration_handoff import (
     read_handoff_state, reduce_handoff_events,
 )
 from local_collaboration_ledger import (
-    GENESIS, LedgerBusyError, LedgerConflictError, LedgerEvent, LedgerIdentityError,
+    GENESIS, LedgerBusyError, LedgerConflictError, LedgerEvent, LedgerIdentityError, LedgerSnapshot,
     LedgerIntegrityError, LedgerPermissionError, LedgerSchemaError,
     LedgerStaleSnapshotError, LocalCollaborationLedger,
 )
@@ -307,6 +307,18 @@ class OwnerImportPlan:
     imported_identity_digest: str
 
 
+@dataclass(frozen=True)
+class OwnerTargetActivationPlan:
+    project_id: str
+    expected_generation: int
+    expected_head: str
+    package_digest: str
+    import_receipt_event_id: str
+    import_receipt_event_hash: str
+    request_digest: str
+    activation_event: Mapping[str, Any]
+
+
 def _portable_equal(event: LedgerEvent, record: Mapping[str, Any]) -> bool:
     return _event_input(_event_record(event)) == _event_input(record)
 
@@ -391,7 +403,7 @@ def apply_owner_import(target_ledger: LocalCollaborationLedger, plan: OwnerImpor
         return _hold(project_id, "hold_owner_integrity", "owner_integrity")
 
 
-def read_owner_imported_handoff_projection(db_path, *, expected_project_id: str, bundle: Mapping[str, Any], proof_ref: Mapping[str, Any]) -> Mapping[str, Any]:
+def _read_owner_imported_handoff_projection(snapshot, *, expected_project_id: str, bundle: Mapping[str, Any], proof_ref: Mapping[str, Any]) -> Mapping[str, Any]:
     """Reconstruct an owner import proof from the bundle and current ledger.
 
     ``proof_ref`` is deliberately only a locator.  No caller-provided digest or
@@ -421,7 +433,6 @@ def read_owner_imported_handoff_projection(db_path, *, expected_project_id: str,
                 or source_locked.state_digest != normalized["source_state_digest"]
                 or exported_handoff.get("status") != "bundle_exported"):
             raise BundleHold("hold_proof_missing_or_stale", "source_reduction_invalid")
-        snapshot = LocalCollaborationLedger.authority_snapshot(db_path, expected_project_id=expected_project_id)
         if not snapshot.events or snapshot.events[-1].event_id != proof_ref["receipt_event_id"] or snapshot.events[-1].event_hash != proof_ref["receipt_event_hash"]:
             raise BundleHold("hold_proof_missing_or_stale", "proof_not_current_tail")
         receipt = snapshot.events[-1]
@@ -481,6 +492,172 @@ def read_owner_imported_handoff_projection(db_path, *, expected_project_id: str,
         return _hold(expected_project_id, "hold_proof_missing_or_stale", "owner_snapshot_failed")
 
 
+def read_owner_imported_handoff_projection(db_path, *, expected_project_id: str, bundle: Mapping[str, Any], proof_ref: Mapping[str, Any]) -> Mapping[str, Any]:
+    """Reconstruct an owner import proof from the bundle and current ledger."""
+    try:
+        snapshot = LocalCollaborationLedger.authority_snapshot(db_path, expected_project_id=expected_project_id)
+    except (LedgerBusyError, LedgerPermissionError, LedgerIntegrityError, LedgerSchemaError, LedgerIdentityError):
+        return _hold(expected_project_id, "hold_proof_missing_or_stale", "owner_snapshot_failed")
+    return _read_owner_imported_handoff_projection(
+        snapshot, expected_project_id=expected_project_id, bundle=bundle, proof_ref=proof_ref,
+    )
+
+
+def _decision(decision: Mapping[str, Any]) -> Mapping[str, str]:
+    if not isinstance(decision, Mapping) or set(decision) != {"decision_id", "decision_digest"}:
+        raise BundleHold("hold_decision_invalid", "decision_shape_invalid")
+    return _freeze({"decision_id": _opaque(decision["decision_id"], "hold_decision_invalid"),
+                    "decision_digest": _hex(decision["decision_digest"], "hold_decision_invalid")})
+
+
+def _activation_context(snapshot, *, expected_project_id: str, bundle: Mapping[str, Any], proof_ref: Mapping[str, Any], decision: Mapping[str, Any]):
+    decision = _decision(decision)
+    projection = _read_owner_imported_handoff_projection(
+        snapshot, expected_project_id=expected_project_id, bundle=bundle, proof_ref=proof_ref,
+    )
+    if projection.get("outcome") != "owner_import_verified":
+        raise BundleHold(projection["outcome"], projection["reason_code"])
+    if projection["target_activation_authorized"] or (projection["target_generation"], projection["target_head"]) != (snapshot.authority_generation, snapshot.authority_head):
+        raise BundleHold("hold_target_stale", "import_pair_not_current")
+    return projection, decision
+
+
+def plan_owner_target_activation(db_path, *, expected_project_id: str, bundle: Mapping[str, Any], proof_ref: Mapping[str, Any], decision: Mapping[str, Any]):
+    """Create a target-local activation plan from fresh owner evidence only."""
+    try:
+        snapshot = LocalCollaborationLedger.authority_snapshot(db_path, expected_project_id=expected_project_id)
+        projection, decision = _activation_context(snapshot, expected_project_id=expected_project_id, bundle=bundle, proof_ref=proof_ref, decision=decision)
+        request = {"schema_version": VERSION, "project_id": expected_project_id, "bundle_id": projection["bundle_id"],
+                   "package_digest": projection["package_digest"], "handoff_id": projection["handoff_id"],
+                   "target_replica_id": _bundle_core(bundle)[0]["target_replica_id"],
+                   "target_replica_epoch": _bundle_core(bundle)[0]["target_replica_epoch"],
+                   "target_enrollment_id": _bundle_core(bundle)[0]["target_enrollment_id"],
+                   "target_enrollment_digest": _bundle_core(bundle)[0]["target_enrollment_digest"],
+                   "import_receipt_event_id": projection["receipt_event_id"], "import_receipt_event_hash": proof_ref["receipt_event_hash"],
+                   "import_generation": snapshot.authority_generation, "import_head": snapshot.authority_head,
+                   **decision}
+        request_digest = _digest(request)
+        event_id = str(uuid.uuid5(uuid.UUID(expected_project_id), "handoff-target-activation:" + request_digest))
+        payload = {**request, "request_digest": request_digest}
+        event = _freeze({"event_type": "handoff_target_activation_committed", "event_id": event_id,
+                         "payload": payload, "actor": "owner", "source": "orch05_handoff_bundle", "root": expected_project_id})
+        return OwnerTargetActivationPlan(expected_project_id, snapshot.authority_generation, snapshot.authority_head,
+                                         projection["package_digest"], projection["receipt_event_id"], proof_ref["receipt_event_hash"], request_digest, event)
+    except BundleHold as exc:
+        return _hold(expected_project_id, exc.outcome, exc.reason_code)
+    except LedgerBusyError:
+        return _hold(expected_project_id, "hold_owner_busy", "owner_busy")
+    except LedgerPermissionError:
+        return _hold(expected_project_id, "hold_owner_permission", "owner_permission")
+    except (LedgerIntegrityError, LedgerSchemaError, LedgerIdentityError):
+        return _hold(expected_project_id, "hold_owner_integrity", "owner_integrity")
+
+
+def _activation_result(plan: OwnerTargetActivationPlan, result, after) -> Mapping[str, Any]:
+    ref = result.event_refs[-1]
+    return {"schema_version": VERSION, "outcome": "owner_target_activated" if result.mutation_performed else "owner_target_activation_duplicate",
+            "project_id": plan.project_id, "bundle_id": plan.activation_event["payload"]["bundle_id"],
+            "package_digest": plan.package_digest, "handoff_id": plan.activation_event["payload"]["handoff_id"],
+            "target_replica_id": plan.activation_event["payload"]["target_replica_id"],
+            "target_generation": after.authority_generation, "target_head": after.authority_head,
+            "import_receipt_event_id": plan.import_receipt_event_id, "import_receipt_event_hash": plan.import_receipt_event_hash,
+            "activation_receipt_event_id": plan.activation_event["event_id"], "activation_receipt_event_hash": ref[3],
+            "decision_digest": plan.activation_event["payload"]["decision_digest"], "request_digest": plan.request_digest,
+            "owner_import_verified": True, "target_activation_authorized": True,
+            "target_activation_performed": result.mutation_performed, "transport_performed": False,
+            "global_convergence_verified": False, "source_unlock_performed": False}
+
+
+def apply_owner_target_activation(target_ledger: LocalCollaborationLedger, plan: OwnerTargetActivationPlan, *, bundle: Mapping[str, Any], proof_ref: Mapping[str, Any], decision: Mapping[str, Any]) -> Mapping[str, Any]:
+    project_id = target_ledger.project_id
+    try:
+        if not isinstance(plan, OwnerTargetActivationPlan) or plan.project_id != project_id:
+            raise BundleHold("hold_schema", "plan_invalid")
+        current = LocalCollaborationLedger.authority_snapshot(target_ledger.path, expected_project_id=project_id)
+        fresh = plan_owner_target_activation(target_ledger.path, expected_project_id=project_id, bundle=bundle, proof_ref=proof_ref, decision=decision)
+        if isinstance(fresh, Mapping):
+            # Exact receipt-loss retry is verified by the two-receipt reader below.
+            if current.events and current.events[-1].event_id == plan.activation_event["event_id"]:
+                verified = read_owner_target_activation(target_ledger.path, expected_project_id=project_id, bundle=bundle, proof_ref=proof_ref,
+                                                        activation_ref={"project_id": project_id, "activation_receipt_event_id": current.events[-1].event_id,
+                                                                        "activation_receipt_event_hash": current.events[-1].event_hash, "package_digest": plan.package_digest})
+                supplied = _decision(decision)
+                if (verified.get("outcome") == "owner_target_activated" and verified.get("request_digest") == plan.request_digest
+                        and verified.get("decision_digest") == supplied["decision_digest"]):
+                    return {**verified, "outcome": "owner_target_activation_duplicate", "target_activation_performed": False}
+                raise BundleHold("hold_activation_conflict", "activation_tail_conflict")
+            return fresh
+        if (fresh.expected_generation, fresh.expected_head, fresh.request_digest) != (plan.expected_generation, plan.expected_head, plan.request_digest):
+            raise BundleHold("hold_activation_conflict", "fresh_plan_mismatch")
+        result = target_ledger.conditional_append_batch([dict(plan.activation_event)], expected_generation=plan.expected_generation, expected_head=plan.expected_head)
+        if result.status not in {"appended", "duplicate"} or len(result.event_refs) != 1 or result.event_refs[0][1] != plan.activation_event["event_id"]:
+            raise BundleHold("hold_readback_ambiguous", "activation_receipt_invalid")
+        after = LocalCollaborationLedger.authority_snapshot(target_ledger.path, expected_project_id=project_id)
+        if (after.authority_generation, after.authority_head) != (result.generation, result.head) or after.events[-1].event_id != plan.activation_event["event_id"]:
+            raise BundleHold("hold_readback_ambiguous", "activation_readback_invalid")
+        return _activation_result(plan, result, after)
+    except BundleHold as exc:
+        return _hold(project_id, exc.outcome, exc.reason_code)
+    except LedgerStaleSnapshotError:
+        return _hold(project_id, "hold_target_stale", "conditional_stale")
+    except LedgerBusyError:
+        return _hold(project_id, "hold_owner_busy", "owner_busy")
+    except LedgerPermissionError:
+        return _hold(project_id, "hold_owner_permission", "owner_permission")
+    except (LedgerIntegrityError, LedgerSchemaError, LedgerIdentityError, LedgerConflictError):
+        return _hold(project_id, "hold_owner_integrity", "owner_integrity")
+
+
+def read_owner_target_activation(db_path, *, expected_project_id: str, bundle: Mapping[str, Any], proof_ref: Mapping[str, Any], activation_ref: Mapping[str, Any]) -> Mapping[str, Any]:
+    try:
+        if not isinstance(activation_ref, Mapping) or set(activation_ref) != {"project_id", "activation_receipt_event_id", "activation_receipt_event_hash", "package_digest"}:
+            raise BundleHold("hold_schema", "activation_locator_invalid")
+        if activation_ref["project_id"] != expected_project_id:
+            raise BundleHold("hold_project_identity", "activation_project_mismatch")
+        _hex(activation_ref["activation_receipt_event_hash"], "hold_proof_missing_or_stale"); _hex(activation_ref["package_digest"], "hold_proof_missing_or_stale")
+        str(uuid.UUID(activation_ref["activation_receipt_event_id"]))
+        snapshot = LocalCollaborationLedger.authority_snapshot(db_path, expected_project_id=expected_project_id)
+        if len(snapshot.events) < 2 or snapshot.events[-1].event_id != activation_ref["activation_receipt_event_id"] or snapshot.events[-1].event_hash != activation_ref["activation_receipt_event_hash"]:
+            raise BundleHold("hold_proof_missing_or_stale", "activation_not_current_tail")
+        event = snapshot.events[-1]
+        payload = event.payload
+        if event.event_type != "handoff_target_activation_committed" or event.root != expected_project_id or not isinstance(payload, Mapping):
+            raise BundleHold("hold_proof_missing_or_stale", "activation_receipt_invalid")
+        before = LedgerSnapshot(expected_project_id, snapshot.schema_version, snapshot.authority_generation - 1, event.previous_hash, snapshot.events[:-1])
+        if not before.events or before.events[-1].event_type != "handoff_import_committed":
+            raise BundleHold("hold_proof_missing_or_stale", "import_not_predecessor")
+        import_ref = {"project_id": expected_project_id, "receipt_event_id": before.events[-1].event_id,
+                      "receipt_event_hash": before.events[-1].event_hash, "package_digest": activation_ref["package_digest"]}
+        projection = _read_owner_imported_handoff_projection(before, expected_project_id=expected_project_id, bundle=bundle, proof_ref=import_ref)
+        if projection.get("outcome") != "owner_import_verified":
+            raise BundleHold(projection["outcome"], projection["reason_code"])
+        normalized, _, _ = _bundle_core(bundle)
+        required = {"schema_version", "project_id", "bundle_id", "package_digest", "handoff_id", "target_replica_id", "target_replica_epoch", "target_enrollment_id", "target_enrollment_digest", "import_receipt_event_id", "import_receipt_event_hash", "import_generation", "import_head", "decision_id", "decision_digest", "request_digest"}
+        if set(payload) != required or payload.get("schema_version") != VERSION or payload.get("project_id") != expected_project_id:
+            raise BundleHold("hold_proof_missing_or_stale", "activation_shape_invalid")
+        for key in ("bundle_id", "package_digest", "handoff_id", "target_replica_id", "target_replica_epoch", "target_enrollment_id", "target_enrollment_digest"):
+            if payload.get(key) != normalized.get(key):
+                raise BundleHold("hold_proof_missing_or_stale", "activation_bundle_binding_invalid")
+        if (payload.get("import_receipt_event_id"), payload.get("import_receipt_event_hash"), payload.get("import_generation"), payload.get("import_head")) != (before.events[-1].event_id, before.events[-1].event_hash, before.authority_generation, before.authority_head):
+            raise BundleHold("hold_proof_missing_or_stale", "activation_import_binding_invalid")
+        decision = _decision({"decision_id": payload.get("decision_id"), "decision_digest": payload.get("decision_digest")})
+        request = {key: payload[key] for key in required - {"request_digest"}}
+        if _digest(request) != payload["request_digest"] or str(uuid.uuid5(uuid.UUID(expected_project_id), "handoff-target-activation:" + payload["request_digest"])) != event.event_id:
+            raise BundleHold("hold_proof_missing_or_stale", "activation_request_invalid")
+        plan = OwnerTargetActivationPlan(expected_project_id, before.authority_generation, before.authority_head, payload["package_digest"], before.events[-1].event_id, before.events[-1].event_hash, payload["request_digest"],
+                                         _freeze({"event_type": event.event_type, "event_id": event.event_id, "payload": payload, "actor": event.actor, "source": event.source, "root": event.root}))
+        result = _activation_result(plan, type("R", (), {"event_refs": ((event.sequence, event.event_id, event.payload_hash, event.event_hash),), "mutation_performed": False})(), snapshot)
+        return {**result, "outcome": "owner_target_activated", "target_activation_performed": False}
+    except BundleHold as exc:
+        return _hold(expected_project_id, exc.outcome, exc.reason_code)
+    except LedgerBusyError:
+        return _hold(expected_project_id, "hold_owner_busy", "owner_busy")
+    except LedgerPermissionError:
+        return _hold(expected_project_id, "hold_owner_permission", "owner_permission")
+    except (LedgerIntegrityError, LedgerSchemaError, LedgerIdentityError):
+        return _hold(expected_project_id, "hold_owner_integrity", "owner_integrity")
+
+
 def verify_owner_import_proof(db_path, *, expected_project_id: str, bundle: Mapping[str, Any], proof_ref: Mapping[str, Any]) -> Mapping[str, Any]:
     """Compatibility name for the one owner-backed imported-handoff projection."""
     return read_owner_imported_handoff_projection(
@@ -488,4 +665,4 @@ def verify_owner_import_proof(db_path, *, expected_project_id: str, bundle: Mapp
     )
 
 
-__all__ = ["BundleHold", "OwnerImportPlan", "apply_owner_import", "inspect_manual_bundle", "plan_owner_import", "prepare_manual_bundle", "read_owner_imported_handoff_projection", "verify_owner_import_proof"]
+__all__ = ["BundleHold", "OwnerImportPlan", "OwnerTargetActivationPlan", "apply_owner_import", "apply_owner_target_activation", "inspect_manual_bundle", "plan_owner_import", "plan_owner_target_activation", "prepare_manual_bundle", "read_owner_imported_handoff_projection", "read_owner_target_activation", "verify_owner_import_proof"]

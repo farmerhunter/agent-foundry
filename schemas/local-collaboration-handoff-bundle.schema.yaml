@@ -88,3 +88,29 @@ $defs:
           owner_readback_verified: {const: true}
           target_activation_authorized: {const: false}
           transport_performed: {const: false}
+  owner_target_activation:
+    type: object
+    additionalProperties: false
+    required: [schema_version, outcome, project_id, bundle_id, package_digest, handoff_id, target_replica_id, target_generation, target_head, import_receipt_event_id, import_receipt_event_hash, activation_receipt_event_id, activation_receipt_event_hash, decision_digest, request_digest, owner_import_verified, target_activation_authorized, target_activation_performed, transport_performed, global_convergence_verified, source_unlock_performed]
+    properties:
+      schema_version: {const: LocalCollaborationHandoffBundle-v1}
+      outcome: {enum: [owner_target_activated, owner_target_activation_duplicate]}
+      project_id: {type: string, format: uuid}
+      bundle_id: {$ref: '#/$defs/opaque'}
+      package_digest: {$ref: '#/$defs/digest'}
+      handoff_id: {$ref: '#/$defs/opaque'}
+      target_replica_id: {$ref: '#/$defs/opaque'}
+      target_generation: {type: integer, minimum: 0}
+      target_head: {$ref: '#/$defs/digest'}
+      import_receipt_event_id: {type: string, format: uuid}
+      import_receipt_event_hash: {$ref: '#/$defs/digest'}
+      activation_receipt_event_id: {type: string, format: uuid}
+      activation_receipt_event_hash: {$ref: '#/$defs/digest'}
+      decision_digest: {$ref: '#/$defs/digest'}
+      request_digest: {$ref: '#/$defs/digest'}
+      owner_import_verified: {const: true}
+      target_activation_authorized: {const: true}
+      target_activation_performed: {type: boolean}
+      transport_performed: {const: false}
+      global_convergence_verified: {const: false}
+      source_unlock_performed: {const: false}

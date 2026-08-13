@@ -10,7 +10,8 @@ from jsonschema import Draft202012Validator
 from local_collaboration_handoff import apply_handoff_transition, plan_handoff_transition, read_handoff_state
 from local_collaboration_handoff_bundle import (
     apply_owner_import, inspect_manual_bundle, plan_owner_import,
-    prepare_manual_bundle, read_owner_imported_handoff_projection, verify_owner_import_proof,
+    apply_owner_target_activation, plan_owner_target_activation, prepare_manual_bundle,
+    read_owner_imported_handoff_projection, read_owner_target_activation, verify_owner_import_proof,
 )
 from local_collaboration_ledger import LocalCollaborationLedger
 
@@ -183,6 +184,49 @@ class ManualBundleTests(unittest.TestCase):
         projection_schema = {"$schema": schema["$schema"], "$defs": schema["$defs"], **schema["$defs"]["owner_import_projection"]}
         self.assertFalse(list(Draft202012Validator(projection_schema).iter_errors(projection)))
         self.assertTrue(list(Draft202012Validator(projection_schema).iter_errors({**projection, "active": True})))
+
+    def test_target_activation_commits_once_restarts_and_leaves_source_locked(self):
+        bundle = self.exported()
+        before = LocalCollaborationLedger.authority_snapshot(self.target.path, expected_project_id=self.project_id)
+        proof = apply_owner_import(self.target, plan_owner_import(before, bundle), expected_before=before)
+        locator = {key: proof[key] for key in ("project_id", "receipt_event_id", "receipt_event_hash", "package_digest")}
+        decision = {"decision_id": "human-a2a", "decision_digest": digest("human-a2a")}
+        plan = plan_owner_target_activation(self.target.path, expected_project_id=self.project_id, bundle=bundle, proof_ref=locator, decision=decision)
+        self.assertNotIsInstance(plan, dict)
+        source_before = LocalCollaborationLedger.authority_snapshot(self.source.path, expected_project_id=self.project_id)
+        committed = apply_owner_target_activation(self.target, plan, bundle=bundle, proof_ref=locator, decision=decision)
+        self.assertEqual(committed["outcome"], "owner_target_activated")
+        self.assertTrue(committed["target_activation_performed"])
+        schema = yaml.safe_load((Path(__file__).parent.parent / "schemas" / "local-collaboration-handoff-bundle.schema.yaml").read_text())
+        activation_schema = {"$schema": schema["$schema"], "$defs": schema["$defs"], **schema["$defs"]["owner_target_activation"]}
+        self.assertFalse(list(Draft202012Validator(activation_schema).iter_errors(committed)))
+        self.assertTrue(list(Draft202012Validator(activation_schema).iter_errors({**committed, "forged": True})))
+        activation_ref = {key: committed[key] for key in ("project_id", "activation_receipt_event_id", "activation_receipt_event_hash", "package_digest")}
+        self.target.close()
+        self.target = LocalCollaborationLedger.open_existing(Path(self.target_root.name) / self.project_id / "collaboration.db", expected_project_id=self.project_id)
+        readback = read_owner_target_activation(self.target.path, expected_project_id=self.project_id, bundle=bundle, proof_ref=locator, activation_ref=activation_ref)
+        self.assertEqual(readback["outcome"], "owner_target_activated")
+        self.assertFalse(readback["target_activation_performed"])
+        retry = apply_owner_target_activation(self.target, plan, bundle=bundle, proof_ref=locator, decision=decision)
+        self.assertEqual(retry["outcome"], "owner_target_activation_duplicate")
+        self.assertFalse(retry["target_activation_performed"])
+        changed = apply_owner_target_activation(self.target, plan, bundle=bundle, proof_ref=locator,
+                                                decision={"decision_id": "human-a2a-2", "decision_digest": digest("human-a2a-2")})
+        self.assertEqual(changed["outcome"], "hold_activation_conflict")
+        source_after = LocalCollaborationLedger.authority_snapshot(self.source.path, expected_project_id=self.project_id)
+        self.assertEqual((source_before.authority_generation, source_before.authority_head), (source_after.authority_generation, source_after.authority_head))
+        self.assertEqual(read_handoff_state(self.source.path, expected_project_id=self.project_id).phase, "source_locked")
+
+    def test_target_activation_rejects_decision_tamper_stale_and_unrelated_tail(self):
+        bundle = self.exported()
+        before = LocalCollaborationLedger.authority_snapshot(self.target.path, expected_project_id=self.project_id)
+        proof = apply_owner_import(self.target, plan_owner_import(before, bundle), expected_before=before)
+        locator = {key: proof[key] for key in ("project_id", "receipt_event_id", "receipt_event_hash", "package_digest")}
+        decision = {"decision_id": "human-a2a", "decision_digest": digest("human-a2a")}
+        self.assertEqual(plan_owner_target_activation(self.target.path, expected_project_id=self.project_id, bundle=bundle, proof_ref=locator, decision={**decision, "verified": True})["outcome"], "hold_decision_invalid")
+        plan = plan_owner_target_activation(self.target.path, expected_project_id=self.project_id, bundle=bundle, proof_ref=locator, decision=decision)
+        self.target.append_event("later", {"n": 1}, event_id=str(uuid.uuid4()), actor="owner", source="fixture", root=self.project_id)
+        self.assertEqual(apply_owner_target_activation(self.target, plan, bundle=bundle, proof_ref=locator, decision=decision)["outcome"], "hold_proof_missing_or_stale")
 
 
 if __name__ == "__main__":
