@@ -583,19 +583,31 @@ def apply_owner_target_activation(target_ledger: LocalCollaborationLedger, plan:
                                                                         "activation_receipt_event_hash": current.events[-1].event_hash, "package_digest": plan.package_digest})
                 supplied = _decision(decision)
                 if (verified.get("outcome") == "owner_target_activated" and verified.get("request_digest") == plan.request_digest
-                        and verified.get("decision_digest") == supplied["decision_digest"]):
+                        and verified.get("decision_digest") == supplied["decision_digest"]
+                        and _json_value(plan.activation_event) == _json_value({"event_type": current.events[-1].event_type,
+                                                                                "event_id": current.events[-1].event_id,
+                                                                                "payload": current.events[-1].payload,
+                                                                                "actor": current.events[-1].actor,
+                                                                                "source": current.events[-1].source,
+                                                                                "root": current.events[-1].root})):
                     return {**verified, "outcome": "owner_target_activation_duplicate", "target_activation_performed": False}
                 raise BundleHold("hold_activation_conflict", "activation_tail_conflict")
             return fresh
-        if (fresh.expected_generation, fresh.expected_head, fresh.request_digest) != (plan.expected_generation, plan.expected_head, plan.request_digest):
+        if fresh != plan:
             raise BundleHold("hold_activation_conflict", "fresh_plan_mismatch")
-        result = target_ledger.conditional_append_batch([dict(plan.activation_event)], expected_generation=plan.expected_generation, expected_head=plan.expected_head)
-        if result.status not in {"appended", "duplicate"} or len(result.event_refs) != 1 or result.event_refs[0][1] != plan.activation_event["event_id"]:
+        result = target_ledger.conditional_append_batch([dict(fresh.activation_event)], expected_generation=fresh.expected_generation, expected_head=fresh.expected_head)
+        if result.status not in {"appended", "duplicate"} or len(result.event_refs) != 1 or result.event_refs[0][1] != fresh.activation_event["event_id"]:
             raise BundleHold("hold_readback_ambiguous", "activation_receipt_invalid")
         after = LocalCollaborationLedger.authority_snapshot(target_ledger.path, expected_project_id=project_id)
-        if (after.authority_generation, after.authority_head) != (result.generation, result.head) or after.events[-1].event_id != plan.activation_event["event_id"]:
+        if (after.authority_generation, after.authority_head) != (result.generation, result.head) or after.events[-1].event_id != fresh.activation_event["event_id"]:
             raise BundleHold("hold_readback_ambiguous", "activation_readback_invalid")
-        return _activation_result(plan, result, after)
+        verified = read_owner_target_activation(target_ledger.path, expected_project_id=project_id, bundle=bundle, proof_ref=proof_ref,
+                                                activation_ref={"project_id": project_id, "activation_receipt_event_id": after.events[-1].event_id,
+                                                                "activation_receipt_event_hash": after.events[-1].event_hash, "package_digest": fresh.package_digest})
+        if verified.get("outcome") != "owner_target_activated":
+            return verified
+        return {**verified, "outcome": "owner_target_activated" if result.mutation_performed else "owner_target_activation_duplicate",
+                "target_activation_performed": result.mutation_performed}
     except BundleHold as exc:
         return _hold(project_id, exc.outcome, exc.reason_code)
     except LedgerStaleSnapshotError:
@@ -616,18 +628,27 @@ def read_owner_target_activation(db_path, *, expected_project_id: str, bundle: M
             raise BundleHold("hold_project_identity", "activation_project_mismatch")
         _hex(activation_ref["activation_receipt_event_hash"], "hold_proof_missing_or_stale"); _hex(activation_ref["package_digest"], "hold_proof_missing_or_stale")
         str(uuid.UUID(activation_ref["activation_receipt_event_id"]))
+        if not isinstance(proof_ref, Mapping) or set(proof_ref) != {"project_id", "receipt_event_id", "receipt_event_hash", "package_digest"}:
+            raise BundleHold("hold_schema", "proof_locator_invalid")
+        if proof_ref["project_id"] != expected_project_id:
+            raise BundleHold("hold_project_identity", "proof_project_mismatch")
+        _hex(proof_ref["receipt_event_hash"], "hold_proof_missing_or_stale"); _hex(proof_ref["package_digest"], "hold_proof_missing_or_stale")
+        str(uuid.UUID(proof_ref["receipt_event_id"]))
         snapshot = LocalCollaborationLedger.authority_snapshot(db_path, expected_project_id=expected_project_id)
         if len(snapshot.events) < 2 or snapshot.events[-1].event_id != activation_ref["activation_receipt_event_id"] or snapshot.events[-1].event_hash != activation_ref["activation_receipt_event_hash"]:
             raise BundleHold("hold_proof_missing_or_stale", "activation_not_current_tail")
         event = snapshot.events[-1]
         payload = event.payload
-        if event.event_type != "handoff_target_activation_committed" or event.root != expected_project_id or not isinstance(payload, Mapping):
+        if (event.event_type != "handoff_target_activation_committed" or event.root != expected_project_id
+                or event.actor != "owner" or event.source != "orch05_handoff_bundle" or not isinstance(payload, Mapping)):
             raise BundleHold("hold_proof_missing_or_stale", "activation_receipt_invalid")
         before = LedgerSnapshot(expected_project_id, snapshot.schema_version, snapshot.authority_generation - 1, event.previous_hash, snapshot.events[:-1])
         if not before.events or before.events[-1].event_type != "handoff_import_committed":
             raise BundleHold("hold_proof_missing_or_stale", "import_not_predecessor")
         import_ref = {"project_id": expected_project_id, "receipt_event_id": before.events[-1].event_id,
                       "receipt_event_hash": before.events[-1].event_hash, "package_digest": activation_ref["package_digest"]}
+        if dict(proof_ref) != import_ref:
+            raise BundleHold("hold_proof_missing_or_stale", "proof_locator_mismatch")
         projection = _read_owner_imported_handoff_projection(before, expected_project_id=expected_project_id, bundle=bundle, proof_ref=import_ref)
         if projection.get("outcome") != "owner_import_verified":
             raise BundleHold(projection["outcome"], projection["reason_code"])
