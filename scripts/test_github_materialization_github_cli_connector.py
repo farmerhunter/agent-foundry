@@ -15,9 +15,14 @@ def auth(login="octocat", scopes=None):
     return {"returncode": 0, "stdout": json.dumps({"hosts": {"github.com": [{"login": login, "scopes": scopes or ["repo"]}]}}), "stderr": ""}
 
 
-def official_auth(login="octocat", scopes="repo"):
-    return {"returncode": 0, "stdout": json.dumps({"hosts": {"github.com": [{"state": "success", "active": True,
-        "host": "github.com", "login": login, "tokenSource": "keyring", "gitProtocol": "https", "scopes": scopes}]}}), "stderr": ""}
+def official_auth(login="octocat", scopes="repo", *, token_source="keyring", git_protocol="https", error=None, extra_hosts=None):
+    account = {"state": "success", "active": True, "host": "github.com", "login": login,
+               "tokenSource": token_source, "gitProtocol": git_protocol, "scopes": scopes}
+    if error is not None:
+        account["error"] = error
+    hosts = {"github.com": [account]}
+    hosts.update(extra_hosts or {})
+    return {"returncode": 0, "stdout": json.dumps({"hosts": hosts}), "stderr": ""}
 
 
 def test_connector_only_exposes_metadata_and_private_execution():
@@ -40,10 +45,23 @@ def test_connector_retains_explicit_legacy_sanitized_fixture_shape():
 
 
 @pytest.mark.parametrize("response", [
+    official_auth(token_source="/Library/Application Support/GitHub CLI/secure-store"),
+    official_auth(git_protocol="ssh"),
+    official_auth(error=""),
+])
+def test_current_auth_shape_accepts_documented_private_source_ssh_and_empty_error(response):
+    runner = StubRunner([response])
+    metadata = GitHubCliIssueLabelConnector(repository_owner="octo-org", repository="demo", runner=runner).capability_metadata()
+    assert metadata["available"] is True
+    assert len(runner.calls) == 1
+
+
+@pytest.mark.parametrize("response", [
     {"returncode": 0, "stdout": json.dumps({"hosts": {"github.com": [{"state": "success", "active": True, "host": "github.com", "login": "octocat", "tokenSource": "keyring", "gitProtocol": "https", "scopes": "repo", "token": "forbidden"}]}}), "stderr": ""},
     {"returncode": 0, "stdout": json.dumps({"hosts": {"github.com": [{"state": "success", "active": False, "host": "github.com", "login": "octocat", "tokenSource": "keyring", "gitProtocol": "https", "scopes": "repo"}]}}), "stderr": ""},
     {"returncode": 0, "stdout": json.dumps({"hosts": {"github.com": [{"state": "success", "active": True, "host": "github.com", "login": "octocat", "tokenSource": "keyring", "gitProtocol": "https", "scopes": "gist"}]}}), "stderr": ""},
     {"returncode": 0, "stdout": json.dumps({"hosts": {"github.com": [{"state": "success", "active": True, "host": "github.com", "login": "octocat", "tokenSource": "keyring", "gitProtocol": "https", "scopes": "repo", "error": "unavailable"}]}}), "stderr": ""},
+    official_auth(extra_hosts={"enterprise.example": []}),
     {"returncode": 0, "stdout": json.dumps({"hosts": {"github.com": [
         {"state": "success", "active": True, "host": "github.com", "login": "octocat", "tokenSource": "keyring", "gitProtocol": "https", "scopes": "repo"},
         {"state": "success", "active": True, "host": "github.com", "login": "other", "tokenSource": "keyring", "gitProtocol": "https", "scopes": "repo"}]}}), "stderr": ""},

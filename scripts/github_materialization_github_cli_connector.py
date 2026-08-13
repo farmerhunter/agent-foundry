@@ -22,7 +22,6 @@ _LABEL = re.compile(r"^[^\x00-\x1f\x7f]{1,128}$")
 _DIGEST = re.compile(r"^[0-9a-f]{64}$")
 _PRINCIPAL = re.compile(r"^[A-Za-z0-9-]{1,39}$")
 _SCOPE = re.compile(r"^[A-Za-z0-9:_-]{1,64}$")
-_TOKEN_SOURCE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 _REASONS = {"hold_capability_unavailable", "hold_capability_untrusted", "hold_auth_mismatch",
             "hold_scope_unavailable", "hold_scope_insufficient", "hold_target_invalid",
             "hold_target_type_invalid", "hold_label_absent", "hold_preimage_stale",
@@ -128,10 +127,15 @@ class GitHubCliIssueLabelConnector:
             raise GitHubCliConnectorHold("hold_capability_unavailable")
         try:
             parsed = json.loads(result["stdout"])
-            accounts = parsed["hosts"]["github.com"]
-        except (KeyError, TypeError, ValueError):
+        except (TypeError, ValueError):
             raise GitHubCliConnectorHold("hold_capability_untrusted") from None
-        if not isinstance(parsed, Mapping) or set(parsed) != {"hosts"} or not isinstance(accounts, list) or len(accounts) != 1:
+        if not isinstance(parsed, Mapping) or set(parsed) != {"hosts"} or not isinstance(parsed.get("hosts"), Mapping):
+            raise GitHubCliConnectorHold("hold_capability_untrusted")
+        hosts = parsed["hosts"]
+        if set(hosts) != {"github.com"}:
+            raise GitHubCliConnectorHold("hold_capability_untrusted")
+        accounts = hosts["github.com"]
+        if not isinstance(accounts, list) or len(accounts) != 1:
             raise GitHubCliConnectorHold("hold_capability_untrusted")
         principal, scopes = self._parse_auth_account(accounts[0])
         return {"connector_id": CONNECTOR_ID, "connector_version": CONNECTOR_VERSION, "host": "github.com",
@@ -154,7 +158,9 @@ class GitHubCliIssueLabelConnector:
         elif official_required <= keys <= official_allowed:
             if value.get("state") != "success" or value.get("active") is not True or value.get("host") != "github.com":
                 raise GitHubCliConnectorHold("hold_capability_untrusted")
-            if "error" in value or not isinstance(value.get("tokenSource"), str) or not _TOKEN_SOURCE.fullmatch(value["tokenSource"]) or value.get("gitProtocol") != "https":
+            token_source = value.get("tokenSource")
+            if (value.get("error", "") != "" or not GitHubCliIssueLabelConnector._private_text(token_source)
+                    or value.get("gitProtocol") not in {"https", "ssh"}):
                 raise GitHubCliConnectorHold("hold_capability_untrusted")
             principal, raw_scopes = value.get("login"), value.get("scopes")
             scopes = GitHubCliIssueLabelConnector._official_scopes(raw_scopes)
@@ -186,6 +192,11 @@ class GitHubCliIssueLabelConnector:
         if any(not scope for scope in scopes):
             raise GitHubCliConnectorHold("hold_scope_insufficient")
         return scopes
+
+    @staticmethod
+    def _private_text(value: Any) -> bool:
+        return (isinstance(value, str) and bool(value) and len(value.encode()) <= 512
+                and not any(ord(character) < 32 or ord(character) == 127 for character in value))
 
     @staticmethod
     def _public_capability(value: Mapping[str, Any]) -> dict[str, Any]:
