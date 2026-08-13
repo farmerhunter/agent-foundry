@@ -1,3 +1,4 @@
+import hashlib
 import json
 import tempfile
 import unittest
@@ -18,8 +19,17 @@ def opaque(name):
 
 
 def digest(name):
-    import hashlib
     return hashlib.sha256(name.encode()).hexdigest()
+
+
+def portable_fold(events):
+    prefix = "0" * 64
+    for event in events:
+        identity = {field: getattr(event, field) for field in
+                    ("sequence", "event_id", "event_type", "payload_hash", "actor", "source", "root")}
+        prefix = hashlib.sha256(json.dumps({"prefix": prefix, "event": identity}, sort_keys=True,
+                                           separators=(",", ":"), ensure_ascii=False).encode()).hexdigest()
+    return prefix
 
 
 class HandoffTests(unittest.TestCase):
@@ -203,8 +213,8 @@ class HandoffTests(unittest.TestCase):
                                            target_replica_id="replica-target", frontier_digest=digest("frontier")))
         self.assertEqual(receipt["outcome"], "prepared")
         event = LocalCollaborationLedger.authority_snapshot(self.ledger.path, expected_project_id=self.project_id).events[-1]
-        self.assertEqual((event.payload["source_generation"], event.payload["source_head"]),
-                         (before.authority_generation, before.authority_head))
+        self.assertEqual((event.payload["source_generation"], event.payload["source_head"], event.payload["source_prefix_identity"]),
+                         (before.authority_generation, before.authority_head, before.portable_prefix_identity))
         self.assertEqual(read_handoff_state(self.ledger.path, expected_project_id=self.project_id).handoff["source_head"], before.authority_head)
         schema = yaml.safe_load((Path(__file__).parent.parent / "schemas" / "local-collaboration-handoff.schema.yaml").read_text())
         payload_schema = {"$schema": schema["$schema"], "$defs": schema["$defs"], **schema["$defs"]["durable_prepare_payload"]}
@@ -218,7 +228,8 @@ class HandoffTests(unittest.TestCase):
         snapshot = LocalCollaborationLedger.authority_snapshot(self.ledger.path, expected_project_id=self.project_id)
         event = snapshot.events[-1]
         altered = type(event)(event.sequence, event.event_id, event.event_type,
-                              {**event.payload, "source_generation": 0, "source_head": "0" * 64},
+                              {**event.payload, "source_generation": 0, "source_head": "0" * 64,
+                               "source_prefix_identity": "0" * 64},
                               event.payload_hash, event.previous_hash, event.event_hash, event.created_at,
                               event.actor, event.source, event.root)
         with self.assertRaises(HandoffHold):
@@ -243,6 +254,41 @@ class HandoffTests(unittest.TestCase):
         replayed = read_handoff_state(self.ledger.path, expected_project_id=self.project_id)
         self.assertEqual((replayed.authority_generation, replayed.authority_head),
                          (snapshot.authority_generation, snapshot.authority_head))
+
+    def test_portable_prefix_is_full_ordered_semantic_fold(self):
+        self.assertEqual(self.apply(self.enrollment("enroll_initial", "replica-source", 1, "source"))["outcome"], "enrolled")
+        self.assertEqual(self.apply(self.enrollment("enroll_target", "replica-target", 1, "target"))["outcome"], "enrolled")
+        snapshot = LocalCollaborationLedger.authority_snapshot(self.ledger.path, expected_project_id=self.project_id)
+        state = read_handoff_state(self.ledger.path, expected_project_id=self.project_id)
+        self.assertEqual(state.portable_prefix_identity, portable_fold(snapshot.events))
+        self.ledger.close()
+        self.ledger = LocalCollaborationLedger.open_existing(Path(self.tmp.name) / self.project_id / "collaboration.db", expected_project_id=self.project_id)
+        self.assertEqual(read_handoff_state(self.ledger.path, expected_project_id=self.project_id).portable_prefix_identity,
+                         portable_fold(LocalCollaborationLedger.authority_snapshot(self.ledger.path, expected_project_id=self.project_id).events))
+
+    def test_same_projected_state_with_changed_earlier_identity_changes_portable_prefix(self):
+        other_root = tempfile.TemporaryDirectory()
+        other = LocalCollaborationLedger.create_project(projects_root=other_root.name, project_id=self.project_id)
+        try:
+            event_id = str(uuid.uuid4())
+            for ledger, actor in ((self.ledger, "owner-a"), (other, "owner-b")):
+                ledger.conditional_append_batch([{"event_type": "unrelated", "event_id": event_id, "payload": {"n": 1},
+                                                   "actor": actor, "source": "fixture", "root": self.project_id}],
+                                                expected_generation=0, expected_head="0" * 64)
+                for request in (self.enrollment("enroll_initial", "replica-source", 1, "source"),
+                                self.enrollment("enroll_target", "replica-target", 1, "target")):
+                    before = read_handoff_state(ledger.path, expected_project_id=self.project_id)
+                    plan = plan_handoff_transition(before, request)
+                    self.assertNotIsInstance(plan, dict)
+                    self.assertEqual(apply_handoff_transition(ledger, plan, expected_before=before)["outcome"], "enrolled")
+            left = read_handoff_state(self.ledger.path, expected_project_id=self.project_id)
+            right = read_handoff_state(other.path, expected_project_id=self.project_id)
+            self.assertEqual((left.phase, left.active_replica_id, left.enrollments, left.state_digest),
+                             (right.phase, right.active_replica_id, right.enrollments, right.state_digest))
+            self.assertNotEqual(left.portable_prefix_identity, right.portable_prefix_identity)
+        finally:
+            other.close()
+            other_root.cleanup()
 
 
 if __name__ == "__main__":

@@ -60,7 +60,7 @@ $defs:
   owner_import_projection:
     type: object
     additionalProperties: false
-    required: [schema_version, outcome, project_id, bundle_id, handoff_id, phase, handoff_status, source_generation, source_head, source_state_digest, frontier_digest, target_generation, target_head, receipt_event_id, package_digest, owner_import_verified, target_activation_authorized, flags]
+    required: [schema_version, outcome, project_id, bundle_id, handoff_id, phase, handoff_status, source_replica_id, target_replica_id, source_replica_epoch, target_replica_epoch, source_enrollment_id, source_enrollment_digest, target_enrollment_id, target_enrollment_digest, source_generation, source_head, source_prefix_identity, source_state_digest, frontier_digest, target_generation, target_head, receipt_event_id, package_digest, owner_import_verified, target_activation_authorized, flags]
     properties:
       schema_version: {const: LocalCollaborationHandoffBundle-v1}
       outcome: {const: owner_import_verified}
@@ -69,8 +69,17 @@ $defs:
       handoff_id: {$ref: '#/$defs/opaque'}
       phase: {const: source_locked}
       handoff_status: {const: bundle_exported}
+      source_replica_id: {$ref: '#/$defs/opaque'}
+      target_replica_id: {$ref: '#/$defs/opaque'}
+      source_replica_epoch: {type: integer, minimum: 1}
+      target_replica_epoch: {type: integer, minimum: 1}
+      source_enrollment_id: {$ref: '#/$defs/opaque'}
+      source_enrollment_digest: {$ref: '#/$defs/digest'}
+      target_enrollment_id: {$ref: '#/$defs/opaque'}
+      target_enrollment_digest: {$ref: '#/$defs/digest'}
       source_generation: {type: integer, minimum: 0}
       source_head: {$ref: '#/$defs/digest'}
+      source_prefix_identity: {$ref: '#/$defs/digest'}
       source_state_digest: {$ref: '#/$defs/digest'}
       frontier_digest: {$ref: '#/$defs/digest'}
       target_generation: {type: integer, minimum: 0}

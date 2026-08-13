@@ -342,6 +342,9 @@ def plan_owner_import(target_snapshot, bundle: Mapping[str, Any]) -> OwnerImport
         if target_snapshot.project_id != normalized["project_id"]:
             raise BundleHold("hold_project_identity", "target_project_mismatch")
         records = list(normalized["events"]) + [normalized["export_marker"]]
+        source_state = reduce_handoff_events(normalized["project_id"], events + [marker], marker.sequence, marker.event_hash)
+        source_handoff = source_state.handoff or {}
+        source_prefix_identity = _hex(source_handoff.get("source_prefix_identity"), "hold_package_integrity")
         current = list(target_snapshot.events)
         if len(current) > len(records) or any(not _portable_equal(event, record) for event, record in zip(current, records)):
             raise BundleHold("hold_target_not_prefix", "target_prefix_invalid")
@@ -356,6 +359,7 @@ def plan_owner_import(target_snapshot, bundle: Mapping[str, Any]) -> OwnerImport
                    "target_enrollment_id": normalized["target_enrollment_id"], "target_enrollment_digest": normalized["target_enrollment_digest"],
                    "package_digest": normalized["package_digest"], "content_manifest_digest": normalized["content_manifest_digest"],
                    "source_generation": normalized["source_generation"], "source_head": normalized["source_head"],
+                   "source_prefix_identity": source_prefix_identity,
                    "source_state_digest": normalized["source_state_digest"], "frontier_digest": normalized["frontier_digest"],
                    "target_before_generation": target_snapshot.authority_generation, "target_before_head": target_snapshot.authority_head,
                    "target_before_state_digest": _target_state_digest(current),
@@ -468,7 +472,7 @@ def _read_owner_imported_handoff_projection(snapshot, *, expected_project_id: st
             raise BundleHold("hold_proof_missing_or_stale", "imported_suffix_identity_invalid")
         required = {"bundle_id", "handoff_id", "source_replica_id", "target_replica_id", "source_replica_epoch",
                     "target_replica_epoch", "source_enrollment_id", "source_enrollment_digest", "target_enrollment_id",
-                    "target_enrollment_digest", "content_manifest_digest", "source_generation", "source_head",
+                    "target_enrollment_digest", "content_manifest_digest", "source_generation", "source_head", "source_prefix_identity",
                     "source_state_digest", "frontier_digest", "target_before_generation", "target_before_head",
                     "target_before_state_digest", "full_set_identity_digest", "imported_suffix_identity_digest"}
         if set(payload) != required | {"schema_version", "project_id", "package_digest"}:
@@ -479,22 +483,35 @@ def _read_owner_imported_handoff_projection(snapshot, *, expected_project_id: st
                     "source_state_digest", "frontier_digest"):
             if payload.get(key) != normalized.get(key):
                 raise BundleHold("hold_proof_missing_or_stale", "receipt_bundle_binding_invalid")
-        if any(source_handoff.get(key) != normalized.get(key) for key in ("handoff_id", "source_replica_id", "target_replica_id", "frontier_digest")):
+        if (any(source_handoff.get(key) != normalized.get(key) for key in ("handoff_id", "source_replica_id", "target_replica_id", "frontier_digest"))
+                or source_handoff.get("source_prefix_identity") != payload.get("source_prefix_identity")):
             raise BundleHold("hold_proof_missing_or_stale", "handoff_binding_invalid")
         enrollments = {entry.replica_id: entry for entry in source_locked.enrollments}
         for prefix_name, replica in (("source", normalized["source_replica_id"]), ("target", normalized["target_replica_id"])):
             entry = enrollments.get(replica)
             if entry is None or entry.revoked or entry.replica_epoch != normalized[prefix_name + "_replica_epoch"] or entry.enrollment_id != normalized[prefix_name + "_enrollment_id"] or entry.enrollment_digest != normalized[prefix_name + "_enrollment_digest"]:
                 raise BundleHold("hold_proof_missing_or_stale", "enrollment_binding_invalid")
-        return {"schema_version": VERSION, "outcome": "owner_import_verified", "project_id": expected_project_id,
+        target_state = reduce_handoff_events(expected_project_id, snapshot.events, snapshot.authority_generation, snapshot.authority_head)
+        target_enrollment = {entry.replica_id: entry for entry in target_state.enrollments}.get(normalized["target_replica_id"])
+        if (target_enrollment is None or target_enrollment.revoked
+                or target_enrollment.replica_epoch != normalized["target_replica_epoch"]
+                or target_enrollment.enrollment_id != normalized["target_enrollment_id"]
+                or target_enrollment.enrollment_digest != normalized["target_enrollment_digest"]):
+            raise BundleHold("hold_proof_missing_or_stale", "target_enrollment_projection_invalid")
+        return _freeze({"schema_version": VERSION, "outcome": "owner_import_verified", "project_id": expected_project_id,
                 "bundle_id": normalized["bundle_id"], "handoff_id": normalized["handoff_id"],
                 "phase": exported.phase, "handoff_status": exported_handoff["status"],
+                "source_replica_id": normalized["source_replica_id"], "target_replica_id": normalized["target_replica_id"],
+                "source_replica_epoch": normalized["source_replica_epoch"], "target_replica_epoch": normalized["target_replica_epoch"],
+                "source_enrollment_id": normalized["source_enrollment_id"], "source_enrollment_digest": normalized["source_enrollment_digest"],
+                "target_enrollment_id": normalized["target_enrollment_id"], "target_enrollment_digest": normalized["target_enrollment_digest"],
                 "source_generation": normalized["source_generation"], "source_head": normalized["source_head"],
+                "source_prefix_identity": payload["source_prefix_identity"],
                 "source_state_digest": normalized["source_state_digest"], "frontier_digest": normalized["frontier_digest"],
                 "target_generation": snapshot.authority_generation, "target_head": snapshot.authority_head,
                 "receipt_event_id": receipt.event_id, "package_digest": proof_ref["package_digest"],
                 "owner_import_verified": True, "target_activation_authorized": False,
-                "flags": _flags(owner_readback_verified=True)}
+                "flags": _flags(owner_readback_verified=True)})
     except BundleHold as exc:
         return _hold(expected_project_id, exc.outcome, exc.reason_code)
     except (LedgerBusyError, LedgerPermissionError, LedgerIntegrityError, LedgerSchemaError, LedgerIdentityError):

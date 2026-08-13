@@ -21,6 +21,7 @@ from local_collaboration_ledger import (
 
 VERSION = "LocalCollaborationHandoff-v1"
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
+PORTABLE_GENESIS = "0" * 64
 OPAQUE = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
 FORBIDDEN = {"prompt", "transcript", "raw_transcript", "tool_output", "raw_tool_output", "secret", "token", "credential", "native_history", "native_thread_id", "username", "hostname", "machine", "machine_label", "path", "exception", "trusted", "approved", "verified", "authorized"}
 TRANSITIONS = {"enroll_initial", "enroll_target", "revoke_inactive", "prepare", "source_lock", "bundle_exported", "cancel", "takeover", "target_activate"}
@@ -110,6 +111,7 @@ class HandoffState:
     enrollments: tuple[Enrollment, ...]
     handoff: Mapping[str, Any] | None
     state_digest: str
+    portable_prefix_identity: str
 
 
 @dataclass(frozen=True)
@@ -140,18 +142,46 @@ def _state_value(state: HandoffState) -> dict[str, Any]:
 
 
 def _make_state(project_id: str, generation: int, head: str, active_id: str | None, active_replica_epoch: int | None,
-                active_epoch: int, phase: str, enrollments: Mapping[str, Enrollment], handoff: Mapping[str, Any] | None) -> HandoffState:
+                active_epoch: int, phase: str, enrollments: Mapping[str, Enrollment], handoff: Mapping[str, Any] | None,
+                portable_prefix_identity: str = PORTABLE_GENESIS) -> HandoffState:
     bare = {"project_id": project_id,
             "active_replica_id": active_id, "active_replica_epoch": active_replica_epoch, "active_epoch": active_epoch,
             "phase": phase, "enrollments": [{"replica_id": item.replica_id, "replica_epoch": item.replica_epoch,
             "enrollment_id": item.enrollment_id, "enrollment_digest": item.enrollment_digest, "revoked": item.revoked}
             for item in sorted(enrollments.values(), key=lambda item: item.replica_id)], "handoff": dict(handoff) if handoff else None}
     return HandoffState(project_id, generation, head, active_id, active_replica_epoch, active_epoch, phase,
-                        tuple(Enrollment(**item) for item in bare["enrollments"]), bare["handoff"], _digest(bare))
+                        tuple(Enrollment(**item) for item in bare["enrollments"]), bare["handoff"], _digest(bare),
+                        _hex(portable_prefix_identity, "hold_owner_integrity"))
 
 
 def _initial(snapshot) -> HandoffState:
-    return _make_state(snapshot.project_id, 0, GENESIS, None, None, 0, "uninitialized", {}, None)
+    return _make_state(snapshot.project_id, 0, GENESIS, None, None, 0, "uninitialized", {}, None, PORTABLE_GENESIS)
+
+
+def _semantic_event_identity(event) -> Mapping[str, Any]:
+    required = ("sequence", "event_id", "event_type", "payload_hash", "actor", "source", "root")
+    if not all(hasattr(event, field) for field in required):
+        raise HandoffHold("hold_schema", "event_record_invalid")
+    if not isinstance(event.sequence, int) or isinstance(event.sequence, bool) or event.sequence < 1:
+        raise HandoffHold("hold_owner_integrity", "event_order_invalid")
+    _uuid(event.event_id, "hold_owner_integrity")
+    if not isinstance(event.event_type, str) or not event.event_type:
+        raise HandoffHold("hold_owner_integrity", "event_identity_invalid")
+    _hex(event.payload_hash, "hold_owner_integrity")
+    if event.actor is not None and not isinstance(event.actor, str):
+        raise HandoffHold("hold_owner_integrity", "event_identity_invalid")
+    if event.source is not None and not isinstance(event.source, str):
+        raise HandoffHold("hold_owner_integrity", "event_identity_invalid")
+    if not isinstance(event.root, str):
+        raise HandoffHold("hold_owner_integrity", "event_identity_invalid")
+    return {field: getattr(event, field) for field in required}
+
+
+def _advance_portable_prefix(state: HandoffState, event) -> HandoffState:
+    identity = _digest({"prefix": state.portable_prefix_identity, "event": _semantic_event_identity(event)})
+    return _make_state(state.project_id, state.authority_generation, state.authority_head,
+                       state.active_replica_id, state.active_replica_epoch, state.active_epoch,
+                       state.phase, _enrollment_map(state), state.handoff, identity)
 
 
 def _event_payload(event) -> Mapping[str, Any] | None:
@@ -172,16 +202,18 @@ def _reduce_event(state: HandoffState, event) -> HandoffState:
         raise HandoffHold("hold_project_identity", "event_project_mismatch")
     payload = _event_payload(event)
     if payload is None:
-        return _make_state(state.project_id, event.sequence, event.event_hash,
-                           state.active_replica_id, state.active_replica_epoch,
-                           state.active_epoch, state.phase, _enrollment_map(state), state.handoff)
+        return _advance_portable_prefix(_make_state(state.project_id, event.sequence, event.event_hash,
+                                        state.active_replica_id, state.active_replica_epoch,
+                                        state.active_epoch, state.phase, _enrollment_map(state), state.handoff,
+                                        state.portable_prefix_identity), event)
     if payload.get("transition") == "target_activate":
         if payload.get("project_id") != state.project_id:
             raise HandoffHold("hold_project_identity", "event_project_mismatch")
         handoff = dict(state.handoff or {})
         handoff["status"] = "held_unverified_target_activation"
-        return _make_state(state.project_id, event.sequence, event.event_hash, state.active_replica_id,
-                           state.active_replica_epoch, state.active_epoch, "held", _enrollment_map(state), handoff)
+        return _advance_portable_prefix(_make_state(state.project_id, event.sequence, event.event_hash, state.active_replica_id,
+                                        state.active_replica_epoch, state.active_epoch, "held", _enrollment_map(state), handoff,
+                                        state.portable_prefix_identity), event)
     if payload["project_id"] != state.project_id:
         raise HandoffHold("hold_project_identity", "event_project_mismatch")
     transition = payload.get("transition")
@@ -189,7 +221,9 @@ def _reduce_event(state: HandoffState, event) -> HandoffState:
         raise HandoffHold("hold_owner_integrity", "handoff_event_invalid")
     # Replaying payloads uses the same state machine as planning.  Event IDs are
     # checked separately by LedgerStore; payload values are the durable inputs.
-    return _transition(state, payload, replay=True, event_generation=event.sequence, event_head=event.event_hash)
+    return _advance_portable_prefix(
+        _transition(state, payload, replay=True, event_generation=event.sequence, event_head=event.event_hash), event,
+    )
 
 
 def _enrollment_map(state: HandoffState) -> dict[str, Enrollment]:
@@ -244,7 +278,7 @@ def _transition(state: HandoffState, request: Mapping[str, Any], *, replay: bool
             raise HandoffHold("hold_enrollment", "inactive_enrollment_required")
         enrollments[rid] = Enrollment(entry.replica_id, entry.replica_epoch, entry.enrollment_id, entry.enrollment_digest, True)
     elif transition == "prepare":
-        keys = {"schema_version", "transition", "project_id", "handoff_id", "source_replica_id", "target_replica_id", "frontier_digest", "source_generation", "source_head", "request_digest", "before_state_digest"} if replay else {"transition", "project_id", "handoff_id", "source_replica_id", "target_replica_id", "frontier_digest"}
+        keys = {"schema_version", "transition", "project_id", "handoff_id", "source_replica_id", "target_replica_id", "frontier_digest", "source_generation", "source_head", "source_prefix_identity", "request_digest", "before_state_digest"} if replay else {"transition", "project_id", "handoff_id", "source_replica_id", "target_replica_id", "frontier_digest"}
         _require_keys(request, keys); source, target = _opaque(request.get("source_replica_id"), "hold_enrollment"), _opaque(request.get("target_replica_id"), "hold_enrollment")
         target_entry = enrollments.get(target)
         if phase != "active" or source != active_id or target == source or target_entry is None or target_entry.revoked:
@@ -254,14 +288,16 @@ def _transition(state: HandoffState, request: Mapping[str, Any], *, replay: bool
             if not isinstance(source_generation, int) or isinstance(source_generation, bool) or source_generation < 0:
                 raise HandoffHold("hold_owner_integrity", "source_frontier_generation_invalid")
             source_head = _hex(request.get("source_head"), "hold_owner_integrity")
-            if (source_generation, source_head) != (state.authority_generation, state.authority_head):
+            source_prefix_identity = _hex(request.get("source_prefix_identity"), "hold_owner_integrity")
+            if source_generation != state.authority_generation or source_prefix_identity != state.portable_prefix_identity:
                 raise HandoffHold("hold_owner_integrity", "source_frontier_not_event_local_prefix")
         else:
-            source_generation, source_head = state.authority_generation, state.authority_head
+            source_generation, source_head, source_prefix_identity = state.authority_generation, state.authority_head, state.portable_prefix_identity
         handoff = {"handoff_id": _opaque(request.get("handoff_id")), "source_replica_id": source, "target_replica_id": target,
                    "source_replica_epoch": active_replica_epoch, "target_replica_epoch": target_entry.replica_epoch,
                    "prior_active_epoch": active_epoch, "source_generation": source_generation,
-                   "source_head": source_head, "frontier_digest": _hex(request.get("frontier_digest")), "status": "preparing"}
+                   "source_head": source_head, "source_prefix_identity": source_prefix_identity,
+                   "frontier_digest": _hex(request.get("frontier_digest")), "status": "preparing"}
         phase = "preparing"
     elif transition == "source_lock":
         keys = {"schema_version", "transition", "project_id", "handoff_id", "request_digest", "before_state_digest"} if replay else {"transition", "project_id", "handoff_id"}
@@ -317,7 +353,8 @@ def _transition(state: HandoffState, request: Mapping[str, Any], *, replay: bool
         head = event_head if event_head is not None else state.authority_head
     else:
         generation, head = state.authority_generation, state.authority_head
-    return _make_state(state.project_id, generation, head, active_id, active_replica_epoch, active_epoch, phase, enrollments, handoff)
+    return _make_state(state.project_id, generation, head, active_id, active_replica_epoch, active_epoch, phase,
+                       enrollments, handoff, state.portable_prefix_identity)
 
 
 def read_handoff_state(db_path, *, expected_project_id: str) -> HandoffState:
@@ -327,7 +364,7 @@ def read_handoff_state(db_path, *, expected_project_id: str) -> HandoffState:
         state = _reduce_event(state, event)
     return _make_state(snapshot.project_id, snapshot.authority_generation, snapshot.authority_head,
                        state.active_replica_id, state.active_replica_epoch, state.active_epoch,
-                       state.phase, _enrollment_map(state), state.handoff)
+                       state.phase, _enrollment_map(state), state.handoff, state.portable_prefix_identity)
 
 
 def reduce_handoff_events(project_id: str, events, authority_generation: int, authority_head: str) -> HandoffState:
@@ -355,7 +392,7 @@ def reduce_handoff_events(project_id: str, events, authority_generation: int, au
         raise HandoffHold("hold_owner_integrity", "authority_pair_invalid")
     return _make_state(project_id, authority_generation, authority_head, state.active_replica_id,
                        state.active_replica_epoch, state.active_epoch, state.phase,
-                       _enrollment_map(state), state.handoff)
+                       _enrollment_map(state), state.handoff, state.portable_prefix_identity)
 
 
 def _hold(project_id: str, outcome: str, reason_code: str) -> dict[str, Any]:
@@ -372,10 +409,11 @@ def _planned_payload(state: HandoffState, request: Mapping[str, Any]) -> tuple[d
         raise HandoffHold("hold_project_identity", "project_mismatch")
     bound = dict(request)
     if bound.get("transition") == "prepare":
-        if "source_generation" in bound or "source_head" in bound:
+        if any(key in bound for key in ("source_generation", "source_head", "source_prefix_identity")):
             raise HandoffHold("hold_schema", "caller_source_frontier_forbidden")
         bound["source_generation"] = state.authority_generation
         bound["source_head"] = state.authority_head
+        bound["source_prefix_identity"] = state.portable_prefix_identity
     bound["schema_version"] = VERSION
     bound["before_state_digest"] = state.state_digest
     bound["request_digest"] = _digest({key: value for key, value in bound.items() if key != "request_digest"})
