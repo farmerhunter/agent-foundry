@@ -17,6 +17,7 @@ properties:
   source_state_digest: {$ref: '#/$defs/digest'}
   target_generation: {type: integer, minimum: 0}
   target_head: {$ref: '#/$defs/digest'}
+  target_locator_digest: {$ref: '#/$defs/digest'}
   handoff_id: {$ref: '#/$defs/opaque'}
   package_digest: {$ref: '#/$defs/digest'}
   activation_visibility: {enum: [not_exposed, owner_verified_import_only, owner_verified_target_local]}
@@ -38,3 +39,5 @@ allOf:
     then: {properties: {next_operation: {const: manual_transfer}, human_decision_required: {const: false}}}
   - if: {properties: {stage: {const: target_active_source_locked}}, required: [stage]}
     then: {properties: {next_operation: {const: none}, human_decision_required: {const: false}, target_activation_visibility: {const: owner_verified_target_local}}}
+  - if: {properties: {stage: {const: target_authority_create_review}}, required: [stage]}
+    then: {required: [target_locator_digest]}

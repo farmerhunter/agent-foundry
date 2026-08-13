@@ -3,6 +3,8 @@ import json
 import tempfile
 import unittest
 import uuid
+from dataclasses import replace
+from types import MappingProxyType
 from pathlib import Path
 
 import yaml
@@ -34,7 +36,8 @@ class OnboardingTests(unittest.TestCase):
         target = self.context.get("target_ledger")
         return read_second_device_onboarding(self.source.path, expected_project_id=self.project_id,
             target_db_path=target.path if target else None, bundle=self.context.get("bundle"),
-            proof_ref=self.context.get("proof_ref"), activation_ref=self.context.get("activation_ref"))
+            proof_ref=self.context.get("proof_ref"), activation_ref=self.context.get("activation_ref"),
+            target_projects_root=self.context.get("target_projects_root"))
 
     def step(self, operation, parameters):
         summary = self.read(); self.assertEqual(summary["next_operation"], operation)
@@ -44,6 +47,18 @@ class OnboardingTests(unittest.TestCase):
         result = apply_second_device_onboarding_step(self.context, plan)
         self.assertIn("receipt", result, result)
         return result
+
+    def establish_locked_bundle(self):
+        from local_collaboration_handoff import plan_handoff_transition, apply_handoff_transition
+        state = read_handoff_state(self.source.path, expected_project_id=self.project_id)
+        initial = plan_handoff_transition(state, {"transition": "enroll_initial", "project_id": self.project_id, "replica_id": "source", "replica_epoch": 1, "enrollment_id": "source-enroll", "enrollment_digest": digest("source"), "decision_id": "initial", "decision_digest": digest("initial")})
+        apply_handoff_transition(self.source, initial, expected_before=state)
+        self.step("enroll_target", {"replica_id": "target", "replica_epoch": 1, "enrollment_id": "target-enroll", "enrollment_digest": digest("target")})
+        self.step("prepare_handoff", {"handoff_id": "handoff-1", "source_replica_id": "source", "target_replica_id": "target", "frontier_digest": digest("frontier")})
+        self.step("lock_source", {"handoff_id": "handoff-1"})
+        locked = read_handoff_state(self.source.path, expected_project_id=self.project_id)
+        self.step("export_bundle", {})
+        return prepare_manual_bundle(self.source, expected_handoff_state=locked)
 
     def test_full_one_step_walkthrough_keeps_source_locked_and_target_local(self):
         self.source.append_event("fixture_source", {"schema_version": "fixture", "project_id": self.project_id}, event_id=str(uuid.uuid4()), actor="fixture", source="fixture", root=self.project_id)
@@ -55,12 +70,17 @@ class OnboardingTests(unittest.TestCase):
         self.step("enroll_target", {"replica_id": "target", "replica_epoch": 1, "enrollment_id": "target-enroll", "enrollment_digest": digest("target")})
         self.step("prepare_handoff", {"handoff_id": "handoff-1", "source_replica_id": "source", "target_replica_id": "target", "frontier_digest": digest("frontier")})
         self.step("lock_source", {"handoff_id": "handoff-1"})
+        source_locked = read_handoff_state(self.source.path, expected_project_id=self.project_id)
         self.step("export_bundle", {})
         # Human-controlled manual channel transfers the opaque in-memory package; facade never transports it.
-        self.context["bundle"] = self.context.pop("_manual_bundle")
+        self.context["bundle"] = prepare_manual_bundle(self.source, expected_handoff_state=source_locked)
         self.step("create_target_authority", {})
-        self.step("import_bundle", {})
-        final = self.step("activate_target", {})["next_summary"]
+        self.context["target_ledger"] = LocalCollaborationLedger.open_existing(Path(self.target_root.name) / self.project_id / "collaboration.db", expected_project_id=self.project_id)
+        imported = self.step("import_bundle", {})
+        self.context["proof_ref"] = imported["operation_output"]["proof_ref"]
+        activated = self.step("activate_target", {})
+        self.context["activation_ref"] = activated["operation_output"]["activation_ref"]
+        final = self.read()
         self.assertEqual(final["stage"], "target_active_source_locked")
         self.assertEqual(final["target_activation_visibility"], "owner_verified_target_local")
         source = self.read(); self.assertEqual(read_handoff_state(self.source.path, expected_project_id=self.project_id).phase, "source_locked")
@@ -85,6 +105,48 @@ class OnboardingTests(unittest.TestCase):
         second = apply_second_device_onboarding_step(self.context, plan)
         self.assertTrue(first["receipt"]["mutation_performed"])
         self.assertTrue(second["receipt"]["duplicate"])
+
+    def test_changed_decision_id_and_prepare_retry_never_claim_duplicate(self):
+        from local_collaboration_handoff import plan_handoff_transition, apply_handoff_transition
+        state = read_handoff_state(self.source.path, expected_project_id=self.project_id)
+        initial = plan_handoff_transition(state, {"transition": "enroll_initial", "project_id": self.project_id, "replica_id": "source", "replica_epoch": 1, "enrollment_id": "source-enroll", "enrollment_digest": digest("source"), "decision_id": "initial", "decision_digest": digest("initial")})
+        apply_handoff_transition(self.source, initial, expected_before=state)
+        summary = self.read(); plan = plan_second_device_onboarding_step(summary, {"operation": "enroll_target", "decision_id": "one", "decision_digest": digest("same"), "parameters": {"replica_id": "target", "replica_epoch": 1, "enrollment_id": "target-enroll", "enrollment_digest": digest("target")}})
+        apply_second_device_onboarding_step(self.context, plan)
+        changed_id = "two"; changed_payload = {"project_id": self.project_id, "operation": plan.operation, "summary_digest": plan.summary_digest, "decision_id": changed_id, "decision_digest": plan.decision_digest, "parameters": dict(plan.parameters)}
+        changed = replace(plan, decision_id=changed_id, fingerprint=hashlib.sha256(json.dumps(changed_payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest())
+        self.assertEqual(apply_second_device_onboarding_step(self.context, changed)["outcome"], "held")
+        prepared_summary = self.read(); prepared = plan_second_device_onboarding_step(prepared_summary, {"operation": "prepare_handoff", "decision_id": "prepare", "decision_digest": digest("prepare"), "parameters": {"handoff_id": "h", "source_replica_id": "source", "target_replica_id": "target", "frontier_digest": digest("f")}})
+        apply_second_device_onboarding_step(self.context, prepared)
+        self.assertEqual(apply_second_device_onboarding_step(self.context, prepared)["reason_code"], "retry_owner_decision_identity_unavailable")
+
+    def test_target_root_switch_and_immutable_export_preserve_mutation_boundary(self):
+        bundle = self.establish_locked_bundle()
+        root_a, root_b = tempfile.TemporaryDirectory(), tempfile.TemporaryDirectory()
+        try:
+            summary = read_second_device_onboarding(self.source.path, expected_project_id=self.project_id, bundle=bundle, target_projects_root=root_a.name)
+            plan = plan_second_device_onboarding_step(summary, {"operation": "create_target_authority", "decision_id": "create", "decision_digest": digest("create"), "parameters": {}})
+            switched = {"source_ledger": self.source, "target_projects_root": root_b.name, "bundle": bundle}
+            self.assertEqual(apply_second_device_onboarding_step(switched, plan)["outcome"], "held")
+            self.assertFalse((Path(root_a.name) / self.project_id / "collaboration.db").exists())
+            self.assertFalse((Path(root_b.name) / self.project_id / "collaboration.db").exists())
+        finally:
+            root_a.cleanup(); root_b.cleanup()
+        # An immutable caller context can receive the committed export receipt without a post-commit write-back.
+        self.assertEqual(self.read()["stage"], "manual_transfer_required")
+
+    def test_immutable_context_keeps_export_receipt_after_commit(self):
+        from local_collaboration_handoff import plan_handoff_transition, apply_handoff_transition
+        state = read_handoff_state(self.source.path, expected_project_id=self.project_id)
+        initial = plan_handoff_transition(state, {"transition": "enroll_initial", "project_id": self.project_id, "replica_id": "source", "replica_epoch": 1, "enrollment_id": "source-enroll", "enrollment_digest": digest("source"), "decision_id": "initial", "decision_digest": digest("initial")})
+        apply_handoff_transition(self.source, initial, expected_before=state)
+        self.step("enroll_target", {"replica_id": "target", "replica_epoch": 1, "enrollment_id": "target-enroll", "enrollment_digest": digest("target")})
+        self.step("prepare_handoff", {"handoff_id": "handoff-1", "source_replica_id": "source", "target_replica_id": "target", "frontier_digest": digest("frontier")})
+        self.step("lock_source", {"handoff_id": "handoff-1"})
+        summary = self.read(); plan = plan_second_device_onboarding_step(summary, {"operation": "export_bundle", "decision_id": "export", "decision_digest": digest("export"), "parameters": {}})
+        result = apply_second_device_onboarding_step(MappingProxyType({"source_ledger": self.source, "target_projects_root": self.target_root.name}), plan)
+        self.assertEqual(result["receipt"]["owner_outcome"], "bundle_exported")
+        self.assertEqual(read_handoff_state(self.source.path, expected_project_id=self.project_id).handoff["status"], "bundle_exported")
 
     def test_closed_schema_immutable_and_claims_hold(self):
         result = self.read(); self.assertTrue(json.dumps(result))

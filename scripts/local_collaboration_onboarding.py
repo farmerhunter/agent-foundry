@@ -13,7 +13,7 @@ from local_collaboration_handoff_bundle import (apply_owner_import, apply_owner_
     inspect_manual_bundle, plan_owner_import, plan_owner_target_activation, prepare_manual_bundle)
 from local_collaboration_handoff_experience import read_handoff_experience
 from local_collaboration_ledger import (LedgerBusyError, LedgerIdentityError, LedgerIntegrityError,
-    LedgerPermissionError, LedgerSchemaError, LocalCollaborationLedger)
+    LedgerPermissionError, LedgerSchemaError, LocalCollaborationLedger, GENESIS)
 
 VERSION = "LocalCollaborationOnboarding-v1"
 HEX = set("0123456789abcdef")
@@ -75,8 +75,16 @@ def _safe_project(value):
     except ValueError: return "00000000-0000-0000-0000-000000000000"
 
 
+def _target_locator(project_id, root):
+    if not isinstance(root, (str, Path)):
+        raise ValueError("target root")
+    value = str(Path(root).expanduser().resolve(strict=False))
+    return _digest({"project_id": project_id, "target_projects_root": value})
+
+
 def read_second_device_onboarding(source_db_path, *, expected_project_id, target_db_path=None,
-                                  bundle=None, proof_ref=None, activation_ref=None, **claims):
+                                  bundle=None, proof_ref=None, activation_ref=None,
+                                  target_projects_root=None, **claims):
     """Read owners only; caller claims never advance the displayed stage."""
     project_id = _safe_project(expected_project_id)
     if claims: return _hold(project_id, "caller_claim_forbidden")
@@ -102,7 +110,12 @@ def read_second_device_onboarding(source_db_path, *, expected_project_id, target
         if inspected.get("outcome") != "import_candidate" or inspected.get("project_id") != project_id:
             return _hold(project_id, "bundle_unavailable")
         fields["package_digest"] = inspected["package_digest"]
-        if target_db_path is None: return _summary(project_id, "target_authority_create_review", "create_target_authority", **fields)
+        if target_db_path is None:
+            try:
+                fields["target_locator_digest"] = _target_locator(project_id, target_projects_root)
+            except ValueError:
+                return _hold(project_id, "target_locator_unavailable")
+            return _summary(project_id, "target_authority_create_review", "create_target_authority", **fields)
         if proof_ref is None: return _summary(project_id, "target_import_review", "import_bundle", **fields)
         exp = read_handoff_experience(target_db_path, expected_project_id=project_id, bundle=bundle, proof_ref=proof_ref,
                                       **({"activation_ref": activation_ref} if activation_ref is not None else {}))
@@ -177,7 +190,7 @@ def _exact_a1_duplicate(source, plan):
     if (event is not None and event.event_type == event_type and event.actor == "owner"
             and event.source == "orch05_handoff" and event.root == plan.project_id
             and isinstance(payload, Mapping) and payload.get("transition") == expected
-            and payload.get("decision_digest") == plan.decision_digest
+            and payload.get("decision_id") == plan.decision_id and payload.get("decision_digest") == plan.decision_digest
             and all(payload.get(key) == value for key, value in plan.parameters.items())):
         return _receipt(plan.project_id, plan, (snapshot.authority_generation - 1, event.previous_hash),
                         (snapshot.authority_generation, snapshot.authority_head), "owner_exact_duplicate", False)
@@ -198,21 +211,28 @@ def _plan_valid(plan):
         return False
 
 
+def _retry_hold(project_id):
+    return {"schema_version": VERSION, "outcome": "held", "reason_code": "retry_owner_decision_identity_unavailable"}
+
+
 def apply_second_device_onboarding_step(context, plan):
     """Freshly re-read then execute exactly one selected public owner mutation."""
     project_id = plan.project_id if isinstance(plan, OnboardingStepPlan) else "00000000-0000-0000-0000-000000000000"
+    receipt = None
+    created_target = None
     try:
         if not isinstance(context, Mapping) or not _plan_valid(plan): raise ValueError("context")
         source = context.get("source_ledger"); target = context.get("target_ledger")
         if not isinstance(source, LocalCollaborationLedger) or source.project_id != project_id: raise ValueError("source")
         current = read_second_device_onboarding(source.path, expected_project_id=project_id,
             target_db_path=target.path if isinstance(target, LocalCollaborationLedger) else None,
-            bundle=context.get("bundle"), proof_ref=context.get("proof_ref"), activation_ref=context.get("activation_ref"))
+            bundle=context.get("bundle"), proof_ref=context.get("proof_ref"), activation_ref=context.get("activation_ref"),
+            target_projects_root=context.get("target_projects_root"))
         if current.get("summary_digest") != plan.summary_digest or current.get("next_operation") != plan.operation:
             duplicate = _exact_a1_duplicate(source, plan)
             if duplicate is not None:
                 return _freeze({"receipt": duplicate, "next_summary": current})
-            return {"schema_version": VERSION, "outcome": "held", "reason_code": "stale_summary_or_plan"}
+            return _retry_hold(project_id)
         source_before = read_handoff_state(source.path, expected_project_id=project_id)
         owner = None; mutated = False; before = (source_before.authority_generation, source_before.authority_head)
         if plan.operation in {"enroll_target", "prepare_handoff", "lock_source"}:
@@ -227,15 +247,16 @@ def apply_second_device_onboarding_step(context, plan):
         elif plan.operation == "export_bundle":
             owner = prepare_manual_bundle(source, expected_handoff_state=source_before)
             if "outcome" in owner: return {"schema_version": VERSION, "outcome": "held", "reason_code": "bundle_export_held"}
-            context["_manual_bundle"] = owner
             mutated = True
         elif plan.operation == "create_target_authority":
             if target is not None or not isinstance(context.get("target_projects_root"), (str, Path)): raise ValueError("target create")
             candidate = Path(context["target_projects_root"]) / project_id / "collaboration.db"
             if candidate.exists() or candidate.is_symlink():
                 return {"schema_version": VERSION, "outcome": "held", "reason_code": "target_already_bound_or_ambiguous"}
+            before = (0, GENESIS)
             target = LocalCollaborationLedger.create_project(projects_root=context["target_projects_root"], project_id=project_id)
-            context["target_ledger"] = target; owner = {"outcome": "target_authority_created"}; mutated = True
+            created_target = target
+            owner = {"outcome": "target_authority_created"}; mutated = True
         elif plan.operation == "import_bundle":
             if not isinstance(target, LocalCollaborationLedger) or not isinstance(context.get("bundle"), Mapping): raise ValueError("import")
             before_snapshot = LocalCollaborationLedger.authority_snapshot(target.path, expected_project_id=project_id); before = (before_snapshot.authority_generation, before_snapshot.authority_head)
@@ -243,7 +264,6 @@ def apply_second_device_onboarding_step(context, plan):
             if isinstance(imported, Mapping): return {"schema_version": VERSION, "outcome": "held", "reason_code": "owner_import_plan_held"}
             owner = apply_owner_import(target, imported, expected_before=before_snapshot); mutated = owner.get("owner_import_performed", False)
             if owner.get("outcome", "").startswith("hold_"): return {"schema_version": VERSION, "outcome": "held", "reason_code": "owner_import_held"}
-            context["proof_ref"] = {key: owner[key] for key in ("project_id", "receipt_event_id", "receipt_event_hash", "package_digest")}
         elif plan.operation == "activate_target":
             if not isinstance(target, LocalCollaborationLedger): raise ValueError("activation")
             before_snapshot = LocalCollaborationLedger.authority_snapshot(target.path, expected_project_id=project_id); before = (before_snapshot.authority_generation, before_snapshot.authority_head)
@@ -252,16 +272,29 @@ def apply_second_device_onboarding_step(context, plan):
             owner = apply_owner_target_activation(target, activation, bundle=context["bundle"], proof_ref=context["proof_ref"], decision={"decision_id": plan.decision_id, "decision_digest": plan.decision_digest})
             mutated = owner.get("target_activation_performed", False)
             if owner.get("outcome", "").startswith("hold_"): return {"schema_version": VERSION, "outcome": "held", "reason_code": "owner_activation_held"}
-            context["activation_ref"] = {key: owner[key] for key in ("project_id", "activation_receipt_event_id", "activation_receipt_event_hash", "package_digest")}
         else: raise ValueError("operation")
         observed = target if plan.operation in {"import_bundle", "activate_target"} else source
+        if plan.operation == "create_target_authority": observed = target
         after_snapshot = LocalCollaborationLedger.authority_snapshot(observed.path, expected_project_id=project_id)
+        owner_outcome = owner.get("outcome", "bundle_exported" if plan.operation == "export_bundle" else "unknown")
+        receipt = _receipt(project_id, plan, before, (after_snapshot.authority_generation, after_snapshot.authority_head), owner_outcome, mutated)
         next_summary = read_second_device_onboarding(source.path, expected_project_id=project_id,
             target_db_path=target.path if isinstance(target, LocalCollaborationLedger) else None,
-            bundle=context.get("bundle"), proof_ref=context.get("proof_ref"), activation_ref=context.get("activation_ref"))
-        return _freeze({"receipt": _receipt(project_id, plan, before, (after_snapshot.authority_generation, after_snapshot.authority_head), owner.get("outcome", "unknown"), mutated), "next_summary": next_summary})
+            bundle=context.get("bundle"), proof_ref=context.get("proof_ref"), activation_ref=context.get("activation_ref"),
+            target_projects_root=context.get("target_projects_root"))
+        output = {}
+        if plan.operation == "import_bundle":
+            output["proof_ref"] = {key: owner[key] for key in ("project_id", "receipt_event_id", "receipt_event_hash", "package_digest")}
+        elif plan.operation == "activate_target":
+            output["activation_ref"] = {key: owner[key] for key in ("project_id", "activation_receipt_event_id", "activation_receipt_event_hash", "package_digest")}
+        return _freeze({"receipt": receipt, "next_summary": next_summary, "operation_output": output})
     except (ValueError, TypeError, KeyError, LedgerBusyError, LedgerPermissionError, LedgerIntegrityError, LedgerSchemaError, LedgerIdentityError):
+        if receipt is not None:
+            return _freeze({"receipt": receipt, "next_summary": _hold(project_id, "post_commit_readback_unavailable"), "operation_output": {}})
         return {"schema_version": VERSION, "outcome": "held", "reason_code": "owner_or_context_unavailable"}
+    finally:
+        if created_target is not None:
+            created_target.close()
 
 
 __all__ = ["OnboardingStepPlan", "apply_second_device_onboarding_step", "plan_second_device_onboarding_step", "read_second_device_onboarding"]
