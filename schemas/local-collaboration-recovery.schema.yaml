@@ -7,7 +7,7 @@ required: [schema_version, outcome, project_id, flags]
 properties:
   schema_version: {const: LocalCollaborationRecovery-v1}
   outcome:
-    enum: [recovery_ready, target_import_recovery_ready, recovery_action_applied, hold_schema, hold_privacy, hold_decision_invalid, hold_owner_proof_unavailable, hold_target_stale, hold_owner_read_unavailable, hold_real_action_hdc_required, hold_cancellation_unproven, hold_enrollment, setup_incomplete]
+    enum: [recovery_ready, target_import_recovery_ready, recovery_action_applied, fresh_backup_created, fresh_target_restored, hold_schema, hold_privacy, hold_decision_invalid, hold_owner_proof_unavailable, hold_target_stale, hold_owner_read_unavailable, hold_real_action_hdc_required, hold_cancellation_unproven, hold_enrollment, setup_incomplete]
   project_id: {type: string, format: uuid}
   reason_code: {type: string, minLength: 1, maxLength: 128, pattern: '^[a-z0-9_]+$'}
   action: {enum: [pre_export_cancel, inactive_revoke, target_takeover]}

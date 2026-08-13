@@ -73,11 +73,17 @@ class RecoveryTests(unittest.TestCase):
         decision = {"decision_id": "d", "decision_digest": digest("d")}
         destination = str(Path(self.b_root.name) / "fresh-backup.db")
         backup = plan_recovery_action(self.target.path, expected_project_id=self.project_id, action="fresh_backup", decision=decision, backup_locator=destination)
-        self.assertEqual(apply_recovery_action(self.target, backup, decision=decision, backup_locator=destination)["outcome"], "recovery_action_applied")
+        backup_receipt = apply_recovery_action(self.target, backup, decision=decision, backup_locator=destination)
+        self.assertEqual(backup_receipt["outcome"], "fresh_backup_created")
         self.assertTrue(Path(destination).is_file())
         restored_root = str(Path(self.b_root.name) / "restored")
         restore = plan_recovery_action(self.target.path, expected_project_id=self.project_id, action="fresh_target_restore", decision=decision, restore_locator=destination, fresh_target_locator=restored_root)
-        self.assertEqual(apply_recovery_action(self.target, restore, decision=decision, restore_locator=destination, fresh_target_locator=restored_root)["outcome"], "recovery_action_applied")
+        restore_receipt = apply_recovery_action(self.target, restore, decision=decision, restore_locator=destination, fresh_target_locator=restored_root)
+        self.assertEqual(restore_receipt["outcome"], "fresh_target_restored")
+        schema = yaml.safe_load((Path(__file__).parent.parent / "schemas" / "local-collaboration-recovery.schema.yaml").read_text())
+        validator = Draft202012Validator(schema)
+        self.assertFalse(list(validator.iter_errors(backup_receipt)))
+        self.assertFalse(list(validator.iter_errors(restore_receipt)))
         self.assertEqual(plan_recovery_action(self.source.path, expected_project_id=self.project_id, action="pre_export_cancel", decision=decision)["outcome"], "hold_cancellation_unproven")
 
     def test_schema_closed_and_private_input_holds(self):

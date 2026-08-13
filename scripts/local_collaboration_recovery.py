@@ -250,7 +250,7 @@ def apply_recovery_action(ledger: LocalCollaborationLedger, plan: RecoveryPlan, 
             if (current.authority_generation, current.authority_head) != (plan.expected_generation, plan.expected_head):
                 raise RecoveryHold("hold_target_stale", "fresh_before_mismatch")
             receipt = ledger.backup(backup_locator)
-            return _freeze({"schema_version": VERSION, "outcome": "recovery_action_applied", "project_id": ledger.project_id,
+            return _freeze({"schema_version": VERSION, "outcome": "fresh_backup_created", "project_id": ledger.project_id,
                             "action": plan.action, "request_digest": plan.request_digest, "decision_digest": plan.decision_digest,
                             "generation": current.authority_generation, "head": current.authority_head,
                             "flags": _flags(mutation_performed=True, owner_readback_verified=bool(receipt), backup_performed=True)})
@@ -264,7 +264,7 @@ def apply_recovery_action(ledger: LocalCollaborationLedger, plan: RecoveryPlan, 
             restored = LocalCollaborationLedger.restore(restore_locator, fresh_target_locator, expected_project_id=ledger.project_id)
             try:
                 after = read_handoff_state(restored.path, expected_project_id=ledger.project_id)
-                return _freeze({"schema_version": VERSION, "outcome": "recovery_action_applied", "project_id": ledger.project_id,
+                return _freeze({"schema_version": VERSION, "outcome": "fresh_target_restored", "project_id": ledger.project_id,
                                 "action": plan.action, "request_digest": plan.request_digest, "decision_digest": plan.decision_digest,
                                 "generation": after.authority_generation, "head": after.authority_head,
                                 "flags": _flags(mutation_performed=True, owner_readback_verified=True, restore_performed=True)})
