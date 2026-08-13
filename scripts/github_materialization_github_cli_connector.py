@@ -1,9 +1,8 @@
-"""Bounded GitHub CLI label connector.
+"""One bounded GitHub CLI label-add connector.
 
-This module is deliberately separate from :class:`FakeConnector`.  It owns
-only one future live capability: adding one already-approved, existing label
-to one existing Issue or pull request, followed by a same-target readback.
-Tests inject ``runner``; this module never reads tokens or environment auth.
+The Human execution HDC owns credential selection.  This connector observes
+only active host-level authentication and confines its one possible operation
+to its constructor's exact repository, Issue and label plan.
 """
 from __future__ import annotations
 
@@ -11,34 +10,27 @@ import hashlib
 import json
 import re
 import subprocess
-import urllib.parse
-import uuid
 from collections.abc import Callable, Mapping
 from typing import Any
 
-
 CONNECTOR_ID = "github-cli-issue-label"
 CONNECTOR_VERSION = "1"
+CONFINEMENT = "exact_repo_issue_label"
 _OWNER = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37})$")
 _REPOSITORY = re.compile(r"^[A-Za-z0-9._-]{1,100}$")
 _LABEL = re.compile(r"^[^\x00-\x1f\x7f]{1,128}$")
 _DIGEST = re.compile(r"^[0-9a-f]{64}$")
 _PRINCIPAL = re.compile(r"^[A-Za-z0-9-]{1,39}$")
 _SCOPE = re.compile(r"^[A-Za-z0-9:_-]{1,64}$")
-_REASONS = {
-    "hold_capability_unavailable", "hold_capability_untrusted",
-    "hold_auth_mismatch", "hold_scope_unavailable", "hold_scope_insufficient",
-    "hold_target_invalid", "hold_target_type_invalid", "hold_label_absent",
-    "hold_preimage_stale", "hold_authority_pair_stale", "hold_duplicate",
-    "hold_provider_conflict", "hold_provider_rate_limited", "hold_provider_unavailable",
-    "hold_write_failed", "hold_readback_mismatch", "hold_rollback_incomplete",
-    "hold_second_forward_attempt", "hold_schema", "hold_output_invalid",
-}
+_REASONS = {"hold_capability_unavailable", "hold_capability_untrusted", "hold_auth_mismatch",
+            "hold_scope_unavailable", "hold_scope_insufficient", "hold_target_invalid",
+            "hold_target_type_invalid", "hold_label_absent", "hold_preimage_stale",
+            "hold_authority_pair_stale", "hold_provider_conflict", "hold_provider_rate_limited",
+            "hold_provider_unavailable", "hold_write_failed", "hold_readback_mismatch",
+            "hold_second_forward_attempt", "hold_schema", "hold_output_invalid"}
 
 
 class GitHubCliConnectorHold(ValueError):
-    """A privacy-safe, closed connector failure classification."""
-
     def __init__(self, reason: str):
         self.reason = reason if reason in _REASONS else "hold_schema"
         super().__init__(self.reason)
@@ -48,7 +40,11 @@ def _digest(value: Any) -> str:
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()).hexdigest()
 
 
-def _validate_target(value: Any) -> dict[str, Any]:
+def capability_digest(value: Mapping[str, Any]) -> str:
+    return _digest(value)
+
+
+def _target(value: Any) -> dict[str, Any]:
     if not isinstance(value, Mapping) or set(value) != {"owner", "repository", "number", "kind"}:
         raise GitHubCliConnectorHold("hold_target_invalid")
     owner, repository, number, kind = value.get("owner"), value.get("repository"), value.get("number"), value.get("kind")
@@ -61,72 +57,54 @@ def _validate_target(value: Any) -> dict[str, Any]:
     return {"owner": owner, "repository": repository, "number": number, "kind": kind}
 
 
-def _validate_plan(value: Any) -> dict[str, Any]:
-    required = {"schema_version", "human_authorization_ref", "operation", "target", "label", "preimage_digest", "authority_generation", "authority_head", "expected_capability_version", "expected_capability_digest"}
-    if not isinstance(value, Mapping) or set(value) != required:
-        raise GitHubCliConnectorHold("hold_schema")
-    if value.get("schema_version") != "GitHubCliIssueLabelConnector-v1" or value.get("operation") != "add_existing_label":
+def _plan(value: Any) -> dict[str, Any]:
+    required = {"schema_version", "human_authorization_ref", "operation", "target", "label", "preimage_digest",
+                "authority_generation", "authority_head", "expected_capability_digest"}
+    if not isinstance(value, Mapping) or set(value) != required or value.get("schema_version") != "GitHubCliIssueLabelConnector-v1" or value.get("operation") != "add_existing_label":
         raise GitHubCliConnectorHold("hold_schema")
     if not isinstance(value.get("human_authorization_ref"), str) or not value["human_authorization_ref"] or len(value["human_authorization_ref"].encode()) > 256:
         raise GitHubCliConnectorHold("hold_schema")
     if not isinstance(value.get("label"), str) or not _LABEL.fullmatch(value["label"]):
         raise GitHubCliConnectorHold("hold_label_absent")
-    if not isinstance(value.get("authority_generation"), int) or isinstance(value["authority_generation"], bool) or value["authority_generation"] < 0:
+    if not isinstance(value.get("authority_generation"), int) or isinstance(value["authority_generation"], bool) or value["authority_generation"] < 0 or not isinstance(value.get("authority_head"), str) or not _DIGEST.fullmatch(value["authority_head"]):
         raise GitHubCliConnectorHold("hold_authority_pair_stale")
-    if not isinstance(value.get("authority_head"), str) or not _DIGEST.fullmatch(value["authority_head"]):
-        raise GitHubCliConnectorHold("hold_authority_pair_stale")
-    if not isinstance(value.get("preimage_digest"), str) or not _DIGEST.fullmatch(value["preimage_digest"]):
-        raise GitHubCliConnectorHold("hold_preimage_stale")
-    if value.get("expected_capability_version") != CONNECTOR_VERSION:
-        raise GitHubCliConnectorHold("hold_capability_untrusted")
-    if not isinstance(value.get("expected_capability_digest"), str) or not _DIGEST.fullmatch(value["expected_capability_digest"]):
-        raise GitHubCliConnectorHold("hold_capability_untrusted")
-    target = _validate_target(value["target"])
-    return {**dict(value), "target": target}
-
-
-def _scope_list(value: Any) -> bool:
-    return (isinstance(value, list) and bool(value) and len(value) <= 10
-            and len(set(value)) == len(value) and all(isinstance(scope, str) and _SCOPE.fullmatch(scope) for scope in value))
-
-
-def capability_digest(value: Mapping[str, Any]) -> str:
-    """Digest the closed, connector-owned capability fact for Gate-1 binding."""
-    return _digest(value)
+    for key, reason in (("preimage_digest", "hold_preimage_stale"), ("expected_capability_digest", "hold_capability_untrusted")):
+        if not isinstance(value.get(key), str) or not _DIGEST.fullmatch(value[key]):
+            raise GitHubCliConnectorHold(reason)
+    return {**dict(value), "target": _target(value["target"])}
 
 
 class GitHubCliIssueLabelConnector:
-    """One-operation connector using the GitHub CLI managed authentication.
-
-    ``runner`` receives a fixed argv tuple and ``shell=False``.  Production
-    callers may omit it; tests must inject a deterministic stub.
-    """
-
     network_capability = True
     production_eligibility = True
     trust_domain = "github_cli_managed_auth"
 
     def __init__(self, *, repository_owner: str, repository: str, runner: Callable[..., Any] | None = None) -> None:
-        self._repository = _validate_target({"owner": repository_owner, "repository": repository, "number": 1, "kind": "issue"})
+        self._repository = _target({"owner": repository_owner, "repository": repository, "number": 1, "kind": "issue"})
         self._runner = runner or subprocess.run
-        self._forward_receipts: dict[str, dict[str, Any]] = {}
+        self._forward_receipts: set[str] = set()
+
+    @property
+    def repository_binding(self) -> dict[str, str]:
+        return {"owner": self._repository["owner"], "repository": self._repository["repository"]}
 
     def capability_metadata(self) -> dict[str, Any]:
-        """Resolve the same normalized capability fact execution will bind."""
         try:
-            return self._resolve_capability()
+            return self._public_capability(self._resolve_capability())
         except GitHubCliConnectorHold:
-            return self._unavailable_capability()
+            return {"connector_id": CONNECTOR_ID, "connector_version": CONNECTOR_VERSION, "host": "github.com",
+                    "available": False, "credential_grant_attested": False, "operation_confinement": CONFINEMENT,
+                    "authoritative": False, "confirmation_eligible": False}
 
-    def add_existing_label(self, plan: Mapping[str, Any], *, authority_pair: Mapping[str, Any]) -> dict[str, Any]:
-        planned = _validate_plan(plan)
+    def _add_existing_label(self, plan: Mapping[str, Any], *, authority_pair: Mapping[str, Any]) -> dict[str, Any]:
+        planned = _plan(plan)
         target = planned["target"]
-        if target["owner"] != self._repository["owner"] or target["repository"] != self._repository["repository"]:
+        if self.repository_binding != {"owner": target["owner"], "repository": target["repository"]}:
             raise GitHubCliConnectorHold("hold_auth_mismatch")
-        if authority_pair != {"authority_generation": planned["authority_generation"], "authority_head": planned["authority_head"]}:
+        pair = {"authority_generation": planned["authority_generation"], "authority_head": planned["authority_head"]}
+        if authority_pair != pair:
             raise GitHubCliConnectorHold("hold_authority_pair_stale")
-        capability = self._resolve_capability()
-        if capability_digest(capability) != planned["expected_capability_digest"]:
+        if self._execution_binding_digest() != planned["expected_capability_digest"]:
             raise GitHubCliConnectorHold("hold_capability_untrusted")
         receipt_id = _digest({key: planned[key] for key in ("human_authorization_ref", "operation", "target", "label", "preimage_digest", "authority_generation", "authority_head")})
         if receipt_id in self._forward_receipts:
@@ -135,55 +113,48 @@ class GitHubCliIssueLabelConnector:
         if _digest(labels) != planned["preimage_digest"]:
             raise GitHubCliConnectorHold("hold_preimage_stale")
         if planned["label"] in labels:
-            return self._result("duplicate_no_mutation", planned, receipt_id, labels, mutation_count=0)
-        self._write("POST", target, planned["label"])
-        readback = self._read_labels(target)
-        if planned["label"] not in readback:
+            return self._result("duplicate_no_mutation", planned, receipt_id, labels, 0)
+        self._write(target, planned["label"])
+        labels = self._read_labels(target)
+        if planned["label"] not in labels:
             raise GitHubCliConnectorHold("hold_readback_mismatch")
-        receipt = self._result("label_added", planned, receipt_id, readback, mutation_count=1)
-        self._forward_receipts[receipt_id] = receipt
-        return receipt
-
-    def _unavailable_capability(self) -> dict[str, Any]:
-        return {"connector_id": CONNECTOR_ID, "connector_version": CONNECTOR_VERSION, "provider": "github", "host": "github.com", "repository_restriction": f"{self._repository['owner']}/{self._repository['repository']}", "authenticated_principal": "unavailable", "observable_scopes": "unavailable", "minimum_scopes": ["repo"], "network_capability": True, "production_eligibility": True, "available": False}
+        self._forward_receipts.add(receipt_id)
+        return self._result("label_added", planned, receipt_id, labels, 1)
 
     def _resolve_capability(self) -> dict[str, Any]:
-        result = self._call(("gh", "auth", "status", "--hostname", "github.com", "--json", "login,scopes"))
+        result = self._call(("gh", "auth", "status", "--active", "--hostname", "github.com", "--json", "hosts"))
         if result["returncode"] != 0:
             raise GitHubCliConnectorHold("hold_capability_unavailable")
         try:
             parsed = json.loads(result["stdout"])
-        except (TypeError, ValueError):
+            accounts = parsed["hosts"]["github.com"]
+        except (KeyError, TypeError, ValueError):
             raise GitHubCliConnectorHold("hold_capability_untrusted") from None
-        if not isinstance(parsed, Mapping) or set(parsed) != {"login", "scopes"}:
+        if not isinstance(parsed, Mapping) or set(parsed) != {"hosts"} or not isinstance(accounts, list) or len(accounts) != 1 or not isinstance(accounts[0], Mapping) or set(accounts[0]) != {"login", "scopes"}:
             raise GitHubCliConnectorHold("hold_capability_untrusted")
-        principal, scopes = parsed.get("login"), parsed.get("scopes")
+        principal, scopes = accounts[0].get("login"), accounts[0].get("scopes")
         if not isinstance(principal, str) or not _PRINCIPAL.fullmatch(principal):
             raise GitHubCliConnectorHold("hold_auth_mismatch")
         if scopes == "unavailable":
             raise GitHubCliConnectorHold("hold_scope_unavailable")
-        if not _scope_list(scopes) or "repo" not in set(scopes):
+        if not isinstance(scopes, list) or not scopes or len(scopes) > 10 or len(set(scopes)) != len(scopes) or any(not isinstance(scope, str) or not _SCOPE.fullmatch(scope) for scope in scopes) or "repo" not in scopes:
             raise GitHubCliConnectorHold("hold_scope_insufficient")
-        return {"connector_id": CONNECTOR_ID, "connector_version": CONNECTOR_VERSION, "provider": "github", "host": "github.com", "repository_restriction": f"{self._repository['owner']}/{self._repository['repository']}", "authenticated_principal": principal, "observable_scopes": sorted(scopes), "minimum_scopes": ["repo"], "network_capability": True, "production_eligibility": True, "available": True}
+        return {"connector_id": CONNECTOR_ID, "connector_version": CONNECTOR_VERSION, "host": "github.com",
+                "active_principal": principal, "observable_host_scopes": sorted(scopes), "available": True,
+                "credential_grant_attested": False, "operation_confinement": CONFINEMENT,
+                "authoritative": False, "confirmation_eligible": False}
 
-    def remove_same_label_if_added(self, receipt: Mapping[str, Any]) -> dict[str, Any]:
-        if not isinstance(receipt, Mapping) or receipt.get("outcome") != "label_added" or not isinstance(receipt.get("receipt_id"), str):
-            raise GitHubCliConnectorHold("hold_schema")
-        stored = self._forward_receipts.get(receipt["receipt_id"])
-        if stored != dict(receipt):
-            raise GitHubCliConnectorHold("hold_schema")
-        target = _validate_target(receipt.get("target"))
-        label = receipt.get("label")
-        if not isinstance(label, str) or not _LABEL.fullmatch(label):
-            raise GitHubCliConnectorHold("hold_schema")
-        labels = self._read_labels(target)
-        if label not in labels:
-            raise GitHubCliConnectorHold("hold_rollback_incomplete")
-        self._write("DELETE", target, label)
-        readback = self._read_labels(target)
-        if label in readback:
-            raise GitHubCliConnectorHold("hold_rollback_incomplete")
-        return {"schema_version": "GitHubCliIssueLabelConnector-v1", "outcome": "rollback_complete", "operation": "remove_same_label_if_added", "receipt_id": receipt["receipt_id"], "target": target, "label": label, "readback_digest": _digest(readback), "mutation_count": 1, "network_capability": True, "production_eligibility": True, "authoritative": False, "confirmation_eligible": False}
+    @staticmethod
+    def _public_capability(value: Mapping[str, Any]) -> dict[str, Any]:
+        """Return binding-safe metadata without the active auth identity."""
+        return {"connector_id": value["connector_id"], "connector_version": value["connector_version"],
+                "host": value["host"], "available": value["available"],
+                "credential_grant_attested": False, "operation_confinement": CONFINEMENT,
+                "authoritative": False, "confirmation_eligible": False}
+
+    def _execution_binding_digest(self) -> str:
+        """Private digest of the full fresh resolver fact, never returned."""
+        return capability_digest(self._resolve_capability())
 
     def _endpoint(self, target: Mapping[str, Any]) -> str:
         return f"repos/{target['owner']}/{target['repository']}/issues/{target['number']}/labels"
@@ -192,20 +163,13 @@ class GitHubCliIssueLabelConnector:
         result = self._call(("gh", "api", "--method", "GET", self._endpoint(target), "--jq", ".[ ].name".replace(" ", "")))
         if result["returncode"] != 0:
             raise self._provider_hold(result["returncode"], result["stderr"])
-        labels = [line for line in result["stdout"].splitlines() if line]
-        if len(labels) > 100 or any(not _LABEL.fullmatch(label) for label in labels) or len(set(labels)) != len(labels):
+        labels = [item for item in result["stdout"].splitlines() if item]
+        if len(labels) > 100 or len(set(labels)) != len(labels) or any(not _LABEL.fullmatch(label) for label in labels):
             raise GitHubCliConnectorHold("hold_output_invalid")
         return sorted(labels)
 
-    def _write(self, method: str, target: Mapping[str, Any], label: str) -> None:
-        endpoint = self._endpoint(target)
-        if method == "POST":
-            argv = ("gh", "api", "--method", "POST", endpoint, "-f", f"labels[]={label}")
-        elif method == "DELETE":
-            argv = ("gh", "api", "--method", "DELETE", endpoint + "/" + urllib.parse.quote(label, safe=""))
-        else:
-            raise GitHubCliConnectorHold("hold_schema")
-        result = self._call(argv)
+    def _write(self, target: Mapping[str, Any], label: str) -> None:
+        result = self._call(("gh", "api", "--method", "POST", self._endpoint(target), "-f", f"labels[]={label}"))
         if result["returncode"] != 0:
             raise self._provider_hold(result["returncode"], result["stderr"], write=True)
 
@@ -218,25 +182,26 @@ class GitHubCliIssueLabelConnector:
             raise GitHubCliConnectorHold("hold_capability_unavailable") from None
         except Exception:
             raise GitHubCliConnectorHold("hold_provider_unavailable") from None
-        returncode = raw.get("returncode") if isinstance(raw, Mapping) else getattr(raw, "returncode", None)
+        code = raw.get("returncode") if isinstance(raw, Mapping) else getattr(raw, "returncode", None)
         stdout = raw.get("stdout", "") if isinstance(raw, Mapping) else getattr(raw, "stdout", "")
         stderr = raw.get("stderr", "") if isinstance(raw, Mapping) else getattr(raw, "stderr", "")
-        if not isinstance(returncode, int) or isinstance(returncode, bool) or not isinstance(stdout, str) or not isinstance(stderr, str) or len(stdout.encode()) > 4096 or len(stderr.encode()) > 4096:
+        if not isinstance(code, int) or isinstance(code, bool) or not isinstance(stdout, str) or not isinstance(stderr, str) or len(stdout.encode()) > 4096 or len(stderr.encode()) > 4096:
             raise GitHubCliConnectorHold("hold_output_invalid")
-        return {"returncode": returncode, "stdout": stdout, "stderr": stderr}
+        return {"returncode": code, "stdout": stdout, "stderr": stderr}
 
     @staticmethod
-    def _provider_hold(returncode: int, stderr: str, *, write: bool = False) -> GitHubCliConnectorHold:
-        # Only fixed HTTP markers affect the classification; raw stderr never
-        # leaves this function or becomes part of a receipt/exception.
-        if returncode == 409 or "HTTP 409" in stderr: return GitHubCliConnectorHold("hold_provider_conflict")
-        if returncode == 429 or "HTTP 429" in stderr: return GitHubCliConnectorHold("hold_provider_rate_limited")
-        if write and (returncode == 422 or "HTTP 422" in stderr): return GitHubCliConnectorHold("hold_label_absent")
+    def _provider_hold(code: int, stderr: str, *, write: bool = False) -> GitHubCliConnectorHold:
+        if code == 409 or "HTTP 409" in stderr: return GitHubCliConnectorHold("hold_provider_conflict")
+        if code == 429 or "HTTP 429" in stderr: return GitHubCliConnectorHold("hold_provider_rate_limited")
+        if write and (code == 422 or "HTTP 422" in stderr): return GitHubCliConnectorHold("hold_label_absent")
         return GitHubCliConnectorHold("hold_write_failed" if write else "hold_provider_unavailable")
 
     @staticmethod
-    def _result(outcome: str, plan: Mapping[str, Any], receipt_id: str, labels: list[str], *, mutation_count: int) -> dict[str, Any]:
-        return {"schema_version": "GitHubCliIssueLabelConnector-v1", "outcome": outcome, "operation": "add_existing_label", "receipt_id": receipt_id, "target": plan["target"], "label": plan["label"], "preimage_digest": plan["preimage_digest"], "readback_digest": _digest(labels), "mutation_count": mutation_count, "network_capability": True, "production_eligibility": True, "authoritative": False, "confirmation_eligible": False}
+    def _result(outcome: str, plan: Mapping[str, Any], receipt_id: str, labels: list[str], mutation_count: int) -> dict[str, Any]:
+        return {"schema_version": "GitHubCliIssueLabelConnector-v1", "outcome": outcome, "operation": "add_existing_label",
+                "receipt_id": receipt_id, "target": plan["target"], "label": plan["label"], "readback_digest": _digest(labels),
+                "mutation_count": mutation_count, "credential_grant_attested": False, "operation_confinement": CONFINEMENT,
+                "authoritative": False, "confirmation_eligible": False}
 
 
-__all__ = ["CONNECTOR_ID", "CONNECTOR_VERSION", "GitHubCliConnectorHold", "GitHubCliIssueLabelConnector"]
+__all__ = ["CONNECTOR_ID", "CONNECTOR_VERSION", "CONFINEMENT", "GitHubCliConnectorHold", "GitHubCliIssueLabelConnector", "capability_digest"]
