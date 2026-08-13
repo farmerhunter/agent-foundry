@@ -1,0 +1,229 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://agent-foundry.dev/schemas/github-materialization-adapter.schema.yaml
+title: GitHubMaterializationAdapter-v1
+oneOf:
+  - $ref: '#/$defs/request'
+  - $ref: '#/$defs/result'
+  - $ref: '#/$defs/github_cli_label_result'
+  - $ref: '#/$defs/github_cli_label_bridge_request'
+  - $ref: '#/$defs/github_cli_label_bridge_result'
+$defs:
+  digest: {type: string, pattern: '^[0-9a-f]{64}$'}
+  uuid: {type: string, format: uuid}
+  gate:
+    type: object
+    additionalProperties: false
+    required: [kind, production_eligibility, project_id, intent_id, attempt_sequence, operation, repository_id, effect_digest, content_digest]
+    properties:
+      kind: {const: fixture_only}
+      production_eligibility: {const: false}
+      project_id: {$ref: '#/$defs/uuid'}
+      intent_id: {$ref: '#/$defs/uuid'}
+      attempt_sequence: {type: integer, minimum: 1}
+      operation: {enum: [issue_create, issue_comment, pull_request_comment]}
+      repository_id: {$ref: '#/$defs/digest'}
+      effect_digest: {$ref: '#/$defs/digest'}
+      content_digest: {$ref: '#/$defs/digest'}
+  capability:
+    type: object
+    additionalProperties: false
+    required: [trust_domain, production_eligibility, network_capability, adapter_id, adapter_version, supported_operations]
+    properties:
+      trust_domain: {const: same_process_reference}
+      production_eligibility: {const: false}
+      network_capability: {const: false}
+      adapter_id: {type: string, minLength: 1}
+      adapter_version: {type: string, minLength: 1}
+      supported_operations:
+        type: array
+        minItems: 1
+        uniqueItems: true
+        items: {enum: [issue_create, issue_comment, pull_request_comment]}
+  content:
+    type: object
+    format: utf8-content
+    additionalProperties: false
+    properties:
+      title: {type: string, format: utf8-256}
+      body: {type: string, format: utf8-8192}
+      summary: {type: string, format: utf8-8192}
+      labels: {type: array, maxItems: 10, items: {type: string, format: utf8-128}}
+  request:
+    type: object
+    additionalProperties: false
+    required: [schema_version, project_id, work_id, intent_id, attempt_sequence, scheduler_generation, scheduler_head, desired_effect_digest, approved_content_digest, classification, operation, repository_id, repository_locator_digest, auth_scope_digest, privacy_class, adapter_id, adapter_version, timestamp_provenance, occurred_at]
+    allOf:
+      - if: {properties: {classification: {const: must_publish}}}
+        then: {required: [gate, capability]}
+      - if: {properties: {classification: {const: optional_sync}}}
+        then:
+          oneOf:
+            - not: {anyOf: [{required: [gate]}, {required: [capability]}]}
+            - required: [gate, capability]
+      - if: {properties: {classification: {const: local_only}}}
+        then:
+          oneOf:
+            - not: {anyOf: [{required: [gate]}, {required: [capability]}]}
+            - required: [gate, capability]
+    properties:
+      schema_version: {const: GitHubMaterializationAdapter-v1}
+      project_id: {$ref: '#/$defs/uuid'}
+      work_id: {type: string, minLength: 1}
+      intent_id: {$ref: '#/$defs/uuid'}
+      attempt_sequence: {type: integer, minimum: 1}
+      scheduler_generation: {type: integer, minimum: 0}
+      scheduler_head: {$ref: '#/$defs/digest'}
+      desired_effect_digest: {$ref: '#/$defs/digest'}
+      approved_content_digest: {$ref: '#/$defs/digest'}
+      classification: {enum: [local_only, must_publish, optional_sync]}
+      operation: {enum: [issue_create, issue_comment, pull_request_comment]}
+      repository_id: {$ref: '#/$defs/digest'}
+      repository_locator_digest: {$ref: '#/$defs/digest'}
+      auth_scope_digest: {$ref: '#/$defs/digest'}
+      expected_remote_kind: {type: string, minLength: 1}
+      expected_remote_ref: {type: string, minLength: 1}
+      expected_remote_version: {type: string, minLength: 1}
+      expected_remote_digest: {$ref: '#/$defs/digest'}
+      privacy_class: {enum: [public_metadata, metadata_only, repository_internal_redacted]}
+      adapter_id: {type: string, minLength: 1}
+      adapter_version: {type: string, minLength: 1}
+      gate: {$ref: '#/$defs/gate'}
+      capability: {$ref: '#/$defs/capability'}
+      occurred_at: {type: string, format: strict-rfc3339}
+      timestamp_provenance: {const: explicit}
+      nonce: {type: string, format: strict-rfc3339}
+      approved_remote_content: {$ref: '#/$defs/content'}
+      canceled: {const: true}
+      compensation: {const: true}
+      readback_only: {const: true}
+  result:
+    type: object
+    additionalProperties: false
+    required: [schema_version, operation, outcome, simulation_only, remote_mutation_performed, authoritative, confirmation_eligible]
+    properties:
+      schema_version: {const: GitHubMaterializationAdapter-v1}
+      operation: {enum: [issue_create, issue_comment, pull_request_comment]}
+      outcome: {enum: [materialization_not_required, materialization_plan_ready, materialization_approval_required, materialization_duplicate, materialization_simulated, materialization_readback_verified, materialization_readback_unavailable, materialization_recovery_readback_required, materialization_canceled]}
+      classification: {enum: [local_only, must_publish, optional_sync]}
+      simulation_only: {const: true}
+      remote_mutation_performed: {const: false}
+      authoritative: {const: false}
+      confirmation_eligible: {const: false}
+      project_id: {$ref: '#/$defs/uuid'}
+      intent_id: {$ref: '#/$defs/uuid'}
+      attempt_sequence: {type: integer, minimum: 1}
+      idempotency_key: {$ref: '#/$defs/uuid'}
+      desired_effect_digest: {$ref: '#/$defs/digest'}
+      readback_digest: {$ref: '#/$defs/digest'}
+      opaque_receipt_ref: {type: string, maxLength: 256}
+      hold: {enum: [hold_materialization_stale_basis]}
+      confirmed: {const: true}
+      adapter_id: {type: string, minLength: 1}
+      adapter_version: {type: string, minLength: 1}
+      expected_remote_kind: {type: string, minLength: 1}
+      expected_remote_ref: {type: string, minLength: 1}
+      expected_remote_digest: {$ref: '#/$defs/digest'}
+      expected_remote_version: {type: string, minLength: 1}
+      request_digest: {$ref: '#/$defs/digest'}
+      desired_effect_digest: {$ref: '#/$defs/digest'}
+      occurred_at: {type: string, format: strict-rfc3339}
+      read_timestamp: {type: string, format: strict-rfc3339}
+      readback_nonce: {type: string, format: strict-rfc3339}
+  github_cli_target:
+    type: object
+    additionalProperties: false
+    required: [owner, repository, number, kind]
+    properties:
+      owner: {type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9-]{0,37}$'}
+      repository: {type: string, pattern: '^[A-Za-z0-9._-]{1,100}$'}
+      number: {type: integer, minimum: 1}
+      kind: {enum: [issue, pull_request]}
+  github_cli_label_result:
+    type: object
+    additionalProperties: false
+    required: [schema_version, outcome, operation, receipt_id, target, label, readback_digest, mutation_count, credential_grant_attested, operation_confinement, authoritative, confirmation_eligible]
+    properties:
+      schema_version: {const: GitHubCliIssueLabelConnector-v1}
+      outcome: {enum: [duplicate_no_mutation, label_added]}
+      operation: {const: add_existing_label}
+      receipt_id: {$ref: '#/$defs/digest'}
+      target: {$ref: '#/$defs/github_cli_target'}
+      label: {type: string, minLength: 1, maxLength: 128, pattern: '^[^\x00-\x1f\x7f]+$'}
+      preimage_digest: {$ref: '#/$defs/digest'}
+      readback_digest: {$ref: '#/$defs/digest'}
+      mutation_count: {type: integer, minimum: 0, maximum: 1}
+      credential_grant_attested: {const: false}
+      operation_confinement: {const: exact_repo_issue_label}
+      authoritative: {const: false}
+      confirmation_eligible: {const: false}
+  github_cli_label_bridge_request:
+    type: object
+    additionalProperties: false
+    required: [schema_version, human_authorization_ref, project_id, work_id, intent_id, attempt_sequence, desired_effect_digest, repository_id, repository_locator_digest, target, label, preimage_digest, privacy_class, write_budget, retry_budget, occurred_at, timestamp_provenance]
+    properties:
+      schema_version: {const: GitHubLabelMaterializationBridge-v1}
+      human_authorization_ref: {type: string, minLength: 1, maxLength: 256}
+      project_id: {$ref: '#/$defs/uuid'}
+      work_id: {type: string, minLength: 1, maxLength: 128}
+      intent_id: {$ref: '#/$defs/uuid'}
+      attempt_sequence: {type: integer, minimum: 1}
+      desired_effect_digest: {$ref: '#/$defs/digest'}
+      repository_id: {$ref: '#/$defs/digest'}
+      repository_locator_digest: {$ref: '#/$defs/digest'}
+      target: {$ref: '#/$defs/github_cli_target'}
+      label: {type: string, minLength: 1, maxLength: 128, pattern: '^[^\x00-\x1f\x7f]+$'}
+      preimage_digest: {$ref: '#/$defs/digest'}
+      privacy_class: {const: metadata_only}
+      write_budget: {const: 1}
+      retry_budget: {const: 0}
+      occurred_at: {type: string, format: strict-rfc3339}
+      timestamp_provenance: {const: explicit}
+  github_cli_label_bridge_result:
+    oneOf:
+      - type: object
+        additionalProperties: false
+        required: [schema_version, outcome, project_id, intent_id, attempt_sequence, authority_generation, authority_head, target, label, connector_receipt_id, readback_digest, mutation_count, connector_called, retry_count, credential_grant_attested, operation_confinement, authoritative, confirmation_eligible, scheduler_confirmation_performed, observation_state]
+        properties:
+          schema_version: {const: GitHubLabelMaterializationBridge-v1}
+          outcome: {enum: [real_label_duplicate_observed_unverified, real_label_added_observed_unverified]}
+          project_id: {$ref: '#/$defs/uuid'}
+          intent_id: {$ref: '#/$defs/uuid'}
+          attempt_sequence: {type: integer, minimum: 1}
+          authority_generation: {type: integer, minimum: 0}
+          authority_head: {$ref: '#/$defs/digest'}
+          target: {$ref: '#/$defs/github_cli_target'}
+          label: {type: string, minLength: 1, maxLength: 128, pattern: '^[^\x00-\x1f\x7f]+$'}
+          connector_receipt_id: {$ref: '#/$defs/digest'}
+          readback_digest: {$ref: '#/$defs/digest'}
+          mutation_count: {type: integer, enum: [0, 1]}
+          connector_called: {const: true}
+          retry_count: {const: 0}
+          credential_grant_attested: {const: false}
+          operation_confinement: {const: exact_repo_issue_label}
+          authoritative: {const: false}
+          confirmation_eligible: {const: false}
+          scheduler_confirmation_performed: {const: false}
+          observation_state: {const: observed_unverified}
+      - type: object
+        additionalProperties: false
+        required: [schema_version, outcome, reason, connector_called, credential_grant_attested, operation_confinement, authoritative, confirmation_eligible, scheduler_confirmation_performed, observation_state, retry_count]
+        properties:
+          schema_version: {const: GitHubLabelMaterializationBridge-v1}
+          outcome: {const: real_label_materialization_hold}
+          reason: {enum: [schema_or_privacy, scheduler_or_authority_drift, repository_or_target_binding, authorization_evidence, capability_unavailable_or_untrusted, stale_preimage, duplicate_forward_attempt, provider_write_or_readback_unavailable, unexpected_connector_result]}
+          connector_called: {type: boolean}
+          mutation_count: {type: integer, enum: [0, 1]}
+          project_id: {$ref: '#/$defs/uuid'}
+          intent_id: {$ref: '#/$defs/uuid'}
+          attempt_sequence: {type: integer, minimum: 1}
+          authority_generation: {type: integer, minimum: 0}
+          authority_head: {$ref: '#/$defs/digest'}
+          target: {$ref: '#/$defs/github_cli_target'}
+          label: {type: string, minLength: 1, maxLength: 128, pattern: '^[^\x00-\x1f\x7f]+$'}
+          retry_count: {const: 0}
+          credential_grant_attested: {const: false}
+          operation_confinement: {const: exact_repo_issue_label}
+          authoritative: {const: false}
+          confirmation_eligible: {const: false}
+          scheduler_confirmation_performed: {const: false}
+          observation_state: {const: not_observed}

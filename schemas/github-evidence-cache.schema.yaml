@@ -1,0 +1,187 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://agent-foundry.local/schemas/github-evidence-cache.schema.yaml
+title: GitHubEvidenceCache-v1
+type: object
+oneOf:
+  - {$ref: '#/$defs/readout_envelope'}
+  - {$ref: '#/$defs/operation_envelope'}
+$defs:
+  timestamp: {type: string, pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z$'}
+  digest: {type: string, pattern: '^[0-9a-f]{64}$'}
+  facts:
+    type: object
+    additionalProperties: false
+    properties:
+      state: {type: string, enum: [open, closed, merged, draft, unknown]}
+      number: {type: integer, minimum: 1}
+      title: {type: string, maxLength: 256}
+      labels: {type: array, maxItems: 25, items: {type: string, maxLength: 128}}
+      disposition: {type: string, maxLength: 128}
+      category: {type: string, maxLength: 128}
+      count: {type: integer, minimum: 0}
+      updated_at: {$ref: '#/$defs/timestamp'}
+  entry:
+    type: object
+    additionalProperties: false
+    required: [evidence_kind, opaque_object_ref, selector_digest, representation_version, facts, summary, anchors, source_revision, fetched_at, coverage, privacy_class]
+    properties:
+      entry_key: {$ref: '#/$defs/digest'}
+      evidence_kind: {enum: [issue_metadata, pull_request_metadata, comment_summary, project_item_summary]}
+      opaque_object_ref: {type: string, minLength: 1, maxLength: 256}
+      selector_digest: {$ref: '#/$defs/digest'}
+      representation_version: {type: string, minLength: 1, maxLength: 64}
+      facts: {$ref: '#/$defs/facts'}
+      summary: {type: string, maxLength: 1024, pattern: '^[^\r\n]*$'}
+      anchors: {type: array, maxItems: 16, items: {type: string, maxLength: 256}}
+      source_revision: {type: string, minLength: 1, maxLength: 512}
+      source_updated_at: {$ref: '#/$defs/timestamp'}
+      fetched_at: {$ref: '#/$defs/timestamp'}
+      coverage: {enum: [complete, partial, unavailable, privacy_held]}
+      privacy_class: {enum: [public_metadata, repository_internal_redacted, metadata_only, privacy_held]}
+      producer_id: {type: string, maxLength: 256}
+      producer_version: {type: string, maxLength: 128}
+      provenance: {type: string, enum: [same_process_reference, adapter_receipt]}
+      metadata: {type: object, additionalProperties: false, properties: {scope: {type: string, maxLength: 128}, selector_count: {type: integer, minimum: 0}}}
+      payload_hash: {$ref: '#/$defs/digest'}
+      freshness: {enum: [fresh_as_of_fetch, stale, partial, unavailable, privacy_held, invalidated, conflict]}
+      as_of: {$ref: '#/$defs/timestamp'}
+      age_seconds: {type: integer, minimum: 0}
+      offline: {type: boolean}
+      authoritative: {const: false}
+      confirmation_eligible: {const: false}
+      next_action: {type: string, maxLength: 128}
+  receipt:
+    type: object
+    additionalProperties: false
+    required: [schema_version, operation, data, created_at, provenance, durability]
+    properties:
+      schema_version: {const: GitHubEvidenceCache-v1}
+      operation: {type: string, enum: [refresh, invalidate, rebuild, cleanup_plan, cleanup_apply]}
+      provenance: {enum: [caller_supplied, caller_evaluated_at]}
+      created_at: {$ref: '#/$defs/timestamp'}
+      durability: {const: wal_synchronous_normal}
+      data:
+        type: object
+        additionalProperties: false
+        properties:
+          generation: {type: integer, minimum: 0}
+          changed: {type: integer, minimum: 0}
+          duplicates: {type: integer, minimum: 0}
+          count: {type: integer, minimum: 0}
+          producer_id: {type: string, minLength: 1, maxLength: 256}
+          coverage: {enum: [complete, partial, unavailable, privacy_held]}
+          reason_digest: {$ref: '#/$defs/digest'}
+  producer:
+    type: object
+    additionalProperties: false
+    required: [trust_domain, production_eligibility, project_id, repository_id, auth_scope_digest, producer_id, producer_version, coverage, entries]
+    properties:
+      trust_domain: {const: same_process_reference}
+      production_eligibility: {const: false}
+      project_id: {type: string, format: uuid}
+      repository_id: {type: string, minLength: 1, maxLength: 256}
+      auth_scope_digest: {$ref: '#/$defs/digest'}
+      producer_id: {type: string, minLength: 1, maxLength: 256}
+      producer_version: {type: string, minLength: 1, maxLength: 128}
+      coverage: {enum: [complete, partial, unavailable, privacy_held]}
+      fetched_at: {$ref: '#/$defs/timestamp'}
+      source_revision: {type: string, minLength: 1, maxLength: 512}
+      entries:
+        type: array
+        maxItems: 25
+        items: {$ref: '#/$defs/entry'}
+  metadata:
+    type: object
+    additionalProperties: false
+    required: [schema_version, project_id, repository_id, repository_locator_digest, auth_scope_digest, host_kind, producer_contract, producer_version, generation, ledger_head, created_at, timestamp_provenance, durability]
+    properties:
+      schema_version: {const: GitHubEvidenceCache-v1}
+      project_id: {type: string, format: uuid}
+      repository_id: {type: string, minLength: 1}
+      repository_locator_digest: {$ref: '#/$defs/digest'}
+      auth_scope_digest: {$ref: '#/$defs/digest'}
+      host_kind: {const: github}
+      generation: {type: string, pattern: '^[0-9]+$'}
+      ledger_head: {$ref: '#/$defs/digest'}
+      producer_contract: {type: string}
+      producer_version: {type: string}
+      created_at: {type: string}
+      timestamp_provenance: {enum: [caller_supplied, caller_evaluated_at, not_collected]}
+      durability: {const: wal_synchronous_normal}
+  readout:
+    type: object
+    additionalProperties: false
+    required: [as_of, age_seconds, coverage, freshness, offline, authoritative, confirmation_eligible, next_action]
+    properties:
+      as_of: {$ref: '#/$defs/timestamp'}
+      age_seconds: {type: [integer, 'null'], minimum: 0}
+      offline: {type: boolean}
+      coverage: {enum: [complete, partial, unavailable, privacy_held]}
+      freshness: {enum: [fresh_as_of_fetch, stale, partial, unavailable, privacy_held, invalidated, conflict]}
+      authoritative: {const: false}
+      confirmation_eligible: {const: false}
+      next_action: {type: string}
+  counters:
+    type: object
+    additionalProperties: false
+    properties:
+      cache_hit: {type: integer, minimum: 0}
+      cache_miss: {type: integer, minimum: 0}
+      refresh_requests: {type: integer, minimum: 0}
+      producer_invocations: {type: integer, minimum: 0}
+  readout_envelope:
+    type: object
+    additionalProperties: false
+    required: [schema_version, operation, outcome, entries, as_of, age_seconds, coverage, freshness, offline, authoritative, confirmation_eligible, next_action, metadata, counters]
+    properties:
+      schema_version: {const: GitHubEvidenceCache-v1}
+      operation: {enum: [read_cache, project_cache_readout]}
+      outcome: {enum: [cache_hit, cache_miss]}
+      entries: {type: array, maxItems: 25, items: {$ref: '#/$defs/entry'}}
+      as_of: {$ref: '#/$defs/timestamp'}
+      age_seconds: {type: [integer, 'null'], minimum: 0}
+      coverage: {enum: [complete, partial, unavailable, privacy_held]}
+      freshness: {enum: [fresh_as_of_fetch, stale, partial, unavailable, privacy_held, invalidated, conflict]}
+      offline: {type: boolean}
+      authoritative: {const: false}
+      confirmation_eligible: {const: false}
+      next_action: {type: string, minLength: 1, maxLength: 128}
+      metadata: {anyOf: [{$ref: '#/$defs/metadata'}, {type: 'null'}]}
+      counters: {$ref: '#/$defs/counters'}
+  operation_envelope:
+    type: object
+    additionalProperties: false
+    required: [schema_version, operation, outcome, authoritative, confirmation_eligible]
+    properties:
+      schema_version: {const: GitHubEvidenceCache-v1}
+      operation: {enum: [initialize_cache, refresh_cache, invalidate_cache_entries, rebuild_cache, plan_cache_cleanup, apply_cache_cleanup]}
+      outcome: {enum: [cache_initialized, cache_unavailable, cache_privacy_held, cache_duplicate, cache_partial, cache_refreshed, cache_invalidated, cache_rebuilt, cache_cleanup_planned, cache_cleaned]}
+      authoritative: {const: false}
+      confirmation_eligible: {const: false}
+      project_id: {type: string, format: uuid}
+      repository_id: {type: string, minLength: 1, maxLength: 256}
+      repository_locator_digest: {$ref: '#/$defs/digest'}
+      auth_scope_digest: {$ref: '#/$defs/digest'}
+      cache_path_digest: {$ref: '#/$defs/digest'}
+      metadata_digest: {$ref: '#/$defs/digest'}
+      decision_id: {type: string, minLength: 1, maxLength: 128}
+      decision_digest: {$ref: '#/$defs/digest'}
+      exists: {type: boolean}
+      generation: {type: integer, minimum: 0}
+      changed_count: {type: integer, minimum: 0}
+      duplicate_count: {type: integer, minimum: 0}
+      count: {type: integer, minimum: 0}
+      receipt_id: {type: [string, 'null'], maxLength: 128}
+    allOf:
+      - if: {properties: {operation: {const: initialize_cache}}}
+        then: {properties: {outcome: {const: cache_initialized}}}
+      - if: {properties: {operation: {const: refresh_cache}}}
+        then: {properties: {outcome: {enum: [cache_unavailable, cache_privacy_held, cache_duplicate, cache_partial, cache_refreshed]}}}
+      - if: {properties: {operation: {const: invalidate_cache_entries}}}
+        then: {properties: {outcome: {const: cache_invalidated}}}
+      - if: {properties: {operation: {const: rebuild_cache}}}
+        then: {properties: {outcome: {const: cache_rebuilt}}}
+      - if: {properties: {operation: {const: plan_cache_cleanup}}}
+        then: {properties: {outcome: {const: cache_cleanup_planned}}}
+      - if: {properties: {operation: {const: apply_cache_cleanup}}}
+        then: {properties: {outcome: {const: cache_cleaned}}}

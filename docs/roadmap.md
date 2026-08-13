@@ -88,11 +88,11 @@ Agent Foundry should use maturity stages for planning and release versions for d
 | AF-16 | Branch-Aware Collaboration And Safety | Multi-agent issue and PR work becomes branch-line aware so V1.x maintenance, V2 integration, AF18 integration, stacked PRs, and custom branch policies do not silently mix. | Execution Contracts, helper reports, docs, and tests expose branch strategy, target branch, PR base, current checkout, and safe next actions without auto-retargeting, checkout, merge, reset, or repair. |
 | AF-17 | Semantic Practice Loading And Adapter Reachability | Generated collaboration and architecture Skills load the right canonical practice references conditionally instead of forcing every thread to carry every practice. | Semantic practice routes, generated references, reachability checks, and adapter packaging preserve canonical practice authority while reducing irrelevant runtime context. |
 | AF-18 | Collaboration Cost-Control And Control Plane | Multi-agent collaboration becomes cost-aware, bounded, portable, and human-controllable before it becomes an assumed runtime substrate. | AF18 has one integration branch, one control-plane design path, explicit policy layers, bounded runtime-owned observations, Human-facing summaries, dogfood calibration, and separate activation/policy-freeze gates. |
-| V2.0 | Local-First Orchestration And Foundry Board | Agent Foundry becomes a local-first orchestration system with GitHub Project as a remote sync surface, not the source of truth. The work must cover new projects and migration/backfill for existing issue-driven projects. | Users can understand, control, resume, and audit multi-agent work from local durable state, see it in a Foundry Board, sync safely with GitHub Project, and migrate existing GitHub issue/project workflows without losing provenance or review gates. |
+| ORCH-01 → ORCH-02 → ORCH-03 → ORCH-04 | Local-first orchestration and integrated collaboration lifecycle | ORCH-01 provides the Board, ORCH-02 provides the SQLite ledger, ORCH-03 provides distributed authority/selective sync, and ORCH-04 provides the complete lifecycle/product experience. Together they target the `v2.0.0` candidate. | Users can onboard, operate, inspect, recover, and selectively synchronize collaboration from durable local state without treating GitHub Project as the scheduler. |
 
-Current planning stage: AF18 collaboration cost-control and V2.0 planning remain
-separate. AF18 is the active collaboration-runtime control-plane lane; V2.0 is
-the local-first orchestration product lane.
+Current planning stage: AF18 remains a completed/maintained collaboration-control
+foundation. ORCH-01 and ORCH-02 are complete; ORCH-03 and ORCH-04 are the active
+v2.0.0 candidate lanes. Final readiness and main/release remain separate Human gates.
 
 AF-0 explains the existing mixed history. AF-1 starts the stricter planning and multi-agent coordination era. AF-2 designs the productization boundary. AF-3 executes the local Core/Vault split. AF-4 proves the split system works for the current real user across existing deployments and establishes the migration discipline needed for later major upgrades. AF-5 makes onboarding humane and reliable for new users. AF-6 closes the current Foundry product lifecycle so install, pack deployment, refresh, status, and rollback are usable beyond a one-off maintainer path. AF-7 upgrades runtime adapters and adds Trae CN support around a verified global Skill path. AF-8 hardens the capability system under realistic multi-user, multi-machine, multi-runtime, long-running-agent, and drift scenarios. AF-9 adds advanced capability-pack discovery, lifecycle, privacy-safe transfer planning, and user-facing Skill workflow packaging. AF-10 optimizes the Coordinator-driven role workflow using AF9 evidence, then pauses for an AF11 pilot migration, then resumes to analyze real telemetry and harden the workflow model. AF-11 is reserved for the Tiny IPA-incubated GitHub collaboration workflow helper migration pilot. AF-12 closes the V1 user-facing UX/docs/starter-pack surface. AF-13 adds the independent external-skills import/reference workflow. AF-14 adds a Tester role and test-planning workflow as V1.x maintenance. AF-15 adds collaboration readiness audit and action workflow as V1.x maintenance. AF-16 adds branch-aware collaboration safety. AF-17 adds semantic practice loading and generated Skill reachability. AF-18 adds collaboration cost-control and control-plane governance. V2.0 moves the orchestration source of truth local-first, with GitHub Project as a sync target. Memory-system planning now uses the separate MS milestone axis.
 
@@ -125,7 +125,7 @@ Suggested mapping:
 | AF-16 | `v1.1.x` maintenance candidate: branch-aware collaboration contracts and helper safety. |
 | AF-17 | `v1.1.x` maintenance candidate: semantic practice loading and generated Skill reachability. |
 | AF-18 | `v1.1.x` / pre-V2 collaboration-runtime control plane candidate; final activation and policy freeze remain separate Human-gated decisions. |
-| V2.0 | `v2.0.0`: local-first orchestration, ledger storage/replay, ledger-backed Foundry Board, existing-project backfill, GitHub Project dry-run sync planning, and readiness evidence after V2 capability gates are accepted. |
+| ORCH-01 + ORCH-02 + ORCH-03 + ORCH-04 | `v2.0.0` candidate: Board, SQLite ledger, distributed authority/selective sync, integrated lifecycle UX, and final readiness evidence. Release requires a separate Human gate. |
 
 `v1.0` is the first public release target. It includes the accepted AF-1 through AF-13 baseline plus release notes, verification, tag, and GitHub Release work needed for external users to rely on Agent Foundry without understanding this repository's personal history.
 
@@ -172,7 +172,7 @@ Default harvest routing:
 
 ## Active Milestone
 
-Agent Foundry `v1.0.0` is published. The active planning area is now V2.0 local-first orchestration. V2 design gates have started landing, but design acceptance is not capability completion; V2 readiness stays held until local-first implementation gates are accepted.
+Agent Foundry `v1.0.0` is published. The active planning area is now the ORCH-03/ORCH-04 path toward a `v2.0.0` candidate. Design acceptance is not capability completion; final readiness and release remain separately Human-gated.
 
 | Milestone | GitHub records | User-facing reason | Status |
 | --- | --- | --- | --- |
@@ -180,7 +180,10 @@ Agent Foundry `v1.0.0` is published. The active planning area is now V2.0 local-
 | AF-14 Tester Role And Test Planning Workflow | #302 Epic; #303 through #308; PR #311 | Users need test planning and evidence that answer what was tested, why it is enough, which risks remain, and when human trial is still needed. | Completed; integrated into `main` as V1.x maintenance |
 | AF-15 Collaboration Readiness And Action Workflow | #314 Epic; #315 through #321 plus #328 through #331 | Users need a clear audit and action plan for new/existing repo collaboration readiness before any live repair/apply behavior. | Completed; integrated into `main` as V1.x maintenance |
 | AF-16 Through AF-18 Collaboration Control Path | [roadmap/milestones-af16-af18.md](roadmap/milestones-af16-af18.md) | Users need branch-aware, context-aware, and semantically loaded collaboration before long-running multi-agent work is safe to scale. | AF16/AF17 completed as maintenance; AF18 active bounded lane; #418 is the sole Epic authority; #450/#451/#452/#454 accepted; post-MVP issues #457-#462 now track calibration through limited rollout before #426/#427 |
-| V2.0 Local-First Orchestration And Foundry Board | #292 Epic; #293 through #299; #359 through #362; #266 telemetry window | Users need a local source of truth for multi-agent orchestration that can still sync to GitHub Project, plus migration from the current GitHub-first workflow. | Design gates partially accepted; implementation gates held; #299 readiness held |
+| ORCH-01 Local-First Orchestration And Foundry Board | #292 (historical Epic); #293 through #299; #359 through #362 | Local durable Board foundation. | Completed |
+| ORCH-02 SQLite Local Ledger Foundation | #525; #526 through #530 | Transactional local authority, onboarding/action routing, replay and recovery. | Completed; final adopter acceptance recorded |
+| ORCH-03 Distributed Authority And Selective Sync | #400; #537, #522, #404, #405, #403, #521, #402, #406 | Bounded local authority and selective external materialization. | Planned; #537 reconciliation is next |
+| ORCH-04 Integrated Collaboration Lifecycle And Product Experience | #538; #539 through #543; #536 | Unified onboarding, status/doctor, recovery, front door and developer launch. | Design accepted; implementation held behind dependencies |
 
 AF18's single high-level goal is to make Agent Foundry's multi-agent
 collaboration cost-aware, bounded, portable, and human-controllable before it
@@ -221,7 +224,7 @@ AF18 documentation is intentionally centralized as follows:
   `scripts/plan_af18_mvp1_control.py` are implementation contracts, not the
   primary human design narrative.
 
-V2.0 does not authorize memory-system work, automatic token capture, live Vault/private/runtime/generated mutation, generated adapter publish, or broad implementation outside reviewed child issues. It must preserve the V1 Core/User Vault/Generated/Runtime/Local Private boundaries.
+ORCH work does not authorize memory-system work, automatic token capture, live Vault/private/runtime/generated mutation, generated adapter publish, or broad implementation outside reviewed child issues. It must preserve the V1 Core/User Vault/Generated/Runtime/Local Private boundaries.
 
 Current V2 correction:
 

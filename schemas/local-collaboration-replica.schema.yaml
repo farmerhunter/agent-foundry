@@ -1,0 +1,170 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://agent-foundry.local/schemas/local-collaboration-replica.schema.yaml
+title: LocalCollaborationReplica-v1
+oneOf:
+  - $ref: '#/$defs/bundle'
+  - $ref: '#/$defs/receipt'
+$defs:
+  digest: {type: string, pattern: '^[0-9a-f]{64}$'}
+  uuid: {type: string, format: uuid}
+  opaque: {type: string, pattern: '^[A-Za-z0-9._-]{1,128}$'}
+  flags:
+    type: object
+    additionalProperties: false
+    required: [simulation_only, network_capability, authoritative, confirmation_eligible, remote_mutation_performed]
+    properties:
+      simulation_only: {const: true}
+      network_capability: {const: false}
+      authoritative: {const: false}
+      confirmation_eligible: {const: false}
+      remote_mutation_performed: {const: false}
+  identity:
+    type: object
+    additionalProperties: false
+    required: [replica_id, replica_epoch, origin_sequence, event_id]
+    properties:
+      replica_id: {$ref: '#/$defs/opaque'}
+      replica_epoch: {type: integer, minimum: 1}
+      origin_sequence: {type: integer, minimum: 1}
+      event_id: {$ref: '#/$defs/uuid'}
+  enrollment_descriptor:
+    type: object
+    additionalProperties: false
+    required: [descriptor_id, descriptor_digest]
+    properties:
+      descriptor_id: {$ref: '#/$defs/opaque'}
+      descriptor_digest: {$ref: '#/$defs/digest'}
+  human_decision_receipt:
+    type: object
+    additionalProperties: false
+    required: [receipt_id, receipt_digest, outcome]
+    properties:
+      receipt_id: {$ref: '#/$defs/opaque'}
+      receipt_digest: {$ref: '#/$defs/digest'}
+      outcome: {const: human_decision_accepted}
+  replica_identity:
+    type: object
+    additionalProperties: false
+    required: [project_id, replica_id, replica_epoch, enrollment_descriptor]
+    properties:
+      project_id: {$ref: '#/$defs/uuid'}
+      replica_id: {$ref: '#/$defs/opaque'}
+      replica_epoch: {type: integer, minimum: 1}
+      enrollment_descriptor: {$ref: '#/$defs/enrollment_descriptor'}
+  event:
+    type: object
+    additionalProperties: false
+    required: [project_id, replica_id, replica_epoch, origin_sequence, event_id, event_type, causal_parents, event_digest]
+    properties:
+      project_id: {$ref: '#/$defs/uuid'}
+      replica_id: {$ref: '#/$defs/opaque'}
+      replica_epoch: {type: integer, minimum: 1}
+      origin_sequence: {type: integer, minimum: 1}
+      event_id: {$ref: '#/$defs/uuid'}
+      event_type: {enum: [work_decision, work_resolution, replica_note]}
+      work_id: {$ref: '#/$defs/opaque'}
+      decision: {enum: [accept, reject, hold]}
+      resolution: {enum: [accept, reject, hold]}
+      human_decision_receipt: {$ref: '#/$defs/human_decision_receipt'}
+      conflict_references:
+        type: array
+        maxItems: 32
+        items: {$ref: '#/$defs/identity'}
+      causal_parents:
+        type: array
+        maxItems: 32
+        items: {$ref: '#/$defs/identity'}
+      event_digest: {$ref: '#/$defs/digest'}
+    oneOf:
+      - required: [event_type, work_id, decision]
+        properties: {event_type: {const: work_decision}}
+        not: {anyOf: [{required: [resolution]}, {required: [human_decision_receipt]}, {required: [conflict_references]}]}
+      - required: [event_type, work_id, resolution, human_decision_receipt, conflict_references]
+        properties: {event_type: {const: work_resolution}}
+        not: {required: [decision]}
+      - required: [event_type]
+        properties: {event_type: {const: replica_note}}
+        not: {anyOf: [{required: [work_id]}, {required: [decision]}, {required: [resolution]}, {required: [human_decision_receipt]}, {required: [conflict_references]}]}
+  bundle:
+    type: object
+    additionalProperties: false
+    required: [schema_version, outcome, project_id, replica_identity, authority_generation, authority_head, frontier, events, bundle_digest, flags]
+    properties:
+      schema_version: {const: LocalCollaborationReplica-v1}
+      outcome: {const: replica_export_ready}
+      project_id: {$ref: '#/$defs/uuid'}
+      replica_identity: {$ref: '#/$defs/replica_identity'}
+      authority_generation: {type: integer, minimum: 0}
+      authority_head: {$ref: '#/$defs/digest'}
+      frontier:
+        type: array
+        maxItems: 100
+        items: {$ref: '#/$defs/identity'}
+      events:
+        type: array
+        maxItems: 100
+        items: {$ref: '#/$defs/event'}
+      bundle_digest: {$ref: '#/$defs/digest'}
+      flags: {$ref: '#/$defs/flags'}
+  receipt:
+    type: object
+    additionalProperties: false
+    properties:
+      schema_version: {const: LocalCollaborationReplica-v1}
+      outcome:
+        enum: [replica_export_ready, replica_import_candidate_ready, replica_converged, replica_duplicate, replica_offline, hold_replica_identity, hold_transport_integrity, hold_missing_dependency, hold_semantic_conflict, hold_privacy, hold_schema, hold_recovery_readback]
+      project_id: {$ref: '#/$defs/uuid'}
+      authority_generation: {type: integer, minimum: 0}
+      authority_head: {$ref: '#/$defs/digest'}
+      bundle_digest: {$ref: '#/$defs/digest'}
+      shared_view_digest: {$ref: '#/$defs/digest'}
+      candidate_identities: {type: array, items: {$ref: '#/$defs/identity'}}
+      converged_identities: {type: array, items: {$ref: '#/$defs/identity'}}
+      duplicate_identities: {type: array, items: {$ref: '#/$defs/identity'}}
+      held_identities: {type: array, items: {$ref: '#/$defs/identity'}}
+      reason_code: {enum: [replica_offline, replica_identity_invalid, transport_integrity_invalid, missing_dependency, semantic_conflict, privacy_rejected, schema_invalid, recovery_readback_required]}
+      flags: {$ref: '#/$defs/flags'}
+      authority_level: {const: current_validation_only}
+      owner_enrollment_verified: {const: false}
+      import_authorized: {const: false}
+      requires_owner_verification: {const: true}
+    dependentRequired:
+      authority_generation: [authority_head]
+      authority_head: [authority_generation]
+    oneOf:
+      - required: [schema_version, outcome, project_id, bundle_digest, flags]
+        properties: {outcome: {const: replica_export_ready}}
+        not: {anyOf: [{required: [authority_generation]}, {required: [shared_view_digest]}, {required: [candidate_identities]}, {required: [converged_identities]}, {required: [duplicate_identities]}, {required: [held_identities]}, {required: [reason_code]}, {required: [authority_level]}, {required: [owner_enrollment_verified]}, {required: [import_authorized]}, {required: [requires_owner_verification]}]}
+      - required: [schema_version, outcome, project_id, authority_generation, authority_head, bundle_digest, candidate_identities, authority_level, owner_enrollment_verified, import_authorized, requires_owner_verification, flags]
+        properties: {outcome: {const: replica_import_candidate_ready}, candidate_identities: {minItems: 1}}
+        not: {anyOf: [{required: [shared_view_digest]}, {required: [converged_identities]}, {required: [duplicate_identities]}, {required: [held_identities]}, {required: [reason_code]}]}
+      - required: [schema_version, outcome, project_id, shared_view_digest, converged_identities, flags]
+        properties: {outcome: {const: replica_converged}}
+        not: {anyOf: [{required: [authority_generation]}, {required: [bundle_digest]}, {required: [candidate_identities]}, {required: [duplicate_identities]}, {required: [held_identities]}, {required: [reason_code]}, {required: [authority_level]}, {required: [owner_enrollment_verified]}, {required: [import_authorized]}, {required: [requires_owner_verification]}]}
+      - required: [schema_version, outcome, project_id, authority_generation, authority_head, bundle_digest, duplicate_identities, flags]
+        properties: {outcome: {const: replica_duplicate}, duplicate_identities: {minItems: 1}}
+        not: {anyOf: [{required: [shared_view_digest]}, {required: [candidate_identities]}, {required: [converged_identities]}, {required: [held_identities]}, {required: [reason_code]}, {required: [authority_level]}, {required: [owner_enrollment_verified]}, {required: [import_authorized]}, {required: [requires_owner_verification]}]}
+      - required: [schema_version, outcome, project_id, authority_generation, authority_head, reason_code, flags]
+        properties: {outcome: {const: replica_offline}, reason_code: {const: replica_offline}}
+        not: {anyOf: [{required: [bundle_digest]}, {required: [shared_view_digest]}, {required: [candidate_identities]}, {required: [converged_identities]}, {required: [duplicate_identities]}, {required: [held_identities]}, {required: [authority_level]}, {required: [owner_enrollment_verified]}, {required: [import_authorized]}, {required: [requires_owner_verification]}]}
+      - required: [schema_version, outcome, project_id, reason_code, held_identities, flags]
+        properties: {outcome: {const: hold_semantic_conflict}, reason_code: {const: semantic_conflict}, held_identities: {minItems: 1}}
+        not: {anyOf: [{required: [bundle_digest]}, {required: [shared_view_digest]}, {required: [candidate_identities]}, {required: [converged_identities]}, {required: [duplicate_identities]}, {required: [authority_level]}, {required: [owner_enrollment_verified]}, {required: [import_authorized]}, {required: [requires_owner_verification]}]}
+      - required: [schema_version, outcome, project_id, reason_code, flags]
+        properties: {outcome: {const: hold_replica_identity}, reason_code: {const: replica_identity_invalid}}
+        not: {anyOf: [{required: [bundle_digest]}, {required: [shared_view_digest]}, {required: [candidate_identities]}, {required: [converged_identities]}, {required: [duplicate_identities]}, {required: [held_identities]}, {required: [authority_level]}, {required: [owner_enrollment_verified]}, {required: [import_authorized]}, {required: [requires_owner_verification]}]}
+      - required: [schema_version, outcome, project_id, reason_code, flags]
+        properties: {outcome: {const: hold_transport_integrity}, reason_code: {const: transport_integrity_invalid}}
+        not: {anyOf: [{required: [bundle_digest]}, {required: [shared_view_digest]}, {required: [candidate_identities]}, {required: [converged_identities]}, {required: [duplicate_identities]}, {required: [held_identities]}, {required: [authority_level]}, {required: [owner_enrollment_verified]}, {required: [import_authorized]}, {required: [requires_owner_verification]}]}
+      - required: [schema_version, outcome, project_id, reason_code, flags]
+        properties: {outcome: {const: hold_missing_dependency}, reason_code: {const: missing_dependency}}
+        not: {anyOf: [{required: [bundle_digest]}, {required: [shared_view_digest]}, {required: [candidate_identities]}, {required: [converged_identities]}, {required: [duplicate_identities]}, {required: [held_identities]}, {required: [authority_level]}, {required: [owner_enrollment_verified]}, {required: [import_authorized]}, {required: [requires_owner_verification]}]}
+      - required: [schema_version, outcome, project_id, reason_code, flags]
+        properties: {outcome: {const: hold_privacy}, reason_code: {const: privacy_rejected}}
+        not: {anyOf: [{required: [bundle_digest]}, {required: [shared_view_digest]}, {required: [candidate_identities]}, {required: [converged_identities]}, {required: [duplicate_identities]}, {required: [held_identities]}, {required: [authority_level]}, {required: [owner_enrollment_verified]}, {required: [import_authorized]}, {required: [requires_owner_verification]}]}
+      - required: [schema_version, outcome, project_id, reason_code, flags]
+        properties: {outcome: {const: hold_schema}, reason_code: {const: schema_invalid}}
+        not: {anyOf: [{required: [bundle_digest]}, {required: [shared_view_digest]}, {required: [candidate_identities]}, {required: [converged_identities]}, {required: [duplicate_identities]}, {required: [held_identities]}, {required: [authority_level]}, {required: [owner_enrollment_verified]}, {required: [import_authorized]}, {required: [requires_owner_verification]}]}
+      - required: [schema_version, outcome, project_id, reason_code, flags]
+        properties: {outcome: {const: hold_recovery_readback}, reason_code: {const: recovery_readback_required}}
+        not: {anyOf: [{required: [bundle_digest]}, {required: [shared_view_digest]}, {required: [candidate_identities]}, {required: [converged_identities]}, {required: [duplicate_identities]}, {required: [held_identities]}, {required: [authority_level]}, {required: [owner_enrollment_verified]}, {required: [import_authorized]}, {required: [requires_owner_verification]}]}
