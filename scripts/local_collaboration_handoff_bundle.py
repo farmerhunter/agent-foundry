@@ -120,6 +120,16 @@ def _event_input(record: Mapping[str, Any]) -> dict[str, Any]:
     return {key: _json_value(record[key]) for key in ("event_type", "event_id", "payload", "actor", "source", "root")}
 
 
+def _identity_digest(records) -> str:
+    return _digest([{key: record[key] for key in ("sequence", "event_id", "payload_hash", "event_type", "actor", "source", "root")}
+                    for record in records])
+
+
+def _target_state_digest(events) -> str:
+    return _digest({"generation": len(events), "head": events[-1].event_hash if events else GENESIS,
+                    "identity_digest": _identity_digest([_event_record(event) for event in events])})
+
+
 def _record_to_event(record: Any) -> LedgerEvent:
     required = {"sequence", "event_id", "event_type", "payload", "payload_hash", "previous_hash", "event_hash", "created_at", "actor", "source", "root"}
     if not isinstance(record, Mapping) or set(record) != required:
@@ -174,6 +184,7 @@ def _bundle_core(bundle: Mapping[str, Any], *, require_marker=True) -> tuple[dic
         raise BundleHold("hold_package_integrity", "package_digest_invalid")
     if require_marker and marker.sequence != len(events) + 1:
         raise BundleHold("hold_package_integrity", "marker_position_invalid")
+    reduce_handoff_events(bundle["project_id"], events + [marker], marker.sequence, marker.event_hash)
     return dict(bundle), events, marker
 
 
@@ -310,7 +321,8 @@ def plan_owner_import(target_snapshot, bundle: Mapping[str, Any]) -> OwnerImport
         if len(current) > len(records) or any(not _portable_equal(event, record) for event, record in zip(current, records)):
             raise BundleHold("hold_target_not_prefix", "target_prefix_invalid")
         missing = tuple(_event_input(record) for record in records[len(current):])
-        imported_digest = _digest([{key: record[key] for key in ("sequence", "event_id", "payload_hash")} for record in records])
+        full_set_digest = _identity_digest(records)
+        suffix_digest = _identity_digest(records[len(current):])
         receipt_id = str(uuid.uuid5(uuid.UUID(normalized["project_id"]), "handoff-import:" + normalized["package_digest"]))
         payload = {"schema_version": VERSION, "project_id": normalized["project_id"], "bundle_id": normalized["bundle_id"],
                    "handoff_id": normalized["handoff_id"], "source_replica_id": normalized["source_replica_id"], "target_replica_id": normalized["target_replica_id"],
@@ -321,12 +333,13 @@ def plan_owner_import(target_snapshot, bundle: Mapping[str, Any]) -> OwnerImport
                    "source_generation": normalized["source_generation"], "source_head": normalized["source_head"],
                    "source_state_digest": normalized["source_state_digest"], "frontier_digest": normalized["frontier_digest"],
                    "target_before_generation": target_snapshot.authority_generation, "target_before_head": target_snapshot.authority_head,
-                   "imported_identity_digest": imported_digest}
+                   "target_before_state_digest": _target_state_digest(current),
+                   "full_set_identity_digest": full_set_digest, "imported_suffix_identity_digest": suffix_digest}
         receipt = {"event_type": "handoff_import_committed", "event_id": receipt_id, "payload": payload,
                    "actor": "owner", "source": "orch05_handoff_bundle", "root": normalized["project_id"]}
         return OwnerImportPlan(normalized["project_id"], normalized["package_digest"], target_snapshot.authority_generation,
                                target_snapshot.authority_head, _digest({"generation": target_snapshot.authority_generation, "head": target_snapshot.authority_head}),
-                               missing, _freeze(receipt), imported_digest)
+                               missing, _freeze(receipt), full_set_digest)
     except BundleHold as exc:
         return _hold(project_id, exc.outcome, exc.reason_code)
 
@@ -336,7 +349,7 @@ def _proof_from(plan: OwnerImportPlan, result, after) -> Mapping[str, Any]:
     return {"schema_version": VERSION, "outcome": "owner_import_committed", "project_id": plan.project_id,
                     "package_digest": plan.package_digest, "receipt_event_id": plan.receipt_event["event_id"],
                     "receipt_event_hash": ref[3], "target_generation": after.authority_generation, "target_head": after.authority_head,
-                    "imported_identity_digest": plan.imported_identity_digest, "owner_import_performed": result.mutation_performed,
+                    "full_set_identity_digest": plan.imported_identity_digest, "owner_import_performed": result.mutation_performed,
                     "target_activation_authorized": False, "flags": _flags(owner_import_performed=result.mutation_performed, owner_readback_verified=True)}
 
 
@@ -374,7 +387,13 @@ def apply_owner_import(target_ledger: LocalCollaborationLedger, plan: OwnerImpor
         return _hold(project_id, "hold_owner_integrity", "owner_integrity")
 
 
-def verify_owner_import_proof(db_path, *, expected_project_id: str, proof_ref: Mapping[str, Any]) -> Mapping[str, Any]:
+def verify_owner_import_proof(db_path, *, expected_project_id: str, bundle: Mapping[str, Any], proof_ref: Mapping[str, Any]) -> Mapping[str, Any]:
+    """Reconstruct an owner import proof from the bundle and current ledger.
+
+    ``proof_ref`` is deliberately only a locator.  No caller-provided digest or
+    claimed verification can replace revalidating the immutable package and the
+    exact current target receipt tail.
+    """
     try:
         if not isinstance(proof_ref, Mapping) or set(proof_ref) != {"project_id", "receipt_event_id", "receipt_event_hash", "package_digest"}:
             raise BundleHold("hold_schema", "proof_locator_invalid")
@@ -382,6 +401,22 @@ def verify_owner_import_proof(db_path, *, expected_project_id: str, proof_ref: M
             raise BundleHold("hold_project_identity", "proof_project_mismatch")
         _hex(proof_ref["receipt_event_hash"], "hold_proof_missing_or_stale"); _hex(proof_ref["package_digest"], "hold_proof_missing_or_stale")
         str(uuid.UUID(proof_ref["receipt_event_id"]))
+        normalized, source_events, marker = _bundle_core(bundle)
+        candidate = inspect_manual_bundle(normalized)
+        if candidate.get("outcome") != "import_candidate" or normalized["project_id"] != expected_project_id:
+            raise BundleHold("hold_proof_missing_or_stale", "bundle_not_candidate")
+        if normalized["package_digest"] != proof_ref["package_digest"]:
+            raise BundleHold("hold_proof_missing_or_stale", "package_locator_mismatch")
+        source_locked = reduce_handoff_events(expected_project_id, source_events,
+                                              source_events[-1].sequence, source_events[-1].event_hash)
+        exported = reduce_handoff_events(expected_project_id, source_events + [marker], marker.sequence, marker.event_hash)
+        source_handoff, exported_handoff = source_locked.handoff or {}, exported.handoff or {}
+        if (source_locked.phase != "source_locked" or source_handoff.get("status") != "source_locked"
+                or source_locked.authority_generation != normalized["source_generation"]
+                or source_locked.authority_head != normalized["source_head"]
+                or source_locked.state_digest != normalized["source_state_digest"]
+                or exported_handoff.get("status") != "bundle_exported"):
+            raise BundleHold("hold_proof_missing_or_stale", "source_reduction_invalid")
         snapshot = LocalCollaborationLedger.authority_snapshot(db_path, expected_project_id=expected_project_id)
         if not snapshot.events or snapshot.events[-1].event_id != proof_ref["receipt_event_id"] or snapshot.events[-1].event_hash != proof_ref["receipt_event_hash"]:
             raise BundleHold("hold_proof_missing_or_stale", "proof_not_current_tail")
@@ -391,16 +426,42 @@ def verify_owner_import_proof(db_path, *, expected_project_id: str, proof_ref: M
         payload = receipt.payload
         if payload.get("schema_version") != VERSION or payload.get("package_digest") != proof_ref["package_digest"] or payload.get("project_id") != expected_project_id:
             raise BundleHold("hold_proof_missing_or_stale", "receipt_binding_invalid")
-        imported = snapshot.events[: -1]
-        expected_ids = _digest([{key: event.__dict__[key] for key in ("sequence", "event_id", "payload_hash")} for event in imported])
-        if payload.get("imported_identity_digest") != expected_ids:
-            raise BundleHold("hold_proof_missing_or_stale", "imported_identity_invalid")
+        imported = list(snapshot.events[: -1])
+        records = list(normalized["events"]) + [normalized["export_marker"]]
+        before_generation = payload.get("target_before_generation")
+        if (not isinstance(before_generation, int) or isinstance(before_generation, bool) or before_generation < 0
+                or before_generation > len(records) or len(imported) != len(records)
+                or any(not _portable_equal(event, record) for event, record in zip(imported, records))):
+            raise BundleHold("hold_proof_missing_or_stale", "target_prefix_or_suffix_invalid")
+        prefix = imported[:before_generation]
+        prefix_head = prefix[-1].event_hash if prefix else GENESIS
+        if (payload.get("target_before_head") != prefix_head
+                or payload.get("target_before_state_digest") != _target_state_digest(prefix)):
+            raise BundleHold("hold_proof_missing_or_stale", "target_before_binding_invalid")
+        if payload.get("full_set_identity_digest") != _identity_digest(records):
+            raise BundleHold("hold_proof_missing_or_stale", "full_set_identity_invalid")
+        if payload.get("imported_suffix_identity_digest") != _identity_digest(records[before_generation:]):
+            raise BundleHold("hold_proof_missing_or_stale", "imported_suffix_identity_invalid")
         required = {"bundle_id", "handoff_id", "source_replica_id", "target_replica_id", "source_replica_epoch",
                     "target_replica_epoch", "source_enrollment_id", "source_enrollment_digest", "target_enrollment_id",
                     "target_enrollment_digest", "content_manifest_digest", "source_generation", "source_head",
-                    "source_state_digest", "frontier_digest", "target_before_generation", "target_before_head"}
-        if set(payload) != required | {"schema_version", "project_id", "package_digest", "imported_identity_digest"}:
+                    "source_state_digest", "frontier_digest", "target_before_generation", "target_before_head",
+                    "target_before_state_digest", "full_set_identity_digest", "imported_suffix_identity_digest"}
+        if set(payload) != required | {"schema_version", "project_id", "package_digest"}:
             raise BundleHold("hold_proof_missing_or_stale", "receipt_shape_invalid")
+        for key in ("bundle_id", "handoff_id", "source_replica_id", "target_replica_id", "source_replica_epoch",
+                    "target_replica_epoch", "source_enrollment_id", "source_enrollment_digest", "target_enrollment_id",
+                    "target_enrollment_digest", "content_manifest_digest", "source_generation", "source_head",
+                    "source_state_digest", "frontier_digest"):
+            if payload.get(key) != normalized.get(key):
+                raise BundleHold("hold_proof_missing_or_stale", "receipt_bundle_binding_invalid")
+        if any(source_handoff.get(key) != normalized.get(key) for key in ("handoff_id", "source_replica_id", "target_replica_id", "frontier_digest")):
+            raise BundleHold("hold_proof_missing_or_stale", "handoff_binding_invalid")
+        enrollments = {entry.replica_id: entry for entry in source_locked.enrollments}
+        for prefix_name, replica in (("source", normalized["source_replica_id"]), ("target", normalized["target_replica_id"])):
+            entry = enrollments.get(replica)
+            if entry is None or entry.revoked or entry.replica_epoch != normalized[prefix_name + "_replica_epoch"] or entry.enrollment_id != normalized[prefix_name + "_enrollment_id"] or entry.enrollment_digest != normalized[prefix_name + "_enrollment_digest"]:
+                raise BundleHold("hold_proof_missing_or_stale", "enrollment_binding_invalid")
         return {"schema_version": VERSION, "outcome": "owner_import_verified", "project_id": expected_project_id,
                         "package_digest": proof_ref["package_digest"], "receipt_event_id": receipt.event_id,
                         "target_generation": snapshot.authority_generation, "target_head": snapshot.authority_head,

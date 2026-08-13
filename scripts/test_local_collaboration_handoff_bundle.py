@@ -67,7 +67,7 @@ class ManualBundleTests(unittest.TestCase):
         self.assertEqual(proof["outcome"], "owner_import_committed")
         self.assertTrue(proof["owner_import_performed"])
         locator = {key: proof[key] for key in ("project_id", "receipt_event_id", "receipt_event_hash", "package_digest")}
-        verified = verify_owner_import_proof(self.target.path, expected_project_id=self.project_id, proof_ref=locator)
+        verified = verify_owner_import_proof(self.target.path, expected_project_id=self.project_id, bundle=bundle, proof_ref=locator)
         self.assertEqual(verified["outcome"], "owner_import_verified")
         self.assertFalse(verified["target_activation_authorized"])
         retry = apply_owner_import(self.target, plan, expected_before=before)
@@ -75,7 +75,7 @@ class ManualBundleTests(unittest.TestCase):
         self.assertFalse(retry["owner_import_performed"])
         self.target.close()
         self.target = LocalCollaborationLedger.open_existing(Path(self.target_root.name) / self.project_id / "collaboration.db", expected_project_id=self.project_id)
-        self.assertEqual(verify_owner_import_proof(self.target.path, expected_project_id=self.project_id, proof_ref=locator)["outcome"], "owner_import_verified")
+        self.assertEqual(verify_owner_import_proof(self.target.path, expected_project_id=self.project_id, bundle=bundle, proof_ref=locator)["outcome"], "owner_import_verified")
 
     def test_exact_source_export_receipt_loss_retry_reconstructs_same_package(self):
         locked = self.locked()
@@ -91,7 +91,9 @@ class ManualBundleTests(unittest.TestCase):
         self.target.conditional_append_batch([{key: record[key] for key in ("event_type", "event_id", "payload", "actor", "source", "root")} for record in prefix], expected_generation=0, expected_head="0" * 64)
         plan = plan_owner_import(LocalCollaborationLedger.authority_snapshot(self.target.path, expected_project_id=self.project_id), bundle)
         self.assertNotIsInstance(plan, dict)
-        self.assertEqual(apply_owner_import(self.target, plan, expected_before=LocalCollaborationLedger.authority_snapshot(self.target.path, expected_project_id=self.project_id))["outcome"], "owner_import_committed")
+        proof = apply_owner_import(self.target, plan, expected_before=LocalCollaborationLedger.authority_snapshot(self.target.path, expected_project_id=self.project_id))
+        locator = {key: proof[key] for key in ("project_id", "receipt_event_id", "receipt_event_hash", "package_digest")}
+        self.assertEqual(verify_owner_import_proof(self.target.path, expected_project_id=self.project_id, bundle=bundle, proof_ref=locator)["outcome"], "owner_import_verified")
         other = LocalCollaborationLedger.create_project(projects_root=tempfile.mkdtemp(), project_id=self.project_id)
         try:
             other.conditional_append_batch([{"event_type": "other", "event_id": str(uuid.uuid4()), "payload": {"n": 1}, "actor": "owner", "source": "fixture", "root": self.project_id}], expected_generation=0, expected_head="0" * 64)
@@ -116,12 +118,23 @@ class ManualBundleTests(unittest.TestCase):
         proof = apply_owner_import(self.target, plan_owner_import(before, bundle), expected_before=before)
         locator = {key: proof[key] for key in ("project_id", "receipt_event_id", "receipt_event_hash", "package_digest")}
         self.target.append_event("later", {"n": 1}, event_id=str(uuid.uuid4()), actor="owner", source="fixture", root=self.project_id)
-        self.assertEqual(verify_owner_import_proof(self.target.path, expected_project_id=self.project_id, proof_ref=locator)["outcome"], "hold_proof_missing_or_stale")
+        self.assertEqual(verify_owner_import_proof(self.target.path, expected_project_id=self.project_id, bundle=bundle, proof_ref=locator)["outcome"], "hold_proof_missing_or_stale")
         other = dict(locator); other["project_id"] = str(uuid.uuid4())
-        self.assertEqual(verify_owner_import_proof(self.target.path, expected_project_id=self.project_id, proof_ref=other)["outcome"], "hold_project_identity")
+        self.assertEqual(verify_owner_import_proof(self.target.path, expected_project_id=self.project_id, bundle=bundle, proof_ref=other)["outcome"], "hold_project_identity")
         state = read_handoff_state(self.source.path, expected_project_id=self.project_id)
         activation = plan_handoff_transition(state, self.request("target_activate", handoff_id="handoff-1", target_replica_id="target", decision_id="d-a", decision_digest=digest("d-a"), import_readback_generation=1, import_readback_head=digest("h")))
         self.assertEqual(activation["outcome"], "hold_a2_owner_proof_unavailable")
+
+    def test_verifier_reconstructs_bundle_and_rejects_forged_locator_or_package(self):
+        bundle = self.exported()
+        before = LocalCollaborationLedger.authority_snapshot(self.target.path, expected_project_id=self.project_id)
+        proof = apply_owner_import(self.target, plan_owner_import(before, bundle), expected_before=before)
+        locator = {key: proof[key] for key in ("project_id", "receipt_event_id", "receipt_event_hash", "package_digest")}
+        bad_locator = dict(locator); bad_locator["package_digest"] = digest("forged")
+        self.assertEqual(verify_owner_import_proof(self.target.path, expected_project_id=self.project_id, bundle=bundle, proof_ref=bad_locator)["outcome"], "hold_proof_missing_or_stale")
+        forged_bundle = json.loads(json.dumps(bundle)); forged_bundle["export_marker"]["payload"]["content_manifest_digest"] = digest("marker-forged")
+        self.assertEqual(verify_owner_import_proof(self.target.path, expected_project_id=self.project_id, bundle=forged_bundle, proof_ref=locator)["outcome"], "hold_package_integrity")
+        self.assertEqual(verify_owner_import_proof(self.target.path, expected_project_id=self.project_id, bundle=None, proof_ref=locator)["outcome"], "hold_schema")
 
     def test_schema_and_no_db_file_copy(self):
         bundle = self.exported()
