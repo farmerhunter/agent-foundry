@@ -96,7 +96,7 @@ class GitHubCliIssueLabelConnector:
                     "available": False, "credential_grant_attested": False, "operation_confinement": CONFINEMENT,
                     "authoritative": False, "confirmation_eligible": False}
 
-    def add_existing_label(self, plan: Mapping[str, Any], *, authority_pair: Mapping[str, Any]) -> dict[str, Any]:
+    def _add_existing_label(self, plan: Mapping[str, Any], *, authority_pair: Mapping[str, Any]) -> dict[str, Any]:
         planned = _plan(plan)
         target = planned["target"]
         if self.repository_binding != {"owner": target["owner"], "repository": target["repository"]}:

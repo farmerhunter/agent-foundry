@@ -4,7 +4,6 @@ title: GitHubMaterializationAdapter-v1
 oneOf:
   - $ref: '#/$defs/request'
   - $ref: '#/$defs/result'
-  - $ref: '#/$defs/github_cli_label_plan'
   - $ref: '#/$defs/github_cli_label_result'
   - $ref: '#/$defs/github_cli_label_bridge_request'
   - $ref: '#/$defs/github_cli_label_bridge_result'
@@ -139,20 +138,6 @@ $defs:
       repository: {type: string, pattern: '^[A-Za-z0-9._-]{1,100}$'}
       number: {type: integer, minimum: 1}
       kind: {enum: [issue, pull_request]}
-  github_cli_label_plan:
-    type: object
-    additionalProperties: false
-    required: [schema_version, human_authorization_ref, operation, target, label, preimage_digest, authority_generation, authority_head, expected_capability_digest]
-    properties:
-      schema_version: {const: GitHubCliIssueLabelConnector-v1}
-      human_authorization_ref: {type: string, minLength: 1, maxLength: 256}
-      operation: {const: add_existing_label}
-      target: {$ref: '#/$defs/github_cli_target'}
-      label: {type: string, minLength: 1, maxLength: 128, pattern: '^[^\x00-\x1f\x7f]+$'}
-      preimage_digest: {$ref: '#/$defs/digest'}
-      authority_generation: {type: integer, minimum: 0}
-      authority_head: {$ref: '#/$defs/digest'}
-      expected_capability_digest: {$ref: '#/$defs/digest'}
   github_cli_label_result:
     type: object
     additionalProperties: false

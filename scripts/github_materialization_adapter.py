@@ -443,7 +443,7 @@ def execute_real_label_materialization(request: Mapping[str, Any], scheduler_sta
                 "operation": "add_existing_label", "target": req["target"], "label": req["label"],
                 "preimage_digest": req["preimage_digest"], **authority_pair,
                 "expected_capability_digest": capability_digest(capability)}
-        receipt = connector.add_existing_label(plan, authority_pair=authority_pair)
+        receipt = connector._add_existing_label(plan, authority_pair=authority_pair)
     except GitHubCliConnectorHold as held:
         return _bridge_hold(req, _bridge_reason(held.reason), connector_called=True)
     except Exception:
