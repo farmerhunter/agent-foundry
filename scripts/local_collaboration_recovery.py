@@ -175,6 +175,8 @@ def apply_recovery_action(context, plan):
             projection = read_owner_imported_handoff_projection(ledger.path, expected_project_id=project_id, bundle=bundle, proof_ref=proof)
             if projection.get("outcome") != "owner_import_verified" or projection.get("target_activation_authorized") or _digest(dict(projection)) != plan.parameters["projection_digest"]: return {"schema_version": VERSION, "outcome": "held", "reason_code": "owner_projection_drift"}
             target_state = read_handoff_state(ledger.path, expected_project_id=project_id)
+            if (target_state.authority_generation, target_state.authority_head) != (projection["target_generation"], projection["target_head"]):
+                return {"schema_version": VERSION, "outcome": "held", "reason_code": "target_authority_pair_drift"}
             req = {"transition": "takeover", "project_id": project_id, "target_replica_id": projection["target_replica_id"], "prior_frontier_digest": projection["frontier_digest"], "decision_id": plan.decision_id, "decision_digest": plan.decision_digest}
             owner_plan = plan_handoff_transition(target_state, req)
             if isinstance(owner_plan, Mapping): return {"schema_version": VERSION, "outcome": "held", "reason_code": "owner_plan_held"}

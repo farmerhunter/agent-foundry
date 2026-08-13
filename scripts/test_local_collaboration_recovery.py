@@ -4,12 +4,15 @@ import tempfile
 import unittest
 import uuid
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 import yaml
 from jsonschema import Draft202012Validator
 
 from local_collaboration_ledger import LocalCollaborationLedger
 from local_collaboration_handoff import apply_handoff_transition, plan_handoff_transition, read_handoff_state
+import local_collaboration_recovery as recovery
 from local_collaboration_recovery import apply_recovery_action, plan_recovery_action, read_recovery_summary
 
 
@@ -47,6 +50,28 @@ class RecoveryTests(unittest.TestCase):
         self.assertEqual(summary["state"], "held")
         after = LocalCollaborationLedger.authority_snapshot(self.ledger.path, expected_project_id=self.project_id)
         self.assertEqual(before.authority_generation, after.authority_generation)
+    def test_takeover_target_pair_drift_holds_before_any_a1_call(self):
+        bundle = {"fixture": "bundle"}; proof = {"fixture": "proof"}
+        projection = {"outcome": "owner_import_verified", "target_activation_authorized": False,
+                      "target_generation": 4, "target_head": digest("four"), "target_replica_id": "target",
+                      "frontier_digest": digest("frontier")}
+        summary = recovery._summary(self.project_id, "recovery_action_ready", "takeover_from_accepted_frontier",
+            bundle_locator_digest=recovery._digest(bundle), proof_locator_digest=recovery._digest(proof),
+            projection_digest=recovery._digest(projection), target_generation=4, target_head=digest("four"),
+            frontier_digest=digest("frontier"), before_generation=4, before_head=digest("four"), before_state_digest=digest("state"))
+        plan = plan_recovery_action(summary, {"operation": "takeover_from_accepted_frontier", "decision_id": "human-1",
+            "decision_digest": digest("human"), "parameters": {"bundle": bundle, "proof_ref": proof, "rpo_warning_digest": digest("rpo")}})
+        drifted = SimpleNamespace(authority_generation=5, authority_head=digest("five"))
+        with patch.object(recovery, "read_recovery_summary", return_value=summary), \
+             patch.object(recovery, "read_handoff_state", return_value=drifted), \
+             patch.object(recovery, "read_owner_imported_handoff_projection", return_value=projection), \
+             patch.object(recovery, "plan_handoff_transition") as owner_plan, \
+             patch.object(recovery, "apply_handoff_transition") as owner_apply:
+            result = apply_recovery_action({"ledger": self.ledger, "bundle": bundle, "proof_ref": proof}, plan)
+        self.assertEqual(result["reason_code"], "target_authority_pair_drift")
+        owner_plan.assert_not_called(); owner_apply.assert_not_called()
+        snap = LocalCollaborationLedger.authority_snapshot(self.ledger.path, expected_project_id=self.project_id)
+        self.assertEqual(snap.authority_generation, 1)
     def test_schema(self):
         schema = yaml.safe_load(Path(__file__).with_name("..").resolve() / "schemas/local-collaboration-recovery.schema.yaml") if False else yaml.safe_load(Path("schemas/local-collaboration-recovery.schema.yaml").read_text())
         summary = read_recovery_summary(self.ledger.path, expected_project_id=self.project_id)
