@@ -291,6 +291,42 @@ def _bridge_state(request):
             "scheduler_generation": 4, "scheduler_head": H}
 
 
+def test_public_replay_authority_pair_is_accepted_by_bridge():
+    request = _bridge_request()
+    connector, runner = _bridge_connector([
+        _official_auth_response(), _official_auth_response(), _official_auth_response(),
+        {"returncode": 0, "stdout": "bug\n", "stderr": ""},
+        {"returncode": 0, "stdout": "", "stderr": ""},
+        {"returncode": 0, "stdout": "bug\ntrial-label\n", "stderr": ""},
+    ])
+    state = _bridge_state(request)
+    state["authority_generation"] = state.pop("scheduler_generation")
+    state["authority_head"] = state.pop("scheduler_head")
+    result = execute_real_label_materialization(request, state, connector)
+    assert result["outcome"] == "real_label_added_observed_unverified"
+    assert sum("POST" in call[0] for call in runner.calls) == 1
+
+
+def test_conflicting_public_authority_and_scheduler_pairs_hold_before_connector():
+    request = _bridge_request()
+    connector, runner = _bridge_connector([])
+    state = _bridge_state(request)
+    state["authority_generation"] = 5
+    result = execute_real_label_materialization(request, state, connector)
+    assert result["reason"] == "scheduler_or_authority_drift"
+    assert runner.calls == []
+
+
+def test_mixed_authority_pairs_hold_before_connector():
+    request = _bridge_request()
+    connector, runner = _bridge_connector([])
+    state = _bridge_state(request)
+    state["authority_generation"] = state.pop("scheduler_generation")
+    result = execute_real_label_materialization(request, state, connector)
+    assert result["reason"] == "scheduler_or_authority_drift"
+    assert runner.calls == []
+
+
 def _bridge_connector(responses):
     runner = BridgeStubRunner(responses)
     return GitHubCliIssueLabelConnector(repository_owner="octo-org", repository="demo", runner=runner), runner
