@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import unicodedata
 import subprocess
 from collections.abc import Callable, Mapping
 from typing import Any
@@ -127,22 +128,81 @@ class GitHubCliIssueLabelConnector:
             raise GitHubCliConnectorHold("hold_capability_unavailable")
         try:
             parsed = json.loads(result["stdout"])
-            accounts = parsed["hosts"]["github.com"]
-        except (KeyError, TypeError, ValueError):
+        except (TypeError, ValueError):
             raise GitHubCliConnectorHold("hold_capability_untrusted") from None
-        if not isinstance(parsed, Mapping) or set(parsed) != {"hosts"} or not isinstance(accounts, list) or len(accounts) != 1 or not isinstance(accounts[0], Mapping) or set(accounts[0]) != {"login", "scopes"}:
+        if not isinstance(parsed, Mapping) or set(parsed) != {"hosts"} or not isinstance(parsed.get("hosts"), Mapping):
             raise GitHubCliConnectorHold("hold_capability_untrusted")
-        principal, scopes = accounts[0].get("login"), accounts[0].get("scopes")
-        if not isinstance(principal, str) or not _PRINCIPAL.fullmatch(principal):
-            raise GitHubCliConnectorHold("hold_auth_mismatch")
-        if scopes == "unavailable":
-            raise GitHubCliConnectorHold("hold_scope_unavailable")
-        if not isinstance(scopes, list) or not scopes or len(scopes) > 10 or len(set(scopes)) != len(scopes) or any(not isinstance(scope, str) or not _SCOPE.fullmatch(scope) for scope in scopes) or "repo" not in scopes:
-            raise GitHubCliConnectorHold("hold_scope_insufficient")
+        hosts = parsed["hosts"]
+        if set(hosts) != {"github.com"}:
+            raise GitHubCliConnectorHold("hold_capability_untrusted")
+        accounts = hosts["github.com"]
+        if not isinstance(accounts, list) or len(accounts) != 1:
+            raise GitHubCliConnectorHold("hold_capability_untrusted")
+        principal, scopes = self._parse_auth_account(accounts[0])
         return {"connector_id": CONNECTOR_ID, "connector_version": CONNECTOR_VERSION, "host": "github.com",
                 "active_principal": principal, "observable_host_scopes": sorted(scopes), "available": True,
                 "credential_grant_attested": False, "operation_confinement": CONFINEMENT,
                 "authoritative": False, "confirmation_eligible": False}
+
+    @staticmethod
+    def _parse_auth_account(value: Any) -> tuple[str, list[str]]:
+        """Accept only the documented CLI shape or the prior sanitized fixture."""
+        if not isinstance(value, Mapping):
+            raise GitHubCliConnectorHold("hold_capability_untrusted")
+        legacy_keys = {"login", "scopes"}
+        official_required = {"state", "active", "host", "login", "tokenSource", "gitProtocol"}
+        official_allowed = official_required | {"scopes", "error"}
+        keys = set(value)
+        if keys == legacy_keys:
+            principal, raw_scopes = value.get("login"), value.get("scopes")
+            scopes = GitHubCliIssueLabelConnector._legacy_scopes(raw_scopes)
+        elif official_required <= keys <= official_allowed:
+            if value.get("state") != "success" or value.get("active") is not True or value.get("host") != "github.com":
+                raise GitHubCliConnectorHold("hold_capability_untrusted")
+            token_source = value.get("tokenSource")
+            if (value.get("error", "") != "" or not GitHubCliIssueLabelConnector._private_text(token_source)
+                    or value.get("gitProtocol") not in {"https", "ssh"}):
+                raise GitHubCliConnectorHold("hold_capability_untrusted")
+            principal, raw_scopes = value.get("login"), value.get("scopes")
+            scopes = GitHubCliIssueLabelConnector._official_scopes(raw_scopes)
+        else:
+            raise GitHubCliConnectorHold("hold_capability_untrusted")
+        if not isinstance(principal, str) or not _PRINCIPAL.fullmatch(principal):
+            raise GitHubCliConnectorHold("hold_auth_mismatch")
+        if not scopes:
+            raise GitHubCliConnectorHold("hold_scope_unavailable")
+        if len(scopes) > 10 or len(set(scopes)) != len(scopes) or any(not _SCOPE.fullmatch(scope) for scope in scopes) or "repo" not in scopes:
+            raise GitHubCliConnectorHold("hold_scope_insufficient")
+        return principal, sorted(scopes)
+
+    @staticmethod
+    def _legacy_scopes(value: Any) -> list[str]:
+        if value == "unavailable":
+            return []
+        if not isinstance(value, list) or any(not isinstance(scope, str) for scope in value):
+            raise GitHubCliConnectorHold("hold_scope_insufficient")
+        return value
+
+    @staticmethod
+    def _official_scopes(value: Any) -> list[str]:
+        if not isinstance(value, str):
+            raise GitHubCliConnectorHold("hold_scope_insufficient")
+        if not value or len(value.encode()) > 512:
+            raise GitHubCliConnectorHold("hold_scope_insufficient")
+        scopes = [scope.strip() for scope in value.split(",")]
+        if any(not scope for scope in scopes):
+            raise GitHubCliConnectorHold("hold_scope_insufficient")
+        return scopes
+
+    @staticmethod
+    def _private_text(value: Any) -> bool:
+        if not isinstance(value, str) or not value:
+            return False
+        try:
+            encoded = value.encode()
+        except UnicodeError:
+            return False
+        return len(encoded) <= 512 and not any(unicodedata.category(character) == "Cc" for character in value)
 
     @staticmethod
     def _public_capability(value: Mapping[str, Any]) -> dict[str, Any]:

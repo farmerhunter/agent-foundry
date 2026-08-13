@@ -296,6 +296,26 @@ def _bridge_connector(responses):
     return GitHubCliIssueLabelConnector(repository_owner="octo-org", repository="demo", runner=runner), runner
 
 
+def _official_auth_response(*, login="octocat", scopes="repo"):
+    return {"returncode": 0, "stdout": json.dumps({"hosts": {"github.com": [{
+        "state": "success", "active": True, "host": "github.com", "login": login,
+        "tokenSource": "keyring", "gitProtocol": "https", "scopes": scopes,
+    }]}}), "stderr": ""}
+
+
+def test_public_real_label_bridge_reaches_stubbed_success_with_current_gh_auth_shape():
+    request = _bridge_request(); connector, runner = _bridge_connector([
+        _official_auth_response(), _official_auth_response(), _official_auth_response(),
+        {"returncode": 0, "stdout": "bug\n", "stderr": ""},
+        {"returncode": 0, "stdout": "", "stderr": ""},
+        {"returncode": 0, "stdout": "bug\ntrial-label\n", "stderr": ""},
+    ])
+    result = execute_real_label_materialization(request, _bridge_state(request), connector)
+    assert result["outcome"] == "real_label_added_observed_unverified"
+    assert sum("POST" in call[0] for call in runner.calls) == 1
+    assert all(call[1]["shell"] is False for call in runner.calls)
+
+
 def test_public_real_label_bridge_adds_once_with_unattested_hdc_credential():
     request = _bridge_request(); connector, runner = _bridge_connector([
         {"returncode": 0, "stdout": '{"hosts":{"github.com":[{"login":"octocat","scopes":["repo"]}]}}', "stderr": ""},
@@ -331,6 +351,17 @@ def test_private_scope_only_binding_drift_holds_before_target():
     ])
     result = execute_real_label_materialization(request, _bridge_state(request), connector)
     assert result["outcome"] == "real_label_materialization_hold" and result["reason"] == "capability_unavailable_or_untrusted"
+    assert not any("/issues/" in " ".join(call[0]) or "POST" in call[0] for call in runner.calls)
+
+
+def test_private_surrogate_auth_source_holds_before_target():
+    request = _bridge_request(); connector, runner = _bridge_connector([
+        {"returncode": 0, "stdout": '{"hosts":{"github.com":[{"state":"success","active":true,"host":"github.com","login":"octocat","tokenSource":"\\ud800","gitProtocol":"https","scopes":"repo"}]}}', "stderr": ""},
+    ])
+    result = execute_real_label_materialization(request, _bridge_state(request), connector)
+    assert result["outcome"] == "real_label_materialization_hold"
+    assert result["reason"] == "capability_unavailable_or_untrusted"
+    assert len(runner.calls) == 1
     assert not any("/issues/" in " ".join(call[0]) or "POST" in call[0] for call in runner.calls)
 
 
