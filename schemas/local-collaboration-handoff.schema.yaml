@@ -13,7 +13,7 @@ $defs:
     additionalProperties: false
     required: [transition, project_id]
     properties:
-      transition: {enum: [enroll_initial, enroll_target, revoke_inactive, prepare, source_lock, cancel, takeover, target_activate]}
+      transition: {enum: [enroll_initial, enroll_target, revoke_inactive, prepare, source_lock, bundle_exported, cancel, takeover, target_activate]}
       project_id: {$ref: '#/$defs/uuid'}
       replica_id: {$ref: '#/$defs/opaque'}
       replica_epoch: {type: integer, minimum: 1}
@@ -27,6 +27,8 @@ $defs:
       frontier_digest: {$ref: '#/$defs/digest'}
       cancellation_evidence: {enum: [bundle_not_released, target_non_activation_readback]}
       prior_frontier_digest: {$ref: '#/$defs/digest'}
+      bundle_id: {$ref: '#/$defs/opaque'}
+      content_manifest_digest: {$ref: '#/$defs/digest'}
   receipt:
     type: object
     additionalProperties: false
@@ -34,8 +36,8 @@ $defs:
     properties:
       schema_version: {const: LocalCollaborationHandoff-v1}
       outcome:
-        enum: [enrolled, prepared, source_locked, cancelled, taken_over, target_active, a2_import_candidate, hold_schema, hold_privacy, hold_project_identity, hold_enrollment, hold_revoked, hold_epoch, hold_transition, hold_stale_snapshot, hold_overlap_conflict, hold_cancellation_unproven, hold_owner_integrity, hold_owner_busy, hold_owner_permission, hold_readback_ambiguous, hold_a2_owner_proof_unavailable]
-      transition: {enum: [enroll_initial, enroll_target, revoke_inactive, prepare, source_lock, cancel, takeover, target_activate]}
+        enum: [enrolled, prepared, source_locked, bundle_exported, cancelled, taken_over, target_active, a2_import_candidate, hold_schema, hold_privacy, hold_project_identity, hold_enrollment, hold_revoked, hold_epoch, hold_transition, hold_stale_snapshot, hold_overlap_conflict, hold_cancellation_unproven, hold_owner_integrity, hold_owner_busy, hold_owner_permission, hold_readback_ambiguous, hold_a2_owner_proof_unavailable]
+      transition: {enum: [enroll_initial, enroll_target, revoke_inactive, prepare, source_lock, bundle_exported, cancel, takeover, target_activate]}
       project_id: {$ref: '#/$defs/uuid'}
       event_ids:
         type: array
@@ -61,7 +63,7 @@ $defs:
         properties:
           owner_persisted: {type: boolean}
           owner_readback_verified: {type: boolean}
-          bundle_exported: {const: false}
+          bundle_exported: {type: boolean}
           owner_import_performed: {const: false}
           transport_performed: {const: false}
 allOf:
