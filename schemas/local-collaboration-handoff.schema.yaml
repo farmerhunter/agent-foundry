@@ -26,8 +26,6 @@ $defs:
       target_replica_id: {$ref: '#/$defs/opaque'}
       frontier_digest: {$ref: '#/$defs/digest'}
       cancellation_evidence: {enum: [bundle_not_released, target_non_activation_readback]}
-      import_readback_generation: {type: integer, minimum: 0}
-      import_readback_head: {$ref: '#/$defs/digest'}
       prior_frontier_digest: {$ref: '#/$defs/digest'}
   receipt:
     type: object
@@ -36,7 +34,7 @@ $defs:
     properties:
       schema_version: {const: LocalCollaborationHandoff-v1}
       outcome:
-        enum: [enrolled, prepared, source_locked, cancelled, taken_over, target_active, a2_import_candidate, hold_schema, hold_privacy, hold_project_identity, hold_enrollment, hold_revoked, hold_epoch, hold_transition, hold_stale_snapshot, hold_overlap_conflict, hold_cancellation_unproven, hold_owner_integrity, hold_owner_busy, hold_owner_permission, hold_readback_ambiguous]
+        enum: [enrolled, prepared, source_locked, cancelled, taken_over, target_active, a2_import_candidate, hold_schema, hold_privacy, hold_project_identity, hold_enrollment, hold_revoked, hold_epoch, hold_transition, hold_stale_snapshot, hold_overlap_conflict, hold_cancellation_unproven, hold_owner_integrity, hold_owner_busy, hold_owner_permission, hold_readback_ambiguous, hold_a2_owner_proof_unavailable]
       transition: {enum: [enroll_initial, enroll_target, revoke_inactive, prepare, source_lock, cancel, takeover, target_activate]}
       project_id: {$ref: '#/$defs/uuid'}
       event_ids:

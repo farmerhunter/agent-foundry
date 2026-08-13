@@ -57,7 +57,7 @@ class HandoffTests(unittest.TestCase):
         self.assertEqual(prepared["outcome"], "prepared")
         return self.apply(self.request("source_lock", handoff_id="handoff-1"))
 
-    def test_enrollment_prepare_lock_a2_and_activation(self):
+    def test_enrollment_prepare_lock_and_a2_candidate_only(self):
         locked = self.ready_locked()
         self.assertEqual(locked["outcome"], "source_locked")
         state = read_handoff_state(self.ledger.path, expected_project_id=self.project_id)
@@ -65,12 +65,9 @@ class HandoffTests(unittest.TestCase):
         header["project_id"] = self.project_id
         seam = verify_a2_import_seam(state, header)
         self.assertEqual(seam["outcome"], "a2_import_candidate")
-        receipt = self.apply(self.request("target_activate", handoff_id="handoff-1", target_replica_id="replica-target",
-                                          import_readback_generation=state.authority_generation,
-                                          import_readback_head=state.authority_head, **self.decision("activate")))
-        self.assertEqual(receipt["outcome"], "target_active")
-        final = read_handoff_state(self.ledger.path, expected_project_id=self.project_id)
-        self.assertEqual((final.active_replica_id, final.active_epoch, final.phase), ("replica-target", 2, "active"))
+        activation = plan_handoff_transition(state, self.request("target_activate", handoff_id="handoff-1", target_replica_id="replica-target", **self.decision("activate")))
+        self.assertEqual(activation["outcome"], "hold_a2_owner_proof_unavailable")
+        self.assertEqual(read_handoff_state(self.ledger.path, expected_project_id=self.project_id).authority_generation, state.authority_generation)
 
     def test_cancel_and_takeover(self):
         self.assertEqual(self.apply(self.enrollment("enroll_initial", "replica-source", 1, "source"))["outcome"], "enrolled")
@@ -107,7 +104,15 @@ class HandoffTests(unittest.TestCase):
         before = read_handoff_state(self.ledger.path, expected_project_id=self.project_id)
         plan = plan_handoff_transition(before, self.request("prepare", handoff_id="handoff-d", source_replica_id="replica-source", target_replica_id="replica-target", frontier_digest=digest("d")))
         self.ledger.conditional_append_batch([{"event_type": "unrelated", "event_id": str(uuid.uuid4()), "payload": {"n": 1}, "actor": "owner", "source": "fixture", "root": self.project_id}], expected_generation=before.authority_generation, expected_head=before.authority_head)
+        calls = 0
+        original = self.ledger.conditional_append_batch
+        def forbidden(*args, **kwargs):
+            nonlocal calls
+            calls += 1
+            return original(*args, **kwargs)
+        self.ledger.conditional_append_batch = forbidden
         self.assertEqual(apply_handoff_transition(self.ledger, plan, expected_before=before)["outcome"], "hold_stale_snapshot")
+        self.assertEqual(calls, 0)
 
     def test_exact_post_commit_duplicate_and_fresh_process_replay(self):
         state = read_handoff_state(self.ledger.path, expected_project_id=self.project_id)
@@ -131,7 +136,7 @@ class HandoffTests(unittest.TestCase):
         state = read_handoff_state(self.ledger.path, expected_project_id=self.project_id)
         plan = plan_handoff_transition(state, self.enrollment("enroll_initial", "replica-source", 1, "source"))
         altered = type(plan)(plan.transition, plan.project_id, plan.expected_generation, plan.expected_head, plan.before_state_digest,
-                             plan.after_state_digest, plan.request_digest, {**plan.event, "event_id": str(uuid.uuid4())})
+                             plan.after_state_digest, plan.expected_outcome, plan.request_digest, {**plan.event, "event_id": str(uuid.uuid4())})
         self.assertEqual(apply_handoff_transition(self.ledger, altered, expected_before=state)["outcome"], "hold_readback_ambiguous")
 
     def test_no_external_io_and_json_safe_receipts(self):
@@ -150,6 +155,29 @@ class HandoffTests(unittest.TestCase):
         receipt = apply_handoff_transition(self.ledger, plan_handoff_transition(state, request), expected_before=state)
         self.assertFalse(list(validator.iter_errors(receipt)))
         self.assertTrue(list(validator.iter_errors({**request, "unknown": True})))
+
+    def test_historical_duplicate_and_crafted_activation_hold(self):
+        state = read_handoff_state(self.ledger.path, expected_project_id=self.project_id)
+        plan = plan_handoff_transition(state, self.enrollment("enroll_initial", "replica-source", 1, "source"))
+        self.assertEqual(apply_handoff_transition(self.ledger, plan, expected_before=state)["cas_status"], "appended")
+        after = read_handoff_state(self.ledger.path, expected_project_id=self.project_id)
+        self.ledger.conditional_append_batch([{"event_type": "unrelated", "event_id": str(uuid.uuid4()), "payload": {"n": 1}, "actor": "owner", "source": "fixture", "root": self.project_id}], expected_generation=after.authority_generation, expected_head=after.authority_head)
+        self.assertEqual(apply_handoff_transition(self.ledger, plan, expected_before=state)["outcome"], "hold_stale_snapshot")
+        current = read_handoff_state(self.ledger.path, expected_project_id=self.project_id)
+        crafted = type(plan)("target_activate", plan.project_id, current.authority_generation, current.authority_head,
+                             current.state_digest, current.state_digest, "target_active", plan.request_digest, plan.event)
+        self.assertEqual(apply_handoff_transition(self.ledger, crafted, expected_before=current)["outcome"], "hold_a2_owner_proof_unavailable")
+
+    def test_unverified_activation_event_replays_to_held_not_active(self):
+        self.ready_locked()
+        state = read_handoff_state(self.ledger.path, expected_project_id=self.project_id)
+        payload = {"schema_version": "LocalCollaborationHandoff-v1", "transition": "target_activate", "project_id": self.project_id,
+                   "request_digest": digest("crafted"), "before_state_digest": state.state_digest}
+        self.ledger.conditional_append_batch([{"event_type": "handoff_target_activated", "event_id": str(uuid.uuid4()), "payload": payload,
+                                                "actor": "owner", "source": "orch05_handoff", "root": self.project_id}],
+                                               expected_generation=state.authority_generation, expected_head=state.authority_head)
+        replayed = read_handoff_state(self.ledger.path, expected_project_id=self.project_id)
+        self.assertEqual((replayed.phase, replayed.active_replica_id), ("held", "replica-source"))
 
 
 if __name__ == "__main__":

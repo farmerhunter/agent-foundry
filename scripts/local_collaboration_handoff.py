@@ -120,6 +120,7 @@ class TransitionPlan:
     expected_head: str
     before_state_digest: str
     after_state_digest: str
+    expected_outcome: str
     request_digest: str
     event: Mapping[str, Any]
 
@@ -170,6 +171,13 @@ def _reduce_event(state: HandoffState, event) -> HandoffState:
     payload = _event_payload(event)
     if payload is None:
         return state
+    if payload.get("transition") == "target_activate":
+        if payload.get("project_id") != state.project_id:
+            raise HandoffHold("hold_project_identity", "event_project_mismatch")
+        handoff = dict(state.handoff or {})
+        handoff["status"] = "held_unverified_target_activation"
+        return _make_state(state.project_id, event.sequence, event.event_hash, state.active_replica_id,
+                           state.active_replica_epoch, state.active_epoch, "held", _enrollment_map(state), handoff)
     if payload["project_id"] != state.project_id:
         raise HandoffHold("hold_project_identity", "event_project_mismatch")
     transition = payload.get("transition")
@@ -295,7 +303,9 @@ def read_handoff_state(db_path, *, expected_project_id: str) -> HandoffState:
     state = _initial(snapshot)
     for event in snapshot.events:
         state = _reduce_event(state, event)
-    return state
+    return _make_state(snapshot.project_id, snapshot.authority_generation, snapshot.authority_head,
+                       state.active_replica_id, state.active_replica_epoch, state.active_epoch,
+                       state.phase, _enrollment_map(state), state.handoff)
 
 
 def _hold(project_id: str, outcome: str, reason_code: str) -> dict[str, Any]:
@@ -320,12 +330,15 @@ def _planned_payload(state: HandoffState, request: Mapping[str, Any]) -> tuple[d
 
 def plan_handoff_transition(state: HandoffState, request: Mapping[str, Any]) -> TransitionPlan | dict[str, Any]:
     try:
+        if not isinstance(request, Mapping) or request.get("transition") == "target_activate":
+            return _hold(state.project_id, "hold_a2_owner_proof_unavailable", "complete_a2_owner_verified_import")
         payload, after = _planned_payload(state, request)
         event_type = {"enroll_initial": "replica_enrolled", "enroll_target": "replica_enrolled", "revoke_inactive": "replica_revoked", "prepare": "handoff_prepared", "source_lock": "handoff_source_locked", "cancel": "handoff_cancelled", "takeover": "handoff_takeover_approved", "target_activate": "handoff_target_activated"}[payload["transition"]]
         event_id = str(uuid.uuid5(uuid.UUID(state.project_id), event_type + ":" + payload["request_digest"]))
         event = {"event_type": event_type, "event_id": event_id, "payload": payload, "actor": "owner", "source": "orch05_handoff", "root": state.project_id}
+        expected_outcome = {"enroll_initial": "enrolled", "enroll_target": "enrolled", "prepare": "prepared", "source_lock": "source_locked", "cancel": "cancelled", "takeover": "taken_over", "revoke_inactive": "enrolled"}[payload["transition"]]
         return TransitionPlan(payload["transition"], state.project_id, state.authority_generation, state.authority_head,
-                              state.state_digest, after.state_digest, payload["request_digest"], event)
+                              state.state_digest, after.state_digest, expected_outcome, payload["request_digest"], event)
     except HandoffHold as exc:
         return _hold(state.project_id, exc.outcome, exc.reason_code)
 
@@ -344,21 +357,39 @@ def apply_handoff_transition(ledger: LocalCollaborationLedger, plan: TransitionP
     if not isinstance(plan, TransitionPlan) or not isinstance(expected_before, HandoffState) or plan.project_id != ledger.project_id:
         return _hold(plan.project_id if isinstance(plan, TransitionPlan) else ledger.project_id, "hold_schema", "plan_invalid")
     try:
+        if plan.transition == "target_activate":
+            return _hold(plan.project_id, "hold_a2_owner_proof_unavailable", "complete_a2_owner_verified_import")
         current = read_handoff_state(ledger.path, expected_project_id=ledger.project_id)
         if (expected_before.authority_generation, expected_before.authority_head, expected_before.state_digest) != (plan.expected_generation, plan.expected_head, plan.before_state_digest):
             return _hold(plan.project_id, "hold_stale_snapshot", "before_state_mismatch")
         expected_event_id = str(uuid.uuid5(uuid.UUID(plan.project_id), plan.event["event_type"] + ":" + plan.request_digest))
         if plan.event.get("event_id") != expected_event_id:
             return _hold(plan.project_id, "hold_readback_ambiguous", "event_id_mismatch")
-        result = ledger.conditional_append_batch([plan.event], expected_generation=plan.expected_generation, expected_head=plan.expected_head)
         expected_ref = (plan.expected_generation + 1, plan.event["event_id"], _digest(plan.event["payload"]))
+        normal = (current.authority_generation, current.authority_head, current.state_digest) == (plan.expected_generation, plan.expected_head, plan.before_state_digest)
+        duplicate = False
+        if not normal:
+            snapshot = LocalCollaborationLedger.authority_snapshot(ledger.path, expected_project_id=ledger.project_id)
+            tail = snapshot.events[-1:] if snapshot.authority_generation == plan.expected_generation + 1 else ()
+            if len(tail) == 1:
+                event = tail[0]
+                duplicate = ((event.sequence, event.event_id, event.payload_hash) == expected_ref
+                             and event.event_type == plan.event["event_type"] and event.actor == plan.event["actor"]
+                             and event.source == plan.event["source"] and event.root == plan.event["root"]
+                             and event.previous_hash == plan.expected_head and current.state_digest == plan.after_state_digest)
+            if not duplicate:
+                return _hold(plan.project_id, "hold_stale_snapshot", "fresh_before_mismatch")
+        result = ledger.conditional_append_batch([plan.event], expected_generation=plan.expected_generation, expected_head=plan.expected_head)
+        if normal and result.status != "appended":
+            return _hold(plan.project_id, "hold_readback_ambiguous", "normal_append_not_appended")
+        if duplicate and result.status != "duplicate":
+            return _hold(plan.project_id, "hold_stale_snapshot", "duplicate_tail_changed")
         if result.status not in {"appended", "duplicate"} or len(result.event_refs) != 1 or result.event_refs[0][:3] != expected_ref:
             return _hold(plan.project_id, "hold_readback_ambiguous", "event_ref_mismatch")
         after = read_handoff_state(ledger.path, expected_project_id=ledger.project_id)
         if (after.authority_generation, after.authority_head, after.state_digest) != (result.generation, result.head, plan.after_state_digest):
             return _hold(plan.project_id, "hold_readback_ambiguous", "after_state_mismatch")
-        outcome = {"enroll_initial": "enrolled", "enroll_target": "enrolled", "prepare": "prepared", "source_lock": "source_locked", "cancel": "cancelled", "takeover": "taken_over", "target_activate": "target_active", "revoke_inactive": "enrolled"}[plan.transition]
-        return {"schema_version": VERSION, "outcome": outcome, "transition": plan.transition, "project_id": plan.project_id,
+        return {"schema_version": VERSION, "outcome": plan.expected_outcome, "transition": plan.transition, "project_id": plan.project_id,
                 "event_ids": [plan.event["event_id"]], "request_digest": plan.request_digest,
                 "before_state_digest": plan.before_state_digest, "after_state_digest": plan.after_state_digest,
                 "readback_generation": after.authority_generation, "readback_head": after.authority_head,
@@ -379,7 +410,9 @@ def verify_a2_import_seam(state: HandoffState, bundle_header: Mapping[str, Any])
             raise HandoffHold("hold_transition", "a2_binding_invalid")
         return {"schema_version": VERSION, "outcome": "a2_import_candidate", "project_id": state.project_id,
                 "handoff_id": state.handoff["handoff_id"], "state_digest": state.state_digest,
-                "owner_import_performed": False, "import_authorized": False, "requires_owner_verification": True}
+                "owner_import_performed": False, "import_authorized": False, "requires_owner_verification": True,
+                "flags": {"owner_persisted": False, "owner_readback_verified": True, "bundle_exported": False,
+                          "owner_import_performed": False, "transport_performed": False}}
     except HandoffHold as exc:
         return _hold(state.project_id, exc.outcome, exc.reason_code)
 
