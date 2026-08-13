@@ -101,10 +101,23 @@ class ManualBundleTests(unittest.TestCase):
                          (proof["target_generation"], proof["target_head"]))
         self.assertNotEqual((projection["source_generation"], projection["source_head"]),
                             (projection["target_generation"], projection["target_head"]))
+        target_state = read_handoff_state(self.target.path, expected_project_id=self.project_id)
+        source_state = read_handoff_state(self.source.path, expected_project_id=self.project_id)
+        self.assertEqual((target_state.phase, target_state.handoff["status"], target_state.state_digest),
+                         (source_state.phase, source_state.handoff["status"], source_state.state_digest))
+        self.assertNotEqual(target_state.authority_head, source_state.authority_head)
+        self.assertEqual((projection["target_replica_id"], projection["target_replica_epoch"],
+                          projection["target_enrollment_id"], projection["target_enrollment_digest"]),
+                         (bundle["target_replica_id"], bundle["target_replica_epoch"],
+                          bundle["target_enrollment_id"], bundle["target_enrollment_digest"]))
+        self.assertEqual(projection["source_prefix_identity"], source_state.handoff["source_prefix_identity"])
+        with self.assertRaises(TypeError):
+            projection["target_replica_id"] = "caller"
         self.assertFalse(projection["target_activation_authorized"])
         self.target.close()
         self.target = LocalCollaborationLedger.open_existing(Path(self.target_root.name) / self.project_id / "collaboration.db", expected_project_id=self.project_id)
         self.assertEqual(read_owner_imported_handoff_projection(self.target.path, expected_project_id=self.project_id, bundle=bundle, proof_ref=locator)["outcome"], "owner_import_verified")
+
 
     def test_projection_rejects_stale_or_cross_project_locator_before_activation(self):
         bundle = self.exported()

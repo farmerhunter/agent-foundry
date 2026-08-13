@@ -203,8 +203,8 @@ class HandoffTests(unittest.TestCase):
                                            target_replica_id="replica-target", frontier_digest=digest("frontier")))
         self.assertEqual(receipt["outcome"], "prepared")
         event = LocalCollaborationLedger.authority_snapshot(self.ledger.path, expected_project_id=self.project_id).events[-1]
-        self.assertEqual((event.payload["source_generation"], event.payload["source_head"]),
-                         (before.authority_generation, before.authority_head))
+        self.assertEqual((event.payload["source_generation"], event.payload["source_head"], event.payload["source_prefix_identity"]),
+                         (before.authority_generation, before.authority_head, before.portable_prefix_identity))
         self.assertEqual(read_handoff_state(self.ledger.path, expected_project_id=self.project_id).handoff["source_head"], before.authority_head)
         schema = yaml.safe_load((Path(__file__).parent.parent / "schemas" / "local-collaboration-handoff.schema.yaml").read_text())
         payload_schema = {"$schema": schema["$schema"], "$defs": schema["$defs"], **schema["$defs"]["durable_prepare_payload"]}
@@ -218,7 +218,8 @@ class HandoffTests(unittest.TestCase):
         snapshot = LocalCollaborationLedger.authority_snapshot(self.ledger.path, expected_project_id=self.project_id)
         event = snapshot.events[-1]
         altered = type(event)(event.sequence, event.event_id, event.event_type,
-                              {**event.payload, "source_generation": 0, "source_head": "0" * 64},
+                              {**event.payload, "source_generation": 0, "source_head": "0" * 64,
+                               "source_prefix_identity": "0" * 64},
                               event.payload_hash, event.previous_hash, event.event_hash, event.created_at,
                               event.actor, event.source, event.root)
         with self.assertRaises(HandoffHold):
