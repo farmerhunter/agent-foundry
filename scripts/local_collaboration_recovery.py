@@ -171,11 +171,10 @@ def apply_recovery_action(context, plan):
             backup, destination = context.get("backup"), context.get("destination")
             if _locator(project_id, backup) != plan.parameters["backup_digest"] or _locator(project_id, destination) != plan.parameters["destination_digest"]: raise ValueError()
             if Path(destination).expanduser().exists(): return {"schema_version": VERSION, "outcome": "held", "reason_code": "restore_destination_exists"}
+            restored_state = read_handoff_state(backup, expected_project_id=project_id)
             restored = LocalCollaborationLedger.restore(backup, destination, expected_project_id=project_id)
             try:
-                after = restored.authority_snapshot(restored.path, expected_project_id=project_id)
-                after_state = read_handoff_state(restored.path, expected_project_id=project_id)
-                provisional = _receipt(plan, before, (after.authority_generation, after.authority_head, after_state.state_digest), "fresh_target_restored", True)
+                provisional = _receipt(plan, before, (restored_state.authority_generation, restored_state.authority_head, restored_state.state_digest), "fresh_target_restored", True)
                 return _post_commit_result(project_id, provisional, restored.path)
             finally: restored.close()
         if plan.operation in {"cancel_pre_export_handoff", "revoke_inactive_replica"}:
@@ -187,8 +186,7 @@ def apply_recovery_action(context, plan):
             if isinstance(owner_plan, Mapping): return {"schema_version": VERSION, "outcome": "held", "reason_code": "owner_plan_held"}
             owner = apply_handoff_transition(ledger, owner_plan, expected_before=before_state)
             if owner.get("outcome", "").startswith("hold_"): return {"schema_version": VERSION, "outcome": "held", "reason_code": "owner_apply_held"}
-            after_state = read_handoff_state(ledger.path, expected_project_id=project_id)
-            provisional = _receipt(plan, before, (owner["readback_generation"], owner["readback_head"], after_state.state_digest), owner["outcome"], owner["flags"]["owner_persisted"])
+            provisional = _receipt(plan, before, (owner["readback_generation"], owner["readback_head"], owner["after_state_digest"]), owner["outcome"], owner["flags"]["owner_persisted"])
         elif plan.operation == "takeover_from_accepted_frontier":
             bundle, proof = context.get("bundle"), context.get("proof_ref")
             if _digest(bundle) != plan.parameters["bundle_digest"] or _digest(proof) != plan.parameters["proof_digest"]: raise ValueError()
@@ -202,8 +200,7 @@ def apply_recovery_action(context, plan):
             if isinstance(owner_plan, Mapping): return {"schema_version": VERSION, "outcome": "held", "reason_code": "owner_plan_held"}
             owner = apply_handoff_transition(ledger, owner_plan, expected_before=target_state)
             if owner.get("outcome", "").startswith("hold_"): return {"schema_version": VERSION, "outcome": "held", "reason_code": "owner_apply_held"}
-            after_state = read_handoff_state(ledger.path, expected_project_id=project_id)
-            provisional = _receipt(plan, (target_state.authority_generation, target_state.authority_head), (owner["readback_generation"], owner["readback_head"], after_state.state_digest), owner["outcome"], owner["flags"]["owner_persisted"])
+            provisional = _receipt(plan, (target_state.authority_generation, target_state.authority_head), (owner["readback_generation"], owner["readback_head"], owner["after_state_digest"]), owner["outcome"], owner["flags"]["owner_persisted"])
         else: raise ValueError()
         return _post_commit_result(project_id, provisional, ledger.path)
     except (ValueError, TypeError, KeyError, LedgerBusyError, LedgerConflictError, LedgerPermissionError, LedgerIntegrityError, LedgerSchemaError, LedgerIdentityError):

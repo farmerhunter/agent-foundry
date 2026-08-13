@@ -71,6 +71,20 @@ class RecoveryTests(unittest.TestCase):
         self.assertEqual(result["next_summary"]["reason_code"], "post_commit_readback_unavailable")
         schema = yaml.safe_load(Path("schemas/local-collaboration-recovery.schema.yaml").read_text())
         self.assertEqual(list(Draft202012Validator(schema).iter_errors(dict(result))), [])
+    def test_a1_revoke_post_commit_readback_failure_keeps_provisional_receipt(self):
+        state = read_handoff_state(self.ledger.path, expected_project_id=self.project_id)
+        target = plan_handoff_transition(state, {"transition": "enroll_target", "project_id": self.project_id, "replica_id": "target", "replica_epoch": 1, "enrollment_id": "target-e", "enrollment_digest": digest("target"), "decision_id": "target", "decision_digest": digest("target")})
+        apply_handoff_transition(self.ledger, target, expected_before=state)
+        summary = read_recovery_summary(self.ledger.path, expected_project_id=self.project_id, intent="revoke_inactive_replica", selected_replica_id="target")
+        plan = plan_recovery_action(summary, {"operation": "revoke_inactive_replica", "decision_id": "human-3", "decision_digest": digest("human3"), "parameters": {}})
+        with patch.object(recovery, "read_recovery_summary", side_effect=[summary, RuntimeError("injected post-commit read")]) as reader:
+            result = apply_recovery_action({"ledger": self.ledger, "selected_replica_id": "target"}, plan)
+        self.assertEqual(reader.call_count, 2); self.assertEqual(result["outcome"], "setup_incomplete")
+        self.assertTrue(result["receipt"]["mutation_performed"]); self.assertEqual(result["receipt"]["selected_replica_id"], "target")
+        state = read_handoff_state(self.ledger.path, expected_project_id=self.project_id)
+        self.assertTrue(next(e for e in state.enrollments if e.replica_id == "target").revoked)
+        schema = yaml.safe_load(Path("schemas/local-collaboration-recovery.schema.yaml").read_text())
+        self.assertEqual(list(Draft202012Validator(schema).iter_errors(dict(result))), [])
     def test_active_revoke_holds_before_mutation(self):
         before = LocalCollaborationLedger.authority_snapshot(self.ledger.path, expected_project_id=self.project_id)
         summary = read_recovery_summary(self.ledger.path, expected_project_id=self.project_id, intent="revoke_inactive_replica", selected_replica_id="source")
