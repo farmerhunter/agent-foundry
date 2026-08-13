@@ -97,7 +97,7 @@ class ConditionalAppendResult:
     status: str
     generation: int
     head: str
-    events: tuple[LedgerEvent, ...]
+    event_refs: tuple[tuple[int, str, str, str], ...]
     mutation_performed: bool
 
 
@@ -547,7 +547,7 @@ class LocalCollaborationLedger:
         if any(current["sequence"] != prior["sequence"] + 1 or current["previous_hash"] != prior["event_hash"]
                for prior, current in zip(rows, rows[1:])):
             return None
-        return tuple(self._row(row) for row in rows)
+        return tuple(self._event_ref(row) for row in rows)
 
     def conditional_append_batch(self, events: Iterable[Mapping[str, Any]], *, expected_generation: int,
                                  expected_head: str) -> ConditionalAppendResult:
@@ -578,7 +578,7 @@ class LocalCollaborationLedger:
                 created = _now()
                 event_hash = self._event_hash(sequence, eid, etype, payload_hash, previous, created, actor, source, root)
                 c.execute("INSERT INTO events VALUES(?,?,?,?,?,?,?,?,?,?,?)", (sequence, eid, etype, _canonical(payload), payload_hash, previous, event_hash, created, actor, source, root))
-                result.append(self._row(c.execute("SELECT * FROM events WHERE sequence=?", (sequence,)).fetchone()))
+                result.append(self._event_ref(c.execute("SELECT * FROM events WHERE sequence=?", (sequence,)).fetchone()))
                 previous = event_hash
             c.execute("COMMIT")
             self._enforce_sidecar_modes()
@@ -641,7 +641,11 @@ class LocalCollaborationLedger:
         except Exception: c.execute("ROLLBACK"); raise
 
     def _row(self,row):
-        return LedgerEvent(row["sequence"],row["event_id"],row["event_type"],_freeze_snapshot_json(json.loads(row["payload"])),row["payload_hash"],row["previous_hash"],row["event_hash"],row["created_at"],row["actor"],row["source"],row["root"])
+        return LedgerEvent(row["sequence"],row["event_id"],row["event_type"],json.loads(row["payload"]),row["payload_hash"],row["previous_hash"],row["event_hash"],row["created_at"],row["actor"],row["source"],row["root"])
+
+    @staticmethod
+    def _event_ref(row):
+        return (row["sequence"], row["event_id"], row["payload_hash"], row["event_hash"])
 
     def list_events(self, *, event_type=None):
         q="SELECT * FROM events"; args=()

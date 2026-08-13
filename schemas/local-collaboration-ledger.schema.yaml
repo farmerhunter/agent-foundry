@@ -35,7 +35,7 @@ conditional_append_batch:
   success: [appended, duplicate]
   duplicate: exact_full_batch_post_commit_retry_only
   stale_snapshot: no_business_mutation
-  receipt: [status, generation, head, events, mutation_performed]
+  receipt: [status, generation, head, event_refs, mutation_performed]
   callbacks_and_domain_predicates: forbidden
 identity:
   project_id: opaque_uuid

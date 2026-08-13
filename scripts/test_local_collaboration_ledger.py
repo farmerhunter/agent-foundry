@@ -10,6 +10,7 @@ import tempfile
 import threading
 import time
 import unittest
+from dataclasses import FrozenInstanceError
 from pathlib import Path
 
 from local_collaboration_ledger import GENESIS, LedgerBackupError, LedgerBusyError, LedgerConflictError, LedgerIdentityError, LedgerIntegrityError, LedgerPermissionError, LedgerSchemaError, LedgerStaleSnapshotError, LocalCollaborationLedger
@@ -210,7 +211,7 @@ class LedgerTests(unittest.TestCase):
     def test_permission_and_schema_fail_closed(self):
         self.ledger.close()
         os.chmod(Path(self.tmp.name) / self.ledger.project_id, 0o755)
-        with self.assertRaises(Exception):
+        with self.assertRaises(LedgerPermissionError):
             LocalCollaborationLedger(self.ledger.project_id, projects_root=self.tmp.name)
 
     def test_registry_discovery_and_input_caps(self):
@@ -293,13 +294,16 @@ class LedgerTests(unittest.TestCase):
         first = self.ledger.conditional_append_batch(
             [{"event_type": "handoff.prepared", "payload": {"epoch": 1}, "event_id": "12121212-1212-1212-1212-121212121212"}],
             expected_generation=0, expected_head=GENESIS)
-        self.assertEqual((first.status, first.generation, first.head, first.mutation_performed), ("appended", 1, first.events[0].event_hash, True))
+        self.assertEqual((first.status, first.generation, first.head, first.mutation_performed), ("appended", 1, first.event_refs[0][3], True))
         second = self.ledger.conditional_append_batch(
             [{"event_type": "handoff.locked", "payload": {"epoch": 1}, "event_id": "13131313-1313-1313-1313-131313131313"}],
             expected_generation=first.generation, expected_head=first.head)
         self.assertEqual((second.status, second.generation, second.mutation_performed), ("appended", 2, True))
         with self.assertRaises(TypeError):
-            second.events[0].payload["epoch"] = 2
+            second.event_refs[0][0] = 9
+        with self.assertRaises(FrozenInstanceError):
+            second.event_refs += ((9, "x", "y", "z"),)
+        self.assertEqual(json.loads(json.dumps(second.event_refs)), [list(second.event_refs[0])])
         self.assertTrue(self.ledger.verify())
 
     def test_conditional_append_stale_does_not_mutate_any_business_table(self):
@@ -327,7 +331,7 @@ class LedgerTests(unittest.TestCase):
         before = self._business_rows()
         retry = self.ledger.conditional_append_batch(batch, expected_generation=0, expected_head=GENESIS)
         self.assertEqual((retry.status, retry.generation, retry.head, retry.mutation_performed), ("duplicate", first.generation, first.head, False))
-        self.assertEqual(retry.events, first.events)
+        self.assertEqual(retry.event_refs, first.event_refs)
         self.assertEqual(before, self._business_rows())
 
     def test_conditional_append_stale_mixed_and_divergent_batches_hold_without_side_effects(self):
@@ -396,7 +400,10 @@ class LedgerTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 self.ledger.conditional_append_batch([event], expected_generation=generation, expected_head=head)
         self.ledger.append_event("ordinary.append", {"ok": True}, event_id="24242424-2424-2424-2424-242424242424")
-        self.assertEqual(self.ledger.list_events()[0].event_type, "ordinary.append")
+        ordinary = self.ledger.list_events()[0]
+        self.assertEqual(ordinary.event_type, "ordinary.append")
+        self.assertIsInstance(ordinary.payload, dict)
+        self.assertEqual(json.loads(json.dumps(ordinary.payload)), {"ok": True})
 
     def test_conditional_append_busy_is_bounded_and_has_no_mutation(self):
         lock = sqlite3.connect(self.ledger.path, timeout=0, isolation_level=None)
