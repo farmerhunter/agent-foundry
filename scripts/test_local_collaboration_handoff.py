@@ -7,7 +7,7 @@ import yaml
 from jsonschema import Draft202012Validator
 
 from local_collaboration_handoff import (
-    HandoffState, apply_handoff_transition, plan_handoff_transition,
+    HandoffHold, HandoffState, apply_handoff_transition, plan_handoff_transition,
     read_handoff_state, reduce_handoff_events, verify_a2_import_seam,
 )
 from local_collaboration_ledger import LocalCollaborationLedger
@@ -190,6 +190,59 @@ class HandoffTests(unittest.TestCase):
         self.assertEqual((reduced.phase, reduced.handoff["status"]), ("source_locked", "bundle_exported"))
         cancel = plan_handoff_transition(reduced, self.request("cancel", handoff_id="handoff-1", cancellation_evidence="bundle_not_released", **self.decision("blocked")))
         self.assertEqual(cancel["outcome"], "hold_cancellation_unproven")
+
+    def test_prepare_persists_only_owner_derived_source_frontier(self):
+        self.assertEqual(self.apply(self.enrollment("enroll_initial", "replica-source", 1, "source"))["outcome"], "enrolled")
+        self.assertEqual(self.apply(self.enrollment("enroll_target", "replica-target", 1, "target"))["outcome"], "enrolled")
+        before = read_handoff_state(self.ledger.path, expected_project_id=self.project_id)
+        forged = self.request("prepare", handoff_id="handoff-frontier", source_replica_id="replica-source",
+                              target_replica_id="replica-target", frontier_digest=digest("frontier"),
+                              source_generation=0, source_head="0" * 64)
+        self.assertEqual(plan_handoff_transition(before, forged)["outcome"], "hold_schema")
+        receipt = self.apply(self.request("prepare", handoff_id="handoff-frontier", source_replica_id="replica-source",
+                                           target_replica_id="replica-target", frontier_digest=digest("frontier")))
+        self.assertEqual(receipt["outcome"], "prepared")
+        event = LocalCollaborationLedger.authority_snapshot(self.ledger.path, expected_project_id=self.project_id).events[-1]
+        self.assertEqual((event.payload["source_generation"], event.payload["source_head"]),
+                         (before.authority_generation, before.authority_head))
+        self.assertEqual(read_handoff_state(self.ledger.path, expected_project_id=self.project_id).handoff["source_head"], before.authority_head)
+        schema = yaml.safe_load((Path(__file__).parent.parent / "schemas" / "local-collaboration-handoff.schema.yaml").read_text())
+        payload_schema = {"$schema": schema["$schema"], "$defs": schema["$defs"], **schema["$defs"]["durable_prepare_payload"]}
+        self.assertFalse(list(Draft202012Validator(payload_schema).iter_errors(dict(event.payload))))
+
+    def test_pure_reducer_requires_prepare_event_local_source_frontier(self):
+        self.assertEqual(self.apply(self.enrollment("enroll_initial", "replica-source", 1, "source"))["outcome"], "enrolled")
+        self.assertEqual(self.apply(self.enrollment("enroll_target", "replica-target", 1, "target"))["outcome"], "enrolled")
+        self.assertEqual(self.apply(self.request("prepare", handoff_id="handoff-prefix", source_replica_id="replica-source",
+                                                 target_replica_id="replica-target", frontier_digest=digest("frontier")))["outcome"], "prepared")
+        snapshot = LocalCollaborationLedger.authority_snapshot(self.ledger.path, expected_project_id=self.project_id)
+        event = snapshot.events[-1]
+        altered = type(event)(event.sequence, event.event_id, event.event_type,
+                              {**event.payload, "source_generation": 0, "source_head": "0" * 64},
+                              event.payload_hash, event.previous_hash, event.event_hash, event.created_at,
+                              event.actor, event.source, event.root)
+        with self.assertRaises(HandoffHold):
+            reduce_handoff_events(self.project_id, list(snapshot.events[:-1]) + [altered],
+                                  snapshot.authority_generation, snapshot.authority_head)
+
+    def test_unrelated_verified_events_advance_the_replay_pair_without_changing_handoff_state(self):
+        self.ledger.conditional_append_batch([{"event_type": "unrelated", "event_id": str(uuid.uuid4()),
+                                               "payload": {"n": 1}, "actor": "owner", "source": "fixture",
+                                               "root": self.project_id}], expected_generation=0, expected_head="0" * 64)
+        initial = self.apply(self.enrollment("enroll_initial", "replica-source", 1, "source"))
+        self.assertEqual(initial["outcome"], "enrolled")
+        self.assertEqual(self.apply(self.enrollment("enroll_target", "replica-target", 1, "target"))["outcome"], "enrolled")
+        self.ledger.append_event("unrelated", {"n": 2}, event_id=str(uuid.uuid4()), actor="owner", source="fixture", root=self.project_id)
+        before_prepare = read_handoff_state(self.ledger.path, expected_project_id=self.project_id)
+        self.assertEqual(before_prepare.phase, "active")
+        self.assertEqual(self.apply(self.request("prepare", handoff_id="handoff-unrelated", source_replica_id="replica-source",
+                                                  target_replica_id="replica-target", frontier_digest=digest("frontier")))["outcome"], "prepared")
+        self.ledger.append_event("unrelated", {"n": 3}, event_id=str(uuid.uuid4()), actor="owner", source="fixture", root=self.project_id)
+        self.assertEqual(self.apply(self.request("source_lock", handoff_id="handoff-unrelated"))["outcome"], "source_locked")
+        snapshot = LocalCollaborationLedger.authority_snapshot(self.ledger.path, expected_project_id=self.project_id)
+        replayed = read_handoff_state(self.ledger.path, expected_project_id=self.project_id)
+        self.assertEqual((replayed.authority_generation, replayed.authority_head),
+                         (snapshot.authority_generation, snapshot.authority_head))
 
 
 if __name__ == "__main__":

@@ -57,3 +57,34 @@ $defs:
       actor: {type: [string, 'null']}
       source: {type: [string, 'null']}
       root: {type: string, format: uuid}
+  owner_import_projection:
+    type: object
+    additionalProperties: false
+    required: [schema_version, outcome, project_id, bundle_id, handoff_id, phase, handoff_status, source_generation, source_head, source_state_digest, frontier_digest, target_generation, target_head, receipt_event_id, package_digest, owner_import_verified, target_activation_authorized, flags]
+    properties:
+      schema_version: {const: LocalCollaborationHandoffBundle-v1}
+      outcome: {const: owner_import_verified}
+      project_id: {type: string, format: uuid}
+      bundle_id: {$ref: '#/$defs/opaque'}
+      handoff_id: {$ref: '#/$defs/opaque'}
+      phase: {const: source_locked}
+      handoff_status: {const: bundle_exported}
+      source_generation: {type: integer, minimum: 0}
+      source_head: {$ref: '#/$defs/digest'}
+      source_state_digest: {$ref: '#/$defs/digest'}
+      frontier_digest: {$ref: '#/$defs/digest'}
+      target_generation: {type: integer, minimum: 0}
+      target_head: {$ref: '#/$defs/digest'}
+      receipt_event_id: {type: string, format: uuid}
+      package_digest: {$ref: '#/$defs/digest'}
+      owner_import_verified: {const: true}
+      target_activation_authorized: {const: false}
+      flags:
+        type: object
+        additionalProperties: false
+        required: [owner_import_performed, owner_readback_verified, target_activation_authorized, transport_performed]
+        properties:
+          owner_import_performed: {type: boolean}
+          owner_readback_verified: {const: true}
+          target_activation_authorized: {const: false}
+          transport_performed: {const: false}

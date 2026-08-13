@@ -151,7 +151,7 @@ def _make_state(project_id: str, generation: int, head: str, active_id: str | No
 
 
 def _initial(snapshot) -> HandoffState:
-    return _make_state(snapshot.project_id, snapshot.authority_generation, snapshot.authority_head, None, None, 0, "uninitialized", {}, None)
+    return _make_state(snapshot.project_id, 0, GENESIS, None, None, 0, "uninitialized", {}, None)
 
 
 def _event_payload(event) -> Mapping[str, Any] | None:
@@ -168,9 +168,13 @@ def _event_payload(event) -> Mapping[str, Any] | None:
 
 
 def _reduce_event(state: HandoffState, event) -> HandoffState:
+    if event.root != state.project_id:
+        raise HandoffHold("hold_project_identity", "event_project_mismatch")
     payload = _event_payload(event)
     if payload is None:
-        return state
+        return _make_state(state.project_id, event.sequence, event.event_hash,
+                           state.active_replica_id, state.active_replica_epoch,
+                           state.active_epoch, state.phase, _enrollment_map(state), state.handoff)
     if payload.get("transition") == "target_activate":
         if payload.get("project_id") != state.project_id:
             raise HandoffHold("hold_project_identity", "event_project_mismatch")
@@ -240,15 +244,24 @@ def _transition(state: HandoffState, request: Mapping[str, Any], *, replay: bool
             raise HandoffHold("hold_enrollment", "inactive_enrollment_required")
         enrollments[rid] = Enrollment(entry.replica_id, entry.replica_epoch, entry.enrollment_id, entry.enrollment_digest, True)
     elif transition == "prepare":
-        keys = {"schema_version", "transition", "project_id", "handoff_id", "source_replica_id", "target_replica_id", "frontier_digest", "request_digest", "before_state_digest"} if replay else {"transition", "project_id", "handoff_id", "source_replica_id", "target_replica_id", "frontier_digest"}
+        keys = {"schema_version", "transition", "project_id", "handoff_id", "source_replica_id", "target_replica_id", "frontier_digest", "source_generation", "source_head", "request_digest", "before_state_digest"} if replay else {"transition", "project_id", "handoff_id", "source_replica_id", "target_replica_id", "frontier_digest"}
         _require_keys(request, keys); source, target = _opaque(request.get("source_replica_id"), "hold_enrollment"), _opaque(request.get("target_replica_id"), "hold_enrollment")
         target_entry = enrollments.get(target)
         if phase != "active" or source != active_id or target == source or target_entry is None or target_entry.revoked:
             raise HandoffHold("hold_enrollment", "prepare_enrollment_invalid")
+        if replay:
+            source_generation = request.get("source_generation")
+            if not isinstance(source_generation, int) or isinstance(source_generation, bool) or source_generation < 0:
+                raise HandoffHold("hold_owner_integrity", "source_frontier_generation_invalid")
+            source_head = _hex(request.get("source_head"), "hold_owner_integrity")
+            if (source_generation, source_head) != (state.authority_generation, state.authority_head):
+                raise HandoffHold("hold_owner_integrity", "source_frontier_not_event_local_prefix")
+        else:
+            source_generation, source_head = state.authority_generation, state.authority_head
         handoff = {"handoff_id": _opaque(request.get("handoff_id")), "source_replica_id": source, "target_replica_id": target,
                    "source_replica_epoch": active_replica_epoch, "target_replica_epoch": target_entry.replica_epoch,
-                   "prior_active_epoch": active_epoch, "source_generation": state.authority_generation,
-                   "source_head": state.authority_head, "frontier_digest": _hex(request.get("frontier_digest")), "status": "preparing"}
+                   "prior_active_epoch": active_epoch, "source_generation": source_generation,
+                   "source_head": source_head, "frontier_digest": _hex(request.get("frontier_digest")), "status": "preparing"}
         phase = "preparing"
     elif transition == "source_lock":
         keys = {"schema_version", "transition", "project_id", "handoff_id", "request_digest", "before_state_digest"} if replay else {"transition", "project_id", "handoff_id"}
@@ -358,6 +371,11 @@ def _planned_payload(state: HandoffState, request: Mapping[str, Any]) -> tuple[d
     if request.get("project_id") != state.project_id:
         raise HandoffHold("hold_project_identity", "project_mismatch")
     bound = dict(request)
+    if bound.get("transition") == "prepare":
+        if "source_generation" in bound or "source_head" in bound:
+            raise HandoffHold("hold_schema", "caller_source_frontier_forbidden")
+        bound["source_generation"] = state.authority_generation
+        bound["source_head"] = state.authority_head
     bound["schema_version"] = VERSION
     bound["before_state_digest"] = state.state_digest
     bound["request_digest"] = _digest({key: value for key, value in bound.items() if key != "request_digest"})

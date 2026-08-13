@@ -10,7 +10,7 @@ from jsonschema import Draft202012Validator
 from local_collaboration_handoff import apply_handoff_transition, plan_handoff_transition, read_handoff_state
 from local_collaboration_handoff_bundle import (
     apply_owner_import, inspect_manual_bundle, plan_owner_import,
-    prepare_manual_bundle, verify_owner_import_proof,
+    prepare_manual_bundle, read_owner_imported_handoff_projection, verify_owner_import_proof,
 )
 from local_collaboration_ledger import LocalCollaborationLedger
 
@@ -77,6 +77,36 @@ class ManualBundleTests(unittest.TestCase):
         self.target = LocalCollaborationLedger.open_existing(Path(self.target_root.name) / self.project_id / "collaboration.db", expected_project_id=self.project_id)
         self.assertEqual(verify_owner_import_proof(self.target.path, expected_project_id=self.project_id, bundle=bundle, proof_ref=locator)["outcome"], "owner_import_verified")
 
+    def test_portable_projection_keeps_source_frontier_distinct_from_target_pair(self):
+        bundle = self.exported()
+        before = LocalCollaborationLedger.authority_snapshot(self.target.path, expected_project_id=self.project_id)
+        proof = apply_owner_import(self.target, plan_owner_import(before, bundle), expected_before=before)
+        locator = {key: proof[key] for key in ("project_id", "receipt_event_id", "receipt_event_hash", "package_digest")}
+        projection = read_owner_imported_handoff_projection(
+            self.target.path, expected_project_id=self.project_id, bundle=bundle, proof_ref=locator,
+        )
+        self.assertEqual((projection["phase"], projection["handoff_status"]), ("source_locked", "bundle_exported"))
+        self.assertEqual((projection["source_generation"], projection["source_head"]),
+                         (bundle["source_generation"], bundle["source_head"]))
+        self.assertEqual((projection["target_generation"], projection["target_head"]),
+                         (proof["target_generation"], proof["target_head"]))
+        self.assertNotEqual((projection["source_generation"], projection["source_head"]),
+                            (projection["target_generation"], projection["target_head"]))
+        self.assertFalse(projection["target_activation_authorized"])
+        self.target.close()
+        self.target = LocalCollaborationLedger.open_existing(Path(self.target_root.name) / self.project_id / "collaboration.db", expected_project_id=self.project_id)
+        self.assertEqual(read_owner_imported_handoff_projection(self.target.path, expected_project_id=self.project_id, bundle=bundle, proof_ref=locator)["outcome"], "owner_import_verified")
+
+    def test_projection_rejects_stale_or_cross_project_locator_before_activation(self):
+        bundle = self.exported()
+        before = LocalCollaborationLedger.authority_snapshot(self.target.path, expected_project_id=self.project_id)
+        proof = apply_owner_import(self.target, plan_owner_import(before, bundle), expected_before=before)
+        locator = {key: proof[key] for key in ("project_id", "receipt_event_id", "receipt_event_hash", "package_digest")}
+        bad = {**locator, "project_id": str(uuid.uuid4())}
+        self.assertEqual(read_owner_imported_handoff_projection(self.target.path, expected_project_id=self.project_id, bundle=bundle, proof_ref=bad)["outcome"], "hold_project_identity")
+        self.target.append_event("later", {"n": 1}, event_id=str(uuid.uuid4()), actor="owner", source="fixture", root=self.project_id)
+        self.assertEqual(read_owner_imported_handoff_projection(self.target.path, expected_project_id=self.project_id, bundle=bundle, proof_ref=locator)["outcome"], "hold_proof_missing_or_stale")
+
     def test_exact_source_export_receipt_loss_retry_reconstructs_same_package(self):
         locked = self.locked()
         first = prepare_manual_bundle(self.source, expected_handoff_state=locked)
@@ -142,6 +172,17 @@ class ManualBundleTests(unittest.TestCase):
         Draft202012Validator.check_schema(schema)
         self.assertFalse(list(Draft202012Validator(schema).iter_errors(json.loads(json.dumps(bundle)))))
         self.assertEqual({path.name for path in Path(self.source_root.name).rglob("*") if path.is_file() if path.suffix in {".db", ".wal", ".shm"}}, {"collaboration.db"})
+
+    def test_closed_projection_schema(self):
+        bundle = self.exported()
+        before = LocalCollaborationLedger.authority_snapshot(self.target.path, expected_project_id=self.project_id)
+        proof = apply_owner_import(self.target, plan_owner_import(before, bundle), expected_before=before)
+        locator = {key: proof[key] for key in ("project_id", "receipt_event_id", "receipt_event_hash", "package_digest")}
+        projection = read_owner_imported_handoff_projection(self.target.path, expected_project_id=self.project_id, bundle=bundle, proof_ref=locator)
+        schema = yaml.safe_load((Path(__file__).parent.parent / "schemas" / "local-collaboration-handoff-bundle.schema.yaml").read_text())
+        projection_schema = {"$schema": schema["$schema"], "$defs": schema["$defs"], **schema["$defs"]["owner_import_projection"]}
+        self.assertFalse(list(Draft202012Validator(projection_schema).iter_errors(projection)))
+        self.assertTrue(list(Draft202012Validator(projection_schema).iter_errors({**projection, "active": True})))
 
 
 if __name__ == "__main__":
