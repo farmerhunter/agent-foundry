@@ -1,0 +1,59 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://agent-foundry.local/schemas/local-collaboration-handoff-bundle.schema.yaml
+title: LocalCollaborationHandoffBundle-v1
+type: object
+additionalProperties: false
+required: [schema_version, project_id, bundle_id, handoff_id, source_replica_id, target_replica_id, source_replica_epoch, target_replica_epoch, source_enrollment_id, source_enrollment_digest, target_enrollment_id, target_enrollment_digest, source_generation, source_head, source_state_digest, frontier_digest, content_manifest_digest, events, export_marker, package_digest, flags]
+properties:
+  schema_version: {const: LocalCollaborationHandoffBundle-v1}
+  project_id: {type: string, format: uuid}
+  bundle_id: {$ref: '#/$defs/opaque'}
+  handoff_id: {$ref: '#/$defs/opaque'}
+  source_replica_id: {$ref: '#/$defs/opaque'}
+  target_replica_id: {$ref: '#/$defs/opaque'}
+  source_replica_epoch: {type: integer, minimum: 1}
+  target_replica_epoch: {type: integer, minimum: 1}
+  source_enrollment_id: {$ref: '#/$defs/opaque'}
+  source_enrollment_digest: {$ref: '#/$defs/digest'}
+  target_enrollment_id: {$ref: '#/$defs/opaque'}
+  target_enrollment_digest: {$ref: '#/$defs/digest'}
+  source_generation: {type: integer, minimum: 0}
+  source_head: {$ref: '#/$defs/digest'}
+  source_state_digest: {$ref: '#/$defs/digest'}
+  frontier_digest: {$ref: '#/$defs/digest'}
+  content_manifest_digest: {$ref: '#/$defs/digest'}
+  events:
+    type: array
+    minItems: 1
+    maxItems: 100
+    items: {$ref: '#/$defs/event'}
+  export_marker: {$ref: '#/$defs/event'}
+  package_digest: {$ref: '#/$defs/digest'}
+  flags:
+    type: object
+    additionalProperties: false
+    required: [owner_import_performed, owner_readback_verified, target_activation_authorized, transport_performed]
+    properties:
+      owner_import_performed: {const: false}
+      owner_readback_verified: {const: false}
+      target_activation_authorized: {const: false}
+      transport_performed: {const: false}
+$defs:
+  digest: {type: string, pattern: '^[0-9a-f]{64}$'}
+  opaque: {type: string, minLength: 1, maxLength: 128, pattern: '^[A-Za-z0-9._-]+$'}
+  event:
+    type: object
+    additionalProperties: false
+    required: [sequence, event_id, event_type, payload, payload_hash, previous_hash, event_hash, created_at, actor, source, root]
+    properties:
+      sequence: {type: integer, minimum: 1}
+      event_id: {type: string, format: uuid}
+      event_type: {type: string, minLength: 1, maxLength: 128}
+      payload: {}
+      payload_hash: {$ref: '#/$defs/digest'}
+      previous_hash: {$ref: '#/$defs/digest'}
+      event_hash: {$ref: '#/$defs/digest'}
+      created_at: {type: string}
+      actor: {type: [string, 'null']}
+      source: {type: [string, 'null']}
+      root: {type: string, format: uuid}

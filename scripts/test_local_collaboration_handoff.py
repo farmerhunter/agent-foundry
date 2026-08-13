@@ -8,7 +8,7 @@ from jsonschema import Draft202012Validator
 
 from local_collaboration_handoff import (
     HandoffState, apply_handoff_transition, plan_handoff_transition,
-    read_handoff_state, verify_a2_import_seam,
+    read_handoff_state, reduce_handoff_events, verify_a2_import_seam,
 )
 from local_collaboration_ledger import LocalCollaborationLedger
 
@@ -178,6 +178,18 @@ class HandoffTests(unittest.TestCase):
                                                expected_generation=state.authority_generation, expected_head=state.authority_head)
         replayed = read_handoff_state(self.ledger.path, expected_project_id=self.project_id)
         self.assertEqual((replayed.phase, replayed.active_replica_id), ("held", "replica-source"))
+
+    def test_bundle_export_marker_is_purely_reducible_and_blocks_unreleased_cancel(self):
+        self.ready_locked()
+        state = read_handoff_state(self.ledger.path, expected_project_id=self.project_id)
+        marker = self.apply(self.request("bundle_exported", handoff_id="handoff-1", bundle_id="bundle-1",
+                                         content_manifest_digest=digest("manifest")))
+        self.assertEqual(marker["outcome"], "bundle_exported")
+        snapshot = LocalCollaborationLedger.authority_snapshot(self.ledger.path, expected_project_id=self.project_id)
+        reduced = reduce_handoff_events(self.project_id, snapshot.events, snapshot.authority_generation, snapshot.authority_head)
+        self.assertEqual((reduced.phase, reduced.handoff["status"]), ("source_locked", "bundle_exported"))
+        cancel = plan_handoff_transition(reduced, self.request("cancel", handoff_id="handoff-1", cancellation_evidence="bundle_not_released", **self.decision("blocked")))
+        self.assertEqual(cancel["outcome"], "hold_cancellation_unproven")
 
 
 if __name__ == "__main__":

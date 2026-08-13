@@ -23,8 +23,8 @@ VERSION = "LocalCollaborationHandoff-v1"
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 OPAQUE = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
 FORBIDDEN = {"prompt", "transcript", "raw_transcript", "tool_output", "raw_tool_output", "secret", "token", "credential", "native_history", "native_thread_id", "username", "hostname", "machine", "machine_label", "path", "exception", "trusted", "approved", "verified", "authorized"}
-TRANSITIONS = {"enroll_initial", "enroll_target", "revoke_inactive", "prepare", "source_lock", "cancel", "takeover", "target_activate"}
-OUTCOMES = {"enrolled", "prepared", "source_locked", "cancelled", "taken_over", "target_active", "hold_schema", "hold_privacy", "hold_project_identity", "hold_enrollment", "hold_revoked", "hold_epoch", "hold_transition", "hold_stale_snapshot", "hold_overlap_conflict", "hold_cancellation_unproven", "hold_owner_integrity", "hold_owner_busy", "hold_owner_permission", "hold_readback_ambiguous"}
+TRANSITIONS = {"enroll_initial", "enroll_target", "revoke_inactive", "prepare", "source_lock", "bundle_exported", "cancel", "takeover", "target_activate"}
+OUTCOMES = {"enrolled", "prepared", "source_locked", "bundle_exported", "cancelled", "taken_over", "target_active", "hold_schema", "hold_privacy", "hold_project_identity", "hold_enrollment", "hold_revoked", "hold_epoch", "hold_transition", "hold_stale_snapshot", "hold_overlap_conflict", "hold_cancellation_unproven", "hold_owner_integrity", "hold_owner_busy", "hold_owner_permission", "hold_readback_ambiguous"}
 
 
 class HandoffHold(ValueError):
@@ -155,7 +155,7 @@ def _initial(snapshot) -> HandoffState:
 
 
 def _event_payload(event) -> Mapping[str, Any] | None:
-    if event.event_type not in {"replica_enrolled", "replica_revoked", "handoff_prepared", "handoff_source_locked", "handoff_cancelled", "handoff_takeover_approved", "handoff_target_activated"}:
+    if event.event_type not in {"replica_enrolled", "replica_revoked", "handoff_prepared", "handoff_source_locked", "handoff_bundle_exported", "handoff_cancelled", "handoff_takeover_approved", "handoff_target_activated"}:
         return None
     payload = event.payload
     if not isinstance(payload, Mapping) or payload.get("schema_version") != VERSION:
@@ -256,6 +256,13 @@ def _transition(state: HandoffState, request: Mapping[str, Any], *, replay: bool
         if phase != "preparing" or not handoff or _opaque(request.get("handoff_id")) != handoff["handoff_id"]:
             raise HandoffHold("hold_transition", "source_lock_invalid")
         handoff = dict(handoff); handoff["status"] = "source_locked"; phase = "source_locked"
+    elif transition == "bundle_exported":
+        keys = {"schema_version", "transition", "project_id", "handoff_id", "bundle_id", "content_manifest_digest", "request_digest", "before_state_digest"} if replay else {"transition", "project_id", "handoff_id", "bundle_id", "content_manifest_digest"}
+        _require_keys(request, keys)
+        if phase != "source_locked" or not handoff or handoff.get("status") != "source_locked" or _opaque(request.get("handoff_id")) != handoff["handoff_id"]:
+            raise HandoffHold("hold_transition", "bundle_export_invalid")
+        handoff = dict(handoff)
+        handoff.update(status="bundle_exported", bundle_id=_opaque(request.get("bundle_id")), content_manifest_digest=_hex(request.get("content_manifest_digest")))
     elif transition == "cancel":
         keys = {"schema_version", "transition", "project_id", "handoff_id", "cancellation_evidence", "decision_id", "decision_digest", "request_digest", "before_state_digest"} if replay else {"transition", "project_id", "handoff_id", "cancellation_evidence", "decision_id", "decision_digest"}
         _require_keys(request, keys); _decision(request)
@@ -264,6 +271,8 @@ def _transition(state: HandoffState, request: Mapping[str, Any], *, replay: bool
         evidence = request.get("cancellation_evidence")
         if evidence not in {"bundle_not_released", "target_non_activation_readback"}:
             raise HandoffHold("hold_cancellation_unproven", "cancellation_evidence_invalid")
+        if handoff.get("status") == "bundle_exported" and evidence == "bundle_not_released":
+            raise HandoffHold("hold_cancellation_unproven", "bundle_release_persisted")
         handoff = dict(handoff); handoff.update(status="cancelled", cancellation_evidence=evidence); phase = "active"
     elif transition in {"target_activate", "takeover"}:
         required = {"schema_version", "transition", "project_id", "target_replica_id", "decision_id", "decision_digest", "request_digest", "before_state_digest"} if replay else {"transition", "project_id", "target_replica_id", "decision_id", "decision_digest"}
@@ -308,6 +317,34 @@ def read_handoff_state(db_path, *, expected_project_id: str) -> HandoffState:
                        state.phase, _enrollment_map(state), state.handoff)
 
 
+def reduce_handoff_events(project_id: str, events, authority_generation: int, authority_head: str) -> HandoffState:
+    """Pure A1 reducer for an already-verified immutable event sequence.
+
+    It deliberately does not open storage or assert that an external event
+    sequence was enrolled, imported, or transported by an owner.
+    """
+    project_id = _uuid(project_id, "hold_project_identity")
+    if not isinstance(authority_generation, int) or isinstance(authority_generation, bool) or authority_generation < 0:
+        raise HandoffHold("hold_schema", "generation_invalid")
+    _hex(authority_head)
+    state = _make_state(project_id, 0, GENESIS, None, None, 0, "uninitialized", {}, None)
+    prior = GENESIS
+    expected_sequence = 1
+    for event in events:
+        if not all(hasattr(event, field) for field in ("sequence", "previous_hash", "event_hash", "root")):
+            raise HandoffHold("hold_schema", "event_record_invalid")
+        if event.sequence != expected_sequence or event.previous_hash != prior or event.root != project_id:
+            raise HandoffHold("hold_owner_integrity", "event_order_invalid")
+        state = _reduce_event(state, event)
+        prior = event.event_hash
+        expected_sequence += 1
+    if authority_generation != expected_sequence - 1 or authority_head != prior:
+        raise HandoffHold("hold_owner_integrity", "authority_pair_invalid")
+    return _make_state(project_id, authority_generation, authority_head, state.active_replica_id,
+                       state.active_replica_epoch, state.active_epoch, state.phase,
+                       _enrollment_map(state), state.handoff)
+
+
 def _hold(project_id: str, outcome: str, reason_code: str) -> dict[str, Any]:
     return {"schema_version": VERSION, "outcome": outcome, "project_id": project_id, "reason_code": reason_code,
             "flags": {"owner_persisted": False, "owner_readback_verified": False, "bundle_exported": False,
@@ -333,10 +370,10 @@ def plan_handoff_transition(state: HandoffState, request: Mapping[str, Any]) -> 
         if not isinstance(request, Mapping) or request.get("transition") == "target_activate":
             return _hold(state.project_id, "hold_a2_owner_proof_unavailable", "complete_a2_owner_verified_import")
         payload, after = _planned_payload(state, request)
-        event_type = {"enroll_initial": "replica_enrolled", "enroll_target": "replica_enrolled", "revoke_inactive": "replica_revoked", "prepare": "handoff_prepared", "source_lock": "handoff_source_locked", "cancel": "handoff_cancelled", "takeover": "handoff_takeover_approved", "target_activate": "handoff_target_activated"}[payload["transition"]]
+        event_type = {"enroll_initial": "replica_enrolled", "enroll_target": "replica_enrolled", "revoke_inactive": "replica_revoked", "prepare": "handoff_prepared", "source_lock": "handoff_source_locked", "bundle_exported": "handoff_bundle_exported", "cancel": "handoff_cancelled", "takeover": "handoff_takeover_approved", "target_activate": "handoff_target_activated"}[payload["transition"]]
         event_id = str(uuid.uuid5(uuid.UUID(state.project_id), event_type + ":" + payload["request_digest"]))
         event = {"event_type": event_type, "event_id": event_id, "payload": payload, "actor": "owner", "source": "orch05_handoff", "root": state.project_id}
-        expected_outcome = {"enroll_initial": "enrolled", "enroll_target": "enrolled", "prepare": "prepared", "source_lock": "source_locked", "cancel": "cancelled", "takeover": "taken_over", "revoke_inactive": "enrolled"}[payload["transition"]]
+        expected_outcome = {"enroll_initial": "enrolled", "enroll_target": "enrolled", "prepare": "prepared", "source_lock": "source_locked", "bundle_exported": "bundle_exported", "cancel": "cancelled", "takeover": "taken_over", "revoke_inactive": "enrolled"}[payload["transition"]]
         return TransitionPlan(payload["transition"], state.project_id, state.authority_generation, state.authority_head,
                               state.state_digest, after.state_digest, expected_outcome, payload["request_digest"], event)
     except HandoffHold as exc:
@@ -394,7 +431,7 @@ def apply_handoff_transition(ledger: LocalCollaborationLedger, plan: TransitionP
                 "before_state_digest": plan.before_state_digest, "after_state_digest": plan.after_state_digest,
                 "readback_generation": after.authority_generation, "readback_head": after.authority_head,
                 "flags": {"owner_persisted": result.mutation_performed, "owner_readback_verified": True,
-                          "bundle_exported": False, "owner_import_performed": False, "transport_performed": False},
+                          "bundle_exported": plan.transition == "bundle_exported", "owner_import_performed": False, "transport_performed": False},
                 "cas_status": result.status}
     except Exception as exc:
         return _owner_hold(plan.project_id, exc)
@@ -417,7 +454,7 @@ def verify_a2_import_seam(state: HandoffState, bundle_header: Mapping[str, Any])
         return _hold(state.project_id, exc.outcome, exc.reason_code)
 
 
-__all__ = ["A2AuthorizationCandidate", "HandoffHold", "HandoffState", "TransitionPlan", "apply_handoff_transition", "plan_handoff_transition", "read_handoff_state", "verify_a2_import_seam"]
+__all__ = ["A2AuthorizationCandidate", "HandoffHold", "HandoffState", "TransitionPlan", "apply_handoff_transition", "plan_handoff_transition", "read_handoff_state", "reduce_handoff_events", "verify_a2_import_seam"]
 
 # Public name reserved by the contract; receipts are JSON mappings to preserve
 # a closed portable boundary.
