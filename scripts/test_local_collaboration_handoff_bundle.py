@@ -2,22 +2,31 @@ import json
 import tempfile
 import unittest
 import uuid
+from dataclasses import replace
 from pathlib import Path
+from unittest.mock import patch
 
 import yaml
 from jsonschema import Draft202012Validator
 
+import local_collaboration_handoff_bundle as handoff_bundle
 from local_collaboration_handoff import apply_handoff_transition, plan_handoff_transition, read_handoff_state
 from local_collaboration_handoff_bundle import (
     apply_owner_import, inspect_manual_bundle, plan_owner_import,
-    prepare_manual_bundle, read_owner_imported_handoff_projection, verify_owner_import_proof,
+    apply_owner_target_activation, plan_owner_target_activation, prepare_manual_bundle,
+    read_owner_imported_handoff_projection, read_owner_target_activation, verify_owner_import_proof,
 )
-from local_collaboration_ledger import LocalCollaborationLedger
+from local_collaboration_ledger import LedgerStaleSnapshotError, LocalCollaborationLedger
 
 
 def digest(value):
     import hashlib
     return hashlib.sha256(value.encode()).hexdigest()
+
+
+def canonical_digest(value):
+    import hashlib
+    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()).hexdigest()
 
 
 class ManualBundleTests(unittest.TestCase):
@@ -183,6 +192,195 @@ class ManualBundleTests(unittest.TestCase):
         projection_schema = {"$schema": schema["$schema"], "$defs": schema["$defs"], **schema["$defs"]["owner_import_projection"]}
         self.assertFalse(list(Draft202012Validator(projection_schema).iter_errors(projection)))
         self.assertTrue(list(Draft202012Validator(projection_schema).iter_errors({**projection, "active": True})))
+
+    def test_target_activation_commits_once_restarts_and_leaves_source_locked(self):
+        bundle = self.exported()
+        before = LocalCollaborationLedger.authority_snapshot(self.target.path, expected_project_id=self.project_id)
+        proof = apply_owner_import(self.target, plan_owner_import(before, bundle), expected_before=before)
+        locator = {key: proof[key] for key in ("project_id", "receipt_event_id", "receipt_event_hash", "package_digest")}
+        decision = {"decision_id": "human-a2a", "decision_digest": digest("human-a2a")}
+        plan = plan_owner_target_activation(self.target.path, expected_project_id=self.project_id, bundle=bundle, proof_ref=locator, decision=decision)
+        self.assertNotIsInstance(plan, dict)
+        source_before = LocalCollaborationLedger.authority_snapshot(self.source.path, expected_project_id=self.project_id)
+        committed = apply_owner_target_activation(self.target, plan, bundle=bundle, proof_ref=locator, decision=decision)
+        self.assertEqual(committed["outcome"], "owner_target_activated")
+        self.assertTrue(committed["target_activation_performed"])
+        schema = yaml.safe_load((Path(__file__).parent.parent / "schemas" / "local-collaboration-handoff-bundle.schema.yaml").read_text())
+        activation_schema = {"$schema": schema["$schema"], "$defs": schema["$defs"], **schema["$defs"]["owner_target_activation"]}
+        self.assertFalse(list(Draft202012Validator(activation_schema).iter_errors(committed)))
+        self.assertTrue(list(Draft202012Validator(activation_schema).iter_errors({**committed, "forged": True})))
+        activation_ref = {key: committed[key] for key in ("project_id", "activation_receipt_event_id", "activation_receipt_event_hash", "package_digest")}
+        self.target.close()
+        self.target = LocalCollaborationLedger.open_existing(Path(self.target_root.name) / self.project_id / "collaboration.db", expected_project_id=self.project_id)
+        readback = read_owner_target_activation(self.target.path, expected_project_id=self.project_id, bundle=bundle, proof_ref=locator, activation_ref=activation_ref)
+        self.assertEqual(readback["outcome"], "owner_target_activated")
+        self.assertFalse(readback["target_activation_performed"])
+        retry = apply_owner_target_activation(self.target, plan, bundle=bundle, proof_ref=locator, decision=decision)
+        self.assertEqual(retry["outcome"], "owner_target_activation_duplicate")
+        self.assertFalse(retry["target_activation_performed"])
+        changed = apply_owner_target_activation(self.target, plan, bundle=bundle, proof_ref=locator,
+                                                decision={"decision_id": "human-a2a-2", "decision_digest": digest("human-a2a-2")})
+        self.assertEqual(changed["outcome"], "hold_activation_conflict")
+        source_after = LocalCollaborationLedger.authority_snapshot(self.source.path, expected_project_id=self.project_id)
+        self.assertEqual((source_before.authority_generation, source_before.authority_head), (source_after.authority_generation, source_after.authority_head))
+        self.assertEqual(read_handoff_state(self.source.path, expected_project_id=self.project_id).phase, "source_locked")
+
+    def test_target_activation_rejects_decision_tamper_stale_and_unrelated_tail(self):
+        bundle = self.exported()
+        before = LocalCollaborationLedger.authority_snapshot(self.target.path, expected_project_id=self.project_id)
+        proof = apply_owner_import(self.target, plan_owner_import(before, bundle), expected_before=before)
+        locator = {key: proof[key] for key in ("project_id", "receipt_event_id", "receipt_event_hash", "package_digest")}
+        decision = {"decision_id": "human-a2a", "decision_digest": digest("human-a2a")}
+        self.assertEqual(plan_owner_target_activation(self.target.path, expected_project_id=self.project_id, bundle=bundle, proof_ref=locator, decision={**decision, "verified": True})["outcome"], "hold_decision_invalid")
+        plan = plan_owner_target_activation(self.target.path, expected_project_id=self.project_id, bundle=bundle, proof_ref=locator, decision=decision)
+        self.target.append_event("later", {"n": 1}, event_id=str(uuid.uuid4()), actor="owner", source="fixture", root=self.project_id)
+        self.assertEqual(apply_owner_target_activation(self.target, plan, bundle=bundle, proof_ref=locator, decision=decision)["outcome"], "hold_proof_missing_or_stale")
+
+    def test_target_activation_precommit_cas_failure_keeps_import_tail(self):
+        bundle = self.exported()
+        before = LocalCollaborationLedger.authority_snapshot(self.target.path, expected_project_id=self.project_id)
+        proof = apply_owner_import(self.target, plan_owner_import(before, bundle), expected_before=before)
+        locator = {key: proof[key] for key in ("project_id", "receipt_event_id", "receipt_event_hash", "package_digest")}
+        decision = {"decision_id": "human-a2a", "decision_digest": digest("human-a2a")}
+        plan = plan_owner_target_activation(self.target.path, expected_project_id=self.project_id, bundle=bundle, proof_ref=locator, decision=decision)
+        import_tail = LocalCollaborationLedger.authority_snapshot(self.target.path, expected_project_id=self.project_id)
+        with patch.object(self.target, "conditional_append_batch", side_effect=LedgerStaleSnapshotError("fixture")) as cas:
+            result = apply_owner_target_activation(self.target, plan, bundle=bundle, proof_ref=locator, decision=decision)
+        self.assertEqual(result["outcome"], "hold_target_stale")
+        self.assertEqual(cas.call_count, 1)
+        after = LocalCollaborationLedger.authority_snapshot(self.target.path, expected_project_id=self.project_id)
+        self.assertEqual((after.authority_generation, after.authority_head), (import_tail.authority_generation, import_tail.authority_head))
+        self.assertEqual(after.events[-1].event_id, proof["receipt_event_id"])
+
+    def test_target_activation_rejects_historical_duplicate_without_cas(self):
+        bundle = self.exported()
+        before = LocalCollaborationLedger.authority_snapshot(self.target.path, expected_project_id=self.project_id)
+        proof = apply_owner_import(self.target, plan_owner_import(before, bundle), expected_before=before)
+        locator = {key: proof[key] for key in ("project_id", "receipt_event_id", "receipt_event_hash", "package_digest")}
+        decision = {"decision_id": "human-a2a", "decision_digest": digest("human-a2a")}
+        plan = plan_owner_target_activation(self.target.path, expected_project_id=self.project_id, bundle=bundle, proof_ref=locator, decision=decision)
+        self.assertEqual(apply_owner_target_activation(self.target, plan, bundle=bundle, proof_ref=locator, decision=decision)["outcome"], "owner_target_activated")
+        self.target.append_event("later", {"n": 1}, event_id=str(uuid.uuid4()), actor="owner", source="fixture", root=self.project_id)
+        tail = LocalCollaborationLedger.authority_snapshot(self.target.path, expected_project_id=self.project_id)
+        with patch.object(self.target, "conditional_append_batch", wraps=self.target.conditional_append_batch) as cas:
+            result = apply_owner_target_activation(self.target, plan, bundle=bundle, proof_ref=locator, decision=decision)
+        self.assertEqual(result["outcome"], "hold_proof_missing_or_stale")
+        self.assertEqual(cas.call_count, 0)
+        after = LocalCollaborationLedger.authority_snapshot(self.target.path, expected_project_id=self.project_id)
+        self.assertEqual((after.authority_generation, after.authority_head), (tail.authority_generation, tail.authority_head))
+
+    def test_target_activation_rejects_rebound_target_enrollment_before_cas(self):
+        bundle = json.loads(json.dumps(self.exported()))
+        bundle["target_enrollment_digest"] = digest("forged-target-enrollment")
+        required = set(bundle)
+        manifest = {key: bundle[key] for key in required - {"events", "export_marker", "content_manifest_digest", "package_digest", "flags"}}
+        bundle["content_manifest_digest"] = canonical_digest({"header": manifest, "events": bundle["events"]})
+        bundle["package_digest"] = canonical_digest({key: bundle[key] for key in required - {"package_digest"}})
+        before = LocalCollaborationLedger.authority_snapshot(self.target.path, expected_project_id=self.project_id)
+        decision = {"decision_id": "human-a2a", "decision_digest": digest("human-a2a")}
+        with patch.object(self.target, "conditional_append_batch", wraps=self.target.conditional_append_batch) as cas:
+            result = plan_owner_target_activation(self.target.path, expected_project_id=self.project_id, bundle=bundle,
+                                                  proof_ref={"project_id": self.project_id, "receipt_event_id": "00000000-0000-0000-0000-000000000001", "receipt_event_hash": "0" * 64, "package_digest": bundle["package_digest"]},
+                                                  decision=decision)
+        self.assertIn(result["outcome"], {"hold_proof_missing_or_stale", "hold_package_integrity"})
+        self.assertEqual(cas.call_count, 0)
+        after = LocalCollaborationLedger.authority_snapshot(self.target.path, expected_project_id=self.project_id)
+        self.assertEqual((after.authority_generation, after.authority_head), (before.authority_generation, before.authority_head))
+
+    def test_target_activation_rejects_caller_plan_event_substitution_before_cas(self):
+        bundle = self.exported()
+        before = LocalCollaborationLedger.authority_snapshot(self.target.path, expected_project_id=self.project_id)
+        proof = apply_owner_import(self.target, plan_owner_import(before, bundle), expected_before=before)
+        locator = {key: proof[key] for key in ("project_id", "receipt_event_id", "receipt_event_hash", "package_digest")}
+        decision = {"decision_id": "human-a2a", "decision_digest": digest("human-a2a")}
+        plan = plan_owner_target_activation(self.target.path, expected_project_id=self.project_id, bundle=bundle, proof_ref=locator, decision=decision)
+        forged_event = json.loads(json.dumps(plan.activation_event)); forged_event["actor"] = "caller"
+        forged_plan = replace(plan, activation_event=forged_event)
+        with patch.object(self.target, "conditional_append_batch", wraps=self.target.conditional_append_batch) as cas:
+            result = apply_owner_target_activation(self.target, forged_plan, bundle=bundle, proof_ref=locator, decision=decision)
+        self.assertEqual(result["outcome"], "hold_activation_conflict")
+        self.assertEqual(cas.call_count, 0)
+
+    def test_target_activation_full_readback_rejects_forged_proof_locator(self):
+        bundle = self.exported()
+        before = LocalCollaborationLedger.authority_snapshot(self.target.path, expected_project_id=self.project_id)
+        proof = apply_owner_import(self.target, plan_owner_import(before, bundle), expected_before=before)
+        locator = {key: proof[key] for key in ("project_id", "receipt_event_id", "receipt_event_hash", "package_digest")}
+        decision = {"decision_id": "human-a2a", "decision_digest": digest("human-a2a")}
+        plan = plan_owner_target_activation(self.target.path, expected_project_id=self.project_id, bundle=bundle, proof_ref=locator, decision=decision)
+        committed = apply_owner_target_activation(self.target, plan, bundle=bundle, proof_ref=locator, decision=decision)
+        activation_ref = {key: committed[key] for key in ("project_id", "activation_receipt_event_id", "activation_receipt_event_hash", "package_digest")}
+        forged_locator = {**locator, "receipt_event_hash": "0" * 64}
+        self.assertEqual(read_owner_target_activation(self.target.path, expected_project_id=self.project_id, bundle=bundle, proof_ref=forged_locator, activation_ref=activation_ref)["outcome"], "hold_proof_missing_or_stale")
+        with patch.object(self.target, "conditional_append_batch", wraps=self.target.conditional_append_batch) as cas:
+            duplicate = apply_owner_target_activation(self.target, plan, bundle=bundle, proof_ref=forged_locator, decision=decision)
+        self.assertEqual(duplicate["outcome"], "hold_proof_missing_or_stale")
+        self.assertEqual(cas.call_count, 0)
+
+    def test_target_activation_readback_rejects_non_owner_lookalike(self):
+        bundle = self.exported()
+        before = LocalCollaborationLedger.authority_snapshot(self.target.path, expected_project_id=self.project_id)
+        proof = apply_owner_import(self.target, plan_owner_import(before, bundle), expected_before=before)
+        locator = {key: proof[key] for key in ("project_id", "receipt_event_id", "receipt_event_hash", "package_digest")}
+        decision = {"decision_id": "human-a2a", "decision_digest": digest("human-a2a")}
+        plan = plan_owner_target_activation(self.target.path, expected_project_id=self.project_id, bundle=bundle, proof_ref=locator, decision=decision)
+        lookalike = json.loads(json.dumps(plan.activation_event)); lookalike["actor"] = "caller"
+        result = self.target.conditional_append_batch([lookalike], expected_generation=plan.expected_generation, expected_head=plan.expected_head)
+        activation_ref = {"project_id": self.project_id, "activation_receipt_event_id": lookalike["event_id"],
+                          "activation_receipt_event_hash": result.event_refs[-1][3], "package_digest": plan.package_digest}
+        self.assertEqual(read_owner_target_activation(self.target.path, expected_project_id=self.project_id, bundle=bundle, proof_ref=locator, activation_ref=activation_ref)["outcome"], "hold_proof_missing_or_stale")
+
+    def test_target_activation_post_cas_readback_hold_and_closed_hold_schema(self):
+        bundle = self.exported()
+        before = LocalCollaborationLedger.authority_snapshot(self.target.path, expected_project_id=self.project_id)
+        proof = apply_owner_import(self.target, plan_owner_import(before, bundle), expected_before=before)
+        locator = {key: proof[key] for key in ("project_id", "receipt_event_id", "receipt_event_hash", "package_digest")}
+        decision = {"decision_id": "human-a2a", "decision_digest": digest("human-a2a")}
+        plan = plan_owner_target_activation(self.target.path, expected_project_id=self.project_id, bundle=bundle, proof_ref=locator, decision=decision)
+        with patch.object(handoff_bundle, "read_owner_target_activation", return_value={"outcome": "hold_readback_ambiguous", "project_id": self.project_id, "reason_code": "fixture", "flags": {"owner_import_performed": False, "owner_readback_verified": False, "target_activation_authorized": False, "transport_performed": False}, "schema_version": "LocalCollaborationHandoffBundle-v1"}):
+            held = apply_owner_target_activation(self.target, plan, bundle=bundle, proof_ref=locator, decision=decision)
+        self.assertEqual(held["outcome"], "hold_readback_ambiguous")
+        self.assertEqual(LocalCollaborationLedger.authority_snapshot(self.target.path, expected_project_id=self.project_id).events[-1].event_id, plan.activation_event["event_id"])
+        schema = yaml.safe_load((Path(__file__).parent.parent / "schemas" / "local-collaboration-handoff-bundle.schema.yaml").read_text())
+        hold_schema = {"$schema": schema["$schema"], "$defs": schema["$defs"], **schema["$defs"]["owner_target_activation_hold"]}
+        self.assertFalse(list(Draft202012Validator(hold_schema).iter_errors(held)))
+        self.assertTrue(list(Draft202012Validator(hold_schema).iter_errors({**held, "forged": True})))
+
+    def test_target_activation_malformed_locators_hold_schema_without_cas(self):
+        bundle = self.exported()
+        before = LocalCollaborationLedger.authority_snapshot(self.target.path, expected_project_id=self.project_id)
+        proof = apply_owner_import(self.target, plan_owner_import(before, bundle), expected_before=before)
+        locator = {key: proof[key] for key in ("project_id", "receipt_event_id", "receipt_event_hash", "package_digest")}
+        decision = {"decision_id": "human-a2a", "decision_digest": digest("human-a2a")}
+        malformed = {**locator, "receipt_event_id": "not-a-uuid"}
+        with patch.object(self.target, "conditional_append_batch", wraps=self.target.conditional_append_batch) as cas:
+            planned = plan_owner_target_activation(self.target.path, expected_project_id=self.project_id, bundle=bundle, proof_ref=malformed, decision=decision)
+        self.assertEqual(planned["outcome"], "hold_schema")
+        self.assertEqual(cas.call_count, 0)
+        plan = plan_owner_target_activation(self.target.path, expected_project_id=self.project_id, bundle=bundle, proof_ref=locator, decision=decision)
+        committed = apply_owner_target_activation(self.target, plan, bundle=bundle, proof_ref=locator, decision=decision)
+        activation_ref = {key: committed[key] for key in ("project_id", "activation_receipt_event_id", "activation_receipt_event_hash", "package_digest")}
+        self.assertEqual(read_owner_target_activation(self.target.path, expected_project_id=self.project_id, bundle=bundle, proof_ref=locator,
+                                                      activation_ref={**activation_ref, "activation_receipt_event_id": "not-a-uuid"})["outcome"], "hold_schema")
+        with patch.object(self.target, "conditional_append_batch", wraps=self.target.conditional_append_batch) as cas:
+            duplicate = apply_owner_target_activation(self.target, plan, bundle=bundle, proof_ref=malformed, decision=decision)
+        self.assertEqual(duplicate["outcome"], "hold_schema")
+        self.assertEqual(cas.call_count, 0)
+
+    def test_target_activation_nested_privacy_hold_matches_closed_schema(self):
+        bundle = json.loads(json.dumps(self.exported()))
+        bundle["events"][0]["payload"]["nested"] = {"token": "forbidden"}
+        locator = {"project_id": self.project_id, "receipt_event_id": "00000000-0000-0000-0000-000000000001",
+                   "receipt_event_hash": "0" * 64, "package_digest": bundle["package_digest"]}
+        decision = {"decision_id": "human-a2a", "decision_digest": digest("human-a2a")}
+        with patch.object(self.target, "conditional_append_batch", wraps=self.target.conditional_append_batch) as cas:
+            held = plan_owner_target_activation(self.target.path, expected_project_id=self.project_id, bundle=bundle, proof_ref=locator, decision=decision)
+        self.assertEqual(held["outcome"], "hold_privacy")
+        self.assertEqual(cas.call_count, 0)
+        schema = yaml.safe_load((Path(__file__).parent.parent / "schemas" / "local-collaboration-handoff-bundle.schema.yaml").read_text())
+        hold_schema = {"$schema": schema["$schema"], "$defs": schema["$defs"], **schema["$defs"]["owner_target_activation_hold"]}
+        self.assertFalse(list(Draft202012Validator(hold_schema).iter_errors(held)))
+        self.assertTrue(list(Draft202012Validator(hold_schema).iter_errors({**held, "unknown": True})))
 
 
 if __name__ == "__main__":

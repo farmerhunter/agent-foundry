@@ -88,3 +88,48 @@ $defs:
           owner_readback_verified: {const: true}
           target_activation_authorized: {const: false}
           transport_performed: {const: false}
+  owner_target_activation:
+    type: object
+    additionalProperties: false
+    required: [schema_version, outcome, project_id, bundle_id, package_digest, handoff_id, target_replica_id, target_generation, target_head, import_receipt_event_id, import_receipt_event_hash, activation_receipt_event_id, activation_receipt_event_hash, decision_digest, request_digest, owner_import_verified, target_activation_authorized, target_activation_performed, transport_performed, global_convergence_verified, source_unlock_performed]
+    properties:
+      schema_version: {const: LocalCollaborationHandoffBundle-v1}
+      outcome: {enum: [owner_target_activated, owner_target_activation_duplicate]}
+      project_id: {type: string, format: uuid}
+      bundle_id: {$ref: '#/$defs/opaque'}
+      package_digest: {$ref: '#/$defs/digest'}
+      handoff_id: {$ref: '#/$defs/opaque'}
+      target_replica_id: {$ref: '#/$defs/opaque'}
+      target_generation: {type: integer, minimum: 0}
+      target_head: {$ref: '#/$defs/digest'}
+      import_receipt_event_id: {type: string, format: uuid}
+      import_receipt_event_hash: {$ref: '#/$defs/digest'}
+      activation_receipt_event_id: {type: string, format: uuid}
+      activation_receipt_event_hash: {$ref: '#/$defs/digest'}
+      decision_digest: {$ref: '#/$defs/digest'}
+      request_digest: {$ref: '#/$defs/digest'}
+      owner_import_verified: {const: true}
+      target_activation_authorized: {const: true}
+      target_activation_performed: {type: boolean}
+      transport_performed: {const: false}
+      global_convergence_verified: {const: false}
+      source_unlock_performed: {const: false}
+  owner_target_activation_hold:
+    type: object
+    additionalProperties: false
+    required: [schema_version, outcome, project_id, reason_code, flags]
+    properties:
+      schema_version: {const: LocalCollaborationHandoffBundle-v1}
+      outcome:
+        enum: [hold_schema, hold_project_identity, hold_decision_invalid, hold_privacy, hold_package_integrity, hold_proof_missing_or_stale, hold_target_stale, hold_enrollment, hold_owner_busy, hold_owner_permission, hold_owner_integrity, hold_readback_ambiguous, hold_activation_conflict]
+      project_id: {type: string, format: uuid}
+      reason_code: {type: string, minLength: 1, maxLength: 128, pattern: '^[a-z0-9_]+$'}
+      flags:
+        type: object
+        additionalProperties: false
+        required: [owner_import_performed, owner_readback_verified, target_activation_authorized, transport_performed]
+        properties:
+          owner_import_performed: {const: false}
+          owner_readback_verified: {const: false}
+          target_activation_authorized: {const: false}
+          transport_performed: {const: false}
