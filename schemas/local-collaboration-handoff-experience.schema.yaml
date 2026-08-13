@@ -1,0 +1,38 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://agent-foundry.local/schemas/local-collaboration-handoff-experience.schema.yaml
+title: LocalCollaborationHandoffExperience-v1
+type: object
+additionalProperties: false
+required: [schema_version, project_id, experience_state, next_action, status_only, mutation_performed, transport_performed, target_activation_performed, automatic_recovery_performed]
+properties:
+  schema_version: {const: LocalCollaborationHandoffExperience-v1}
+  project_id: {type: string, format: uuid}
+  experience_state: {enum: [single_device_active, handoff_preparing, source_locked, bundle_ready_for_manual_transfer, target_import_verified_activation_deferred, cancelled, taken_over, target_active, held]}
+  next_action: {enum: [continue_single_device, lock_source_after_review, export_manual_bundle, transfer_and_owner_import_bundle, request_later_target_activation_gate, request_cancel_with_owner_evidence, request_human_takeover_decision, resolve_conflict_or_recover_owner_state, none]}
+  active_replica_id: {$ref: '#/$defs/opaque'}
+  source_replica_id: {$ref: '#/$defs/opaque'}
+  target_replica_id: {$ref: '#/$defs/opaque'}
+  handoff_id: {$ref: '#/$defs/opaque'}
+  authority_generation: {type: integer, minimum: 0}
+  authority_head: {$ref: '#/$defs/digest'}
+  state_digest: {$ref: '#/$defs/digest'}
+  source_generation: {type: integer, minimum: 0}
+  source_head: {$ref: '#/$defs/digest'}
+  source_state_digest: {$ref: '#/$defs/digest'}
+  frontier_digest: {$ref: '#/$defs/digest'}
+  target_generation: {type: integer, minimum: 0}
+  target_head: {$ref: '#/$defs/digest'}
+  owner_import_verified: {const: true}
+  target_activation_authorized: {const: false}
+  reason_code: {$ref: '#/$defs/opaque'}
+  status_only: {const: true}
+  mutation_performed: {const: false}
+  transport_performed: {const: false}
+  target_activation_performed: {const: false}
+  automatic_recovery_performed: {const: false}
+$defs:
+  digest: {type: string, pattern: '^[0-9a-f]{64}$'}
+  opaque: {type: string, minLength: 1, maxLength: 128, pattern: '^[A-Za-z0-9._-]+$'}
+allOf:
+  - if: {properties: {experience_state: {const: held}}, required: [experience_state]}
+    then: {required: [reason_code]}
