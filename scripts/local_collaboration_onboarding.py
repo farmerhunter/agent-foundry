@@ -86,6 +86,8 @@ def read_second_device_onboarding(source_db_path, *, expected_project_id, target
         if source.phase == "uninitialized": return _summary(project_id, "source_ready", "none", decision=False, **fields)
         if source.phase == "active" and len(source.enrollments) < 2:
             return _summary(project_id, "target_enrollment_review", "enroll_target", **fields)
+        if source.phase == "active" and len(source.enrollments) != 2:
+            return _hold(project_id, "target_enrollment_ambiguous")
         if source.phase == "active":
             return _summary(project_id, "handoff_prepare_review", "prepare_handoff", **fields)
         if source.phase == "preparing":
@@ -171,19 +173,36 @@ def _exact_a1_duplicate(source, plan):
     snapshot = LocalCollaborationLedger.authority_snapshot(source.path, expected_project_id=plan.project_id)
     event = snapshot.events[-1] if snapshot.events else None
     payload = event.payload if event is not None else None
+    expected = {"enroll_target": "enroll_target", "prepare_handoff": "prepare", "lock_source": "source_lock"}[plan.operation]
     if (event is not None and event.event_type == event_type and event.actor == "owner"
             and event.source == "orch05_handoff" and event.root == plan.project_id
-            and isinstance(payload, Mapping) and payload.get("decision_digest") == plan.decision_digest):
+            and isinstance(payload, Mapping) and payload.get("transition") == expected
+            and payload.get("decision_digest") == plan.decision_digest
+            and all(payload.get(key) == value for key, value in plan.parameters.items())):
         return _receipt(plan.project_id, plan, (snapshot.authority_generation - 1, event.previous_hash),
                         (snapshot.authority_generation, snapshot.authority_head), "owner_exact_duplicate", False)
     return None
+
+
+def _plan_valid(plan):
+    if not isinstance(plan, OnboardingStepPlan) or plan.operation not in _PARAMS:
+        return False
+    try:
+        project_id = _uuid(plan.project_id); decision_id = _opaque(plan.decision_id); decision_digest = _hex(plan.decision_digest)
+        if not isinstance(plan.parameters, Mapping) or set(plan.parameters) != _PARAMS[plan.operation]:
+            return False
+        expected = _digest({"project_id": project_id, "operation": plan.operation, "summary_digest": _hex(plan.summary_digest),
+            "decision_id": decision_id, "decision_digest": decision_digest, "parameters": dict(plan.parameters)})
+        return expected == plan.fingerprint
+    except (ValueError, TypeError):
+        return False
 
 
 def apply_second_device_onboarding_step(context, plan):
     """Freshly re-read then execute exactly one selected public owner mutation."""
     project_id = plan.project_id if isinstance(plan, OnboardingStepPlan) else "00000000-0000-0000-0000-000000000000"
     try:
-        if not isinstance(context, Mapping) or not isinstance(plan, OnboardingStepPlan): raise ValueError("context")
+        if not isinstance(context, Mapping) or not _plan_valid(plan): raise ValueError("context")
         source = context.get("source_ledger"); target = context.get("target_ledger")
         if not isinstance(source, LocalCollaborationLedger) or source.project_id != project_id: raise ValueError("source")
         current = read_second_device_onboarding(source.path, expected_project_id=project_id,
@@ -212,6 +231,9 @@ def apply_second_device_onboarding_step(context, plan):
             mutated = True
         elif plan.operation == "create_target_authority":
             if target is not None or not isinstance(context.get("target_projects_root"), (str, Path)): raise ValueError("target create")
+            candidate = Path(context["target_projects_root"]) / project_id / "collaboration.db"
+            if candidate.exists() or candidate.is_symlink():
+                return {"schema_version": VERSION, "outcome": "held", "reason_code": "target_already_bound_or_ambiguous"}
             target = LocalCollaborationLedger.create_project(projects_root=context["target_projects_root"], project_id=project_id)
             context["target_ledger"] = target; owner = {"outcome": "target_authority_created"}; mutated = True
         elif plan.operation == "import_bundle":

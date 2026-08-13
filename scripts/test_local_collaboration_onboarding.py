@@ -98,5 +98,16 @@ class OnboardingTests(unittest.TestCase):
         self.assertEqual(apply_second_device_onboarding_step({}, object())["outcome"], "held")
         self.assertFalse((Path(self.target_root.name) / self.project_id / "collaboration.db").exists())
 
+    def test_forged_plan_and_existing_target_hold_before_create(self):
+        from dataclasses import replace
+        state = read_handoff_state(self.source.path, expected_project_id=self.project_id)
+        from local_collaboration_handoff import plan_handoff_transition, apply_handoff_transition
+        initial = plan_handoff_transition(state, {"transition": "enroll_initial", "project_id": self.project_id, "replica_id": "source", "replica_epoch": 1, "enrollment_id": "source-enroll", "enrollment_digest": digest("source"), "decision_id": "initial", "decision_digest": digest("initial")})
+        apply_handoff_transition(self.source, initial, expected_before=state)
+        summary = self.read()
+        plan = plan_second_device_onboarding_step(summary, {"operation": "enroll_target", "decision_id": "enroll", "decision_digest": digest("enroll"), "parameters": {"replica_id": "target", "replica_epoch": 1, "enrollment_id": "target-enroll", "enrollment_digest": digest("target")}})
+        forged = replace(plan, fingerprint=digest("forged"))
+        self.assertEqual(apply_second_device_onboarding_step(self.context, forged)["outcome"], "held")
+
 
 if __name__ == "__main__": unittest.main()
