@@ -1,0 +1,55 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://agent-foundry.local/schemas/local-collaboration-recovery.schema.yaml
+title: LocalCollaborationRecovery-v1
+type: object
+additionalProperties: false
+required: [schema_version, outcome, project_id, flags]
+properties:
+  schema_version: {const: LocalCollaborationRecovery-v1}
+  outcome:
+    enum: [recovery_ready, target_import_recovery_ready, recovery_action_applied, fresh_backup_created, fresh_target_restored, hold_schema, hold_privacy, hold_decision_invalid, hold_owner_proof_unavailable, hold_target_stale, hold_owner_read_unavailable, hold_real_action_hdc_required, hold_cancellation_unproven, hold_enrollment, setup_incomplete]
+  project_id: {type: string, format: uuid}
+  reason_code: {type: string, minLength: 1, maxLength: 128, pattern: '^[a-z0-9_]+$'}
+  action: {enum: [fresh_backup, fresh_target_restore, pre_export_cancel, inactive_revoke, target_takeover]}
+  request_digest: {$ref: '#/$defs/digest'}
+  decision_digest: {$ref: '#/$defs/digest'}
+  generation: {type: integer, minimum: 0}
+  head: {$ref: '#/$defs/digest'}
+  active_replica_id: {type: [string, 'null']}
+  phase: {type: string}
+  recovery_actions:
+    type: array
+    items: {type: string}
+  target_replica_id: {type: string}
+  source_replica_id: {type: string}
+  source_generation: {type: integer, minimum: 0}
+  source_head: {$ref: '#/$defs/digest'}
+  source_prefix_identity: {$ref: '#/$defs/digest'}
+  frontier_digest: {$ref: '#/$defs/digest'}
+  target_generation: {type: integer, minimum: 0}
+  target_head: {$ref: '#/$defs/digest'}
+  import_receipt_event_id: {type: string}
+  provisional_receipt:
+    type: object
+    additionalProperties: false
+    required: [event_ids, request_digest, generation, head]
+    properties:
+      event_ids: {type: array, items: {type: string}}
+      request_digest: {$ref: '#/$defs/digest'}
+      generation: {type: integer, minimum: 0}
+      head: {$ref: '#/$defs/digest'}
+  flags: {$ref: '#/$defs/flags'}
+$defs:
+  digest: {type: string, pattern: '^[0-9a-f]{64}$'}
+  flags:
+    type: object
+    additionalProperties: false
+    required: [mutation_performed, owner_readback_verified, backup_performed, restore_performed, transport_performed, source_unlock_performed, target_activation_performed]
+    properties:
+      mutation_performed: {type: boolean}
+      owner_readback_verified: {type: boolean}
+      backup_performed: {type: boolean}
+      restore_performed: {type: boolean}
+      transport_performed: {const: false}
+      source_unlock_performed: {const: false}
+      target_activation_performed: {const: false}
