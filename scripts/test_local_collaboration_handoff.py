@@ -225,6 +225,25 @@ class HandoffTests(unittest.TestCase):
             reduce_handoff_events(self.project_id, list(snapshot.events[:-1]) + [altered],
                                   snapshot.authority_generation, snapshot.authority_head)
 
+    def test_unrelated_verified_events_advance_the_replay_pair_without_changing_handoff_state(self):
+        self.ledger.conditional_append_batch([{"event_type": "unrelated", "event_id": str(uuid.uuid4()),
+                                               "payload": {"n": 1}, "actor": "owner", "source": "fixture",
+                                               "root": self.project_id}], expected_generation=0, expected_head="0" * 64)
+        initial = self.apply(self.enrollment("enroll_initial", "replica-source", 1, "source"))
+        self.assertEqual(initial["outcome"], "enrolled")
+        self.assertEqual(self.apply(self.enrollment("enroll_target", "replica-target", 1, "target"))["outcome"], "enrolled")
+        self.ledger.append_event("unrelated", {"n": 2}, event_id=str(uuid.uuid4()), actor="owner", source="fixture", root=self.project_id)
+        before_prepare = read_handoff_state(self.ledger.path, expected_project_id=self.project_id)
+        self.assertEqual(before_prepare.phase, "active")
+        self.assertEqual(self.apply(self.request("prepare", handoff_id="handoff-unrelated", source_replica_id="replica-source",
+                                                  target_replica_id="replica-target", frontier_digest=digest("frontier")))["outcome"], "prepared")
+        self.ledger.append_event("unrelated", {"n": 3}, event_id=str(uuid.uuid4()), actor="owner", source="fixture", root=self.project_id)
+        self.assertEqual(self.apply(self.request("source_lock", handoff_id="handoff-unrelated"))["outcome"], "source_locked")
+        snapshot = LocalCollaborationLedger.authority_snapshot(self.ledger.path, expected_project_id=self.project_id)
+        replayed = read_handoff_state(self.ledger.path, expected_project_id=self.project_id)
+        self.assertEqual((replayed.authority_generation, replayed.authority_head),
+                         (snapshot.authority_generation, snapshot.authority_head))
+
 
 if __name__ == "__main__":
     unittest.main()

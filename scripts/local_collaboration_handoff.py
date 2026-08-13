@@ -151,7 +151,7 @@ def _make_state(project_id: str, generation: int, head: str, active_id: str | No
 
 
 def _initial(snapshot) -> HandoffState:
-    return _make_state(snapshot.project_id, snapshot.authority_generation, snapshot.authority_head, None, None, 0, "uninitialized", {}, None)
+    return _make_state(snapshot.project_id, 0, GENESIS, None, None, 0, "uninitialized", {}, None)
 
 
 def _event_payload(event) -> Mapping[str, Any] | None:
@@ -168,9 +168,13 @@ def _event_payload(event) -> Mapping[str, Any] | None:
 
 
 def _reduce_event(state: HandoffState, event) -> HandoffState:
+    if event.root != state.project_id:
+        raise HandoffHold("hold_project_identity", "event_project_mismatch")
     payload = _event_payload(event)
     if payload is None:
-        return state
+        return _make_state(state.project_id, event.sequence, event.event_hash,
+                           state.active_replica_id, state.active_replica_epoch,
+                           state.active_epoch, state.phase, _enrollment_map(state), state.handoff)
     if payload.get("transition") == "target_activate":
         if payload.get("project_id") != state.project_id:
             raise HandoffHold("hold_project_identity", "event_project_mismatch")
