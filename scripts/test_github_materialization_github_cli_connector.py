@@ -73,6 +73,14 @@ def test_current_auth_shape_invalid_classes_hold_before_target(response):
     assert len(runner.calls) == 1
 
 
+def test_c1_control_token_source_is_publicly_unavailable_before_any_target_call():
+    runner = StubRunner([official_auth(token_source="keyring\u0085")])
+    metadata = GitHubCliIssueLabelConnector(repository_owner="octo-org", repository="demo", runner=runner).capability_metadata()
+    assert metadata["available"] is False
+    assert len(runner.calls) == 1
+    assert not any("/issues/" in " ".join(argv) for argv, _ in runner.calls)
+
+
 @pytest.mark.parametrize("response", [{"returncode": 1, "stdout": "", "stderr": "token=x"}, auth("bad user"), {"returncode": 0, "stdout": "{}", "stderr": ""}])
 def test_metadata_failure_is_nonattesting_and_never_calls_target(response):
     runner = StubRunner([response])

@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import unicodedata
 import subprocess
 from collections.abc import Callable, Mapping
 from typing import Any
@@ -196,7 +197,7 @@ class GitHubCliIssueLabelConnector:
     @staticmethod
     def _private_text(value: Any) -> bool:
         return (isinstance(value, str) and bool(value) and len(value.encode()) <= 512
-                and not any(ord(character) < 32 or ord(character) == 127 for character in value))
+                and not any(unicodedata.category(character) == "Cc" for character in value))
 
     @staticmethod
     def _public_capability(value: Mapping[str, Any]) -> dict[str, Any]:
