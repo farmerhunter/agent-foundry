@@ -90,7 +90,7 @@ class GitHubCliIssueLabelConnector:
 
     def capability_metadata(self) -> dict[str, Any]:
         try:
-            return self._resolve_capability()
+            return self._public_capability(self._resolve_capability())
         except GitHubCliConnectorHold:
             return {"connector_id": CONNECTOR_ID, "connector_version": CONNECTOR_VERSION, "host": "github.com",
                     "available": False, "credential_grant_attested": False, "operation_confinement": CONFINEMENT,
@@ -104,7 +104,7 @@ class GitHubCliIssueLabelConnector:
         pair = {"authority_generation": planned["authority_generation"], "authority_head": planned["authority_head"]}
         if authority_pair != pair:
             raise GitHubCliConnectorHold("hold_authority_pair_stale")
-        if capability_digest(self._resolve_capability()) != planned["expected_capability_digest"]:
+        if capability_digest(self._public_capability(self._resolve_capability())) != planned["expected_capability_digest"]:
             raise GitHubCliConnectorHold("hold_capability_untrusted")
         receipt_id = _digest({key: planned[key] for key in ("human_authorization_ref", "operation", "target", "label", "preimage_digest", "authority_generation", "authority_head")})
         if receipt_id in self._forward_receipts:
@@ -141,6 +141,14 @@ class GitHubCliIssueLabelConnector:
             raise GitHubCliConnectorHold("hold_scope_insufficient")
         return {"connector_id": CONNECTOR_ID, "connector_version": CONNECTOR_VERSION, "host": "github.com",
                 "active_principal": principal, "observable_host_scopes": sorted(scopes), "available": True,
+                "credential_grant_attested": False, "operation_confinement": CONFINEMENT,
+                "authoritative": False, "confirmation_eligible": False}
+
+    @staticmethod
+    def _public_capability(value: Mapping[str, Any]) -> dict[str, Any]:
+        """Return binding-safe metadata without the active auth identity."""
+        return {"connector_id": value["connector_id"], "connector_version": value["connector_version"],
+                "host": value["host"], "available": value["available"],
                 "credential_grant_attested": False, "operation_confinement": CONFINEMENT,
                 "authoritative": False, "confirmation_eligible": False}
 

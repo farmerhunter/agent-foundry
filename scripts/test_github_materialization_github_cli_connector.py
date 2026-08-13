@@ -22,6 +22,7 @@ def test_connector_only_exposes_metadata_and_private_execution():
     assert metadata["available"] is True
     assert metadata["credential_grant_attested"] is False
     assert metadata["operation_confinement"] == CONFINEMENT
+    assert "active_principal" not in metadata and "observable_host_scopes" not in metadata
     assert not hasattr(connector, "add_existing_label")
     assert not hasattr(connector, "remove_same_label_if_added")
     assert runner.calls[0][0] == ("gh", "auth", "status", "--active", "--hostname", "github.com", "--json", "hosts")
@@ -33,6 +34,7 @@ def test_metadata_failure_is_nonattesting_and_never_calls_target(response):
     runner = StubRunner([response])
     metadata = GitHubCliIssueLabelConnector(repository_owner="octo-org", repository="demo", runner=runner).capability_metadata()
     assert metadata["available"] is False and metadata["credential_grant_attested"] is False
+    assert "active_principal" not in metadata and "observable_host_scopes" not in metadata
     assert not any("/issues/" in " ".join(argv) or "POST" in argv or "DELETE" in argv for argv, _ in runner.calls)
 
 
