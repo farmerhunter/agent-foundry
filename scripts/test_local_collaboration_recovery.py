@@ -85,6 +85,24 @@ class RecoveryTests(unittest.TestCase):
         self.assertTrue(next(e for e in state.enrollments if e.replica_id == "target").revoked)
         schema = yaml.safe_load(Path("schemas/local-collaboration-recovery.schema.yaml").read_text())
         self.assertEqual(list(Draft202012Validator(schema).iter_errors(dict(result))), [])
+    def test_a1_revoke_owner_hold_after_exact_cas_tail_is_setup_incomplete(self):
+        state = read_handoff_state(self.ledger.path, expected_project_id=self.project_id)
+        target = plan_handoff_transition(state, {"transition": "enroll_target", "project_id": self.project_id, "replica_id": "target", "replica_epoch": 1, "enrollment_id": "target-e", "enrollment_digest": digest("target"), "decision_id": "target", "decision_digest": digest("target")})
+        apply_handoff_transition(self.ledger, target, expected_before=state)
+        summary = read_recovery_summary(self.ledger.path, expected_project_id=self.project_id, intent="revoke_inactive_replica", selected_replica_id="target")
+        plan = plan_recovery_action(summary, {"operation": "revoke_inactive_replica", "decision_id": "human-4", "decision_digest": digest("human4"), "parameters": {}})
+        owner_apply = recovery.apply_handoff_transition
+        def commit_then_report_owner_hold(*args, **kwargs):
+            owner_apply(*args, **kwargs)
+            return {"outcome": "hold_readback_ambiguous"}
+        with patch.object(recovery, "apply_handoff_transition", side_effect=commit_then_report_owner_hold) as patched:
+            result = apply_recovery_action({"ledger": self.ledger, "selected_replica_id": "target"}, plan)
+        self.assertEqual(patched.call_count, 1); self.assertEqual(result["outcome"], "setup_incomplete")
+        self.assertTrue(result["receipt"]["mutation_performed"])
+        state = read_handoff_state(self.ledger.path, expected_project_id=self.project_id)
+        self.assertTrue(next(e for e in state.enrollments if e.replica_id == "target").revoked)
+        schema = yaml.safe_load(Path("schemas/local-collaboration-recovery.schema.yaml").read_text())
+        self.assertEqual(list(Draft202012Validator(schema).iter_errors(dict(result))), [])
     def test_active_revoke_holds_before_mutation(self):
         before = LocalCollaborationLedger.authority_snapshot(self.ledger.path, expected_project_id=self.project_id)
         summary = read_recovery_summary(self.ledger.path, expected_project_id=self.project_id, intent="revoke_inactive_replica", selected_replica_id="source")

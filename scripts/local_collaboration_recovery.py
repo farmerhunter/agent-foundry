@@ -148,6 +148,24 @@ def _post_commit_result(project_id, receipt, db_path):
                         "next_summary": _hold(project_id, "post_commit_readback_unavailable")})
 
 
+def _a1_post_commit_ambiguity(ledger, plan, before, owner_plan):
+    """Recognize only the exact owner-planned tail; caller evidence is ignored."""
+    try:
+        snapshot = LocalCollaborationLedger.authority_snapshot(ledger.path, expected_project_id=plan.project_id)
+        event = snapshot.events[-1] if snapshot.events else None
+        expected = owner_plan.event
+        if (event is None or snapshot.authority_generation != owner_plan.expected_generation + 1
+                or event.previous_hash != owner_plan.expected_head or event.event_id != expected["event_id"]
+                or event.event_type != expected["event_type"] or event.payload_hash != _digest(expected["payload"])
+                or event.actor != expected["actor"] or event.source != expected["source"] or event.root != expected["root"]):
+            return None
+        before_pair = (before.authority_generation, before.authority_head)
+        return _receipt(plan, before_pair, (snapshot.authority_generation, snapshot.authority_head, owner_plan.after_state_digest),
+                        "owner_post_commit_readback_ambiguous", True)
+    except (LedgerBusyError, LedgerPermissionError, LedgerIntegrityError, LedgerSchemaError, LedgerIdentityError):
+        return None
+
+
 def apply_recovery_action(context, plan):
     """Freshly revalidate, execute one public owner action, and return a metadata receipt."""
     project_id = plan.project_id if isinstance(plan, RecoveryActionPlan) else "00000000-0000-0000-0000-000000000000"
@@ -185,7 +203,12 @@ def apply_recovery_action(context, plan):
             owner_plan = plan_handoff_transition(before_state, req)
             if isinstance(owner_plan, Mapping): return {"schema_version": VERSION, "outcome": "held", "reason_code": "owner_plan_held"}
             owner = apply_handoff_transition(ledger, owner_plan, expected_before=before_state)
-            if owner.get("outcome", "").startswith("hold_"): return {"schema_version": VERSION, "outcome": "held", "reason_code": "owner_apply_held"}
+            if owner.get("outcome", "").startswith("hold_"):
+                provisional = _a1_post_commit_ambiguity(ledger, plan, before_state, owner_plan)
+                if provisional is not None:
+                    return _freeze({"schema_version": VERSION, "outcome": "setup_incomplete", "receipt": provisional,
+                                    "next_summary": _hold(project_id, "post_commit_readback_unavailable")})
+                return {"schema_version": VERSION, "outcome": "held", "reason_code": "owner_apply_held"}
             provisional = _receipt(plan, before, (owner["readback_generation"], owner["readback_head"], owner["after_state_digest"]), owner["outcome"], owner["flags"]["owner_persisted"])
         elif plan.operation == "takeover_from_accepted_frontier":
             bundle, proof = context.get("bundle"), context.get("proof_ref")
@@ -199,7 +222,12 @@ def apply_recovery_action(context, plan):
             owner_plan = plan_handoff_transition(target_state, req)
             if isinstance(owner_plan, Mapping): return {"schema_version": VERSION, "outcome": "held", "reason_code": "owner_plan_held"}
             owner = apply_handoff_transition(ledger, owner_plan, expected_before=target_state)
-            if owner.get("outcome", "").startswith("hold_"): return {"schema_version": VERSION, "outcome": "held", "reason_code": "owner_apply_held"}
+            if owner.get("outcome", "").startswith("hold_"):
+                provisional = _a1_post_commit_ambiguity(ledger, plan, target_state, owner_plan)
+                if provisional is not None:
+                    return _freeze({"schema_version": VERSION, "outcome": "setup_incomplete", "receipt": provisional,
+                                    "next_summary": _hold(project_id, "post_commit_readback_unavailable")})
+                return {"schema_version": VERSION, "outcome": "held", "reason_code": "owner_apply_held"}
             provisional = _receipt(plan, (target_state.authority_generation, target_state.authority_head), (owner["readback_generation"], owner["readback_head"], owner["after_state_digest"]), owner["outcome"], owner["flags"]["owner_persisted"])
         else: raise ValueError()
         return _post_commit_result(project_id, provisional, ledger.path)
