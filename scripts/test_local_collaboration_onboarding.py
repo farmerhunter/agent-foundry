@@ -9,6 +9,7 @@ from pathlib import Path
 
 import yaml
 from jsonschema import Draft202012Validator
+import local_collaboration_onboarding as onboarding
 
 from local_collaboration_handoff import read_handoff_state
 from local_collaboration_handoff_bundle import prepare_manual_bundle
@@ -71,9 +72,10 @@ class OnboardingTests(unittest.TestCase):
         self.step("prepare_handoff", {"handoff_id": "handoff-1", "source_replica_id": "source", "target_replica_id": "target", "frontier_digest": digest("frontier")})
         self.step("lock_source", {"handoff_id": "handoff-1"})
         source_locked = read_handoff_state(self.source.path, expected_project_id=self.project_id)
-        self.step("export_bundle", {})
-        # Human-controlled manual channel transfers the opaque in-memory package; facade never transports it.
-        self.context["bundle"] = prepare_manual_bundle(self.source, expected_handoff_state=source_locked)
+        exported = self.step("export_bundle", {})
+        self.context["bundle"] = exported["operation_output"]["manual_transfer_artifact"]
+        self.assertTrue(json.dumps(exported["receipt"]))
+        with self.assertRaises(TypeError): json.dumps(exported["operation_output"]["manual_transfer_artifact"])
         self.step("create_target_authority", {})
         self.context["target_ledger"] = LocalCollaborationLedger.open_existing(Path(self.target_root.name) / self.project_id / "collaboration.db", expected_project_id=self.project_id)
         imported = self.step("import_bundle", {})
@@ -146,6 +148,30 @@ class OnboardingTests(unittest.TestCase):
         summary = self.read(); plan = plan_second_device_onboarding_step(summary, {"operation": "export_bundle", "decision_id": "export", "decision_digest": digest("export"), "parameters": {}})
         result = apply_second_device_onboarding_step(MappingProxyType({"source_ledger": self.source, "target_projects_root": self.target_root.name}), plan)
         self.assertEqual(result["receipt"]["owner_outcome"], "bundle_exported")
+        self.assertEqual(read_handoff_state(self.source.path, expected_project_id=self.project_id).handoff["status"], "bundle_exported")
+
+    def test_post_export_readback_failure_preserves_provisional_receipt(self):
+        from local_collaboration_handoff import plan_handoff_transition, apply_handoff_transition
+        state = read_handoff_state(self.source.path, expected_project_id=self.project_id)
+        initial = plan_handoff_transition(state, {"transition": "enroll_initial", "project_id": self.project_id, "replica_id": "source", "replica_epoch": 1, "enrollment_id": "source-enroll", "enrollment_digest": digest("source"), "decision_id": "initial", "decision_digest": digest("initial")})
+        apply_handoff_transition(self.source, initial, expected_before=state)
+        self.step("enroll_target", {"replica_id": "target", "replica_epoch": 1, "enrollment_id": "target-enroll", "enrollment_digest": digest("target")})
+        self.step("prepare_handoff", {"handoff_id": "handoff-1", "source_replica_id": "source", "target_replica_id": "target", "frontier_digest": digest("frontier")})
+        self.step("lock_source", {"handoff_id": "handoff-1"})
+        plan = plan_second_device_onboarding_step(self.read(), {"operation": "export_bundle", "decision_id": "export", "decision_digest": digest("export"), "parameters": {}})
+        original = onboarding.read_second_device_onboarding; calls = {"count": 0}
+        def fail_after_preflight(*args, **kwargs):
+            calls["count"] += 1
+            if calls["count"] == 2: raise onboarding.LedgerIntegrityError("injected")
+            return original(*args, **kwargs)
+        onboarding.read_second_device_onboarding = fail_after_preflight
+        try:
+            result = apply_second_device_onboarding_step(self.context, plan)
+        finally:
+            onboarding.read_second_device_onboarding = original
+        self.assertEqual(result["outcome"], "setup_incomplete")
+        self.assertEqual(result["receipt"]["owner_outcome"], "bundle_exported")
+        self.assertTrue(result["receipt"]["mutation_performed"])
         self.assertEqual(read_handoff_state(self.source.path, expected_project_id=self.project_id).handoff["status"], "bundle_exported")
 
     def test_closed_schema_immutable_and_claims_hold(self):

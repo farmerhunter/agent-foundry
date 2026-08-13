@@ -6,7 +6,7 @@ import json
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Iterator, Mapping
 
 from local_collaboration_handoff import apply_handoff_transition, plan_handoff_transition, read_handoff_state
 from local_collaboration_handoff_bundle import (apply_owner_import, apply_owner_target_activation,
@@ -23,6 +23,16 @@ OPAQUE = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-"
 class _FrozenDict(dict):
     def _blocked(self, *args, **kwargs): raise TypeError("immutable onboarding result")
     __setitem__ = __delitem__ = clear = pop = popitem = setdefault = update = _blocked
+
+
+class _EphemeralTransferArtifact(Mapping[str, Any]):
+    """In-memory-only package channel for the explicit Human transfer boundary."""
+    __slots__ = ("_bundle",)
+    def __init__(self, bundle): object.__setattr__(self, "_bundle", bundle)
+    def __getitem__(self, key): return self._bundle[key]
+    def __iter__(self) -> Iterator[str]: return iter(self._bundle)
+    def __len__(self): return len(self._bundle)
+    def __setattr__(self, key, value): raise TypeError("immutable ephemeral transfer artifact")
 
 
 def _freeze(value):
@@ -178,6 +188,13 @@ def _receipt(project_id, plan, before, after, owner, mutated):
         "owner_outcome": owner, "mutation_performed": mutated, "duplicate": not mutated})
 
 
+def _provisional_export_receipt(project_id, plan, before, bundle):
+    marker = bundle.get("export_marker") if isinstance(bundle, Mapping) else None
+    if not isinstance(marker, Mapping) or not isinstance(marker.get("sequence"), int) or not isinstance(marker.get("event_hash"), str):
+        return None
+    return _receipt(project_id, plan, before, (marker["sequence"], marker["event_hash"]), "bundle_exported", True)
+
+
 def _exact_a1_duplicate(source, plan):
     event_type = {"enroll_target": "replica_enrolled", "prepare_handoff": "handoff_prepared",
                   "lock_source": "handoff_source_locked"}.get(plan.operation)
@@ -219,6 +236,7 @@ def apply_second_device_onboarding_step(context, plan):
     """Freshly re-read then execute exactly one selected public owner mutation."""
     project_id = plan.project_id if isinstance(plan, OnboardingStepPlan) else "00000000-0000-0000-0000-000000000000"
     receipt = None
+    provisional_receipt = None
     created_target = None
     try:
         if not isinstance(context, Mapping) or not _plan_valid(plan): raise ValueError("context")
@@ -244,10 +262,13 @@ def apply_second_device_onboarding_step(context, plan):
             owner = apply_handoff_transition(source, planned, expected_before=source_before)
             if owner.get("outcome", "").startswith("hold_"): return {"schema_version": VERSION, "outcome": "held", "reason_code": "owner_apply_held"}
             mutated = owner["flags"]["owner_persisted"]
+            provisional_receipt = _receipt(project_id, plan, before, (owner["readback_generation"], owner["readback_head"]), owner["outcome"], mutated)
         elif plan.operation == "export_bundle":
             owner = prepare_manual_bundle(source, expected_handoff_state=source_before)
             if "outcome" in owner: return {"schema_version": VERSION, "outcome": "held", "reason_code": "bundle_export_held"}
             mutated = True
+            provisional_receipt = _provisional_export_receipt(project_id, plan, before, owner)
+            if provisional_receipt is None: return {"schema_version": VERSION, "outcome": "held", "reason_code": "bundle_export_receipt_unavailable"}
         elif plan.operation == "create_target_authority":
             if target is not None or not isinstance(context.get("target_projects_root"), (str, Path)): raise ValueError("target create")
             candidate = Path(context["target_projects_root"]) / project_id / "collaboration.db"
@@ -257,6 +278,7 @@ def apply_second_device_onboarding_step(context, plan):
             target = LocalCollaborationLedger.create_project(projects_root=context["target_projects_root"], project_id=project_id)
             created_target = target
             owner = {"outcome": "target_authority_created"}; mutated = True
+            provisional_receipt = _receipt(project_id, plan, before, (0, GENESIS), "target_authority_created", True)
         elif plan.operation == "import_bundle":
             if not isinstance(target, LocalCollaborationLedger) or not isinstance(context.get("bundle"), Mapping): raise ValueError("import")
             before_snapshot = LocalCollaborationLedger.authority_snapshot(target.path, expected_project_id=project_id); before = (before_snapshot.authority_generation, before_snapshot.authority_head)
@@ -264,6 +286,7 @@ def apply_second_device_onboarding_step(context, plan):
             if isinstance(imported, Mapping): return {"schema_version": VERSION, "outcome": "held", "reason_code": "owner_import_plan_held"}
             owner = apply_owner_import(target, imported, expected_before=before_snapshot); mutated = owner.get("owner_import_performed", False)
             if owner.get("outcome", "").startswith("hold_"): return {"schema_version": VERSION, "outcome": "held", "reason_code": "owner_import_held"}
+            provisional_receipt = _receipt(project_id, plan, before, (owner["target_generation"], owner["target_head"]), owner["outcome"], mutated)
         elif plan.operation == "activate_target":
             if not isinstance(target, LocalCollaborationLedger): raise ValueError("activation")
             before_snapshot = LocalCollaborationLedger.authority_snapshot(target.path, expected_project_id=project_id); before = (before_snapshot.authority_generation, before_snapshot.authority_head)
@@ -272,12 +295,13 @@ def apply_second_device_onboarding_step(context, plan):
             owner = apply_owner_target_activation(target, activation, bundle=context["bundle"], proof_ref=context["proof_ref"], decision={"decision_id": plan.decision_id, "decision_digest": plan.decision_digest})
             mutated = owner.get("target_activation_performed", False)
             if owner.get("outcome", "").startswith("hold_"): return {"schema_version": VERSION, "outcome": "held", "reason_code": "owner_activation_held"}
+            provisional_receipt = _receipt(project_id, plan, before, (owner["target_generation"], owner["target_head"]), owner["outcome"], mutated)
         else: raise ValueError("operation")
         observed = target if plan.operation in {"import_bundle", "activate_target"} else source
         if plan.operation == "create_target_authority": observed = target
         after_snapshot = LocalCollaborationLedger.authority_snapshot(observed.path, expected_project_id=project_id)
         owner_outcome = owner.get("outcome", "bundle_exported" if plan.operation == "export_bundle" else "unknown")
-        receipt = _receipt(project_id, plan, before, (after_snapshot.authority_generation, after_snapshot.authority_head), owner_outcome, mutated)
+        receipt = provisional_receipt or _receipt(project_id, plan, before, (after_snapshot.authority_generation, after_snapshot.authority_head), owner_outcome, mutated)
         next_summary = read_second_device_onboarding(source.path, expected_project_id=project_id,
             target_db_path=target.path if isinstance(target, LocalCollaborationLedger) else None,
             bundle=context.get("bundle"), proof_ref=context.get("proof_ref"), activation_ref=context.get("activation_ref"),
@@ -287,10 +311,13 @@ def apply_second_device_onboarding_step(context, plan):
             output["proof_ref"] = {key: owner[key] for key in ("project_id", "receipt_event_id", "receipt_event_hash", "package_digest")}
         elif plan.operation == "activate_target":
             output["activation_ref"] = {key: owner[key] for key in ("project_id", "activation_receipt_event_id", "activation_receipt_event_hash", "package_digest")}
-        return _freeze({"receipt": receipt, "next_summary": next_summary, "operation_output": output})
+        elif plan.operation == "export_bundle":
+            output["manual_transfer_artifact"] = _EphemeralTransferArtifact(owner)
+        return _FrozenDict({"receipt": receipt, "next_summary": next_summary, "operation_output": _FrozenDict(output)})
     except (ValueError, TypeError, KeyError, LedgerBusyError, LedgerPermissionError, LedgerIntegrityError, LedgerSchemaError, LedgerIdentityError):
-        if receipt is not None:
-            return _freeze({"receipt": receipt, "next_summary": _hold(project_id, "post_commit_readback_unavailable"), "operation_output": {}})
+        if receipt is not None or provisional_receipt is not None:
+            return _freeze({"schema_version": VERSION, "outcome": "setup_incomplete", "receipt": receipt or provisional_receipt,
+                            "next_summary": _hold(project_id, "post_commit_readback_unavailable"), "operation_output": {}})
         return {"schema_version": VERSION, "outcome": "held", "reason_code": "owner_or_context_unavailable"}
     finally:
         if created_target is not None:
