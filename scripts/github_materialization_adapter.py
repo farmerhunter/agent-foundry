@@ -42,7 +42,7 @@ HOLDS = {"hold_materialization_policy", "hold_materialization_scheduler_state",
 BRIDGE_HOLD_REASONS = {
     "schema_or_privacy", "scheduler_or_authority_drift", "repository_or_target_binding",
     "authorization_evidence", "capability_unavailable_or_untrusted",
-    "capability_broader_or_unobservable", "stale_preimage", "duplicate_forward_attempt",
+    "stale_preimage", "duplicate_forward_attempt",
     "provider_write_or_readback_unavailable", "unexpected_connector_result",
 }
 RFC3339 = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:\d{2})$")
@@ -325,6 +325,8 @@ def _bridge_hold(request: Any, reason: str, *, connector_called: bool = False,
         "outcome": "real_label_materialization_hold",
         "reason": reason if reason in BRIDGE_HOLD_REASONS else "schema_or_privacy",
         "connector_called": connector_called,
+        "credential_grant_attested": False,
+        "operation_confinement": "exact_repo_issue_label",
         "authoritative": False,
         "confirmation_eligible": False,
         "scheduler_confirmation_performed": False,
@@ -344,9 +346,9 @@ def _bridge_hold(request: Any, reason: str, *, connector_called: bool = False,
 
 def _bridge_request(request: Any) -> dict[str, Any]:
     required = {"schema_version", "human_authorization_ref", "project_id", "work_id", "intent_id",
-                "attempt_sequence", "scheduler_generation", "scheduler_head", "desired_effect_digest",
+                "attempt_sequence", "desired_effect_digest",
                 "repository_id", "repository_locator_digest", "target", "label", "preimage_digest",
-                "expected_capability_version", "expected_capability_digest", "privacy_class", "write_budget",
+                "privacy_class", "write_budget",
                 "retry_budget", "occurred_at", "timestamp_provenance"}
     if not isinstance(request, Mapping) or set(request) != required:
         raise MaterializationHold("hold_materialization_schema")
@@ -364,12 +366,8 @@ def _bridge_request(request: Any) -> dict[str, Any]:
         raise MaterializationHold("hold_materialization_approval")
     if not isinstance(request.get("attempt_sequence"), int) or isinstance(request["attempt_sequence"], bool) or request["attempt_sequence"] < 1:
         raise MaterializationHold("hold_materialization_binding")
-    if not isinstance(request.get("scheduler_generation"), int) or isinstance(request["scheduler_generation"], bool) or request["scheduler_generation"] < 0:
-        raise MaterializationHold("hold_materialization_stale_basis")
-    for key in ("scheduler_head", "desired_effect_digest", "repository_id", "repository_locator_digest", "preimage_digest", "expected_capability_digest"):
+    for key in ("desired_effect_digest", "repository_id", "repository_locator_digest", "preimage_digest"):
         _hex(request.get(key))
-    if request.get("expected_capability_version") != "1":
-        raise MaterializationHold("hold_materialization_connector_untrusted")
     _ts(request.get("occurred_at"))
     if request.get("timestamp_provenance") != "explicit":
         raise MaterializationHold("hold_materialization_schema")
@@ -393,11 +391,13 @@ def _bridge_scheduler_state(request: Mapping[str, Any], state: Any) -> dict[str,
     if not isinstance(state, Mapping) or state.get("remote_intent_state") != "pending_materialization":
         raise MaterializationHold("hold_materialization_scheduler_state")
     required = {"project_id": request["project_id"], "intent_id": request["intent_id"],
-                "attempt_sequence": request["attempt_sequence"], "desired_effect_digest": request["desired_effect_digest"],
-                "scheduler_generation": request["scheduler_generation"], "scheduler_head": request["scheduler_head"]}
+                "attempt_sequence": request["attempt_sequence"], "desired_effect_digest": request["desired_effect_digest"]}
     if any(state.get(key) != value for key, value in required.items()):
         raise MaterializationHold("hold_materialization_stale_basis")
-    return {"authority_generation": state["scheduler_generation"], "authority_head": state["scheduler_head"]}
+    generation, head = state.get("scheduler_generation"), state.get("scheduler_head")
+    if not isinstance(generation, int) or isinstance(generation, bool) or generation < 0 or not isinstance(head, str) or not HEX64.fullmatch(head):
+        raise MaterializationHold("hold_materialization_stale_basis")
+    return {"authority_generation": generation, "authority_head": head}
 
 
 def _bridge_effect_digest(request: Mapping[str, Any]) -> str:
@@ -411,7 +411,6 @@ def _bridge_effect_digest(request: Mapping[str, Any]) -> str:
 def _bridge_reason(reason: str) -> str:
     if reason in {"hold_capability_unavailable", "hold_capability_untrusted", "hold_scope_unavailable", "hold_scope_insufficient", "hold_auth_mismatch"}:
         return "capability_unavailable_or_untrusted"
-    if reason == "hold_capability_broader_or_unobservable": return "capability_broader_or_unobservable"
     if reason in {"hold_authority_pair_stale"}: return "scheduler_or_authority_drift"
     if reason in {"hold_target_invalid", "hold_target_type_invalid"}: return "repository_or_target_binding"
     if reason in {"hold_preimage_stale"}: return "stale_preimage"
@@ -429,27 +428,21 @@ def execute_real_label_materialization(request: Mapping[str, Any], scheduler_sta
     except MaterializationHold as held:
         return _bridge_hold({}, "scheduler_or_authority_drift" if str(held) in {"hold_materialization_scheduler_state", "hold_materialization_stale_basis"} else "schema_or_privacy")
     try:
-        from github_materialization_github_cli_connector import CONNECTOR_VERSION, GitHubCliConnectorHold, GitHubCliIssueLabelConnector
+        from github_materialization_github_cli_connector import GitHubCliConnectorHold, GitHubCliIssueLabelConnector, capability_digest
         if type(connector) is not GitHubCliIssueLabelConnector:
             return _bridge_hold(req, "authorization_evidence")
-        if connector.repository_capability_required is not True:
-            return _bridge_hold(req, "capability_broader_or_unobservable")
         binding = connector.repository_binding
         if binding != {"owner": req["target"]["owner"], "repository": req["target"]["repository"]}:
             return _bridge_hold(req, "repository_or_target_binding")
         if req["repository_locator_digest"] != _digest(binding) or req["desired_effect_digest"] != _bridge_effect_digest(req):
             return _bridge_hold(req, "repository_or_target_binding")
-        if req["expected_capability_version"] != CONNECTOR_VERSION:
-            return _bridge_hold(req, "capability_unavailable_or_untrusted")
         capability = connector.capability_metadata()
         if capability.get("available") is not True:
-            return _bridge_hold(req, "capability_broader_or_unobservable", connector_called=True)
-        if capability.get("connector_version") != req["expected_capability_version"] or _digest(capability) != req["expected_capability_digest"]:
             return _bridge_hold(req, "capability_unavailable_or_untrusted", connector_called=True)
         plan = {"schema_version": "GitHubCliIssueLabelConnector-v1", "human_authorization_ref": req["human_authorization_ref"],
                 "operation": "add_existing_label", "target": req["target"], "label": req["label"],
                 "preimage_digest": req["preimage_digest"], **authority_pair,
-                "expected_capability_version": req["expected_capability_version"], "expected_capability_digest": req["expected_capability_digest"]}
+                "expected_capability_digest": capability_digest(capability)}
         receipt = connector.add_existing_label(plan, authority_pair=authority_pair)
     except GitHubCliConnectorHold as held:
         return _bridge_hold(req, _bridge_reason(held.reason), connector_called=True)
@@ -462,6 +455,7 @@ def execute_real_label_materialization(request: Mapping[str, Any], scheduler_sta
             "attempt_sequence": req["attempt_sequence"], **authority_pair, "target": req["target"], "label": req["label"],
             "connector_receipt_id": receipt["receipt_id"], "readback_digest": receipt["readback_digest"],
             "mutation_count": receipt["mutation_count"], "connector_called": True, "retry_count": 0,
+            "credential_grant_attested": False, "operation_confinement": "exact_repo_issue_label",
             "authoritative": False, "confirmation_eligible": False, "scheduler_confirmation_performed": False,
             "observation_state": "observed_unverified"}
     _schema_validate(result, "github_cli_label_bridge_result")

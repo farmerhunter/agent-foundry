@@ -264,21 +264,18 @@ class BridgeStubRunner:
 
 
 def _bridge_capability():
-    return {"connector_id": CONNECTOR_ID, "connector_version": CONNECTOR_VERSION, "provider": "github", "host": "github.com",
-            "repository_restriction": "octo-org/demo", "authenticated_principal": "octocat", "observable_scopes": ["repo"],
-            "minimum_scopes": ["issues:metadata"], "repository_permission": {"repository": "octo-org/demo", "issues": "metadata"},
-            "network_capability": True, "production_eligibility": True, "available": True}
+    return {"connector_id": CONNECTOR_ID, "connector_version": CONNECTOR_VERSION, "host": "github.com", "active_principal": "octocat",
+            "observable_host_scopes": ["repo"], "available": True, "credential_grant_attested": False,
+            "operation_confinement": "exact_repo_issue_label", "authoritative": False, "confirmation_eligible": False}
 
 
 def _bridge_request(**extra):
     target = {"owner": "octo-org", "repository": "demo", "number": 12, "kind": "issue"}
     repository = {"owner": "octo-org", "repository": "demo"}
     base = {"schema_version": "GitHubLabelMaterializationBridge-v1", "human_authorization_ref": "human-gate-2",
-            "project_id": PID, "work_id": "work-1", "intent_id": INTENT, "attempt_sequence": 1,
-            "scheduler_generation": 4, "scheduler_head": H, "repository_id": C,
+            "project_id": PID, "work_id": "work-1", "intent_id": INTENT, "attempt_sequence": 1, "repository_id": C,
             "repository_locator_digest": hashlib.sha256(json.dumps(repository, sort_keys=True, separators=(",", ":")).encode()).hexdigest(),
             "target": target, "label": "trial-label", "preimage_digest": hashlib.sha256(json.dumps(["bug"], separators=(",", ":")).encode()).hexdigest(),
-            "expected_capability_version": CONNECTOR_VERSION, "expected_capability_digest": capability_digest(_bridge_capability()),
             "privacy_class": "metadata_only", "write_budget": 1, "retry_budget": 0,
             "occurred_at": "2026-08-12T00:00:00Z", "timestamp_provenance": "explicit"}
     effect = {"version": "GitHubLabelMaterializationBridge-v1", "operation": "add_existing_label", "target": target, "label": "trial-label",
@@ -291,7 +288,7 @@ def _bridge_request(**extra):
 def _bridge_state(request):
     return {"project_id": request["project_id"], "remote_intent_state": "pending_materialization", "intent_id": request["intent_id"],
             "attempt_sequence": request["attempt_sequence"], "desired_effect_digest": request["desired_effect_digest"],
-            "scheduler_generation": request["scheduler_generation"], "scheduler_head": request["scheduler_head"]}
+            "scheduler_generation": 4, "scheduler_head": H}
 
 
 def _bridge_connector(responses):
@@ -299,14 +296,17 @@ def _bridge_connector(responses):
     return GitHubCliIssueLabelConnector(repository_owner="octo-org", repository="demo", runner=runner), runner
 
 
-def test_public_real_label_bridge_fails_closed_when_cli_cannot_prove_repository_grant():
+def test_public_real_label_bridge_adds_once_with_unattested_hdc_credential():
     request = _bridge_request(); connector, runner = _bridge_connector([
         {"returncode": 0, "stdout": '{"hosts":{"github.com":[{"login":"octocat","scopes":["repo"]}]}}', "stderr": ""},
+        {"returncode": 0, "stdout": '{"hosts":{"github.com":[{"login":"octocat","scopes":["repo"]}]}}', "stderr": ""},
+        {"returncode": 0, "stdout": "bug\n", "stderr": ""}, {"returncode": 0, "stdout": "", "stderr": ""},
+        {"returncode": 0, "stdout": "bug\ntrial-label\n", "stderr": ""},
     ])
     result = execute_real_label_materialization(request, _bridge_state(request), connector)
-    assert result["outcome"] == "real_label_materialization_hold"
-    assert result["reason"] == "capability_broader_or_unobservable" and result["connector_called"] is True
-    assert not any("/issues/" in " ".join(call[0]) for call in runner.calls)
+    assert result["outcome"] == "real_label_added_observed_unverified" and result["mutation_count"] == 1
+    assert result["credential_grant_attested"] is False and result["operation_confinement"] == "exact_repo_issue_label"
+    assert sum("POST" in call[0] for call in runner.calls) == 1
     assert all(call[1]["shell"] is False for call in runner.calls)
 
 
@@ -316,12 +316,12 @@ def test_public_real_label_bridge_rejects_forgery_and_capability_before_target()
     assert result["outcome"] == "real_label_materialization_hold" and result["reason"] == "schema_or_privacy" and not runner.calls
     with pytest.raises(TypeError):
         GitHubCliIssueLabelConnector(repository_owner="octo-org", repository="demo", capability_resolver=lambda: _bridge_capability())
-    connector, runner = _bridge_connector([{"returncode": 0, "stdout": '{"hosts":{"github.com":[{"login":"octocat","scopes":["repo"]}]}}', "stderr": ""}])
+    connector, runner = _bridge_connector([{"returncode": 0, "stdout": '{"hosts":{"github.com":[{"login":"octocat","scopes":["repo"]}]}}', "stderr": ""}, {"returncode": 1, "stdout": "", "stderr": ""}])
     result = execute_real_label_materialization(request, _bridge_state(request), connector)
-    assert result["reason"] == "capability_broader_or_unobservable" and result["connector_called"] is True
+    assert result["reason"] == "capability_unavailable_or_untrusted" and result["connector_called"] is True
     assert not any("/issues/" in " ".join(call[0]) for call in runner.calls)
     connector, runner = _bridge_connector([])
-    result = execute_real_label_materialization(request, {**_bridge_state(request), "scheduler_head": "c" * 64}, connector)
+    result = execute_real_label_materialization(request, {**_bridge_state(request), "scheduler_head": "bad"}, connector)
     assert result["reason"] == "scheduler_or_authority_drift" and not runner.calls
 
 
@@ -330,8 +330,8 @@ def test_public_real_label_bridge_duplicate_and_binding_budget_holds():
     target = request["target"]
     effect = {"version": "GitHubLabelMaterializationBridge-v1", "operation": "add_existing_label", "target": target, "label": request["label"], "preimage_digest": request["preimage_digest"], "project_id": PID, "intent_id": INTENT, "attempt_sequence": 1, "repository_id": C, "repository_locator_digest": request["repository_locator_digest"]}
     request["desired_effect_digest"] = hashlib.sha256(json.dumps(effect, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-    connector, runner = _bridge_connector([{"returncode": 0, "stdout": '{"hosts":{"github.com":[{"login":"octocat","scopes":["repo"]}]}}', "stderr": ""}])
+    connector, runner = _bridge_connector([{"returncode": 0, "stdout": '{"hosts":{"github.com":[{"login":"octocat","scopes":["repo"]}]}}', "stderr": ""}, {"returncode": 1, "stdout": "", "stderr": ""}])
     result = execute_real_label_materialization(request, _bridge_state(request), connector)
-    assert result["reason"] == "capability_broader_or_unobservable" and len(runner.calls) == 1
+    assert result["reason"] == "capability_unavailable_or_untrusted" and len(runner.calls) == 2
     result = execute_real_label_materialization(_bridge_request(write_budget=2), _bridge_state(_bridge_request(write_budget=2)), connector)
-    assert result["reason"] == "schema_or_privacy" and len(runner.calls) == 1
+    assert result["reason"] == "schema_or_privacy" and len(runner.calls) == 2
