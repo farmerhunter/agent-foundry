@@ -34,6 +34,11 @@ class LedgerConflictError(LedgerError):
     pass
 
 
+class LedgerStaleSnapshotError(LedgerConflictError):
+    """The committed authority pair changed before a conditional append."""
+    classification = "stale_snapshot"
+
+
 class LedgerPermissionError(LedgerError):
     pass
 
@@ -85,6 +90,15 @@ class LedgerSnapshot:
     authority_generation: int
     authority_head: str
     events: tuple[LedgerEvent, ...]
+
+
+@dataclass(frozen=True)
+class ConditionalAppendResult:
+    status: str
+    generation: int
+    head: str
+    event_refs: tuple[tuple[int, str, str, str], ...]
+    mutation_performed: bool
 
 
 def _canonical(value: Any) -> str:
@@ -486,6 +500,104 @@ class LocalCollaborationLedger:
     def accept_compact_events(self, events):
         return self.append_batch(events)
 
+    def _normalize_batch(self, events: Iterable[Mapping[str, Any]]):
+        events = list(events)
+        if len(events) > 100: raise ValueError("batch exceeds 100 events")
+        normalized = []
+        for item in events:
+            if not isinstance(item, Mapping) or set(item) - {"event_type","payload","event_id","actor","source","root"}: raise ValueError("unknown event input key")
+            eid, root = self._validate(item.get("event_type"), item.get("payload"), item.get("event_id"), item.get("actor"), item.get("source"), item.get("root"))
+            _json_depth(item["payload"])
+            normalized.append((eid,item["event_type"],item["payload"],item.get("actor"),item.get("source"),root))
+        if sum(len(_canonical(item["payload"]).encode()) for item in events) > 1024 * 1024: raise ValueError("batch exceeds 1 MiB")
+        if not normalized: raise ValueError("conditional batch must not be empty")
+        return normalized
+
+    @staticmethod
+    def _validate_expected_pair(expected_generation, expected_head):
+        if not isinstance(expected_generation, int) or isinstance(expected_generation, bool) or expected_generation < 0:
+            raise ValueError("expected_generation must be a non-negative integer")
+        if not isinstance(expected_head, str) or not re.fullmatch(r"[0-9a-f]{64}", expected_head):
+            raise ValueError("expected_head must be a lowercase SHA-256 hash")
+        if (expected_generation == 0) != (expected_head == GENESIS):
+            raise ValueError("expected generation/head pair is invalid")
+
+    def _classify_conditional_batch(self, c, normalized, expected_generation, expected_head):
+        rows = []
+        event_ids = set()
+        for eid, etype, payload, actor, source, root in normalized:
+            if eid in event_ids or c.execute("SELECT 1 FROM holds WHERE event_id=?", (eid,)).fetchone():
+                return None
+            event_ids.add(eid)
+            row = c.execute("SELECT * FROM events WHERE event_id=?", (eid,)).fetchone()
+            if row is None:
+                rows.append(None)
+                continue
+            identity = self._identity_hash(_hash(payload), etype, actor, source, root)
+            existing = self._identity_hash(row["payload_hash"], row["event_type"], row["actor"], row["source"], row["root"])
+            if identity != existing:
+                return None
+            rows.append(row)
+        if all(row is None for row in rows):
+            return "absent"
+        if any(row is None for row in rows):
+            return None
+        if rows[0]["sequence"] != expected_generation + 1 or rows[0]["previous_hash"] != expected_head:
+            return None
+        if any(current["sequence"] != prior["sequence"] + 1 or current["previous_hash"] != prior["event_hash"]
+               for prior, current in zip(rows, rows[1:])):
+            return None
+        return tuple(self._event_ref(row) for row in rows)
+
+    def conditional_append_batch(self, events: Iterable[Mapping[str, Any]], *, expected_generation: int,
+                                 expected_head: str) -> ConditionalAppendResult:
+        """Atomically append a planned batch only at its verified authority pair.
+
+        A stale plan never records a hold or changes any business table.  The
+        sole stale success path is an exact post-commit retry of the same batch.
+        """
+        self._validate_expected_pair(expected_generation, expected_head)
+        normalized = self._normalize_batch(events)
+        c = self._conn
+        try:
+            c.execute("BEGIN IMMEDIATE")
+            last = c.execute("SELECT sequence,event_hash FROM events ORDER BY sequence DESC LIMIT 1").fetchone()
+            generation, head = (last["sequence"], last["event_hash"]) if last else (0, GENESIS)
+            classification = self._classify_conditional_batch(c, normalized, expected_generation, expected_head)
+            if isinstance(classification, tuple):
+                c.execute("COMMIT")
+                return ConditionalAppendResult("duplicate", generation, head, classification, False)
+            if (generation, head) != (expected_generation, expected_head) or classification != "absent":
+                raise LedgerStaleSnapshotError("stale_snapshot")
+
+            result = []
+            sequence, previous = generation, head
+            for eid, etype, payload, actor, source, root in normalized:
+                payload_hash = _hash(payload)
+                sequence += 1
+                created = _now()
+                event_hash = self._event_hash(sequence, eid, etype, payload_hash, previous, created, actor, source, root)
+                c.execute("INSERT INTO events VALUES(?,?,?,?,?,?,?,?,?,?,?)", (sequence, eid, etype, _canonical(payload), payload_hash, previous, event_hash, created, actor, source, root))
+                result.append(self._event_ref(c.execute("SELECT * FROM events WHERE sequence=?", (sequence,)).fetchone()))
+                previous = event_hash
+            c.execute("COMMIT")
+            self._enforce_sidecar_modes()
+            return ConditionalAppendResult("appended", sequence, previous, tuple(result), True)
+        except LedgerStaleSnapshotError:
+            if c.in_transaction: c.execute("ROLLBACK")
+            raise
+        except LedgerConflictError:
+            if c.in_transaction: c.execute("ROLLBACK")
+            raise
+        except sqlite3.OperationalError as exc:
+            if c.in_transaction: c.execute("ROLLBACK")
+            if "locked" in str(exc).lower() or "busy" in str(exc).lower():
+                raise LedgerBusyError("database busy") from None
+            raise LedgerSchemaError("database write failed") from None
+        except Exception:
+            if c.in_transaction: c.execute("ROLLBACK")
+            raise
+
     def append_batch(self, events: Iterable[Mapping[str, Any]]):
         events = list(events)
         if len(events) > 100: raise ValueError("batch exceeds 100 events")
@@ -530,6 +642,10 @@ class LocalCollaborationLedger:
 
     def _row(self,row):
         return LedgerEvent(row["sequence"],row["event_id"],row["event_type"],json.loads(row["payload"]),row["payload_hash"],row["previous_hash"],row["event_hash"],row["created_at"],row["actor"],row["source"],row["root"])
+
+    @staticmethod
+    def _event_ref(row):
+        return (row["sequence"], row["event_id"], row["payload_hash"], row["event_hash"])
 
     def list_events(self, *, event_type=None):
         q="SELECT * FROM events"; args=()

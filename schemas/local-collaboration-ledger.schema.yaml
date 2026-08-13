@@ -28,6 +28,15 @@ authority_snapshot:
   sqlite_coordination_files: permitted
   latest_at_return: false
   failure: fail_closed
+conditional_append_batch:
+  api: conditional_append_batch
+  transaction: BEGIN_IMMEDIATE
+  expected_pair: [generation, head]
+  success: [appended, duplicate]
+  duplicate: exact_full_batch_post_commit_retry_only
+  stale_snapshot: no_business_mutation
+  receipt: [status, generation, head, event_refs, mutation_performed]
+  callbacks_and_domain_predicates: forbidden
 identity:
   project_id: opaque_uuid
   bindings_non_authoritative: [path, remote, thread, issue]
