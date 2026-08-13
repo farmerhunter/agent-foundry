@@ -44,6 +44,21 @@ class RecoveryTests(unittest.TestCase):
         plan2 = self.plan("create_backup", {"destination": str(dest)})
         held = apply_recovery_action({"ledger": self.ledger, "destination": str(dest)}, plan2)
         self.assertEqual(held["outcome"], "held")
+    def test_backup_and_selected_replica_success_outputs_match_closed_schema(self):
+        schema = yaml.safe_load(Path("schemas/local-collaboration-recovery.schema.yaml").read_text())
+        validator = Draft202012Validator(schema)
+        dest = Path(self.root.name) / "canonical-backup.db"
+        backup = apply_recovery_action({"ledger": self.ledger, "destination": str(dest)}, self.plan("create_backup", {"destination": str(dest)}))
+        self.assertEqual(list(validator.iter_errors(dict(backup))), [])
+        state = read_handoff_state(self.ledger.path, expected_project_id=self.project_id)
+        target = plan_handoff_transition(state, {"transition": "enroll_target", "project_id": self.project_id, "replica_id": "target", "replica_epoch": 1, "enrollment_id": "target-e", "enrollment_digest": digest("target"), "decision_id": "target", "decision_digest": digest("target")})
+        apply_handoff_transition(self.ledger, target, expected_before=state)
+        summary = read_recovery_summary(self.ledger.path, expected_project_id=self.project_id, intent="revoke_inactive_replica", selected_replica_id="target")
+        plan = plan_recovery_action(summary, {"operation": "revoke_inactive_replica", "decision_id": "human-2", "decision_digest": digest("human2"), "parameters": {}})
+        result = apply_recovery_action({"ledger": self.ledger, "selected_replica_id": "target"}, plan)
+        self.assertEqual(result["receipt"]["selected_replica_id"], "target")
+        self.assertEqual(list(validator.iter_errors(dict(result))), [])
+        self.assertIn("destination_digest", backup["receipt"]["locator_digests"])
     def test_active_revoke_holds_before_mutation(self):
         before = LocalCollaborationLedger.authority_snapshot(self.ledger.path, expected_project_id=self.project_id)
         summary = read_recovery_summary(self.ledger.path, expected_project_id=self.project_id, intent="revoke_inactive_replica", selected_replica_id="source")

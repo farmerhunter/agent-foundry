@@ -92,7 +92,7 @@ def read_recovery_summary(db_path, *, expected_project_id, intent="status_only",
 
 @dataclass(frozen=True)
 class RecoveryActionPlan:
-    project_id: str; operation: str; summary_digest: str; decision_id: str; decision_digest: str; parameters: Mapping[str, Any]; fingerprint: str
+    project_id: str; operation: str; summary_digest: str; decision_id: str; decision_digest: str; parameters: Mapping[str, Any]; bindings: Mapping[str, Any]; fingerprint: str
 
 
 _PARAMS = {"create_backup": {"destination"}, "restore_fresh_target": {"backup", "destination"},
@@ -116,19 +116,24 @@ def plan_recovery_action(summary, request):
             if _digest(params["bundle"]) != summary.get("bundle_locator_digest") or _digest(params["proof_ref"]) != summary.get("proof_locator_digest"): raise ValueError()
             if not _hex(params["rpo_warning_digest"]): raise ValueError()
             params = {"bundle_digest": _digest(request["parameters"]["bundle"]), "proof_digest": _digest(request["parameters"]["proof_ref"]), "projection_digest": summary["projection_digest"], "rpo_warning_digest": params["rpo_warning_digest"]}
-        fingerprint = _digest({"project_id": project_id, "operation": operation, "summary_digest": summary["summary_digest"], "decision_id": request["decision_id"], "decision_digest": request["decision_digest"], "parameters": params})
-        return RecoveryActionPlan(project_id, operation, summary["summary_digest"], request["decision_id"], request["decision_digest"], _freeze(params), fingerprint)
+        bindings = {key: summary[key] for key in ("before_generation", "before_head", "before_state_digest", "selected_replica_id", "bundle_locator_digest", "proof_locator_digest", "projection_digest") if key in summary}
+        fingerprint = _digest({"project_id": project_id, "operation": operation, "summary_digest": summary["summary_digest"], "decision_id": request["decision_id"], "decision_digest": request["decision_digest"], "parameters": params, "bindings": bindings})
+        return RecoveryActionPlan(project_id, operation, summary["summary_digest"], request["decision_id"], request["decision_digest"], _freeze(params), _freeze(bindings), fingerprint)
     except (ValueError, TypeError, KeyError):
         return {"schema_version": VERSION, "outcome": "held", "reason_code": "plan_schema_or_preimage_invalid"}
 
 
 def _receipt(plan, before, after, owner_outcome, mutated, **extra):
+    locator_digests = {key: value for key, value in plan.parameters.items() if key.endswith("_digest")}
+    locator_digests.update({key: value for key, value in plan.bindings.items() if key in {"bundle_locator_digest", "proof_locator_digest"}})
     return _freeze({"schema_version": VERSION, "outcome": "recovery_action_applied" if mutated else "recovery_action_duplicate",
         "project_id": plan.project_id, "operation": plan.operation, "operation_fingerprint": plan.fingerprint,
         "decision_id": plan.decision_id, "decision_digest": plan.decision_digest, "before_generation": before[0], "before_head": before[1],
-        "after_generation": after[0], "after_head": after[1], "owner_outcome": owner_outcome, "mutation_performed": mutated,
+        "before_state_digest": plan.bindings["before_state_digest"], "after_generation": after[0], "after_head": after[1], "after_state_digest": after[2],
+        "locator_digests": locator_digests, "owner_outcome": owner_outcome, "mutation_performed": mutated,
         "duplicate": not mutated, "source_unlock_performed": False, "automatic_recovery": False, "deletion_performed": False,
-        "transport_performed": False, "global_convergence_verified": False, **extra})
+        "transport_performed": False, "global_convergence_verified": False,
+        **({"selected_replica_id": plan.bindings["selected_replica_id"]} if "selected_replica_id" in plan.bindings else {}), **extra})
 
 
 def apply_recovery_action(context, plan):
@@ -148,7 +153,7 @@ def apply_recovery_action(context, plan):
             destination = context.get("destination")
             if _locator(project_id, destination) != plan.parameters["destination_digest"]: raise ValueError()
             if Path(destination).expanduser().exists(): return {"schema_version": VERSION, "outcome": "held", "reason_code": "backup_destination_exists"}
-            ledger.backup(destination); provisional = _receipt(plan, before, before, "backup_created", True)
+            ledger.backup(destination); provisional = _receipt(plan, before, (before[0], before[1], before_state.state_digest), "backup_created", True)
             return _freeze({"receipt": provisional, "next_summary": read_recovery_summary(ledger.path, expected_project_id=project_id)})
         if plan.operation == "restore_fresh_target":
             backup, destination = context.get("backup"), context.get("destination")
@@ -157,7 +162,8 @@ def apply_recovery_action(context, plan):
             restored = LocalCollaborationLedger.restore(backup, destination, expected_project_id=project_id)
             try:
                 after = restored.authority_snapshot(restored.path, expected_project_id=project_id)
-                return _freeze({"receipt": _receipt(plan, before, (after.authority_generation, after.authority_head), "fresh_target_restored", True), "next_summary": _summary(project_id, "setup_incomplete", "none")})
+                after_state = read_handoff_state(restored.path, expected_project_id=project_id)
+                return _freeze({"receipt": _receipt(plan, before, (after.authority_generation, after.authority_head, after_state.state_digest), "fresh_target_restored", True), "next_summary": _summary(project_id, "setup_incomplete", "none")})
             finally: restored.close()
         if plan.operation in {"cancel_pre_export_handoff", "revoke_inactive_replica"}:
             req = {"transition": "cancel" if plan.operation.startswith("cancel") else "revoke_inactive", "project_id": project_id,
@@ -168,7 +174,8 @@ def apply_recovery_action(context, plan):
             if isinstance(owner_plan, Mapping): return {"schema_version": VERSION, "outcome": "held", "reason_code": "owner_plan_held"}
             owner = apply_handoff_transition(ledger, owner_plan, expected_before=before_state)
             if owner.get("outcome", "").startswith("hold_"): return {"schema_version": VERSION, "outcome": "held", "reason_code": "owner_apply_held"}
-            provisional = _receipt(plan, before, (owner["readback_generation"], owner["readback_head"]), owner["outcome"], owner["flags"]["owner_persisted"])
+            after_state = read_handoff_state(ledger.path, expected_project_id=project_id)
+            provisional = _receipt(plan, before, (owner["readback_generation"], owner["readback_head"], after_state.state_digest), owner["outcome"], owner["flags"]["owner_persisted"])
         elif plan.operation == "takeover_from_accepted_frontier":
             bundle, proof = context.get("bundle"), context.get("proof_ref")
             if _digest(bundle) != plan.parameters["bundle_digest"] or _digest(proof) != plan.parameters["proof_digest"]: raise ValueError()
@@ -182,7 +189,8 @@ def apply_recovery_action(context, plan):
             if isinstance(owner_plan, Mapping): return {"schema_version": VERSION, "outcome": "held", "reason_code": "owner_plan_held"}
             owner = apply_handoff_transition(ledger, owner_plan, expected_before=target_state)
             if owner.get("outcome", "").startswith("hold_"): return {"schema_version": VERSION, "outcome": "held", "reason_code": "owner_apply_held"}
-            provisional = _receipt(plan, (target_state.authority_generation, target_state.authority_head), (owner["readback_generation"], owner["readback_head"]), owner["outcome"], owner["flags"]["owner_persisted"])
+            after_state = read_handoff_state(ledger.path, expected_project_id=project_id)
+            provisional = _receipt(plan, (target_state.authority_generation, target_state.authority_head), (owner["readback_generation"], owner["readback_head"], after_state.state_digest), owner["outcome"], owner["flags"]["owner_persisted"])
         else: raise ValueError()
         return _freeze({"receipt": provisional, "next_summary": read_recovery_summary(ledger.path, expected_project_id=project_id)})
     except (ValueError, TypeError, KeyError, LedgerBusyError, LedgerConflictError, LedgerPermissionError, LedgerIntegrityError, LedgerSchemaError, LedgerIdentityError):
