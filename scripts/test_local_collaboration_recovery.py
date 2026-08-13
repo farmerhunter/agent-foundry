@@ -59,6 +59,18 @@ class RecoveryTests(unittest.TestCase):
         self.assertEqual(result["receipt"]["selected_replica_id"], "target")
         self.assertEqual(list(validator.iter_errors(dict(result))), [])
         self.assertIn("destination_digest", backup["receipt"]["locator_digests"])
+    def test_post_commit_summary_failure_is_typed_setup_incomplete_with_receipt(self):
+        dest = Path(self.root.name) / "readback-failure.db"
+        plan = self.plan("create_backup", {"destination": str(dest)})
+        preflight = read_recovery_summary(self.ledger.path, expected_project_id=self.project_id, intent="create_backup")
+        with patch.object(recovery, "read_recovery_summary", side_effect=[preflight, RuntimeError("injected")]) as reader:
+            result = apply_recovery_action({"ledger": self.ledger, "destination": str(dest)}, plan)
+        self.assertEqual(reader.call_count, 2); self.assertTrue(dest.exists())
+        self.assertEqual(result["outcome"], "setup_incomplete")
+        self.assertTrue(result["receipt"]["mutation_performed"])
+        self.assertEqual(result["next_summary"]["reason_code"], "post_commit_readback_unavailable")
+        schema = yaml.safe_load(Path("schemas/local-collaboration-recovery.schema.yaml").read_text())
+        self.assertEqual(list(Draft202012Validator(schema).iter_errors(dict(result))), [])
     def test_active_revoke_holds_before_mutation(self):
         before = LocalCollaborationLedger.authority_snapshot(self.ledger.path, expected_project_id=self.project_id)
         summary = read_recovery_summary(self.ledger.path, expected_project_id=self.project_id, intent="revoke_inactive_replica", selected_replica_id="source")

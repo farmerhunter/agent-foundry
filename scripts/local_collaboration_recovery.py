@@ -136,6 +136,18 @@ def _receipt(plan, before, after, owner_outcome, mutated, **extra):
         **({"selected_replica_id": plan.bindings["selected_replica_id"]} if "selected_replica_id" in plan.bindings else {}), **extra})
 
 
+def _post_commit_result(project_id, receipt, db_path):
+    """A committed owner action is incomplete until its facade readback succeeds."""
+    try:
+        next_summary = read_recovery_summary(db_path, expected_project_id=project_id)
+        if not isinstance(next_summary, Mapping) or next_summary.get("state") == "held":
+            raise ValueError("post-commit owner readback unavailable")
+        return _freeze({"receipt": receipt, "next_summary": next_summary})
+    except Exception:
+        return _freeze({"schema_version": VERSION, "outcome": "setup_incomplete", "receipt": receipt,
+                        "next_summary": _hold(project_id, "post_commit_readback_unavailable")})
+
+
 def apply_recovery_action(context, plan):
     """Freshly revalidate, execute one public owner action, and return a metadata receipt."""
     project_id = plan.project_id if isinstance(plan, RecoveryActionPlan) else "00000000-0000-0000-0000-000000000000"
@@ -154,7 +166,7 @@ def apply_recovery_action(context, plan):
             if _locator(project_id, destination) != plan.parameters["destination_digest"]: raise ValueError()
             if Path(destination).expanduser().exists(): return {"schema_version": VERSION, "outcome": "held", "reason_code": "backup_destination_exists"}
             ledger.backup(destination); provisional = _receipt(plan, before, (before[0], before[1], before_state.state_digest), "backup_created", True)
-            return _freeze({"receipt": provisional, "next_summary": read_recovery_summary(ledger.path, expected_project_id=project_id)})
+            return _post_commit_result(project_id, provisional, ledger.path)
         if plan.operation == "restore_fresh_target":
             backup, destination = context.get("backup"), context.get("destination")
             if _locator(project_id, backup) != plan.parameters["backup_digest"] or _locator(project_id, destination) != plan.parameters["destination_digest"]: raise ValueError()
@@ -163,7 +175,8 @@ def apply_recovery_action(context, plan):
             try:
                 after = restored.authority_snapshot(restored.path, expected_project_id=project_id)
                 after_state = read_handoff_state(restored.path, expected_project_id=project_id)
-                return _freeze({"receipt": _receipt(plan, before, (after.authority_generation, after.authority_head, after_state.state_digest), "fresh_target_restored", True), "next_summary": _summary(project_id, "setup_incomplete", "none")})
+                provisional = _receipt(plan, before, (after.authority_generation, after.authority_head, after_state.state_digest), "fresh_target_restored", True)
+                return _post_commit_result(project_id, provisional, restored.path)
             finally: restored.close()
         if plan.operation in {"cancel_pre_export_handoff", "revoke_inactive_replica"}:
             req = {"transition": "cancel" if plan.operation.startswith("cancel") else "revoke_inactive", "project_id": project_id,
@@ -192,7 +205,7 @@ def apply_recovery_action(context, plan):
             after_state = read_handoff_state(ledger.path, expected_project_id=project_id)
             provisional = _receipt(plan, (target_state.authority_generation, target_state.authority_head), (owner["readback_generation"], owner["readback_head"], after_state.state_digest), owner["outcome"], owner["flags"]["owner_persisted"])
         else: raise ValueError()
-        return _freeze({"receipt": provisional, "next_summary": read_recovery_summary(ledger.path, expected_project_id=project_id)})
+        return _post_commit_result(project_id, provisional, ledger.path)
     except (ValueError, TypeError, KeyError, LedgerBusyError, LedgerConflictError, LedgerPermissionError, LedgerIntegrityError, LedgerSchemaError, LedgerIdentityError):
         if provisional is not None:
             return _freeze({"schema_version": VERSION, "outcome": "setup_incomplete", "receipt": provisional, "next_summary": _hold(project_id, "post_commit_readback_unavailable")})
