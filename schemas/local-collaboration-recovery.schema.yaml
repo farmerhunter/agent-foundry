@@ -1,0 +1,33 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://agent-foundry.local/schemas/local-collaboration-recovery.schema.yaml
+title: LocalCollaborationRecovery-v1
+type: object
+additionalProperties: false
+required: [schema_version, project_id, state, next_action, mutation_performed, source_unlock_performed, automatic_recovery, deletion_performed, transport_performed, global_convergence_verified, summary_digest]
+properties:
+  schema_version: {const: LocalCollaborationRecovery-v1}
+  project_id: {type: string, format: uuid}
+  state: {enum: [healthy_active, recovery_action_ready, source_locked_target_not_exposed, target_active_source_locked, reverse_handoff_required, setup_incomplete, held]}
+  next_action: {enum: [none, status_only, create_backup, restore_fresh_target, cancel_pre_export_handoff, revoke_inactive_replica, takeover_from_accepted_frontier, start_reverse_handoff, resolve_hold]}
+  reason_code: {type: string, pattern: '^[A-Za-z0-9._-]+$'}
+  summary_digest: {type: string, pattern: '^[0-9a-f]{64}$'}
+  before_generation: {type: integer, minimum: 0}
+  before_head: {type: string, pattern: '^[0-9a-f]{64}$'}
+  before_state_digest: {type: string, pattern: '^[0-9a-f]{64}$'}
+  selected_replica_id: {type: string, pattern: '^[A-Za-z0-9._-]+$'}
+  handoff_id: {type: string, pattern: '^[A-Za-z0-9._-]+$'}
+  bundle_locator_digest: {type: string, pattern: '^[0-9a-f]{64}$'}
+  proof_locator_digest: {type: string, pattern: '^[0-9a-f]{64}$'}
+  projection_digest: {type: string, pattern: '^[0-9a-f]{64}$'}
+  target_generation: {type: integer, minimum: 0}
+  target_head: {type: string, pattern: '^[0-9a-f]{64}$'}
+  frontier_digest: {type: string, pattern: '^[0-9a-f]{64}$'}
+  mutation_performed: {const: false}
+  source_unlock_performed: {const: false}
+  automatic_recovery: {const: false}
+  deletion_performed: {const: false}
+  transport_performed: {const: false}
+  global_convergence_verified: {const: false}
+allOf:
+  - if: {properties: {state: {const: held}}, required: [state]}
+    then: {required: [reason_code], properties: {next_action: {const: resolve_hold}}}
