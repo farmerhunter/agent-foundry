@@ -1,0 +1,38 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://agent-foundry.local/schemas/local-collaboration-handoff-experience.schema.yaml
+title: LocalCollaborationHandoffExperience-v1
+type: object
+additionalProperties: false
+required: [schema_version, outcome, project_id, mode, status, next_action, target_activation_authorized, flags]
+properties:
+  schema_version: {const: LocalCollaborationHandoffExperience-v1}
+  outcome:
+    enum: [local_ready, target_import_verified_activation_deferred, hold_schema, hold_privacy, hold_project_identity, hold_owner_state, hold_import_proof, hold_conflict]
+  project_id: {type: string, format: uuid}
+  mode: {enum: [local_source, imported_target]}
+  status:
+    enum: [local_enrollment_required, local_active, handoff_preparing, source_locked_export_bundle, source_locked_bundle_exported, handoff_cancelled_active, handoff_taken_over_active, handoff_conflict_held, target_import_verified_activation_deferred, held]
+  next_action:
+    enum: [enroll_active_device, continue_local_work, lock_source_then_export_bundle, export_manual_bundle, retain_bundle_and_resolve_handoff, continue_on_current_active_device, human_conflict_resolution_required, keep_target_inactive, inspect_owner_import_proof]
+  handoff_id: {type: string, minLength: 1, maxLength: 128, pattern: '^[A-Za-z0-9._-]+$'}
+  source_generation: {type: integer, minimum: 0}
+  source_head: {type: string, pattern: '^[0-9a-f]{64}$'}
+  target_generation: {type: integer, minimum: 0}
+  target_head: {type: string, pattern: '^[0-9a-f]{64}$'}
+  reason_code: {type: string, minLength: 1, maxLength: 128, pattern: '^[A-Za-z0-9._-]+$'}
+  target_activation_authorized: {const: false}
+  flags:
+    type: object
+    additionalProperties: false
+    required: [projection_only, owner_import_verified, transport_performed, target_activation_authorized]
+    properties:
+      projection_only: {const: true}
+      owner_import_verified: {type: boolean}
+      transport_performed: {const: false}
+      target_activation_authorized: {const: false}
+allOf:
+  - if:
+      properties: {outcome: {pattern: '^hold_'}}
+      required: [outcome]
+    then:
+      required: [reason_code]
