@@ -12,19 +12,32 @@ from local_collaboration_ledger import (
 )
 
 VERSION = "LocalCollaborationHandoffExperience-v1"
-MODES = {"local_source", "imported_target"}
 
 
-def _flags(*, owner_import_verified: bool = False) -> dict[str, bool]:
-    return {"projection_only": True, "owner_import_verified": owner_import_verified,
-            "transport_performed": False, "target_activation_authorized": False}
+class _FrozenDict(dict):
+    def _blocked(self, *args, **kwargs):
+        raise TypeError("immutable handoff experience")
+    __setitem__ = __delitem__ = clear = pop = popitem = setdefault = update = _blocked
 
 
-def _hold(project_id: str, mode: str, outcome: str, reason_code: str) -> dict[str, Any]:
-    return {"schema_version": VERSION, "outcome": outcome, "project_id": project_id,
-            "mode": mode, "status": "held", "next_action": "human_conflict_resolution_required"
-            if outcome == "hold_conflict" else "inspect_owner_import_proof",
-            "reason_code": reason_code, "target_activation_authorized": False, "flags": _flags()}
+def _freeze(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return _FrozenDict({key: _freeze(item) for key, item in value.items()})
+    if isinstance(value, (list, tuple)):
+        return tuple(_freeze(item) for item in value)
+    return value
+
+
+def _base(project_id: str, state: str, next_action: str, **extra: Any) -> Mapping[str, Any]:
+    return _freeze({"schema_version": VERSION, "project_id": project_id,
+                    "experience_state": state, "next_action": next_action,
+                    "status_only": True, "mutation_performed": False,
+                    "transport_performed": False, "target_activation_performed": False,
+                    "automatic_recovery_performed": False, **extra})
+
+
+def _hold(project_id: str, reason_code: str) -> Mapping[str, Any]:
+    return _base(project_id, "held", "resolve_conflict_or_recover_owner_state", reason_code=reason_code)
 
 
 def _project_id(value: Any) -> str:
@@ -34,81 +47,71 @@ def _project_id(value: Any) -> str:
         raise ValueError("project_id_invalid") from exc
 
 
-def _closed_args(mode: Any, bundle: Any, proof_ref: Any) -> str | None:
-    if mode not in MODES:
-        return "mode_invalid"
-    if mode == "local_source" and (bundle is not None or proof_ref is not None):
-        return "local_mode_auxiliary_input_forbidden"
-    if mode == "imported_target" and (not isinstance(bundle, Mapping) or not isinstance(proof_ref, Mapping)):
-        return "imported_bundle_and_locator_required"
-    return None
-
-
-def _local_projection(state) -> dict[str, Any]:
+def _local_projection(state) -> Mapping[str, Any]:
     handoff = state.handoff or {}
-    phase, handoff_status = state.phase, handoff.get("status")
-    if phase == "uninitialized":
-        status, action = "local_enrollment_required", "enroll_active_device"
-    elif phase == "active" and handoff_status == "cancelled":
-        status, action = "handoff_cancelled_active", "continue_on_current_active_device"
-    elif phase == "active" and handoff.get("takeover") is True and handoff_status == "target_active":
-        status, action = "handoff_taken_over_active", "continue_on_current_active_device"
-    elif phase == "active":
-        status, action = "local_active", "continue_local_work"
-    elif phase == "preparing":
-        status, action = "handoff_preparing", "lock_source_then_export_bundle"
-    elif phase == "source_locked" and handoff_status == "bundle_exported":
-        status, action = "source_locked_bundle_exported", "retain_bundle_and_resolve_handoff"
-    elif phase == "source_locked":
-        status, action = "source_locked_export_bundle", "export_manual_bundle"
-    else:
-        return _hold(state.project_id, "local_source", "hold_conflict", "owner_handoff_held")
-    result = {"schema_version": VERSION, "outcome": "local_ready", "project_id": state.project_id,
-              "mode": "local_source", "status": status, "next_action": action,
-              "target_activation_authorized": False, "flags": _flags()}
+    common = {"authority_generation": state.authority_generation, "authority_head": state.authority_head,
+              "state_digest": state.state_digest}
+    if state.active_replica_id is not None:
+        common["active_replica_id"] = state.active_replica_id
     if handoff.get("handoff_id") is not None:
-        result["handoff_id"] = handoff["handoff_id"]
-        result["source_generation"] = state.authority_generation
-        result["source_head"] = state.authority_head
-    return result
+        common["handoff_id"] = handoff["handoff_id"]
+        for key in ("source_replica_id", "target_replica_id", "frontier_digest"):
+            if handoff.get(key) is not None:
+                common[key] = handoff[key]
+    if state.phase == "uninitialized":
+        return _hold(state.project_id, "active_device_enrollment_required")
+    if state.phase == "active" and handoff.get("status") == "cancelled":
+        return _base(state.project_id, "cancelled", "continue_single_device", **common)
+    if state.phase == "active" and handoff.get("takeover") is True and handoff.get("status") == "target_active":
+        return _base(state.project_id, "taken_over", "continue_single_device", **common)
+    if state.phase == "active" and handoff.get("status") == "target_active":
+        return _base(state.project_id, "target_active", "none", **common)
+    if state.phase == "active":
+        return _base(state.project_id, "single_device_active", "continue_single_device", **common)
+    if state.phase == "preparing":
+        return _base(state.project_id, "handoff_preparing", "lock_source_after_review", **common)
+    if state.phase == "source_locked" and handoff.get("status") == "bundle_exported":
+        return _base(state.project_id, "bundle_ready_for_manual_transfer", "transfer_and_owner_import_bundle", **common)
+    if state.phase == "source_locked":
+        return _base(state.project_id, "source_locked", "export_manual_bundle", **common)
+    return _hold(state.project_id, "owner_handoff_held")
 
 
-def project_handoff_experience(db_path, *, expected_project_id: str, mode: str,
-                               bundle: Mapping[str, Any] | None = None,
-                               proof_ref: Mapping[str, Any] | None = None) -> Mapping[str, Any]:
-    """Project either local owner state or an owner-reconstructed A2 import.
+def read_handoff_experience(db_path, *, expected_project_id: str, bundle: Mapping[str, Any] | None = None,
+                            proof_ref: Mapping[str, Any] | None = None, **claims: Any) -> Mapping[str, Any]:
+    """Return local A1 state, or an A2 owner-verified imported projection.
 
-    This is intentionally a read-only UI boundary.  In imported mode no A1
-    replay can substitute for the A2 bundle-and-owner-receipt reconstruction.
+    Presence of *both* bundle and proof locator selects imported mode.  Caller
+    claims never select a mode or establish imported authority.
     """
     try:
         project_id = _project_id(expected_project_id)
     except ValueError:
-        return _hold("00000000-0000-0000-0000-000000000000", "local_source", "hold_project_identity", "project_id_invalid")
-    reason = _closed_args(mode, bundle, proof_ref)
-    if reason:
-        return _hold(project_id, mode if mode in MODES else "local_source", "hold_schema", reason)
+        return _hold("00000000-0000-0000-0000-000000000000", "project_id_invalid")
+    if claims or (bundle is None) != (proof_ref is None):
+        return _hold(project_id, "selection_or_claim_invalid")
     try:
-        if mode == "local_source":
+        if bundle is None:
             return _local_projection(read_handoff_state(db_path, expected_project_id=project_id))
+        if not isinstance(bundle, Mapping) or not isinstance(proof_ref, Mapping):
+            return _hold(project_id, "import_bundle_or_locator_invalid")
         projection = read_owner_imported_handoff_projection(
             db_path, expected_project_id=project_id, bundle=bundle, proof_ref=proof_ref,
         )
-        if projection.get("outcome") != "owner_import_verified":
-            return _hold(project_id, mode, "hold_import_proof", projection.get("reason_code", "owner_proof_unavailable"))
+        if not isinstance(projection, Mapping) or projection.get("outcome") != "owner_import_verified":
+            return _hold(project_id, "owner_import_proof_unavailable")
         if projection.get("project_id") != project_id or projection.get("target_activation_authorized") is not False:
-            return _hold(project_id, mode, "hold_import_proof", "owner_projection_invalid")
-        return {"schema_version": VERSION, "outcome": "target_import_verified_activation_deferred",
-                "project_id": project_id, "mode": "imported_target",
-                "status": "target_import_verified_activation_deferred", "next_action": "keep_target_inactive",
-                "handoff_id": projection["handoff_id"], "source_generation": projection["source_generation"],
-                "source_head": projection["source_head"], "target_generation": projection["target_generation"],
-                "target_head": projection["target_head"], "target_activation_authorized": False,
-                "flags": _flags(owner_import_verified=True)}
-    except HandoffHold as exc:
-        return _hold(project_id, mode, "hold_owner_state", exc.reason_code)
+            return _hold(project_id, "owner_import_projection_invalid")
+        return _base(project_id, "target_import_verified_activation_deferred", "request_later_target_activation_gate",
+                     handoff_id=projection["handoff_id"], source_generation=projection["source_generation"],
+                     source_head=projection["source_head"], source_state_digest=projection["source_state_digest"],
+                     frontier_digest=projection["frontier_digest"], target_generation=projection["target_generation"],
+                     target_head=projection["target_head"], owner_import_verified=True,
+                     target_activation_authorized=False)
+    except (HandoffHold, ValueError, TypeError, KeyError):
+        return _hold(project_id, "owner_import_proof_unavailable" if bundle is not None else "owner_state_unavailable")
     except (LedgerBusyError, LedgerPermissionError, LedgerIntegrityError, LedgerSchemaError, LedgerIdentityError):
-        return _hold(project_id, mode, "hold_owner_state", "owner_state_unavailable")
+        return _hold(project_id, "owner_state_unavailable")
 
 
-__all__ = ["project_handoff_experience"]
+__all__ = ["read_handoff_experience"]
