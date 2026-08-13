@@ -154,6 +154,21 @@ class ManualBundleTests(unittest.TestCase):
         finally:
             other.close()
 
+    def test_changed_earlier_semantic_identity_holds_before_a2_mutation(self):
+        shared_event_id = str(uuid.uuid4())
+        self.source.conditional_append_batch([{"event_type": "unrelated", "event_id": shared_event_id, "payload": {"n": 1},
+                                                "actor": "source-owner", "source": "fixture", "root": self.project_id}],
+                                             expected_generation=0, expected_head="0" * 64)
+        bundle = self.exported()
+        self.target.conditional_append_batch([{"event_type": "unrelated", "event_id": shared_event_id, "payload": {"n": 1},
+                                                "actor": "target-owner", "source": "fixture", "root": self.project_id}],
+                                             expected_generation=0, expected_head="0" * 64)
+        before = LocalCollaborationLedger.authority_snapshot(self.target.path, expected_project_id=self.project_id)
+        held = plan_owner_import(before, bundle)
+        self.assertEqual(held["outcome"], "hold_target_not_prefix")
+        after = LocalCollaborationLedger.authority_snapshot(self.target.path, expected_project_id=self.project_id)
+        self.assertEqual((after.authority_generation, after.authority_head), (before.authority_generation, before.authority_head))
+
     def test_export_marker_blocks_unreleased_cancel_and_forgery_holds(self):
         bundle = self.exported()
         state = read_handoff_state(self.source.path, expected_project_id=self.project_id)

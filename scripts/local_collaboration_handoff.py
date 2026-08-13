@@ -353,7 +353,8 @@ def _transition(state: HandoffState, request: Mapping[str, Any], *, replay: bool
         head = event_head if event_head is not None else state.authority_head
     else:
         generation, head = state.authority_generation, state.authority_head
-    return _make_state(state.project_id, generation, head, active_id, active_replica_epoch, active_epoch, phase, enrollments, handoff)
+    return _make_state(state.project_id, generation, head, active_id, active_replica_epoch, active_epoch, phase,
+                       enrollments, handoff, state.portable_prefix_identity)
 
 
 def read_handoff_state(db_path, *, expected_project_id: str) -> HandoffState:
