@@ -300,6 +300,7 @@ def test_public_real_label_bridge_adds_once_with_unattested_hdc_credential():
     request = _bridge_request(); connector, runner = _bridge_connector([
         {"returncode": 0, "stdout": '{"hosts":{"github.com":[{"login":"octocat","scopes":["repo"]}]}}', "stderr": ""},
         {"returncode": 0, "stdout": '{"hosts":{"github.com":[{"login":"octocat","scopes":["repo"]}]}}', "stderr": ""},
+        {"returncode": 0, "stdout": '{"hosts":{"github.com":[{"login":"octocat","scopes":["repo"]}]}}', "stderr": ""},
         {"returncode": 0, "stdout": "bug\n", "stderr": ""}, {"returncode": 0, "stdout": "", "stderr": ""},
         {"returncode": 0, "stdout": "bug\ntrial-label\n", "stderr": ""},
     ])
@@ -308,6 +309,18 @@ def test_public_real_label_bridge_adds_once_with_unattested_hdc_credential():
     assert result["credential_grant_attested"] is False and result["operation_confinement"] == "exact_repo_issue_label"
     assert sum("POST" in call[0] for call in runner.calls) == 1
     assert all(call[1]["shell"] is False for call in runner.calls)
+
+
+def test_private_auth_binding_drift_holds_before_target_and_never_leaks_auth():
+    request = _bridge_request(); connector, runner = _bridge_connector([
+        {"returncode": 0, "stdout": '{"hosts":{"github.com":[{"login":"octocat","scopes":["repo"]}]}}', "stderr": ""},
+        {"returncode": 0, "stdout": '{"hosts":{"github.com":[{"login":"octocat","scopes":["repo"]}]}}', "stderr": ""},
+        {"returncode": 0, "stdout": '{"hosts":{"github.com":[{"login":"changed","scopes":["repo"]}]}}', "stderr": ""},
+    ])
+    result = execute_real_label_materialization(request, _bridge_state(request), connector)
+    assert result["outcome"] == "real_label_materialization_hold" and result["reason"] == "capability_unavailable_or_untrusted"
+    assert not any("/issues/" in " ".join(call[0]) for call in runner.calls)
+    assert "active_principal" not in result and "observable_host_scopes" not in result
 
 
 def test_public_real_label_bridge_rejects_forgery_and_capability_before_target():

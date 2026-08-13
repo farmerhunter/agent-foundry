@@ -428,7 +428,7 @@ def execute_real_label_materialization(request: Mapping[str, Any], scheduler_sta
     except MaterializationHold as held:
         return _bridge_hold({}, "scheduler_or_authority_drift" if str(held) in {"hold_materialization_scheduler_state", "hold_materialization_stale_basis"} else "schema_or_privacy")
     try:
-        from github_materialization_github_cli_connector import GitHubCliConnectorHold, GitHubCliIssueLabelConnector, capability_digest
+        from github_materialization_github_cli_connector import GitHubCliConnectorHold, GitHubCliIssueLabelConnector
         if type(connector) is not GitHubCliIssueLabelConnector:
             return _bridge_hold(req, "authorization_evidence")
         binding = connector.repository_binding
@@ -442,7 +442,7 @@ def execute_real_label_materialization(request: Mapping[str, Any], scheduler_sta
         plan = {"schema_version": "GitHubCliIssueLabelConnector-v1", "human_authorization_ref": req["human_authorization_ref"],
                 "operation": "add_existing_label", "target": req["target"], "label": req["label"],
                 "preimage_digest": req["preimage_digest"], **authority_pair,
-                "expected_capability_digest": capability_digest(capability)}
+                "expected_capability_digest": connector._execution_binding_digest()}
         receipt = connector._add_existing_label(plan, authority_pair=authority_pair)
     except GitHubCliConnectorHold as held:
         return _bridge_hold(req, _bridge_reason(held.reason), connector_called=True)

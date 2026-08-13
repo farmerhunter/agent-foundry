@@ -104,7 +104,7 @@ class GitHubCliIssueLabelConnector:
         pair = {"authority_generation": planned["authority_generation"], "authority_head": planned["authority_head"]}
         if authority_pair != pair:
             raise GitHubCliConnectorHold("hold_authority_pair_stale")
-        if capability_digest(self._public_capability(self._resolve_capability())) != planned["expected_capability_digest"]:
+        if self._execution_binding_digest() != planned["expected_capability_digest"]:
             raise GitHubCliConnectorHold("hold_capability_untrusted")
         receipt_id = _digest({key: planned[key] for key in ("human_authorization_ref", "operation", "target", "label", "preimage_digest", "authority_generation", "authority_head")})
         if receipt_id in self._forward_receipts:
@@ -151,6 +151,10 @@ class GitHubCliIssueLabelConnector:
                 "host": value["host"], "available": value["available"],
                 "credential_grant_attested": False, "operation_confinement": CONFINEMENT,
                 "authoritative": False, "confirmation_eligible": False}
+
+    def _execution_binding_digest(self) -> str:
+        """Private digest of the full fresh resolver fact, never returned."""
+        return capability_digest(self._resolve_capability())
 
     def _endpoint(self, target: Mapping[str, Any]) -> str:
         return f"repos/{target['owner']}/{target['repository']}/issues/{target['number']}/labels"
