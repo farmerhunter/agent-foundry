@@ -3,6 +3,7 @@ import tempfile
 import unittest
 import uuid
 from pathlib import Path
+from unittest.mock import patch
 
 import yaml
 from jsonschema import Draft202012Validator
@@ -13,12 +14,17 @@ from local_collaboration_handoff_bundle import (
     apply_owner_target_activation, plan_owner_target_activation, prepare_manual_bundle,
     read_owner_imported_handoff_projection, read_owner_target_activation, verify_owner_import_proof,
 )
-from local_collaboration_ledger import LocalCollaborationLedger
+from local_collaboration_ledger import LedgerStaleSnapshotError, LocalCollaborationLedger
 
 
 def digest(value):
     import hashlib
     return hashlib.sha256(value.encode()).hexdigest()
+
+
+def canonical_digest(value):
+    import hashlib
+    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()).hexdigest()
 
 
 class ManualBundleTests(unittest.TestCase):
@@ -227,6 +233,57 @@ class ManualBundleTests(unittest.TestCase):
         plan = plan_owner_target_activation(self.target.path, expected_project_id=self.project_id, bundle=bundle, proof_ref=locator, decision=decision)
         self.target.append_event("later", {"n": 1}, event_id=str(uuid.uuid4()), actor="owner", source="fixture", root=self.project_id)
         self.assertEqual(apply_owner_target_activation(self.target, plan, bundle=bundle, proof_ref=locator, decision=decision)["outcome"], "hold_proof_missing_or_stale")
+
+    def test_target_activation_precommit_cas_failure_keeps_import_tail(self):
+        bundle = self.exported()
+        before = LocalCollaborationLedger.authority_snapshot(self.target.path, expected_project_id=self.project_id)
+        proof = apply_owner_import(self.target, plan_owner_import(before, bundle), expected_before=before)
+        locator = {key: proof[key] for key in ("project_id", "receipt_event_id", "receipt_event_hash", "package_digest")}
+        decision = {"decision_id": "human-a2a", "decision_digest": digest("human-a2a")}
+        plan = plan_owner_target_activation(self.target.path, expected_project_id=self.project_id, bundle=bundle, proof_ref=locator, decision=decision)
+        import_tail = LocalCollaborationLedger.authority_snapshot(self.target.path, expected_project_id=self.project_id)
+        with patch.object(self.target, "conditional_append_batch", side_effect=LedgerStaleSnapshotError("fixture")) as cas:
+            result = apply_owner_target_activation(self.target, plan, bundle=bundle, proof_ref=locator, decision=decision)
+        self.assertEqual(result["outcome"], "hold_target_stale")
+        self.assertEqual(cas.call_count, 1)
+        after = LocalCollaborationLedger.authority_snapshot(self.target.path, expected_project_id=self.project_id)
+        self.assertEqual((after.authority_generation, after.authority_head), (import_tail.authority_generation, import_tail.authority_head))
+        self.assertEqual(after.events[-1].event_id, proof["receipt_event_id"])
+
+    def test_target_activation_rejects_historical_duplicate_without_cas(self):
+        bundle = self.exported()
+        before = LocalCollaborationLedger.authority_snapshot(self.target.path, expected_project_id=self.project_id)
+        proof = apply_owner_import(self.target, plan_owner_import(before, bundle), expected_before=before)
+        locator = {key: proof[key] for key in ("project_id", "receipt_event_id", "receipt_event_hash", "package_digest")}
+        decision = {"decision_id": "human-a2a", "decision_digest": digest("human-a2a")}
+        plan = plan_owner_target_activation(self.target.path, expected_project_id=self.project_id, bundle=bundle, proof_ref=locator, decision=decision)
+        self.assertEqual(apply_owner_target_activation(self.target, plan, bundle=bundle, proof_ref=locator, decision=decision)["outcome"], "owner_target_activated")
+        self.target.append_event("later", {"n": 1}, event_id=str(uuid.uuid4()), actor="owner", source="fixture", root=self.project_id)
+        tail = LocalCollaborationLedger.authority_snapshot(self.target.path, expected_project_id=self.project_id)
+        with patch.object(self.target, "conditional_append_batch", wraps=self.target.conditional_append_batch) as cas:
+            result = apply_owner_target_activation(self.target, plan, bundle=bundle, proof_ref=locator, decision=decision)
+        self.assertEqual(result["outcome"], "hold_proof_missing_or_stale")
+        self.assertEqual(cas.call_count, 0)
+        after = LocalCollaborationLedger.authority_snapshot(self.target.path, expected_project_id=self.project_id)
+        self.assertEqual((after.authority_generation, after.authority_head), (tail.authority_generation, tail.authority_head))
+
+    def test_target_activation_rejects_rebound_target_enrollment_before_cas(self):
+        bundle = json.loads(json.dumps(self.exported()))
+        bundle["target_enrollment_digest"] = digest("forged-target-enrollment")
+        required = set(bundle)
+        manifest = {key: bundle[key] for key in required - {"events", "export_marker", "content_manifest_digest", "package_digest", "flags"}}
+        bundle["content_manifest_digest"] = canonical_digest({"header": manifest, "events": bundle["events"]})
+        bundle["package_digest"] = canonical_digest({key: bundle[key] for key in required - {"package_digest"}})
+        before = LocalCollaborationLedger.authority_snapshot(self.target.path, expected_project_id=self.project_id)
+        decision = {"decision_id": "human-a2a", "decision_digest": digest("human-a2a")}
+        with patch.object(self.target, "conditional_append_batch", wraps=self.target.conditional_append_batch) as cas:
+            result = plan_owner_target_activation(self.target.path, expected_project_id=self.project_id, bundle=bundle,
+                                                  proof_ref={"project_id": self.project_id, "receipt_event_id": "00000000-0000-0000-0000-000000000001", "receipt_event_hash": "0" * 64, "package_digest": bundle["package_digest"]},
+                                                  decision=decision)
+        self.assertIn(result["outcome"], {"hold_proof_missing_or_stale", "hold_package_integrity"})
+        self.assertEqual(cas.call_count, 0)
+        after = LocalCollaborationLedger.authority_snapshot(self.target.path, expected_project_id=self.project_id)
+        self.assertEqual((after.authority_generation, after.authority_head), (before.authority_generation, before.authority_head))
 
 
 if __name__ == "__main__":
