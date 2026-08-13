@@ -12,7 +12,7 @@ import time
 import unittest
 from pathlib import Path
 
-from local_collaboration_ledger import LedgerBackupError, LedgerBusyError, LedgerConflictError, LedgerIdentityError, LedgerIntegrityError, LedgerPermissionError, LedgerSchemaError, LocalCollaborationLedger
+from local_collaboration_ledger import GENESIS, LedgerBackupError, LedgerBusyError, LedgerConflictError, LedgerIdentityError, LedgerIntegrityError, LedgerPermissionError, LedgerSchemaError, LedgerStaleSnapshotError, LocalCollaborationLedger
 
 
 class LedgerTests(unittest.TestCase):
@@ -287,6 +287,104 @@ class LedgerTests(unittest.TestCase):
     def test_precommit_invalid_batch_rolls_back_without_partial_event(self):
         with self.assertRaises(ValueError):
             self.ledger.append_batch([{"event_type": "ok", "payload": {"a": 1}}, {"event_type": "bad", "payload": {"prompt": "x"}}])
+        self.assertEqual(self.ledger.list_events(), [])
+
+    def test_conditional_append_commits_at_exact_empty_and_nonempty_pairs(self):
+        first = self.ledger.conditional_append_batch(
+            [{"event_type": "handoff.prepared", "payload": {"epoch": 1}, "event_id": "12121212-1212-1212-1212-121212121212"}],
+            expected_generation=0, expected_head=GENESIS)
+        self.assertEqual((first.status, first.generation, first.head, first.mutation_performed), ("appended", 1, first.events[0].event_hash, True))
+        second = self.ledger.conditional_append_batch(
+            [{"event_type": "handoff.locked", "payload": {"epoch": 1}, "event_id": "13131313-1313-1313-1313-131313131313"}],
+            expected_generation=first.generation, expected_head=first.head)
+        self.assertEqual((second.status, second.generation, second.mutation_performed), ("appended", 2, True))
+        with self.assertRaises(TypeError):
+            second.events[0].payload["epoch"] = 2
+        self.assertTrue(self.ledger.verify())
+
+    def test_conditional_append_stale_does_not_mutate_any_business_table(self):
+        snapshot = LocalCollaborationLedger.authority_snapshot(self.ledger.path, expected_project_id=self.ledger.project_id)
+        other = LocalCollaborationLedger.open_existing(self.ledger.path, expected_project_id=self.ledger.project_id)
+        try:
+            other.append_event("other.commit", {"n": 1}, event_id="14141414-1414-1414-1414-141414141414")
+        finally:
+            other.close()
+        before = self._business_rows()
+        with self.assertRaises(LedgerStaleSnapshotError) as caught:
+            self.ledger.conditional_append_batch(
+                [{"event_type": "handoff.prepared", "payload": {"epoch": 2}, "event_id": "15151515-1515-1515-1515-151515151515"}],
+                expected_generation=snapshot.authority_generation, expected_head=snapshot.authority_head)
+        self.assertEqual(caught.exception.classification, "stale_snapshot")
+        self.assertEqual(before, self._business_rows())
+        self.assertEqual(self.ledger._conn.execute("SELECT COUNT(*) FROM events WHERE event_id='15151515-1515-1515-1515-151515151515'").fetchone()[0], 0)
+
+    def test_conditional_append_exact_retry_is_duplicate_without_mutation(self):
+        batch = [
+            {"event_type": "handoff.prepared", "payload": {"epoch": 3}, "event_id": "16161616-1616-1616-1616-161616161616"},
+            {"event_type": "handoff.locked", "payload": {"epoch": 3}, "event_id": "17171717-1717-1717-1717-171717171717"},
+        ]
+        first = self.ledger.conditional_append_batch(batch, expected_generation=0, expected_head=GENESIS)
+        before = self._business_rows()
+        retry = self.ledger.conditional_append_batch(batch, expected_generation=0, expected_head=GENESIS)
+        self.assertEqual((retry.status, retry.generation, retry.head, retry.mutation_performed), ("duplicate", first.generation, first.head, False))
+        self.assertEqual(retry.events, first.events)
+        self.assertEqual(before, self._business_rows())
+
+    def test_conditional_append_stale_mixed_and_divergent_batches_hold_without_side_effects(self):
+        batch = [
+            {"event_type": "handoff.prepared", "payload": {"epoch": 4}, "event_id": "18181818-1818-1818-1818-181818181818"},
+            {"event_type": "handoff.locked", "payload": {"epoch": 4}, "event_id": "19191919-1919-1919-1919-191919191919"},
+        ]
+        self.ledger.conditional_append_batch(batch, expected_generation=0, expected_head=GENESIS)
+        before = self._business_rows()
+        mixed = [batch[0], {"event_type": "handoff.active", "payload": {"epoch": 4}, "event_id": "20202020-2020-2020-2020-202020202020"}]
+        divergent = [{**batch[0], "payload": {"epoch": 99}}, batch[1]]
+        for candidate in (mixed, divergent):
+            with self.assertRaises(LedgerStaleSnapshotError):
+                self.ledger.conditional_append_batch(candidate, expected_generation=0, expected_head=GENESIS)
+            self.assertEqual(before, self._business_rows())
+
+    def test_conditional_append_concurrent_writers_allow_exactly_one_winner(self):
+        results, failures = [], []
+        def writer(event_id):
+            ledger = LocalCollaborationLedger.open_existing(self.ledger.path, expected_project_id=self.ledger.project_id)
+            try:
+                results.append(ledger.conditional_append_batch(
+                    [{"event_type": "handoff.prepared", "payload": {"event": event_id}, "event_id": event_id}],
+                    expected_generation=0, expected_head=GENESIS).status)
+            except LedgerStaleSnapshotError:
+                failures.append("stale_snapshot")
+            finally:
+                ledger.close()
+        first = threading.Thread(target=writer, args=("21212121-2121-2121-2121-212121212121",))
+        second = threading.Thread(target=writer, args=("22222222-2222-2222-2222-222222222222",))
+        first.start(); second.start(); first.join(); second.join()
+        self.assertEqual(results, ["appended"])
+        self.assertEqual(failures, ["stale_snapshot"])
+        self.assertEqual(len(self.ledger.list_events()), 1)
+
+    def test_conditional_append_rejects_invalid_pair_and_preserves_append_regression(self):
+        event = {"event_type": "handoff.prepared", "payload": {"epoch": 5}, "event_id": "23232323-2323-2323-2323-232323232323"}
+        for generation, head in ((True, GENESIS), (-1, GENESIS), (0, "x" * 64), (1, GENESIS), (0, "A" * 64)):
+            with self.assertRaises(ValueError):
+                self.ledger.conditional_append_batch([event], expected_generation=generation, expected_head=head)
+        self.ledger.append_event("ordinary.append", {"ok": True}, event_id="24242424-2424-2424-2424-242424242424")
+        self.assertEqual(self.ledger.list_events()[0].event_type, "ordinary.append")
+
+    def test_conditional_append_busy_is_bounded_and_has_no_mutation(self):
+        lock = sqlite3.connect(self.ledger.path, timeout=0, isolation_level=None)
+        lock.execute("BEGIN IMMEDIATE")
+        writer = LocalCollaborationLedger.open_existing(self.ledger.path, expected_project_id=self.ledger.project_id)
+        started = time.monotonic()
+        try:
+            with self.assertRaises(LedgerBusyError):
+                writer.conditional_append_batch(
+                    [{"event_type": "handoff.prepared", "payload": {"epoch": 6}, "event_id": "25252525-2525-2525-2525-252525252525"}],
+                    expected_generation=0, expected_head=GENESIS)
+        finally:
+            writer.close()
+            lock.execute("ROLLBACK"); lock.close()
+        self.assertLess(time.monotonic() - started, 8)
         self.assertEqual(self.ledger.list_events(), [])
 
     def test_busy_writer_is_bounded_and_classified(self):
