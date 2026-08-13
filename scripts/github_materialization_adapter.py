@@ -394,7 +394,15 @@ def _bridge_scheduler_state(request: Mapping[str, Any], state: Any) -> dict[str,
                 "attempt_sequence": request["attempt_sequence"], "desired_effect_digest": request["desired_effect_digest"]}
     if any(state.get(key) != value for key, value in required.items()):
         raise MaterializationHold("hold_materialization_stale_basis")
-    generation, head = state.get("scheduler_generation"), state.get("scheduler_head")
+    authority_generation, authority_head = state.get("authority_generation"), state.get("authority_head")
+    scheduler_generation, scheduler_head = state.get("scheduler_generation"), state.get("scheduler_head")
+    if (authority_generation is not None and scheduler_generation is not None
+            and authority_generation != scheduler_generation):
+        raise MaterializationHold("hold_materialization_stale_basis")
+    if authority_head is not None and scheduler_head is not None and authority_head != scheduler_head:
+        raise MaterializationHold("hold_materialization_stale_basis")
+    generation = authority_generation if authority_generation is not None else scheduler_generation
+    head = authority_head if authority_head is not None else scheduler_head
     if not isinstance(generation, int) or isinstance(generation, bool) or generation < 0 or not isinstance(head, str) or not HEX64.fullmatch(head):
         raise MaterializationHold("hold_materialization_stale_basis")
     return {"authority_generation": generation, "authority_head": head}
