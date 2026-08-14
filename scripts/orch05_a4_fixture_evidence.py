@@ -118,7 +118,7 @@ def _s2(root: Path, ledgers: list[LocalCollaborationLedger]) -> Mapping[str, Any
     if not (duplicate.get("outcome") == "owner_import_committed" and duplicate.get("owner_import_performed") is False
             and _pair(before) == _pair(after) and len(before.events) == len(after.events) and status_ok):
         raise _FixtureHold("held_s2_duplicate_evidence")
-    return {"status": "complete", "duplicate_calls": 1, "owner_import_calls": 2,
+    return {"status": "complete", "scenario_calls": 1, "duplicate_calls": 1, "owner_import_calls": 2,
             "pair_unchanged": True, "event_count_unchanged": True, "owner_status_accepted": True,
             "source_locked": read_handoff_state(source.path, expected_project_id=project_id).phase == "source_locked"}
 
@@ -163,7 +163,7 @@ def _s3(root: Path, ledgers: list[LocalCollaborationLedger]) -> Mapping[str, Any
     overlap_ok = isinstance(overlap, Mapping) and str(overlap.get("outcome", "")).startswith("hold_") and _pair(before_overlap) == _pair(after_overlap)
     if not (drift_ok and forged_ok and overlap_ok):
         raise _FixtureHold("held_s3_fixture_safety_defect")
-    return {"status": "complete", "negative_count": 3, "all_holds": True, "wrongful_activation": False,
+    return {"status": "complete", "scenario_calls": 1, "negative_count": 3, "all_holds": True, "wrongful_activation": False,
             "tail_drift_hold_class": drift["outcome"], "tail_drift_mutations": 0,
             "forgery_hold_class": forged["outcome"], "forgery_mutations": 0,
             "overlap_hold_class": overlap["outcome"], "overlap_mutations": 0}
@@ -190,7 +190,10 @@ def _s4(root: Path, ledgers: list[LocalCollaborationLedger]) -> Mapping[str, Any
     after_duplicate = LocalCollaborationLedger.authority_snapshot(target.path, expected_project_id=project_id)
     stale = plan_recovery_action(target.path, expected_project_id=project_id, action="target_takeover", decision=decision, bundle=bundle, proof_ref=locator)
     target_status = read_handoff_experience(target.path, expected_project_id=project_id)
+    restored_pair_matches_backup = ((backup.get("generation"), backup.get("head"))
+                                    == (restore.get("generation"), restore.get("head")))
     valid = (backup.get("outcome") == "fresh_backup_created" and restore.get("outcome") == "fresh_target_restored"
+             and restored_pair_matches_backup
              and first.get("outcome") == "recovery_action_applied" and first.get("active_replica_id") == "target"
              and duplicate.get("outcome") == "recovery_action_applied" and duplicate.get("flags", {}).get("mutation_performed") is False
              and _pair(pair) == _pair(after_duplicate) and isinstance(stale, Mapping) and str(stale.get("outcome", "")).startswith("hold_")
@@ -198,9 +201,19 @@ def _s4(root: Path, ledgers: list[LocalCollaborationLedger]) -> Mapping[str, Any
              and read_handoff_state(source.path, expected_project_id=project_id).phase == "source_locked")
     if not valid:
         raise _FixtureHold("held_s4_recovery_evidence")
-    return {"status": "complete", "backup_created": True, "restore_created": True, "takeover_applied": True,
+    return {"status": "complete", "scenario_calls": 1, "backup_created": True, "restore_created": True, "takeover_applied": True,
             "takeover_duplicate_calls": 1, "takeover_duplicate_zero_mutation": True, "stale_hold": True,
-            "target_status_active": True, "source_locked": True}
+            "target_status_active": True, "source_locked": True,
+            "restored_pair_matches_backup": True}
+
+
+def _not_run() -> Mapping[str, Any]:
+    return {"status": "not_run", "scenario_calls": 0}
+
+
+def _stopped_scenario(*, terminal: str, unexpected: bool) -> Mapping[str, Any]:
+    return {"status": "fail" if unexpected else "hold", "reason_code": "unexpected_exception" if unexpected else terminal,
+            "scenario_calls": 1, "counters_complete": False}
 
 
 def _receipt(*, terminal: str, cleanup: bool, s2: Mapping[str, Any] | None = None,
@@ -208,8 +221,8 @@ def _receipt(*, terminal: str, cleanup: bool, s2: Mapping[str, Any] | None = Non
     return _freeze({"contract_version": VERSION, "integration": INTEGRATION, "run_id": uuid.uuid4().hex,
                     "prior_s1_evidence_ref": S1_EVIDENCE_REF, "s1_rerun": False,
                     "fixture_only": True, "live_data": False, "network": False, "transport": False,
-                    "s2": dict(s2 or {"status": "not_run"}), "s3": dict(s3 or {"status": "not_run"}),
-                    "s4": dict(s4 or {"status": "not_run"}), "cleanup_complete": cleanup, "terminal_outcome": terminal})
+                    "s2": dict(s2 or _not_run()), "s3": dict(s3 or _not_run()),
+                    "s4": dict(s4 or _not_run()), "cleanup_complete": cleanup, "terminal_outcome": terminal})
 
 
 def collect_missing_fixture_evidence(*, private_root: str | Path) -> Mapping[str, Any]:
@@ -217,18 +230,25 @@ def collect_missing_fixture_evidence(*, private_root: str | Path) -> Mapping[str
     root: Path | None = None
     ledgers: list[LocalCollaborationLedger] = []
     s2 = s3 = s4 = None
+    active: str | None = None
     terminal = "held_evidence_incomplete"
     try:
         root = _root_or_hold(private_root)
         root.mkdir(mode=0o700)
-        s2 = _s2(root, ledgers)
-        s3 = _s3(root, ledgers)
-        s4 = _s4(root, ledgers)
+        active = "s2"; s2 = _s2(root, ledgers)
+        active = "s3"; s3 = _s3(root, ledgers)
+        active = "s4"; s4 = _s4(root, ledgers)
         terminal = "fixture_evidence_complete_for_live_a4_hdc_preparation"
     except _FixtureHold as exc:
         terminal = exc.terminal
+        if active == "s2": s2 = _stopped_scenario(terminal=terminal, unexpected=False)
+        elif active == "s3": s3 = _stopped_scenario(terminal=terminal, unexpected=False)
+        elif active == "s4": s4 = _stopped_scenario(terminal=terminal, unexpected=False)
     except Exception:
         terminal = "held_evidence_incomplete"
+        if active == "s2": s2 = _stopped_scenario(terminal=terminal, unexpected=True)
+        elif active == "s3": s3 = _stopped_scenario(terminal=terminal, unexpected=True)
+        elif active == "s4": s4 = _stopped_scenario(terminal=terminal, unexpected=True)
     finally:
         for ledger in reversed(ledgers):
             try:
