@@ -413,6 +413,32 @@ receipts. Ambiguity, duplicate roles, legacy adoption, unavailable capability,
 privacy exposure, forged/unknown receipts and partial failures are held rather
 than guessed.
 
+## Start Local Collaboration
+
+For the user-facing intent **“开启本地多-agent协作”** (English alias:
+**“start local collaboration”**), start with the portable
+[`local collaboration lifecycle`](../workflows/local-collaboration-lifecycle.md).
+It describes the existing owner APIs and the Human decisions around mutation;
+it is guidance, not an executable API.
+
+| User need | Status | What the front door does |
+| --- | --- | --- |
+| Fresh/existing local onboarding, status and recovery | `supported` | Read-only preflight, explicit Human decision before mutation, then fresh owner readback. |
+| Local Board view | `supported` when available | Optional local read-only status view only; it does not access GitHub Project or mutate a Board. |
+| Same-host manual handoff between two isolated authorities | `experimental_same_host_manual_custody` | Opt-in guidance for manual immutable bundle custody, source lock, owner proof, target-local activation, recovery and cleanup. |
+| Real second device, cross-host, device loss, independent credentials, transport or convergence | `held_real_second_device_deferred` | No mutation; request the later A0-Real/transport Human gate. |
+
+The normal path remains single-machine onboarding/status/recovery through
+existing owner APIs. Every create, accepted backfill, recovery, activation,
+retention, or disposal has an explicit Human decision; holds name one safe next
+action and never auto-repair or fall back to a different store.
+
+`experimental_same_host_manual_custody` is deliberately not automatic
+cross-device sync or transport resilience. Manual custody, source lock,
+interruption/overlap holds, recovery, and explicit cleanup must remain visible.
+Target activation is target-local; source unlock and global convergence are not
+inferred.
+
 **中文要点：** 新项目可以请求一次“准备有界协作”。系统先只读检查：唯一匹配就复用
 Coordinator/Architect，缺失才计划创建；Implementer、Reviewer、Tester、Harvester 仍在
 具体 Work 开始时临时创建。任何重名、旧 thread 认领、能力缺失或半途失败都会停住并显示
