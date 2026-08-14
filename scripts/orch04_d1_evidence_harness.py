@@ -78,8 +78,6 @@ def _validate_inputs(root: Path, project_binding: str) -> Path:
         uuid.UUID(project_binding)
     except (ValueError, TypeError, AttributeError) as exc:
         raise _Hold("held_preflight") from exc
-    if not project_binding.startswith("b21487d3-"):
-        raise _Hold("held_preflight")
     return root
 
 
@@ -199,7 +197,15 @@ def run(private_root: str | Path, project_binding: str) -> dict[str, Any]:
     try:
         root = _validate_inputs(root, project_binding)
         identity = _owned_root(root)
-        onboarding = fresh_onboarding(root, "synthetic_fixture", "orch04-d1:" + project_binding)
+        receipt["stages"]["onboarding"] = _stage("entered")
+        try:
+            onboarding = fresh_onboarding(root, "synthetic_fixture", "orch04-d1:" + project_binding)
+        except Exception:
+            receipt["stages"]["onboarding"] = _stage("held_onboarding")
+            raise _Hold("held_onboarding")
+        if not isinstance(onboarding, Mapping):
+            receipt["stages"]["onboarding"] = _stage("held_owner_api_contract_mismatch")
+            raise _Hold("held_owner_api_contract_mismatch")
         if onboarding.get("status") != "created" or onboarding.get("mutation_performed") is not True:
             receipt["stages"]["onboarding"] = _stage("held_onboarding")
             raise _Hold("held_onboarding")
@@ -207,8 +213,8 @@ def run(private_root: str | Path, project_binding: str) -> dict[str, Any]:
         if not isinstance(project_id, str):
             receipt["stages"]["onboarding"] = _stage("held_owner_api_contract_mismatch")
             raise _Hold("held_owner_api_contract_mismatch")
+        receipt["stages"]["onboarding"] = _stage("created", mutation_performed=True)
         before = _snapshot(root, project_id)
-        receipt["stages"]["onboarding"] = _stage("created", event_count=before[2], mutation_performed=True)
 
         receipt["stages"]["action"] = _stage("entered")
         action = _decode_action(local_action_batch(root, project_id, [_action()]), (1, 0))

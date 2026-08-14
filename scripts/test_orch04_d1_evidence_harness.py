@@ -16,6 +16,7 @@ import orch04_d1_evidence_harness as harness
 
 ROOT = Path("/private/tmp")
 PROJECT = "b21487d3-b1fa-513a-9bb9-927ed5000475"
+ALTERNATE_PROJECT = "c3c72601-47ec-4483-8739-f1cd1af0824b"
 
 
 class D1HarnessTests(unittest.TestCase):
@@ -72,7 +73,16 @@ class D1HarnessTests(unittest.TestCase):
             receipt = harness.run(root, PROJECT)
         self.assertEqual(receipt["outcome"], "held_owner_api_contract_mismatch")
         self.assertEqual(receipt["cleanup"], "complete")
-        self.assertEqual(receipt["stages"]["onboarding"]["outcome"], "not_entered")
+        self.assertEqual(receipt["stages"]["onboarding"]["outcome"], "created")
+
+    def test_onboarding_exception_is_entered_typed_hold_and_cleans(self):
+        root = self.root("onboarding-exception")
+        with patch.object(harness, "fresh_onboarding", side_effect=RuntimeError("raw private failure")):
+            receipt = harness.run(root, PROJECT)
+        self.assertEqual(receipt["outcome"], "held_onboarding")
+        self.assertEqual(receipt["stages"]["onboarding"]["outcome"], "held_onboarding")
+        self.assertEqual(receipt["cleanup"], "complete")
+        self.assertNotIn("raw private failure", json.dumps(receipt))
 
     def test_malformed_binding_rejects_before_onboarding(self):
         root = self.root("bad-binding")
@@ -81,6 +91,12 @@ class D1HarnessTests(unittest.TestCase):
         onboarding.assert_not_called()
         self.assertEqual(receipt["outcome"], "held_preflight")
         self.assertEqual(receipt["cleanup"], "not_started")
+
+    def test_any_valid_synthetic_uuid_is_accepted(self):
+        root = self.root("alternate-project")
+        receipt = harness.run(root, ALTERNATE_PROJECT)
+        self.assertEqual(receipt["outcome"], "fixture_evidence_complete")
+        self.assertEqual(receipt["cleanup"], "complete")
 
     def test_entered_owner_failure_is_not_not_run_and_cleans(self):
         root = self.root("action-hold")
