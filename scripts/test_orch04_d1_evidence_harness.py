@@ -9,6 +9,7 @@ import unittest
 import uuid
 from pathlib import Path
 from unittest.mock import patch
+from subprocess import CompletedProcess
 
 import orch04_d1_evidence_harness as harness
 
@@ -125,6 +126,16 @@ class D1HarnessTests(unittest.TestCase):
         self.assertNotIn(PROJECT, text)
         self.assertNotIn("integration", text)
         self.assertEqual(receipt["source_binding"], "external_execution_preflight_required")
+
+    def test_timestamp_cli_malformed_result_holds_without_mutation(self):
+        root = self.root("timestamp-malformed")
+        malformed = CompletedProcess(args=["ignored"], returncode=6, stdout='{"status":"hold","error":"wrong","mutation_performed":false}', stderr="")
+        with patch.object(harness.subprocess, "run", return_value=malformed):
+            receipt = harness.run(root, PROJECT)
+        self.assertEqual(receipt["outcome"], "held_timestamp_hold_semantics")
+        self.assertEqual(receipt["stages"]["timestamp_hold"]["outcome"], "held_timestamp_hold_semantics")
+        self.assertEqual(receipt["cleanup"], "complete")
+        self.assertFalse(root.exists())
 
 
 if __name__ == "__main__":

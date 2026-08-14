@@ -13,11 +13,12 @@ import json
 import os
 import shutil
 import stat
+import subprocess
+import sys
 import uuid
 from pathlib import Path
 from typing import Any, Mapping
 
-from github_collaboration_helper import sqlite_action_timestamp_valid
 from local_collaboration_ledger import LocalCollaborationLedger
 from sqlite_collaboration_workflow import fresh_onboarding, local_action_batch
 
@@ -144,6 +145,53 @@ def _decode_action(result: Mapping[str, Any], expected: tuple[int, int]) -> tupl
     return status, appended, duplicate, mutation
 
 
+def _public_timestamp_hold(root: Path, project_id: str) -> Mapping[str, Any]:
+    """Exercise the public CLI action route with a missing timestamp.
+
+    The action document is short-lived inside the invocation-owned fixture
+    root.  CLI stdout is decoded in memory and never becomes receipt data.
+    """
+    action_path = root / "invalid-action.json"
+    action = {
+        "action_id": "orch04-d1-invalid-timestamp",
+        "action_type": "assignment",
+        "work_item": {"id": "synthetic:orch04-d1"},
+        "approved_by_role": "agent",
+        "payload": {"owner_role": "synthetic-adopter"},
+    }
+    action_path.write_text(json.dumps(action, sort_keys=True, separators=(",", ":")), encoding="utf-8")
+    helper = Path(__file__).resolve().parent / "github_collaboration_helper.py"
+    try:
+        completed = subprocess.run(
+            [sys.executable, str(helper), "local-ledger-action-apply", "--ledger-backend", "sqlite",
+             "--projects-root", str(root), "--project-id", project_id,
+             "--action-json", str(action_path), "--json"],
+            cwd=helper.parent.parent,
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=15,
+        )
+        try:
+            value = json.loads(completed.stdout)
+        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            raise _Hold("held_timestamp_hold_semantics") from exc
+        if (completed.returncode != 6 or not isinstance(value, Mapping)
+                or set(value) != {"status", "error", "mutation_performed"}
+                or value.get("status") != "hold"
+                or value.get("error") != "sqlite_action_timestamp_invalid"
+                or value.get("mutation_performed") is not False):
+            raise _Hold("held_timestamp_hold_semantics")
+        return value
+    except (OSError, subprocess.SubprocessError):
+        raise _Hold("held_timestamp_hold_semantics") from None
+    finally:
+        try:
+            action_path.unlink(missing_ok=True)
+        except OSError:
+            raise _Hold("held_cleanup") from None
+
+
 def run(private_root: str | Path, project_binding: str) -> dict[str, Any]:
     root = Path(private_root)
     receipt = _empty_receipt(root, project_binding)
@@ -177,9 +225,7 @@ def run(private_root: str | Path, project_binding: str) -> dict[str, Any]:
         receipt["stages"]["duplicate"] = _stage("duplicate", status=duplicate[0], appended_count=duplicate[1], duplicate_count=duplicate[2], mutation_performed=duplicate[3], authority_unchanged=True)
 
         receipt["stages"]["timestamp_hold"] = _stage("entered")
-        if sqlite_action_timestamp_valid(None):
-            raise _Hold("held_timestamp_hold_semantics")
-        timestamp_hold = {"status": "hold", "error": "sqlite_action_timestamp_invalid", "mutation_performed": False}
+        timestamp_hold = _public_timestamp_hold(root, project_id)
         after_timestamp = _snapshot(root, project_id)
         if after_timestamp != after_duplicate:
             raise _Hold("held_timestamp_hold_semantics")
