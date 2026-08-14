@@ -31,10 +31,20 @@ class FixtureEvidenceTests(unittest.TestCase):
         self.assertTrue(json.dumps(receipt))
         with self.assertRaises(TypeError):
             receipt["network"] = True
-        self.assertEqual(set(receipt), {"contract_version", "integration", "run_id", "prior_s1_evidence_ref", "s1_rerun", "fixture_only", "live_data", "network", "transport", "s2", "s3", "s4", "cleanup_complete", "terminal_outcome"})
+        self.assertEqual(receipt["contract_version"], "ORCH05-A4-EH1-v2")
+        self.assertEqual(receipt["source_binding"], "external_execution_preflight_required")
+        self.assertEqual(set(receipt), {"contract_version", "source_binding", "run_id", "prior_s1_evidence_ref", "s1_rerun", "fixture_only", "live_data", "network", "transport", "s2", "s3", "s4", "cleanup_complete", "terminal_outcome"})
         rendered = json.dumps(receipt)
         self.assertNotIn(str(root), rendered)
         self.assertNotIn("project_id", rendered)
+
+    def test_receipt_has_no_checkout_identity_or_caller_ref(self):
+        receipt = evidence._receipt(terminal="held_evidence_incomplete", cleanup=True)
+        rendered = json.dumps(receipt)
+        self.assertNotIn("integration", receipt)
+        self.assertNotIn("9155bbe", rendered)
+        self.assertNotIn("f7e6340", rendered)
+        self.assertEqual(receipt["source_binding"], "external_execution_preflight_required")
 
     def test_existing_symlink_and_escaping_roots_fail_before_owner_calls(self):
         existing = self.root("existing")

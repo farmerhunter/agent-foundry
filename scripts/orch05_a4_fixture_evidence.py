@@ -25,8 +25,8 @@ from local_collaboration_ledger import LocalCollaborationLedger
 from local_collaboration_recovery import apply_recovery_action, plan_recovery_action, read_recovery_summary
 
 
-VERSION = "ORCH05-A4-EH1-v1"
-INTEGRATION = "codex/orch-05-single-active-handoff-integration@f7e6340afb61e1a025cfb957f9160eb9a99c9019"
+VERSION = "ORCH05-A4-EH1-v2"
+SOURCE_BINDING = "external_execution_preflight_required"
 S1_EVIDENCE_REF = "5284481954"
 _ROOT_NAME = re.compile(r"^orch05-a4-eh1-[A-Za-z0-9_-]+$")
 
@@ -218,7 +218,7 @@ def _stopped_scenario(*, terminal: str, unexpected: bool) -> Mapping[str, Any]:
 
 def _receipt(*, terminal: str, cleanup: bool, s2: Mapping[str, Any] | None = None,
              s3: Mapping[str, Any] | None = None, s4: Mapping[str, Any] | None = None) -> Mapping[str, Any]:
-    return _freeze({"contract_version": VERSION, "integration": INTEGRATION, "run_id": uuid.uuid4().hex,
+    return _freeze({"contract_version": VERSION, "source_binding": SOURCE_BINDING, "run_id": uuid.uuid4().hex,
                     "prior_s1_evidence_ref": S1_EVIDENCE_REF, "s1_rerun": False,
                     "fixture_only": True, "live_data": False, "network": False, "transport": False,
                     "s2": dict(s2 or _not_run()), "s3": dict(s3 or _not_run()),
