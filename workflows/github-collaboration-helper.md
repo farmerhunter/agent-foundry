@@ -8,6 +8,12 @@ configuration shape, evidence requirements, and safety boundaries before helper
 scripts exist. It does not publish generated Skills, install runtime adapters,
 mutate GitHub state, or write Vault/private state.
 
+> **Current collaboration front door.** For normal local collaboration, start
+> with [`local-collaboration-lifecycle.md`](local-collaboration-lifecycle.md)
+> and its SQLite owner APIs. The V2/JSONL command sections below are retained
+> only as historical, compatibility or diagnostic reference; they are neither
+> primary onboarding nor a fallback authority, and must not imply dual-write.
+
 ## Codex Target Activation
 
 Codex users should have one stable helper entry point across projects and
@@ -592,6 +598,12 @@ work: it separates observed facts, unknown/degraded sources, action category,
 owner role, and workflow route. AF15 does not implement V2, does not create a
 Foundry Board or Local Collaboration Ledger, and does not make GitHub Project
 the source of truth.
+
+## Historical V2/JSONL helper reference
+
+The following sections describe historical diagnostic surfaces. They must not
+be presented as the normal path for “start local collaboration”; use the SQLite
+owner lifecycle instead.
 
 ## Foundry Board Preview
 

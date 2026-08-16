@@ -35,6 +35,20 @@ External skills are reviewed inputs. An import outcome is one of `discard`, `ref
 
 **中文要点：** 日常用短命令。重要新增/变更必须经你批准后才会 active。外部 skills 先 review；`reference_only` 只是证据，不会激活或 publish。
 
+## 开启本地多-agent协作
+
+这是当前协作产品的第一成功路径：请求 **“开启本地多-agent协作”** / **“start local collaboration”**。它先通过 SQLite owner API 只读确认项目绑定、authority、状态与 hold；若需要 mutation，会明确说明唯一的 Human decision，随后以 fresh owner readback 结束。日常状态与恢复说明也只读取 owner 派生结果；可选 Board 只读，GitHub/Project 只是 native facts 或非权威投影。
+
+| 你想做什么 | 当前结果 |
+| --- | --- |
+| 单机 onboarding、status、一个已批准本地 action、recovery | `available`（已接受 Core/integration 证据；尚非 production release） |
+| 同机、两个隔离 authority 的手工 immutable bundle custody | `experimental_same_host_manual_custody` |
+| 真正第二台设备、cross-host、device-loss、transport、独立 credentials、global convergence | `held_real_second_device_deferred` |
+
+不要把 `--ledger-root`、JSONL replay 或旧 V2 trial 当作正常入口、迁移要求或失败回退。它们仅保留为历史、export 或诊断材料。A0-Lite 的 source lock、manual custody、hold、recovery 和 cleanup 仍需显式可见；它不等于真实设备连续性。
+
+性能、通用 latency、规模和真实 adopter friction 尚为 `unknown/not_exposed`，以后由真实使用反馈评估；不要从 fixture 或本文档推断它们。
+
 ## Tester Evidence
 
 For risky user-visible or stateful changes, you can ask for Tester evidence before accepting the work. Tester plans or gathers evidence; Tester does not approve the change.
@@ -104,6 +118,12 @@ Branch action-plan concepts are also read-only:
 **中文要点：** 新 repo 先要 setup checklist；老 repo 先 audit drift。Action plan 只读，给出下一步，不自动 repair/apply。
 Branch action plan 也只读：它可以提示 split、switch context、forward-merge 或多线验证，
 但不会自动 checkout、retarget、merge、reset 或 clean。
+
+## Historical V2/JSONL reference
+
+下面的 Foundry Board、JSONL ledger、V2 trial 和 `--ledger-root` 示例是保留的
+历史/诊断参考。它们不改变上述 SQLite 单机 owner authority，也不构成 dual-write
+或 fallback。
 
 ## Foundry Board Preview
 

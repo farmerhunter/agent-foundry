@@ -433,6 +433,10 @@ existing owner APIs. Every create, accepted backfill, recovery, activation,
 retention, or disposal has an explicit Human decision; holds name one safe next
 action and never auto-repair or fall back to a different store.
 
+This is accepted functional lifecycle evidence, not a production or universal
+performance claim. Real-adopter friction, latency, scale and cross-device
+operation remain `unknown/not_exposed` or deferred until separately observed.
+
 `experimental_same_host_manual_custody` is deliberately not automatic
 cross-device sync or transport resilience. Manual custody, source lock,
 interruption/overlap holds, recovery, and explicit cleanup must remain visible.

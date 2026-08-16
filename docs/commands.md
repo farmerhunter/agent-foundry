@@ -6,6 +6,29 @@ Use these short commands in day-to-day agent work. English command text is canon
 
 ## Commands
 
+## Local collaboration first-success path
+
+For collaboration work, use this short path before the historical V2/JSONL
+commands below. The SQLite authority is the only normal operational store.
+
+| Command | 中文触发 | Use |
+| --- | --- | --- |
+| `start local collaboration` | `开启本地多-agent协作` | Run a read-only SQLite owner preflight for a fresh or existing single-machine project, explain one safe next action, and keep mutations Human-gated. |
+| `show local collaboration status` | `显示本地协作状态` | Show fresh owner-derived authority/status/hold state; an optional Board remains read-only. |
+| `prepare local collaboration recovery` | `准备本地协作恢复` | Explain owner-guided backup, restore, takeover, source-lock and cleanup before a separately approved recovery action. |
+
+`A0-Lite` is experimental same-host/manual-custody guidance only. Real
+second-device, cross-host, transport, device-loss, independent-credential and
+convergence requests are deferred; do not use an old JSONL/V2 command as a
+fallback.
+
+## Other commands and historical diagnostics
+
+The V2/JSONL trial, export and diagnostic rows in the remainder of this table
+are not the primary collaboration onboarding path and must not create a second
+authority or a dual-write migration requirement. The unrelated lifecycle and
+maintenance commands retain their normal meanings.
+
 | Command | 中文触发 | Use |
 | --- | --- | --- |
 | `harvest practices` | `做一次 harvest practice` | Extract reusable practices from the current session and show a review list. |
@@ -35,13 +58,13 @@ Use these short commands in day-to-day agent work. English command text is canon
 | `audit existing collaboration setup` | `审计现有 collaboration setup` | Review drift in an existing project and group next actions as informational, agent-handled, human-gated, or unsupported/deferred. Read-only. |
 | `check branch readiness for this issue or PR` | `检查这个 issue 或 PR 的 branch readiness` | Explain `Branch strategy`, `Target branch`, PR base, local branch state, and safe next action concepts such as split, switch context, forward-merge, or multi-line verification. Read-only. |
 | `show Foundry Board` | `显示 Foundry Board` | Render a read-only local-first board/report from accepted ledger replay first, with GitHub/Project as mirror drift evidence. It does not write GitHub, Project, ledger, runtime, or Vault state. |
-| `onboard this existing project into V2 Local Orchestration as a ten-minute read-only trial` | `把这个 existing project 作为十分钟只读 trial 接入 V2 Local Orchestration` | Start a guided onboarding packet that does not require raw JSON reading: show what the agent reads, may write, will not touch, and the one Human decision now; derive an explicit issue/PR fallback set from current durable evidence; keep candidates non-authoritative; show isolated ledger and Project sync `not executed` boundaries. |
+| `onboard this existing project into V2 Local Orchestration as a ten-minute read-only trial` | `把这个 existing project 作为十分钟只读 trial 接入 V2 Local Orchestration` | Historical read-only V2/JSONL trial; diagnostic evidence only, never the normal SQLite onboarding route. |
 | `run the interactive Human onboarding trial` | `运行 interactive Human onboarding trial` | Continue the guided onboarding one step at a time with captured Human responses. The helper must not advance without a response, keeps raw JSON as debug only, defaults to no mutation, and may write only a local transcript inside the isolated trial root. |
 | `run controlled ledger dogfood for this adopter issue` | `为这个 adopter issue 运行 controlled ledger dogfood` | Run a reversible isolated-trial workflow: Human-reviewed candidate evidence becomes accepted local ledger events, then one safe local transition drives replay, Foundry Board, cockpit, dry-run Project mirror plan, recovery, and audit output. It writes only under the explicit trial root; GitHub/Project remain untouched. |
-| `show local collaboration ledger report` | `显示 local collaboration ledger report` | Replay local append-only ledger events from `usage/local/collaboration-ledger/` or a supplied test root into derived work-item state. Read-only; no GitHub dependency or write-back. |
+| `show local collaboration ledger report` | `显示 local collaboration ledger report` | Historical/diagnostic JSONL replay report; read-only and non-authoritative for current SQLite collaboration. |
 | `preview existing project ledger backfill` | `预览 existing project ledger backfill` | Convert bounded existing GitHub-first issue/PR/comment/label/milestone/Project evidence into candidate local ledger events for review only. No authoritative migration or writes. |
-| `apply reviewed migration candidates` | `应用 reviewed migration candidates` | Apply reviewed accept/reject/skip decisions for backfill candidates into the accepted local ledger. Writes only local ledger JSONL; no GitHub or Project mutation. |
-| `apply approved local board action` | `应用 approved local board action` | Apply an approved Foundry Board/local next action into the local ledger. Writes only local ledger JSONL; no GitHub/Project/runtime/Vault mutation. |
+| `apply reviewed migration candidates` | `应用 reviewed migration candidates` | Historical JSONL migration material; not a current collaboration authority or fallback. |
+| `apply approved local board action` | `应用 approved local board action` | Historical JSONL action material; use the SQLite owner path for current local actions. |
 | `preview GitHub Project sync plan` | `预览 GitHub Project sync plan` | Generate a dry-run Project mirror plan from ledger-backed board state with before/after values, conflicts, Human gates, and readback requirements. No Project/GitHub writes. |
 | `apply accepted Project sync plan` | `应用 accepted Project sync plan` | Apply accepted Project mirror operations through a reviewed fake/mock executor and record local sync-readback evidence. Live Project writes remain gated. |
 | `review mixed local and GitHub state` | `检查 local ledger 和 GitHub/Project 的混杂状态` | Explain local-newer, remote-newer, remote-only, candidate-only, partial-sync, branch-line, supersession, degraded Project, and out-of-band edit recovery paths. Read-only; no hidden repair. |

@@ -14,6 +14,16 @@ local Agent Foundry
   -> optional remote sync when network is available
 ```
 
+## Snapshot sync is not collaboration handoff
+
+Snapshots move Core/Vault material and selected safe aggregates. They never
+carry, replace, merge, or authorize a SQLite collaboration authority. Do not
+copy or share an authority database between machines, and do not infer a
+handoff, source unlock, target activation, transport resilience or convergence
+from a successful snapshot import. The current A0-Lite path is experimental
+same-host manual custody only; real second-device/cross-host/device-loss and
+transport cases remain deferred behind later evidence and Human gates.
+
 ## Recommended Setup
 
 Use multiple remotes if needed:

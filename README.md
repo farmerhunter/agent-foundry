@@ -36,6 +36,29 @@ Agent Foundry keeps Core tooling, User Vault records, and runtime delivery separ
 
 Agent memory, session summaries, and external skills are treated as evidence sources. They can suggest candidates, but they do not become durable rules until reviewed.
 
+## Start Local Collaboration
+
+For a new or existing project, the supported collaboration front door is
+**“开启本地多-agent协作”** / **“start local collaboration”**. It uses the
+SQLite-backed local authority and its owner APIs for a single machine: read-only
+onboarding and status first, one explicitly approved local action when needed,
+then fresh owner readback and owner-guided recovery. The optional Board is a
+read-only view, not a second authority and not a GitHub Project writer.
+
+| Capability | Current boundary |
+| --- | --- |
+| Single-machine onboarding, status and recovery | `available` in accepted Core/integration evidence; not a production release claim. |
+| Idempotent owner-guided local actions | `available` behind the relevant Human decision and fresh readback. |
+| A0-Lite manual custody between isolated authorities on one host | `experimental_same_host_manual_custody`. |
+| Real second device, cross-host transport, device-loss resilience, independent credentials or convergence | `held_real_second_device_deferred`. |
+
+Start with [the local collaboration lifecycle](workflows/local-collaboration-lifecycle.md),
+then use [the collaboration guide](docs/multi-agent-collaboration.md) for roles
+and durable GitHub evidence. JSONL/V2 trial commands elsewhere in this repository
+are historical, compatibility, export, or diagnostic material—not a normal
+onboarding path, a fallback authority, a migration requirement, or a dual-write
+store.
+
 ## Repository Map
 
 | Path | Purpose |
@@ -139,5 +162,6 @@ See [docs/system-design.md](docs/system-design.md) and [docs/lifecycle-compatibi
 - [Roadmap](docs/roadmap.md): productization, repository hygiene, and memory-system readiness plan.
 - [Lifecycle Compatibility](docs/lifecycle-compatibility.md): how the full loop maps across agent systems.
 - [Offline Sync](docs/offline-sync.md): snapshot and remote sync strategy.
+- [v2.0.0 Candidate](docs/v2.0.0-candidate.md): evidence, usable boundaries, and remaining release gates.
 - [Standards and Sources](docs/standards-and-sources.md): external conventions and adapter standards.
 - [Memory System Handoff Dump](docs/memory-system-handoff-dump.md): preserved discussion evidence for a proposed future memory/knowledge subsystem; not current implemented architecture.

@@ -92,7 +92,7 @@ It performs no mutation. The only safe next action is to request the later
 A0-Real/transport gate with an explicit Human decision contract. Do not use
 A0-Lite to bypass that gate.
 
-## Adopter walkthrough gate
+## Functional walkthrough boundary
 
 After this documentation is accepted, a separate Human Decision Contract must
 bind one adopter project/root/revision plus retention and cleanup. The adopter
@@ -101,7 +101,9 @@ single-machine onboarding, read fresh authority/status, perform one approved
 local action, see a hold and recovery explanation, and recognize that
 A0-Lite is experimental while real second-device work is unavailable.
 
-Record 1–5 scores for discoverability, authority clarity, recovery clarity,
-and boundary honesty. The recommended threshold is every score at least 4 with
-no privacy or unsupported-capability defect. This walkthrough does not
+Functional evidence may establish that the front door is discoverable and
+truthful: it can validate **discoverability**, **authority clarity**, **recovery clarity**, and **boundary honesty** as functional questions. It must not
+manufacture numeric usability, performance, latency, scale or
+real-adopter-friction scores from a synthetic walkthrough; those stay
+`not_collected` and await later real usage feedback. This walkthrough does not
 authorize an A0-Lite operation, adapter publication, main merge, or release.

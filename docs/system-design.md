@@ -87,6 +87,31 @@ Downstream:
 
 Core and Vault currently live in one repository for maintainability. They are separate logical units so agents can distinguish the canonical destination from the current project they are harvesting from.
 
+## Local collaboration authority boundary
+
+The current collaboration front door is a separate, SQLite-backed local
+authority for a single machine. It is deliberately not a replacement for Core,
+the selected Vault, generated adapters, runtime installs, GitHub native facts,
+or GitHub/Project projections.
+
+```mermaid
+flowchart TB
+  Core["Foundry Core\nworkflows, schemas, owner APIs"] --> Generated["Generated adapters\nnon-authoritative output"]
+  Vault["Selected User Vault\ncanonical practices and assets"] --> Generated
+  Generated --> Runtime["Runtime installs\ndownstream copies"]
+  SQLite["SQLite collaboration authority\nsingle-machine owner state"] --> Status["Read-only status / optional Board"]
+  GitHub["GitHub native facts\nissues, PRs, labels"] --> Projection["Non-authoritative projections"]
+  SQLite --> Projection
+```
+
+Only owner APIs may establish or mutate the SQLite authority. The Board and
+GitHub/Project projections do not become authority by agreeing with it. JSONL
+replay remains historical/export/diagnostic material, never a fallback or
+dual-write store. Same-host manual custody is `experimental`; real second
+device, cross-host transport, device-loss resilience, independent credentials
+and global convergence are deferred. Core/Vault restore is separate from this
+handoff boundary and must never copy or share SQLite authority files.
+
 ## Core And User Vault Split
 
 The target product direction is a reusable public Core with user-owned Vaults. A user's Vault is private by default unless that user explicitly chooses to publish it. In the current repository, the maintainer's User Vault belongs to the `farmerhunter` account and should not remain bundled into a public Core distribution before Agent Foundry claims external-user readiness.
