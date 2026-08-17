@@ -182,6 +182,40 @@ def _same_fresh_binding(before: Mapping[str, Any], after: Mapping[str, Any], fie
     return all(before.get(name) == after.get(name) for name in fields)
 
 
+def _binding_digest(value: Mapping[str, Any]) -> str:
+    return _digest({key: item for key, item in value.items() if key != "topology_apply_binding_digest"})
+
+
+def _validate_apply_binding(
+    binding: Any,
+    plan: Mapping[str, Any],
+    operation_receipt_refs: tuple[str, ...],
+    topology: Mapping[str, Any],
+) -> tuple[str | None, str | None]:
+    """Validate an owner commitment to the exact plan, receipts and readback."""
+    if not isinstance(binding, Mapping) or _has_private(binding):
+        return None, "topology_apply_readback_binding_missing"
+    required = (
+        "topology_apply_binding_ref", "topology_apply_binding_digest", "topology_plan_digest",
+        "operation_receipt_refs_digest", "rolehub_ref", "coordinator_ref", "architect_ref",
+        "topology_readback_digest",
+    )
+    if not _nonempty(binding, *required):
+        return None, "topology_apply_readback_binding_missing"
+    if binding["topology_plan_digest"] != plan["topology_plan_digest"]:
+        return None, "topology_apply_plan_binding_mismatch"
+    if binding["operation_receipt_refs_digest"] != _digest(list(operation_receipt_refs)):
+        return None, "topology_apply_receipt_binding_mismatch"
+    if binding["topology_apply_binding_digest"] != _binding_digest(binding):
+        return None, "topology_apply_readback_binding_forged"
+    final_fields = ("rolehub_ref", "coordinator_ref", "architect_ref", "topology_readback_digest")
+    if any(topology.get(name) != binding.get(name) for name in final_fields):
+        return None, "topology_apply_readback_identity_mismatch"
+    if topology.get("topology_apply_binding_ref") != binding["topology_apply_binding_ref"] or topology.get("topology_apply_binding_digest") != binding["topology_apply_binding_digest"]:
+        return None, "topology_apply_readback_binding_mismatch"
+    return binding["topology_apply_binding_ref"], None
+
+
 def initialize(
     owners: Owners,
     *,
@@ -238,8 +272,11 @@ def initialize(
         return _result("topology_plan_ready", onboarding_key, attention_reason=None, safe_next_action="Obtain bounded topology-apply authorization.", topology_plan=_freeze(plan))
 
     mutation_performed = False
+    apply_invoked = False
     operation_receipt_refs: tuple[str, ...] = ()
+    apply_binding: Mapping[str, Any] | None = None
     if topology.get("state") == "missing":
+        apply_invoked = True
         plan = {
             "contract_version": VERSION,
             "onboarding_key": onboarding_key,
@@ -255,21 +292,17 @@ def initialize(
             return _result("setup_incomplete", onboarding_key, attention_reason=error, safe_next_action="Read topology and scheduler state before any follow-up.")
         assert applied is not None
         refs = applied.get("operation_receipt_refs")
-        binding_ref = applied.get("topology_apply_binding_ref")
-        binding_digest = applied.get("topology_apply_binding_digest")
         if (
             applied.get("state") != "applied"
             or not isinstance(refs, (list, tuple))
             or not all(isinstance(item, str) and item for item in refs)
-            or not isinstance(binding_ref, str)
-            or not binding_ref
-            or not isinstance(binding_digest, str)
-            or not binding_digest
             or applied.get("topology_plan_digest") != plan["topology_plan_digest"]
+            or not isinstance(applied.get("topology_apply_binding"), Mapping)
         ):
             return _result("setup_incomplete", onboarding_key, attention_reason="topology_apply_incomplete", safe_next_action="Read topology and scheduler state before any follow-up.")
         mutation_performed = bool(applied.get("mutation_performed"))
         operation_receipt_refs = tuple(refs)
+        apply_binding = applied["topology_apply_binding"]
 
     fresh_project, error = _call(owners.project, "read_binding")
     if error:
@@ -284,13 +317,13 @@ def initialize(
         return _result("setup_incomplete", onboarding_key, attention_reason="project_binding_drift", safe_next_action="Resolve project binding drift before any follow-up.", mutation_performed=mutation_performed, operation_receipt_refs=operation_receipt_refs)
     if not _same_fresh_binding(scheduler, fresh_scheduler, ("scheduler_binding_ref", "work_root_ref", "scheduler_binding_revision", "scheduler_binding_digest", "project_binding_digest")):
         return _result("setup_incomplete", onboarding_key, attention_reason="scheduler_binding_drift", safe_next_action="Resolve scheduler/Work-root drift before any follow-up.", mutation_performed=mutation_performed, operation_receipt_refs=operation_receipt_refs)
-    if mutation_performed:
-        if (
-            fresh_topology.get("topology_apply_binding_ref") != binding_ref
-            or fresh_topology.get("topology_apply_binding_digest") != binding_digest
-        ):
-            return _result("setup_incomplete", onboarding_key, attention_reason="topology_apply_readback_binding_mismatch", safe_next_action="Read topology and scheduler state before any follow-up.", mutation_performed=True, operation_receipt_refs=operation_receipt_refs)
-        return _receipt(onboarding_key, fresh_project, fresh_scheduler, fresh_topology, mutation_performed=True, operation_receipt_refs=operation_receipt_refs, topology_apply_binding_ref=binding_ref, topology_apply_binding_digest=binding_digest)
+    if apply_invoked:
+        assert apply_binding is not None
+        binding_ref, binding_error = _validate_apply_binding(apply_binding, plan, operation_receipt_refs, fresh_topology)
+        if binding_error:
+            return _result("setup_incomplete", onboarding_key, attention_reason=binding_error, safe_next_action="Read topology and scheduler state before any follow-up.", mutation_performed=mutation_performed, operation_receipt_refs=operation_receipt_refs)
+        assert binding_ref is not None
+        return _receipt(onboarding_key, fresh_project, fresh_scheduler, fresh_topology, mutation_performed=mutation_performed, operation_receipt_refs=operation_receipt_refs, topology_apply_binding_ref=binding_ref, topology_apply_binding_digest=apply_binding["topology_apply_binding_digest"])
     return _receipt(onboarding_key, fresh_project, fresh_scheduler, fresh_topology, mutation_performed=False, operation_receipt_refs=operation_receipt_refs)
 
 

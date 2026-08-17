@@ -77,10 +77,13 @@ record; it binds fresh project, topology and scheduler/Work-root readbacks and
 uses privacy-safe opaque refs/digests only.
 
 When topology was applied during this attempt, its owner must additionally
-return an opaque apply/readback binding for the exact topology plan and its
-operation receipt. The final authoritative topology readback must present the
-same binding. A missing, changed or foreign binding is `setup_incomplete`, not
-`native_ready`; preserve the applied receipt and do not retry automatically.
+return an opaque apply/readback commitment derived from the exact topology-plan
+digest, operation-receipt digest, and final RoleHub/Coordinator/Architect plus
+topology-readback identity. The final authoritative topology readback must
+present that exact commitment. Validate it even if the invoked owner reports
+zero mutation/reuse. A missing, changed, replayed or foreign binding is
+`setup_incomplete`, not `native_ready`; preserve the applied receipt and do not
+retry automatically.
 
 ## Apply and rollback boundary
 

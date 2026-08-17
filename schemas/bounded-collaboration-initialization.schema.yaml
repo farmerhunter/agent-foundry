@@ -49,5 +49,8 @@ allOf:
   - if: {properties: {completion_state: {const: topology_plan_ready}}}
     then: {required: [topology_plan]}
   - if:
-      properties: {completion_state: {const: native_ready}, mutation_performed: {const: true}}
+      required: [operation_receipt_refs]
+      properties:
+        completion_state: {const: native_ready}
+        operation_receipt_refs: {minItems: 1}
     then: {required: [topology_apply_binding_ref, topology_apply_binding_digest]}
