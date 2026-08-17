@@ -101,9 +101,13 @@ class NativeRoleTopologyOwner:
             con.execute("CREATE TABLE IF NOT EXISTS topology (k TEXT PRIMARY KEY, v TEXT NOT NULL)")
             os.chmod(path, 0o600)
         else:
+            if (path.stat().st_mode & 0o777) != 0o600 or (path.parent.stat().st_mode & 0o777) != 0o700:
+                raise ValueError("owner_store_permission_hold")
             con = sqlite3.connect("file:" + str(path) + "?mode=ro", uri=True, timeout=0.1)
             con.execute("PRAGMA trusted_schema=OFF")
             if con.execute("PRAGMA journal_mode").fetchone()[0].lower() != "wal": con.close(); raise ValueError("owner_store_schema_unknown")
+            if con.execute("PRAGMA synchronous").fetchone()[0] != 2: con.close(); raise ValueError("owner_store_schema_unknown")
+            if con.execute("PRAGMA integrity_check").fetchone()[0] != "ok": con.close(); raise ValueError("owner_store_integrity_hold")
             if not any(row[0] == "topology" for row in con.execute("SELECT name FROM sqlite_master WHERE type='table'")): con.close(); raise ValueError("owner_store_schema_unknown")
         row = con.execute("SELECT v FROM topology WHERE k='mapping'").fetchone()
         if row is None:
@@ -160,7 +164,7 @@ class NativeRoleTopologyOwner:
         try:
             rec = self._record(con, "completion")
             if rec is None:
-                return {"state": "held", "reason": "partial_native_apply"} if self._record(con, "attempt") is not None else {"state": "missing"}
+                return {"state": "held", "reason": "partial_native_apply"}
             reason = self._verify_stored_host(rec)
             if reason: return {"state": "held", "reason": reason}
             return {"state": "ready", **rec["topology"]}
@@ -175,7 +179,7 @@ class NativeRoleTopologyOwner:
         try:
             rec = self._record(con, "completion")
             if rec is None:
-                return {"state": "held", "reason": "partial_native_apply"} if self._record(con, "attempt") is not None else {"state": "absent"}
+                return {"state": "held", "reason": "partial_native_apply"}
             if rec.get("onboarding_key") != onboarding_key: return {"state": "absent"}
             reason = self._verify_stored_host(rec)
             if reason: return {"state": "held", "reason": reason}
