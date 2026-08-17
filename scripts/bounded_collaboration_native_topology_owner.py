@@ -209,8 +209,32 @@ class PermitBoundNativeRoleTopologyOwner(NativeRoleTopologyOwner):
     def _read_target(self) -> tuple[Any, str]:
         return self._sealed_host, self._sealed_project_root
 
+    def _preflight_unmanaged_topology(self, identity: Mapping[str, str]) -> str | None:
+        """Reject native title evidence not created by this protected owner."""
+        try:
+            host, root = self._read_target()
+            for _, title in _ROLES:
+                entries = host.list_threads(root)
+                if not isinstance(entries, list):
+                    return "native_readback_unavailable"
+                matches = []
+                for item in entries:
+                    if not isinstance(item, ThreadMetadata) or item.cwd != root or item.project_id != identity["project_id"] or not item.id or not item.name:
+                        return "topology_ambiguous"
+                    if item.name == title:
+                        matches.append(item)
+                if len(matches) > 1:
+                    return "topology_ambiguous"
+                if matches:
+                    return "unmanaged_existing_topology"
+        except Exception:
+            return "native_readback_unavailable"
+        return None
+
     def apply_topology(self, plan: Mapping[str, Any]) -> Mapping[str, Any]:
         identity, reason = self._valid(plan)
+        if reason: return {"state": "held", "reason": reason}
+        reason = self._preflight_unmanaged_topology(identity)
         if reason: return {"state": "held", "reason": reason}
         self._guard.consumed = True
         try: con = self._connect(identity, create=True)

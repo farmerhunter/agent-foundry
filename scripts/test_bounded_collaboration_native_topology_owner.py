@@ -16,7 +16,8 @@ from local_collaboration_ledger import LocalCollaborationLedger
 
 
 class FakeHost:
-    def __init__(self, project_id: str): self.project_id = project_id; self.items = {}; self.calls = self.creates = self.names = self.reads = 0
+    def __init__(self, project_id: str): self.project_id = project_id; self.items = {}; self.calls = self.creates = self.names = self.reads = self.lists = 0
+    def list_threads(self, cwd: str): self.calls += 1; self.lists += 1; return list(self.items.values())
     def create_thread(self, cwd: str):
         self.calls += 1; self.creates += 1; key = "n" + str(self.calls); self.items[key] = ThreadMetadata(key, cwd, "", self.project_id); return self.items[key]
     def set_thread_name(self, ident: str, title: str):
@@ -37,7 +38,7 @@ def test_trusted_two_call_lifecycle_and_exact_retry() -> None:
     try:
         host = FakeHost(project_id); runtime = TrustedRuntime(); owner = NativeRoleTopologyOwner(root, selected, host, runtime=runtime)
         first = bridge.trusted_initialize_fixture(root, selected, "key", topology_owner=owner, permit=runtime.issue_permit(host_digest="sha256:" + "2" * 64))
-        assert first["terminal_classification"] == "native_ready" and host.calls == 15
+        assert first["terminal_classification"] == "native_ready" and host.calls == 18
         assert "permit" not in str(first).lower() and "n1" not in str(first)
         before = host.calls
         retry = bridge.trusted_initialize_fixture(root, selected, "key", topology_owner=owner, permit=object())
@@ -152,7 +153,7 @@ def test_completed_retry_holds_on_deleted_or_replaced_host_identity() -> None:
             host = FakeHost(project_id); runtime = TrustedRuntime(); owner = NativeRoleTopologyOwner(root, selected, host, runtime=runtime)
             assert bridge.trusted_initialize_fixture(root, selected, "done", topology_owner=owner, permit=runtime.issue_permit(host_digest="sha256:" + "2" * 64))["terminal_classification"] == "native_ready"
             if replacement:
-                host.items["n1"] = ThreadMetadata("n1", str(selected), "AF18 RoleHub", "foreign-project")
+                native_id = next(iter(host.items)); host.items[native_id] = ThreadMetadata(native_id, str(selected), "AF18 RoleHub", "foreign-project")
             else:
                 host.items.clear()
             creates, names, before = host.creates, host.names, host.calls
@@ -162,5 +163,25 @@ def test_completed_retry_holds_on_deleted_or_replaced_host_identity() -> None:
         finally: temp.cleanup()
 
 
+def test_unmanaged_collision_ambiguity_foreign_and_list_failure_hold_pre_store() -> None:
+    for kind in ("collision", "ambiguous", "foreign", "error"):
+        temp, root, selected, project_id = _fixture()
+        try:
+            host = FakeHost(project_id); runtime = TrustedRuntime(); owner = NativeRoleTopologyOwner(root, selected, host, runtime=runtime)
+            project = bridge.ProjectBindingOwner(root, selected); sched = bridge.SchedulerBindingOwner(root); plan = initialize(Owners(project, sched, owner), onboarding_key=kind, apply_authorized=False)["topology_plan"]
+            binding = project.read_binding(); scheduler_binding = sched.read_binding(binding); identity, reason = owner._identity(binding); assert reason is None and identity is not None
+            context = {"project_id": binding["project_id"], "project_binding_ref": binding["project_binding_ref"], "project_binding_digest": binding["project_binding_digest"], "root_digest": binding["root_digest"], "scheduler_binding_digest": scheduler_binding["scheduler_binding_digest"], "scheduler_binding_ref": scheduler_binding["scheduler_binding_ref"], "work_root_ref": scheduler_binding["work_root_ref"], "scheduler_binding_revision": scheduler_binding["scheduler_binding_revision"], "onboarding_key": kind, "topology_plan_digest": plan["topology_plan_digest"], "topology_preimage_digest": plan["topology_preimage_digest"], "mapping_digest": identity["mapping_digest"], "create_budget": {"RoleHub": 1, "Coordinator": 1, "DurableArchitect": 1}}
+            bound = owner.bind_permit(runtime.issue_permit(host_digest="sha256:" + "2" * 64), context); assert bound is not None
+            if kind == "collision": host.items["u"] = ThreadMetadata("u", str(selected), "AF18 Coordinator", project_id)
+            elif kind == "ambiguous":
+                host.items["u1"] = ThreadMetadata("u1", str(selected), "AF18 Coordinator", project_id); host.items["u2"] = ThreadMetadata("u2", str(selected), "AF18 Coordinator", project_id)
+            elif kind == "foreign": host.items["u"] = ThreadMetadata("u", str(selected), "irrelevant", "foreign")
+            else:
+                host.list_threads = lambda cwd: (_ for _ in ()).throw(RuntimeError("unavailable"))
+            held = bound.apply_topology(plan)
+            assert held["state"] == "held" and host.creates == 0 and host.names == 0 and not (root / project_id / "role-topology.db").exists()
+        finally: temp.cleanup()
+
+
 if __name__ == "__main__":
-    test_trusted_two_call_lifecycle_and_exact_retry(); test_bad_or_replayed_permit_holds_before_store_or_host(); test_one_shot_guard_is_consumed_before_second_host_attempt(); test_noncanonical_identity_holds_without_host_or_store(); test_final_store_symlink_holds_before_sqlite_or_host(); test_same_permit_cannot_bind_a_second_owner_or_project(); test_bound_owner_context_swap_cannot_retarget_same_root_project(); test_bound_owner_host_and_root_swap_holds_before_either_store_or_host(); test_completed_retry_holds_on_deleted_or_replaced_host_identity(); print("ok")
+    test_trusted_two_call_lifecycle_and_exact_retry(); test_bad_or_replayed_permit_holds_before_store_or_host(); test_one_shot_guard_is_consumed_before_second_host_attempt(); test_noncanonical_identity_holds_without_host_or_store(); test_final_store_symlink_holds_before_sqlite_or_host(); test_same_permit_cannot_bind_a_second_owner_or_project(); test_bound_owner_context_swap_cannot_retarget_same_root_project(); test_bound_owner_host_and_root_swap_holds_before_either_store_or_host(); test_completed_retry_holds_on_deleted_or_replaced_host_identity(); test_unmanaged_collision_ambiguity_foreign_and_list_failure_hold_pre_store(); print("ok")
