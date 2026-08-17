@@ -177,7 +177,7 @@ class NativeRoleTopologyOwner:
         identity, reason = self._identity(project_binding)
         if reason: return {"state": "held", "reason": reason}
         try: con = self._connect(identity, create=False)
-        except (OSError, sqlite3.Error, ValueError): return {"state": "held"}
+        except (OSError, sqlite3.Error, ValueError): return {"state": "held", "reason": "owner_store_unavailable"}
         if con is None: return {"state": "absent"}
         try:
             rec = self._record(con, "completion")
@@ -278,7 +278,7 @@ class PermitBoundNativeRoleTopologyOwner(NativeRoleTopologyOwner):
             created: dict[str, ThreadMetadata] = {}
             for role, title in _ROLES:
                 previous = self._record(con, "attempt") or {}
-                attempt = {"state": "verifying", "mapping_digest": identity["mapping_digest"], "project_id": identity["project_id"], "project_binding_digest": identity["project_binding_digest"], "root_digest": identity["root_digest"], "topology_plan_digest": plan["topology_plan_digest"], "operation_budget": [item[0] for item in _ROLES], "roles": list(created), "pending_role": role, "pending_title": title, "operation_refs": previous.get("operation_refs", {}), "native_ids": previous.get("native_ids", {}), "readback_digests": previous.get("readback_digests", {})}
+                attempt = {"state": "verifying", "mapping_digest": identity["mapping_digest"], "project_id": identity["project_id"], "project_binding_digest": identity["project_binding_digest"], "root_digest": identity["root_digest"], "topology_plan_digest": plan["topology_plan_digest"], "operation_budget": [item[0] for item in _ROLES], "roles": list(created), "pending_role": role, "pending_title": title, "operation_refs": previous.get("operation_refs", {}), "native_ids": previous.get("native_ids", {}), "readback_digests": previous.get("readback_digests", {}), "operations": previous.get("operations", {})}
                 con.execute("INSERT OR REPLACE INTO topology(k,v) VALUES('attempt',?)", (_canon(attempt),)); con.commit()
                 md = self._sealed_host.create_thread(self._sealed_project_root)
                 if not isinstance(md, ThreadMetadata) or md.project_id != identity["project_id"] or md.cwd != self._sealed_project_root: return {"state": "held", "reason": "native_metadata_mismatch"}
@@ -286,6 +286,11 @@ class PermitBoundNativeRoleTopologyOwner(NativeRoleTopologyOwner):
                 if not isinstance(read, ThreadMetadata) or read.id != md.id or read.project_id != identity["project_id"] or read.cwd != self._sealed_project_root or read.name != title: return {"state": "held", "reason": "native_readback_unavailable"}
                 created[role] = read
                 con.execute("INSERT OR REPLACE INTO topology(k,v) VALUES('attempt',?)", (_canon({**attempt, "state": "applying", "roles": list(created), "operation_refs": {item: "operation:" + hashlib.sha256((plan["topology_plan_digest"] + item).encode()).hexdigest()[:24] for item in created}, "native_ids": {item: created[item].id for item in created}, "readback_digests": {item: _digest({"id": created[item].id, "project_id": created[item].project_id, "cwd": created[item].cwd, "name": created[item].name}) for item in created}, "operations": {item: {"native_id": created[item].id, "title": created[item].name, "project_id": created[item].project_id, "readback_digest": _digest({"id": created[item].id, "project_id": created[item].project_id, "cwd": created[item].cwd, "name": created[item].name}), "operation_ref": "operation:" + hashlib.sha256((plan["topology_plan_digest"] + item).encode()).hexdigest()[:24]} for item in created}}),)); con.commit()
+            for role, title in _ROLES:
+                entries = self._sealed_host.list_threads(self._sealed_project_root)
+                matches = [item for item in entries if isinstance(item, ThreadMetadata) and item.name == title]
+                if len(matches) != 1 or matches[0].id != created[role].id or matches[0].project_id != identity["project_id"] or matches[0].cwd != self._sealed_project_root:
+                    return {"state": "held", "reason": "topology_ambiguous"}
             refs = tuple("operation:" + hashlib.sha256((plan["topology_plan_digest"] + role).encode()).hexdigest()[:24] for role, _ in _ROLES)
             topology_digest = _digest({role: _opaque(role, md.id) for role, md in created.items()})
             binding = {"topology_apply_binding_ref": "topology-apply:" + hashlib.sha256((plan["topology_plan_digest"] + identity["mapping_digest"]).encode()).hexdigest()[:24], "topology_plan_digest": plan["topology_plan_digest"], "onboarding_key": plan["onboarding_key"], "project_binding_digest": plan["project_binding_digest"], "scheduler_binding_digest": plan["scheduler_binding_digest"], "operation_receipt_refs": list(refs), "operation_receipt_refs_digest": _digest(list(refs)), "requested_roles": ["Coordinator", "Architect"], "rolehub_ref": _opaque("RoleHub", created["RoleHub"].id), "coordinator_ref": _opaque("Coordinator", created["Coordinator"].id), "architect_ref": _opaque("Architect", created["Architect"].id), "topology_readback_digest": topology_digest}

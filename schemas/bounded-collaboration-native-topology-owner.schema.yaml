@@ -8,6 +8,10 @@ oneOf:
     properties: {state: {const: missing}}
   - type: object
     additionalProperties: false
+    required: [state]
+    properties: {state: {const: absent}}
+  - type: object
+    additionalProperties: false
     required: [state, reason]
     properties: {state: {const: held}, reason: {type: string, minLength: 1}}
   - type: object
