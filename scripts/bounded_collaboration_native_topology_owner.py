@@ -284,14 +284,17 @@ class PermitBoundNativeRoleTopologyOwner(NativeRoleTopologyOwner):
                 attempt = {"state": "verifying", "mapping_digest": identity["mapping_digest"], "project_id": identity["project_id"], "project_binding_digest": identity["project_binding_digest"], "root_digest": identity["root_digest"], "topology_plan_digest": plan["topology_plan_digest"], "operation_budget": [item[0] for item in _ROLES], "roles": list(created), "pending_role": role, "pending_title": title, "operation_refs": previous.get("operation_refs", {}), "native_ids": previous.get("native_ids", {}), "readback_digests": previous.get("readback_digests", {}), "operations": previous.get("operations", {})}
                 con.execute("INSERT OR REPLACE INTO topology(k,v) VALUES('attempt',?)", (_canon(attempt),)); con.commit()
                 md = self._sealed_host.create_thread(self._sealed_project_root)
-                if not isinstance(md, ThreadMetadata) or md.project_id != identity["project_id"] or md.cwd != self._sealed_project_root: return {"state": "held", "reason": "native_metadata_mismatch"}
+                if not isinstance(md, ThreadMetadata) or not isinstance(getattr(md, "id", None), str) or not md.id:
+                    return partial_result()
                 created_before_name = {**attempt, "state": "verifying", "pending_role": role, "pending_title": title, "native_ids": {**attempt.get("native_ids", {}), role: md.id}, "operations": {**attempt.get("operations", {}), role: {"native_id": md.id, "title": title, "project_id": md.project_id, "operation_ref": "operation:" + hashlib.sha256((plan["topology_plan_digest"] + role).encode()).hexdigest()[:24], "readback_digest": None}}}
                 con.execute("INSERT OR REPLACE INTO topology(k,v) VALUES('attempt',?)", (_canon(created_before_name),)); con.commit()
+                if md.project_id != identity["project_id"] or md.cwd != self._sealed_project_root:
+                    return partial_result()
                 try:
                     named = self._sealed_host.set_thread_name(md.id, title); read = self._sealed_host.read_thread(named.id, include_turns=False)
                 except Exception:
                     return partial_result()
-                if not isinstance(read, ThreadMetadata) or read.id != md.id or read.project_id != identity["project_id"] or read.cwd != self._sealed_project_root or read.name != title: return {"state": "held", "reason": "native_readback_unavailable"}
+                if not isinstance(read, ThreadMetadata) or read.id != md.id or read.project_id != identity["project_id"] or read.cwd != self._sealed_project_root or read.name != title: return partial_result()
                 created[role] = read
                 con.execute("INSERT OR REPLACE INTO topology(k,v) VALUES('attempt',?)", (_canon({**attempt, "state": "applying", "roles": list(created), "operation_refs": {item: "operation:" + hashlib.sha256((plan["topology_plan_digest"] + item).encode()).hexdigest()[:24] for item in created}, "native_ids": {item: created[item].id for item in created}, "readback_digests": {item: _digest({"id": created[item].id, "project_id": created[item].project_id, "cwd": created[item].cwd, "name": created[item].name}) for item in created}, "operations": {item: {"native_id": created[item].id, "title": created[item].name, "project_id": created[item].project_id, "readback_digest": _digest({"id": created[item].id, "project_id": created[item].project_id, "cwd": created[item].cwd, "name": created[item].name}), "operation_ref": "operation:" + hashlib.sha256((plan["topology_plan_digest"] + item).encode()).hexdigest()[:24]} for item in created}}),)); con.commit()
             prior = self._record(con, "attempt") or {}
