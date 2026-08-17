@@ -18,6 +18,7 @@ class ThreadMetadata:
     id: str
     cwd: str
     name: str
+    project_id: str = ""
 
 @runtime_checkable
 class CodexHostThreadConnector(Protocol):
@@ -54,9 +55,9 @@ class CodexHostRoleHubAdapter:
         result.update(extra)
         return _safe(result)
 
-    def _read(self, ident: str, cwd: str) -> ThreadMetadata:
+    def _read(self, ident: str, cwd: str, project_id: str = "") -> ThreadMetadata:
         metadata = self.host.read_thread(ident, include_turns=False)
-        if not isinstance(metadata, ThreadMetadata) or metadata.id != ident or metadata.cwd != cwd or not metadata.name:
+        if not isinstance(metadata, ThreadMetadata) or metadata.id != ident or metadata.cwd != cwd or not metadata.name or (project_id and metadata.project_id != project_id):
             raise RuntimeError("metadata_mismatch")
         return metadata
 
@@ -99,7 +100,7 @@ class CodexHostRoleHubAdapter:
                         raise RuntimeError("held_runtime_transport_unobservable")
                     self._preimages[key] = md
                     md = self.host.set_thread_name(md.id, title)
-                    md = self._read(md.id, cwd)
+                    md = self._read(md.id, cwd, plan["project_id"])
                     if md.name != title:
                         raise AdapterHold("readback_name_mismatch")
                     receipt = self._receipt(plan, op, "applied", readback={"digest": digest({"cwd": md.cwd, "name": md.name}), "name": md.name})
@@ -107,14 +108,14 @@ class CodexHostRoleHubAdapter:
                     matches = [m for m in self.host.list_threads(cwd) if isinstance(m, ThreadMetadata) and m.cwd == cwd and (not role or m.name == title or role in m.name)]
                     if len(matches) != 1:
                         raise RuntimeError("held_runtime_transport_unobservable")
-                    md = self._read(matches[0].id, cwd)
+                    md = self._read(matches[0].id, cwd, plan["project_id"])
                     receipt = self._receipt(plan, op, "applied", readback={"digest": digest({"cwd": md.cwd, "name": md.name}), "name": md.name})
                 elif action == "name":
                     ident = op.get("target_ref")
                     if not isinstance(ident, str) or not ident:
                         raise RuntimeError("held_runtime_transport_unobservable")
-                    before = self._read(ident, cwd); self._preimages[key] = before
-                    after = self.host.set_thread_name(ident, title); after = self._read(ident, cwd)
+                    before = self._read(ident, cwd, plan["project_id"]); self._preimages[key] = before
+                    after = self.host.set_thread_name(ident, title); after = self._read(ident, cwd, plan["project_id"])
                     if after.name != title:
                         raise AdapterHold("readback_name_mismatch")
                     receipt = self._receipt(plan, op, "applied", preimage={"name": before.name}, readback={"digest": digest({"cwd": after.cwd, "name": after.name}), "name": after.name})
@@ -124,7 +125,7 @@ class CodexHostRoleHubAdapter:
                     ident = op.get("target_ref")
                     if not isinstance(ident, str) or not ident:
                         raise RuntimeError("held_runtime_transport_unobservable")
-                    self._read(ident, cwd)
+                    self._read(ident, cwd, plan["project_id"])
                     try:
                         self.host.navigate_to_thread(ident)
                         receipt = self._receipt(plan, op, "applied", navigation="native", target_ref="opaque")

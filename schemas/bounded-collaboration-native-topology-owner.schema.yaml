@@ -1,0 +1,13 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://agent-foundry.local/schemas/bounded-collaboration-native-topology-owner.schema.yaml
+title: Bounded collaboration native topology public receipt
+type: object
+additionalProperties: true
+required: [state]
+properties:
+  state: {enum: [missing, ready, held]}
+  project_binding_digest: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}
+  topology_readback_digest: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}
+  rolehub_ref: {type: string}
+  coordinator_ref: {type: string}
+  architect_ref: {type: string}

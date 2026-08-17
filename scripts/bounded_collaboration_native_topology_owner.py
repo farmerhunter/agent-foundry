@@ -1,0 +1,172 @@
+#!/usr/bin/env python3
+"""Fixture-only protected owner for the native bounded-collaboration topology."""
+from __future__ import annotations
+
+import hashlib
+import json
+import re
+import sqlite3
+import time
+import uuid
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Mapping
+
+from codex_host_rolehub_adapter import ThreadMetadata
+
+VERSION = "bounded-collaboration-native-topology-owner-v1"
+_DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
+_ROLES = (("RoleHub", "AF18 RoleHub"), ("Coordinator", "AF18 Coordinator"), ("Architect", "AF18 Durable Architect"))
+
+
+def _canon(value: Any) -> str:
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+
+
+def _digest(value: Any) -> str:
+    return "sha256:" + hashlib.sha256(_canon(value).encode()).hexdigest()
+
+
+def _opaque(role: str, native_id: str) -> str:
+    return role.lower() + ":" + hashlib.sha256((role + "\0" + native_id).encode()).hexdigest()[:24]
+
+
+class TrustedRuntime:
+    """Fixture issuer. Its permits are deliberately not JSON-serializable."""
+    def __init__(self, runtime_digest: str = "sha256:" + "1" * 64):
+        self._secret = object(); self.runtime_digest = runtime_digest
+
+    def issue_permit(self, *, host_digest: str, nonce: str = "fixture-nonce", expires_at: float | None = None) -> "_Permit":
+        return _Permit(self._secret, self.runtime_digest, host_digest, nonce, time.monotonic() + 60 if expires_at is None else expires_at)
+
+
+class _Permit:
+    __slots__ = ("_secret", "runtime_digest", "host_digest", "nonce", "expires_at")
+    def __init__(self, secret: object, runtime_digest: str, host_digest: str, nonce: str, expires_at: float):
+        self._secret, self.runtime_digest, self.host_digest, self.nonce, self.expires_at = secret, runtime_digest, host_digest, nonce, expires_at
+    def __reduce__(self): raise TypeError("permit_not_serializable")
+    def __repr__(self): return "<opaque-native-topology-permit>"
+
+
+@dataclass
+class _Guard:
+    consumed: bool = False
+
+
+class NativeRoleTopologyOwner:
+    """Unbound/read-only owner. Native creation is impossible until bound."""
+    def __init__(self, projects_root: str | Path, project_root: str | Path, host: Any, *, runtime: TrustedRuntime | None = None, host_digest: str = "sha256:" + "2" * 64):
+        self._projects_root = Path(projects_root); self._project_root = Path(project_root)
+        self._host, self._runtime, self._host_digest = host, runtime, host_digest
+
+    def _identity(self, binding: Mapping[str, Any]) -> tuple[dict[str, str] | None, str | None]:
+        project_id = binding.get("project_id")
+        if not isinstance(project_id, str): return None, "project_identity_invalid"
+        try:
+            if str(uuid.UUID(project_id)) != project_id: return None, "project_identity_invalid"
+        except (ValueError, AttributeError, TypeError): return None, "project_identity_invalid"
+        pd, rd = binding.get("project_binding_digest"), binding.get("root_digest")
+        if not isinstance(pd, str) or not isinstance(rd, str) or not _DIGEST.fullmatch(pd) or not _DIGEST.fullmatch(rd): return None, "project_identity_invalid"
+        try:
+            root = self._projects_root.resolve(strict=True); project_dir = root / project_id
+            if not self._projects_root.is_absolute() or self._projects_root.is_symlink() or root != self._projects_root or project_dir.is_symlink() or not project_dir.is_dir() or project_dir.resolve(strict=True).parent != root:
+                return None, "project_identity_invalid"
+            authority = project_dir / "collaboration.db"
+            if authority.is_symlink() or not authority.is_file(): return None, "project_identity_invalid"
+        except OSError: return None, "project_identity_invalid"
+        mapping = _digest({"owner_version": VERSION, "project_id": project_id, "project_binding_digest": pd, "root_digest": rd})
+        return {"project_id": project_id, "project_binding_digest": pd, "root_digest": rd, "mapping_digest": mapping, "store": str(project_dir / "role-topology.db")}, None
+
+    def _connect(self, identity: Mapping[str, str], *, create: bool) -> sqlite3.Connection | None:
+        path = Path(identity["store"])
+        if not create and not path.exists(): return None
+        con = sqlite3.connect(path, timeout=0.1)
+        con.execute("PRAGMA trusted_schema=OFF"); con.execute("PRAGMA foreign_keys=ON")
+        con.execute("CREATE TABLE IF NOT EXISTS topology (k TEXT PRIMARY KEY, v TEXT NOT NULL)")
+        row = con.execute("SELECT v FROM topology WHERE k='mapping'").fetchone()
+        if row is None:
+            con.execute("INSERT INTO topology(k,v) VALUES('mapping',?)", (identity["mapping_digest"],)); con.commit()
+        elif row[0] != identity["mapping_digest"]:
+            con.close(); raise ValueError("project_binding_mismatch")
+        return con
+
+    def _record(self, con: sqlite3.Connection, key: str) -> Mapping[str, Any] | None:
+        row = con.execute("SELECT v FROM topology WHERE k=?", (key,)).fetchone()
+        return json.loads(row[0]) if row else None
+
+    def read_topology(self, project_binding: Mapping[str, Any]) -> Mapping[str, Any]:
+        identity, reason = self._identity(project_binding)
+        if reason: return {"state": "held", "reason": reason}
+        try: con = self._connect(identity, create=False)
+        except (OSError, sqlite3.Error, ValueError): return {"state": "held", "reason": "owner_store_unavailable"}
+        if con is None: return {"state": "missing"}
+        try:
+            rec = self._record(con, "completion")
+            if rec is None: return {"state": "missing"}
+            return {"state": "ready", **rec["topology"]}
+        finally: con.close()
+
+    def read_completion(self, onboarding_key: str, project_binding: Mapping[str, Any]) -> Mapping[str, Any]:
+        identity, reason = self._identity(project_binding)
+        if reason: return {"state": "held", "reason": reason}
+        try: con = self._connect(identity, create=False)
+        except (OSError, sqlite3.Error, ValueError): return {"state": "held"}
+        if con is None: return {"state": "absent"}
+        try:
+            rec = self._record(con, "completion")
+            if rec is None or rec.get("onboarding_key") != onboarding_key: return {"state": "absent"}
+            return {"state": "ready", **rec["completion"]}
+        finally: con.close()
+
+    def apply_topology(self, plan: Mapping[str, Any]) -> Mapping[str, Any]:
+        return {"state": "held", "reason": "authorization_unavailable"}
+
+    def bind_permit(self, permit: object, context: Mapping[str, Any]) -> "PermitBoundNativeRoleTopologyOwner | None":
+        if not isinstance(permit, _Permit) or self._runtime is None or permit._secret is not self._runtime._secret or permit.expires_at <= time.monotonic() or permit.runtime_digest != self._runtime.runtime_digest or permit.host_digest != self._host_digest:
+            return None
+        return PermitBoundNativeRoleTopologyOwner(self, permit, dict(context), _Guard())
+
+
+class PermitBoundNativeRoleTopologyOwner(NativeRoleTopologyOwner):
+    def __init__(self, base: NativeRoleTopologyOwner, permit: _Permit, context: Mapping[str, Any], guard: _Guard):
+        self.__dict__.update(base.__dict__); self._permit, self._context, self._guard = permit, dict(context), guard
+
+    def _valid(self, plan: Mapping[str, Any]) -> tuple[dict[str, str] | None, str | None]:
+        if self._guard.consumed or self._permit.expires_at <= time.monotonic(): return None, "authorization_unavailable"
+        required = ("onboarding_key", "project_binding_ref", "project_binding_digest", "scheduler_binding_digest", "topology_plan_digest", "topology_preimage_digest")
+        if not isinstance(plan, Mapping) or any(plan.get(k) != self._context.get(k) for k in required) or tuple(plan.get("requested_roles", ())) != ("Coordinator", "Architect"):
+            return None, "authorization_mismatch"
+        if self._context.get("create_budget") != {"RoleHub": 1, "Coordinator": 1, "DurableArchitect": 1}: return None, "authorization_mismatch"
+        identity, reason = self._identity({"project_id": self._context.get("project_id"), "project_binding_digest": self._context.get("project_binding_digest"), "root_digest": self._context.get("root_digest")})
+        if reason or identity is None or identity["mapping_digest"] != self._context.get("mapping_digest"): return None, reason or "project_binding_mismatch"
+        return identity, None
+
+    def apply_topology(self, plan: Mapping[str, Any]) -> Mapping[str, Any]:
+        identity, reason = self._valid(plan)
+        if reason: return {"state": "held", "reason": reason}
+        self._guard.consumed = True
+        try: con = self._connect(identity, create=True)
+        except (OSError, sqlite3.Error, ValueError): return {"state": "held", "reason": "owner_store_unavailable"}
+        assert con is not None
+        try:
+            if self._record(con, "completion") is not None: return {"state": "held", "reason": "completion_drift"}
+            con.execute("INSERT OR REPLACE INTO topology(k,v) VALUES('attempt',?)", (_canon({"state": "prepared", "mapping_digest": identity["mapping_digest"]}),)); con.commit()
+            created: dict[str, ThreadMetadata] = {}
+            for role, title in _ROLES:
+                md = self._host.create_thread(str(self._project_root))
+                if not isinstance(md, ThreadMetadata) or md.project_id != identity["project_id"] or md.cwd != str(self._project_root): return {"state": "held", "reason": "native_metadata_mismatch"}
+                named = self._host.set_thread_name(md.id, title); read = self._host.read_thread(named.id, include_turns=False)
+                if not isinstance(read, ThreadMetadata) or read.id != md.id or read.project_id != identity["project_id"] or read.cwd != str(self._project_root) or read.name != title: return {"state": "held", "reason": "native_readback_unavailable"}
+                created[role] = read
+            refs = tuple("operation:" + hashlib.sha256((plan["topology_plan_digest"] + role).encode()).hexdigest()[:24] for role, _ in _ROLES)
+            topology_digest = _digest({role: _opaque(role, md.id) for role, md in created.items()})
+            binding = {"topology_apply_binding_ref": "topology-apply:" + hashlib.sha256((plan["topology_plan_digest"] + identity["mapping_digest"]).encode()).hexdigest()[:24], "topology_plan_digest": plan["topology_plan_digest"], "onboarding_key": plan["onboarding_key"], "project_binding_digest": plan["project_binding_digest"], "scheduler_binding_digest": plan["scheduler_binding_digest"], "operation_receipt_refs": list(refs), "operation_receipt_refs_digest": _digest(list(refs)), "requested_roles": ["Coordinator", "Architect"], "rolehub_ref": _opaque("RoleHub", created["RoleHub"].id), "coordinator_ref": _opaque("Coordinator", created["Coordinator"].id), "architect_ref": _opaque("Architect", created["Architect"].id), "topology_readback_digest": topology_digest}
+            binding["topology_apply_binding_digest"] = _digest(binding)
+            topology = {"rolehub_ref": binding["rolehub_ref"], "coordinator_ref": binding["coordinator_ref"], "architect_ref": binding["architect_ref"], "topology_readback_digest": topology_digest, "project_binding_digest": plan["project_binding_digest"], "coordinator_count": 1, "architect_count": 1, "topology_apply_binding_ref": binding["topology_apply_binding_ref"], "topology_apply_binding_digest": binding["topology_apply_binding_digest"], "topology_apply_binding": binding}
+            completion = {"completion_receipt_ref": "completion:" + hashlib.sha256((plan["onboarding_key"] + binding["topology_apply_binding_digest"]).encode()).hexdigest()[:24], "onboarding_key": plan["onboarding_key"], "project_binding_ref": plan["project_binding_ref"], "project_binding_digest": plan["project_binding_digest"], "scheduler_binding_ref": self._context["scheduler_binding_ref"], "work_root_ref": self._context["work_root_ref"], "scheduler_binding_revision": self._context["scheduler_binding_revision"], "scheduler_binding_digest": plan["scheduler_binding_digest"], "topology_plan_digest": plan["topology_plan_digest"], "operation_receipt_refs": list(refs), "topology_apply_binding_ref": binding["topology_apply_binding_ref"], "topology_apply_binding_digest": binding["topology_apply_binding_digest"], "rolehub_ref": topology["rolehub_ref"], "coordinator_ref": topology["coordinator_ref"], "architect_ref": topology["architect_ref"], "topology_readback_digest": topology_digest}
+            con.execute("INSERT OR REPLACE INTO topology(k,v) VALUES('completion',?)", (_canon({"onboarding_key": plan["onboarding_key"], "topology": topology, "completion": completion}),)); con.commit()
+            return {"state": "applied", "mutation_performed": True, "topology_plan_digest": plan["topology_plan_digest"], "operation_receipt_refs": refs, "topology_apply_binding": binding}
+        finally: con.close()
+
+
+__all__ = ["NativeRoleTopologyOwner", "PermitBoundNativeRoleTopologyOwner", "TrustedRuntime", "VERSION"]
