@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import sqlite3
 import time
@@ -92,11 +93,21 @@ class NativeRoleTopologyOwner:
     def _connect(self, identity: Mapping[str, str], *, create: bool) -> sqlite3.Connection | None:
         path = Path(identity["store"])
         if not create and not path.exists(): return None
-        con = sqlite3.connect(path, timeout=0.1)
-        con.execute("PRAGMA trusted_schema=OFF"); con.execute("PRAGMA foreign_keys=ON")
-        con.execute("CREATE TABLE IF NOT EXISTS topology (k TEXT PRIMARY KEY, v TEXT NOT NULL)")
+        if create:
+            os.chmod(path.parent, 0o700)
+            con = sqlite3.connect(path, timeout=0.1)
+            con.execute("PRAGMA journal_mode=WAL"); con.execute("PRAGMA synchronous=FULL")
+            con.execute("PRAGMA trusted_schema=OFF"); con.execute("PRAGMA foreign_keys=ON")
+            con.execute("CREATE TABLE IF NOT EXISTS topology (k TEXT PRIMARY KEY, v TEXT NOT NULL)")
+            os.chmod(path, 0o600)
+        else:
+            con = sqlite3.connect("file:" + str(path) + "?mode=ro", uri=True, timeout=0.1)
+            con.execute("PRAGMA trusted_schema=OFF")
+            if con.execute("PRAGMA journal_mode").fetchone()[0].lower() != "wal": con.close(); raise ValueError("owner_store_schema_unknown")
+            if not any(row[0] == "topology" for row in con.execute("SELECT name FROM sqlite_master WHERE type='table'")): con.close(); raise ValueError("owner_store_schema_unknown")
         row = con.execute("SELECT v FROM topology WHERE k='mapping'").fetchone()
         if row is None:
+            if not create: con.close(); raise ValueError("owner_store_schema_unknown")
             con.execute("INSERT INTO topology(k,v) VALUES('mapping',?)", (identity["mapping_digest"],)); con.commit()
         elif row[0] != identity["mapping_digest"]:
             con.close(); raise ValueError("project_binding_mismatch")
@@ -148,7 +159,8 @@ class NativeRoleTopologyOwner:
         if con is None: return {"state": "missing"}
         try:
             rec = self._record(con, "completion")
-            if rec is None: return {"state": "missing"}
+            if rec is None:
+                return {"state": "held", "reason": "partial_native_apply"} if self._record(con, "attempt") is not None else {"state": "missing"}
             reason = self._verify_stored_host(rec)
             if reason: return {"state": "held", "reason": reason}
             return {"state": "ready", **rec["topology"]}
@@ -162,7 +174,9 @@ class NativeRoleTopologyOwner:
         if con is None: return {"state": "absent"}
         try:
             rec = self._record(con, "completion")
-            if rec is None or rec.get("onboarding_key") != onboarding_key: return {"state": "absent"}
+            if rec is None:
+                return {"state": "held", "reason": "partial_native_apply"} if self._record(con, "attempt") is not None else {"state": "absent"}
+            if rec.get("onboarding_key") != onboarding_key: return {"state": "absent"}
             reason = self._verify_stored_host(rec)
             if reason: return {"state": "held", "reason": reason}
             return {"state": "ready", **rec["completion"]}
@@ -245,15 +259,15 @@ class PermitBoundNativeRoleTopologyOwner(NativeRoleTopologyOwner):
     def apply_topology(self, plan: Mapping[str, Any]) -> Mapping[str, Any]:
         identity, reason = self._valid(plan)
         if reason: return {"state": "held", "reason": reason}
+        self._guard.consumed = True
         reason = self._preflight_unmanaged_topology(identity)
         if reason: return {"state": "held", "reason": reason}
-        self._guard.consumed = True
         try: con = self._connect(identity, create=True)
         except (OSError, sqlite3.Error, ValueError): return {"state": "held", "reason": "owner_store_unavailable"}
         assert con is not None
         try:
             if self._record(con, "completion") is not None: return {"state": "held", "reason": "completion_drift"}
-            con.execute("INSERT OR REPLACE INTO topology(k,v) VALUES('attempt',?)", (_canon({"state": "prepared", "mapping_digest": identity["mapping_digest"]}),)); con.commit()
+            con.execute("INSERT OR REPLACE INTO topology(k,v) VALUES('attempt',?)", (_canon({"state": "prepared", "mapping_digest": identity["mapping_digest"], "roles": []}),)); con.commit()
             created: dict[str, ThreadMetadata] = {}
             for role, title in _ROLES:
                 md = self._sealed_host.create_thread(self._sealed_project_root)
@@ -261,6 +275,7 @@ class PermitBoundNativeRoleTopologyOwner(NativeRoleTopologyOwner):
                 named = self._sealed_host.set_thread_name(md.id, title); read = self._sealed_host.read_thread(named.id, include_turns=False)
                 if not isinstance(read, ThreadMetadata) or read.id != md.id or read.project_id != identity["project_id"] or read.cwd != self._sealed_project_root or read.name != title: return {"state": "held", "reason": "native_readback_unavailable"}
                 created[role] = read
+                con.execute("INSERT OR REPLACE INTO topology(k,v) VALUES('attempt',?)", (_canon({"state": "applying", "mapping_digest": identity["mapping_digest"], "roles": list(created)}),)); con.commit()
             refs = tuple("operation:" + hashlib.sha256((plan["topology_plan_digest"] + role).encode()).hexdigest()[:24] for role, _ in _ROLES)
             topology_digest = _digest({role: _opaque(role, md.id) for role, md in created.items()})
             binding = {"topology_apply_binding_ref": "topology-apply:" + hashlib.sha256((plan["topology_plan_digest"] + identity["mapping_digest"]).encode()).hexdigest()[:24], "topology_plan_digest": plan["topology_plan_digest"], "onboarding_key": plan["onboarding_key"], "project_binding_digest": plan["project_binding_digest"], "scheduler_binding_digest": plan["scheduler_binding_digest"], "operation_receipt_refs": list(refs), "operation_receipt_refs_digest": _digest(list(refs)), "requested_roles": ["Coordinator", "Architect"], "rolehub_ref": _opaque("RoleHub", created["RoleHub"].id), "coordinator_ref": _opaque("Coordinator", created["Coordinator"].id), "architect_ref": _opaque("Architect", created["Architect"].id), "topology_readback_digest": topology_digest}

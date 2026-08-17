@@ -96,7 +96,7 @@ class CodexHostRoleHubAdapter:
                 title, cwd = op.get("title") or role, plan["project_root"]
                 if action == "create":
                     md = self.host.create_thread(cwd)
-                    if not isinstance(md, ThreadMetadata) or md.cwd != cwd:
+                    if not isinstance(md, ThreadMetadata) or md.cwd != cwd or md.project_id != plan["project_id"]:
                         raise RuntimeError("held_runtime_transport_unobservable")
                     self._preimages[key] = md
                     md = self.host.set_thread_name(md.id, title)
