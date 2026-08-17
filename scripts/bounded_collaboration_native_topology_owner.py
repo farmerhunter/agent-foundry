@@ -276,10 +276,10 @@ class PermitBoundNativeRoleTopologyOwner(NativeRoleTopologyOwner):
             if self._record(con, "completion") is not None: return {"state": "held", "reason": "completion_drift"}
             con.execute("INSERT OR REPLACE INTO topology(k,v) VALUES('attempt',?)", (_canon({"state": "prepared", "mapping_digest": identity["mapping_digest"], "roles": []}),)); con.commit()
             created: dict[str, ThreadMetadata] = {}
-            def partial_result() -> Mapping[str, Any]:
+            def partial_result(force_mutation: bool = False) -> Mapping[str, Any]:
                 refs = tuple("operation:" + hashlib.sha256((plan["topology_plan_digest"] + item).encode()).hexdigest()[:24] for item in created)
                 persisted = self._record(con, "attempt") or {}
-                mutated = bool(created or persisted.get("operations"))
+                mutated = force_mutation or bool(created or persisted.get("operations"))
                 if not mutated:
                     return {"state": "held", "reason": "native_create_unavailable", "mutation_performed": False}
                 return {"state": "applied", "mutation_performed": True, "topology_plan_digest": plan["topology_plan_digest"], "operation_receipt_refs": refs or ("operation:partial",), "topology_apply_binding": {}}
@@ -292,7 +292,7 @@ class PermitBoundNativeRoleTopologyOwner(NativeRoleTopologyOwner):
                 except Exception:
                     return partial_result()
                 if not isinstance(md, ThreadMetadata) or not isinstance(getattr(md, "id", None), str) or not md.id:
-                    return partial_result()
+                    return partial_result(True)
                 created_before_name = {**attempt, "state": "verifying", "pending_role": role, "pending_title": title, "native_ids": {**attempt.get("native_ids", {}), role: md.id}, "operations": {**attempt.get("operations", {}), role: {"native_id": md.id, "title": title, "project_id": md.project_id, "operation_ref": "operation:" + hashlib.sha256((plan["topology_plan_digest"] + role).encode()).hexdigest()[:24], "readback_digest": None}}}
                 con.execute("INSERT OR REPLACE INTO topology(k,v) VALUES('attempt',?)", (_canon(created_before_name),)); con.commit()
                 if md.project_id != identity["project_id"] or md.cwd != self._sealed_project_root:
