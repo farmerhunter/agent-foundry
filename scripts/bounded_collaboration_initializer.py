@@ -211,7 +211,7 @@ def _validate_apply_binding(
         return None, "topology_apply_readback_binding_missing"
     if binding["onboarding_key"] != onboarding_key or binding["project_binding_digest"] != project["project_binding_digest"] or binding["scheduler_binding_digest"] != scheduler["scheduler_binding_digest"] or tuple(binding["requested_roles"]) != ROLES:
         return None, "topology_apply_binding_context_mismatch"
-    stored_refs = binding["operation_receipt_refs"]
+    stored_refs = binding.get("operation_receipt_refs")
     if not isinstance(stored_refs, (list, tuple)) or not all(isinstance(item, str) and item for item in stored_refs):
         return None, "topology_apply_readback_binding_missing"
     if binding["operation_receipt_refs_digest"] != _digest(list(stored_refs)):
@@ -303,13 +303,22 @@ def initialize(
     reason = _topology(topology, project)
     if reason:
         return _result("partial_hold", onboarding_key, attention_reason=reason, safe_next_action="Resolve topology ambiguity before a new onboarding attempt.")
+    original, original_error = _call(owners.topology, "read_completion", onboarding_key, project)
+    if original_error:
+        return _result("partial_hold", onboarding_key, attention_reason=original_error, safe_next_action="Restore original completion evidence before any follow-up.")
+    assert original is not None
+    if topology.get("state") == "missing" and original.get("state") != "absent":
+        return _result("partial_hold", onboarding_key, attention_reason="original_completion_key_collision", safe_next_action="Resolve the existing completion identity before any topology apply.")
+    if topology.get("state") == "ready" and original.get("state") != "ready":
+        return _result("partial_hold", onboarding_key, attention_reason="original_completion_unavailable", safe_next_action="Restore the owner-resolved original completion record before any follow-up.")
     if caller_claims is not None:
         return _result("partial_hold", onboarding_key, attention_reason="caller_claims_not_authoritative", safe_next_action="Remove caller-produced completion claims and use owner readbacks only.")
 
-    retry_binding_seen = topology.get("state") == "ready" and isinstance(topology.get("topology_apply_binding"), Mapping) and topology["topology_apply_binding"].get("onboarding_key") == onboarding_key
+    retry_binding_seen = topology.get("state") == "ready"
     if retry_binding_seen:
+        retry_binding = topology.get("topology_apply_binding")
         binding_ref, binding_error = _validate_apply_binding(
-            topology["topology_apply_binding"],
+            retry_binding,
             onboarding_key=onboarding_key,
             project=project,
             scheduler=scheduler,
@@ -318,6 +327,10 @@ def initialize(
         if binding_error:
             return _result("partial_hold", onboarding_key, attention_reason=binding_error, safe_next_action="Resolve topology commitment drift before any follow-up.")
         assert binding_ref is not None
+        expected = _completion_identity(onboarding_key, project, scheduler, topology, retry_binding)
+        original_reason = _validate_persistent_completion(original, expected)
+        if original_reason:
+            return _result("partial_hold", onboarding_key, attention_reason=original_reason, safe_next_action="Resolve original completion identity drift before any follow-up.")
 
     if topology.get("state") == "missing" and not apply_authorized:
         plan = {
@@ -328,6 +341,7 @@ def initialize(
             "scheduler_binding_digest": scheduler["scheduler_binding_digest"],
             "requested_roles": ROLES,
             "topology_preimage_digest": _digest({"state": "missing", "project_binding_digest": project["project_binding_digest"]}),
+            "original_completion_preimage": "absent",
         }
         plan["topology_plan_digest"] = _digest(plan)
         return _result("topology_plan_ready", onboarding_key, attention_reason=None, safe_next_action="Obtain bounded topology-apply authorization.", topology_plan=_freeze(plan))
@@ -346,6 +360,7 @@ def initialize(
             "scheduler_binding_digest": scheduler["scheduler_binding_digest"],
             "requested_roles": ROLES,
             "topology_preimage_digest": _digest({"state": "missing", "project_binding_digest": project["project_binding_digest"]}),
+            "original_completion_preimage": "absent",
         }
         plan["topology_plan_digest"] = _digest(plan)
         applied, error = _call(owners.topology, "apply_topology", _freeze(plan))

@@ -54,6 +54,9 @@ class Topology:
     def apply_topology(self, plan):
         self.apply_calls += 1
         assert plan["requested_roles"] == ("Coordinator", "Architect")
+        assert plan["original_completion_preimage"] == "absent"
+        if plan["onboarding_key"] in self.completions:
+            return {"state": "held"}
         self.state = "ready"
         refs = ["receipt:coordinator", "receipt:architect"]
         self.binding = {"topology_apply_binding_ref": "binding:opaque", "onboarding_key": plan["onboarding_key"], "project_binding_digest": plan["project_binding_digest"], "scheduler_binding_digest": plan["scheduler_binding_digest"], "requested_roles": list(plan["requested_roles"]), "topology_plan_digest": plan["topology_plan_digest"], "operation_receipt_refs": refs, "operation_receipt_refs_digest": initializer._digest(refs), "rolehub_ref": "hub:opaque", "coordinator_ref": "role:c", "architect_ref": "role:a", "topology_readback_digest": "sha256:topology"}
@@ -83,12 +86,20 @@ def schema(name, value):
 
 def main():
     own, project, scheduler, topology = owners()
-    success = initializer.initialize(own, onboarding_key="onboard-1")
-    check("valid-composite-ready", success["completion_state"] == "native_ready" and success["mutation_performed"] is False and topology.apply_calls == 0, success)
+    unrecorded = initializer.initialize(own, onboarding_key="onboard-1")
+    check("unrecorded-ready-topology-holds-and-resolves-completion", unrecorded["completion_state"] == "partial_hold" and unrecorded["attention_reason"] == "original_completion_unavailable" and topology.completion_calls == 1 and topology.apply_calls == 0, unrecorded)
+    own, project, scheduler, topology = owners("bound", "missing")
+    success = initializer.initialize(own, onboarding_key="onboard-1", apply_authorized=True)
+    check("valid-composite-ready", success["completion_state"] == "native_ready" and success["mutation_performed"] is True and topology.apply_calls == 1, success)
     check("immutable-json-safe", isinstance(success["operation_receipt_refs"], tuple) and json.loads(json.dumps(success))["completion_state"] == "native_ready", success)
     try: success["completion_state"] = "forged"; raise AssertionError("receipt mutation accepted")
     except TypeError: print("immutable-receipt: ok")
     schema("ready", success)
+
+    own, project, scheduler, topology = owners("bound", "missing")
+    topology.completions["collision"] = {"state": "ready", "completion_receipt_ref": "completion:foreign"}
+    collision = initializer.initialize(own, onboarding_key="collision", apply_authorized=True)
+    check("missing-topology-key-collision-holds-before-apply", collision["completion_state"] == "partial_hold" and collision["attention_reason"] == "original_completion_key_collision" and topology.apply_calls == 0 and topology.completion_calls == 1, collision)
 
     own, _, scheduler, topology = owners("missing", "missing")
     missing_scheduler = initializer.initialize(own, onboarding_key="onboard-2", apply_authorized=True)
@@ -108,6 +119,20 @@ def main():
     topology.binding["rolehub_ref"] = "hub:foreign"; topology.binding["coordinator_ref"] = "role:foreign-c"; topology.binding["architect_ref"] = "role:foreign-a"; topology.binding["topology_readback_digest"] = "sha256:foreign-topology"; topology.binding["topology_apply_binding_digest"] = initializer._binding_digest(topology.binding)
     foreign_retry = initializer.initialize(own, onboarding_key="onboard-3", apply_authorized=True)
     check("same-key-retry-rereads-self-consistent-foreign-topology-holds", foreign_retry["completion_state"] == "partial_hold" and foreign_retry["attention_reason"] == "original_completion_identity_drift" and topology.apply_calls == 1 and topology.completion_calls >= 2, foreign_retry)
+
+    own, project, scheduler, topology = owners("bound", "missing")
+    initial = initializer.initialize(own, onboarding_key="onboard-stored-foreign", apply_authorized=True)
+    check("stored-identity-fixture-ready", initial["completion_state"] == "native_ready", initial)
+    topology.completions["onboard-stored-foreign"]["coordinator_ref"] = "role:foreign-c"
+    stored_foreign = initializer.initialize(own, onboarding_key="onboard-stored-foreign", apply_authorized=True)
+    check("foreign-stored-record-holds", stored_foreign["completion_state"] == "partial_hold" and stored_foreign["attention_reason"] == "original_completion_identity_drift", stored_foreign)
+
+    own, project, scheduler, topology = owners("bound", "missing")
+    initial = initializer.initialize(own, onboarding_key="onboard-missing-stored-receipts", apply_authorized=True)
+    check("missing-stored-receipts-fixture-ready", initial["completion_state"] == "native_ready", initial)
+    topology.binding.pop("operation_receipt_refs")
+    retry_missing_refs = initializer.initialize(own, onboarding_key="onboard-missing-stored-receipts", apply_authorized=True)
+    check("retry-missing-operation-receipt-fields-holds", retry_missing_refs["completion_state"] == "partial_hold" and retry_missing_refs["attention_reason"] == "topology_apply_readback_binding_missing", retry_missing_refs)
 
     own, project, scheduler, topology = owners("bound", "missing")
     old_apply = topology.apply_topology
@@ -153,6 +178,16 @@ def main():
     topology.apply_topology = apply_mutation_without_receipt
     missing_receipt = initializer.initialize(own, onboarding_key="onboard-missing-receipt", apply_authorized=True)
     check("mutation-true-without-receipt-holds", missing_receipt["completion_state"] == "setup_incomplete" and missing_receipt["attention_reason"] == "topology_apply_incomplete", missing_receipt)
+
+    own, project, scheduler, topology = owners("bound", "missing")
+    old_apply = topology.apply_topology
+    def apply_with_binding_missing_receipt_fields(plan):
+        value = old_apply(plan)
+        value["topology_apply_binding"].pop("operation_receipt_refs")
+        return value
+    topology.apply_topology = apply_with_binding_missing_receipt_fields
+    fresh_missing_refs = initializer.initialize(own, onboarding_key="onboard-fresh-missing-binding-refs", apply_authorized=True)
+    check("fresh-missing-operation-receipt-fields-holds", fresh_missing_refs["completion_state"] == "setup_incomplete" and fresh_missing_refs["attention_reason"] == "topology_apply_readback_binding_missing", fresh_missing_refs)
 
     own, _, scheduler, topology = owners("bound", "duplicate")
     duplicate = initializer.initialize(own, onboarding_key="onboard-4", apply_authorized=True)

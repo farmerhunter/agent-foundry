@@ -93,7 +93,9 @@ commitment drift is a typed hold; it cannot be repaired by issuing another
 create/reuse call.
 
 The topology owner must also resolve the immutable original completion identity
-for that key, not a caller cache. Each retry compares the current project,
+for that key on every ready-topology path, not a caller cache. An absent record,
+key collision or invalid stored receipt is a hold; do not create or overwrite a
+successful record to make it pass. Each retry compares the current project,
 scheduler/Work-root, approved plan and receipt refs, RoleHub, Coordinator,
 Architect and topology readback one by one with that stored receipt. A wholly
 self-consistent replacement is still a hold when it differs from the original
