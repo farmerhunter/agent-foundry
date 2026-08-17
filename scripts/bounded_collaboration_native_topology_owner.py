@@ -41,9 +41,10 @@ class TrustedRuntime:
 
 
 class _Permit:
-    __slots__ = ("_secret", "runtime_digest", "host_digest", "nonce", "expires_at")
+    __slots__ = ("_secret", "runtime_digest", "host_digest", "nonce", "expires_at", "_binding")
     def __init__(self, secret: object, runtime_digest: str, host_digest: str, nonce: str, expires_at: float):
         self._secret, self.runtime_digest, self.host_digest, self.nonce, self.expires_at = secret, runtime_digest, host_digest, nonce, expires_at
+        self._binding: str | None = None
     def __reduce__(self): raise TypeError("permit_not_serializable")
     def __repr__(self): return "<opaque-native-topology-permit>"
 
@@ -129,6 +130,18 @@ class NativeRoleTopologyOwner:
     def bind_permit(self, permit: object, context: Mapping[str, Any]) -> "PermitBoundNativeRoleTopologyOwner | None":
         if not isinstance(permit, _Permit) or self._runtime is None or permit._secret is not self._runtime._secret or permit.expires_at <= time.monotonic() or permit.runtime_digest != self._runtime.runtime_digest or permit.host_digest != self._host_digest:
             return None
+        required = ("onboarding_key", "project_id", "project_binding_ref", "project_binding_digest", "root_digest", "scheduler_binding_digest", "topology_plan_digest", "topology_preimage_digest", "mapping_digest")
+        if not all(isinstance(context.get(key), str) and context[key] for key in required):
+            return None
+        identity, reason = self._identity({"project_id": context["project_id"], "project_binding_digest": context["project_binding_digest"], "root_digest": context["root_digest"]})
+        if reason or identity is None or identity["mapping_digest"] != context["mapping_digest"] or not _DIGEST.fullmatch(str(context["scheduler_binding_digest"])) or not _DIGEST.fullmatch(str(context["topology_plan_digest"])):
+            return None
+        binding = _digest({key: context[key] for key in required} | {"host_digest": self._host_digest, "runtime_digest": self._runtime.runtime_digest, "budget": context.get("create_budget")})
+        if permit._binding is not None:
+            return None
+        # Claim before producing a bound owner, so an interrupted caller cannot
+        # replay the same opaque permit against another owner/project.
+        permit._binding = binding
         return PermitBoundNativeRoleTopologyOwner(self, permit, dict(context), _Guard())
 
 

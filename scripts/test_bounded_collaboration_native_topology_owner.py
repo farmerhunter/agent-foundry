@@ -91,5 +91,19 @@ def test_final_store_symlink_holds_before_sqlite_or_host() -> None:
     finally: temp.cleanup()
 
 
+def test_same_permit_cannot_bind_a_second_owner_or_project() -> None:
+    first_temp, first_root, first_selected, first_id = _fixture(); second_temp, second_root, second_selected, second_id = _fixture()
+    try:
+        runtime = TrustedRuntime(); permit = runtime.issue_permit(host_digest="sha256:" + "2" * 64)
+        first_host = FakeHost(first_id); first_owner = NativeRoleTopologyOwner(first_root, first_selected, first_host, runtime=runtime)
+        assert bridge.trusted_initialize_fixture(first_root, first_selected, "first", topology_owner=first_owner, permit=permit)["terminal_classification"] == "native_ready"
+        second_host = FakeHost(second_id); second_owner = NativeRoleTopologyOwner(second_root, second_selected, second_host, runtime=runtime)
+        second = bridge.trusted_initialize_fixture(second_root, second_selected, "second", topology_owner=second_owner, permit=permit)
+        assert second["terminal_classification"] == "partial_hold" and second["attention_reason"] == "authorization_unavailable"
+        assert second_host.calls == 0 and not (second_root / second_id / "role-topology.db").exists()
+    finally:
+        first_temp.cleanup(); second_temp.cleanup()
+
+
 if __name__ == "__main__":
-    test_trusted_two_call_lifecycle_and_exact_retry(); test_bad_or_replayed_permit_holds_before_store_or_host(); test_one_shot_guard_is_consumed_before_second_host_attempt(); test_noncanonical_identity_holds_without_host_or_store(); test_final_store_symlink_holds_before_sqlite_or_host(); print("ok")
+    test_trusted_two_call_lifecycle_and_exact_retry(); test_bad_or_replayed_permit_holds_before_store_or_host(); test_one_shot_guard_is_consumed_before_second_host_attempt(); test_noncanonical_identity_holds_without_host_or_store(); test_final_store_symlink_holds_before_sqlite_or_host(); test_same_permit_cannot_bind_a_second_owner_or_project(); print("ok")
