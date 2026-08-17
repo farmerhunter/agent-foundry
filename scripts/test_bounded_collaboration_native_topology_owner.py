@@ -126,5 +126,23 @@ def test_bound_owner_context_swap_cannot_retarget_same_root_project() -> None:
     finally: temp.cleanup()
 
 
+def test_bound_owner_host_and_root_swap_holds_before_either_store_or_host() -> None:
+    temp, root, selected, first_id = _fixture()
+    try:
+        second_selected = Path(temp.name) / "host-target"; second_selected.mkdir(); os.chmod(second_selected, 0o700); second_selected = second_selected.resolve(); second_id = str(uuid.uuid4())
+        ledger = LocalCollaborationLedger.create_project(projects_root=root, project_id=second_id); ledger.bind_project("path", str(second_selected)); ledger.bind_project("repo", "second"); ledger.close()
+        control.apply_control_request(root, second_id, _bridge_request(second_id)); scheduler.apply_scheduler_request(root, second_id, {"project_id": second_id, "work_id": "work-bridge", "operation": "initialize", "occurred_at": "2026-08-17T00:00:01Z"})
+        runtime = TrustedRuntime(); first_host = FakeHost(first_id); owner = NativeRoleTopologyOwner(root, selected, first_host, runtime=runtime)
+        project = bridge.ProjectBindingOwner(root, selected); sched = bridge.SchedulerBindingOwner(root); plan = initialize(Owners(project, sched, owner), onboarding_key="first", apply_authorized=False)["topology_plan"]
+        binding = project.read_binding(); scheduler_binding = sched.read_binding(binding); identity, reason = owner._identity(binding); assert reason is None and identity is not None
+        context = {"project_id": binding["project_id"], "project_binding_ref": binding["project_binding_ref"], "project_binding_digest": binding["project_binding_digest"], "root_digest": binding["root_digest"], "scheduler_binding_digest": scheduler_binding["scheduler_binding_digest"], "scheduler_binding_ref": scheduler_binding["scheduler_binding_ref"], "work_root_ref": scheduler_binding["work_root_ref"], "scheduler_binding_revision": scheduler_binding["scheduler_binding_revision"], "onboarding_key": "first", "topology_plan_digest": plan["topology_plan_digest"], "topology_preimage_digest": plan["topology_preimage_digest"], "mapping_digest": identity["mapping_digest"], "create_budget": {"RoleHub": 1, "Coordinator": 1, "DurableArchitect": 1}}
+        bound = owner.bind_permit(runtime.issue_permit(host_digest="sha256:" + "2" * 64), context); assert bound is not None
+        second_host = FakeHost(second_id); bound.__dict__["_project_root"] = second_selected; bound.__dict__["_host"] = second_host
+        assert bound.apply_topology(plan)["reason"] == "authorization_mismatch"
+        assert first_host.calls == 0 and second_host.calls == 0
+        assert not (root / first_id / "role-topology.db").exists() and not (root / second_id / "role-topology.db").exists()
+    finally: temp.cleanup()
+
+
 if __name__ == "__main__":
-    test_trusted_two_call_lifecycle_and_exact_retry(); test_bad_or_replayed_permit_holds_before_store_or_host(); test_one_shot_guard_is_consumed_before_second_host_attempt(); test_noncanonical_identity_holds_without_host_or_store(); test_final_store_symlink_holds_before_sqlite_or_host(); test_same_permit_cannot_bind_a_second_owner_or_project(); test_bound_owner_context_swap_cannot_retarget_same_root_project(); print("ok")
+    test_trusted_two_call_lifecycle_and_exact_retry(); test_bad_or_replayed_permit_holds_before_store_or_host(); test_one_shot_guard_is_consumed_before_second_host_attempt(); test_noncanonical_identity_holds_without_host_or_store(); test_final_store_symlink_holds_before_sqlite_or_host(); test_same_permit_cannot_bind_a_second_owner_or_project(); test_bound_owner_context_swap_cannot_retarget_same_root_project(); test_bound_owner_host_and_root_swap_holds_before_either_store_or_host(); print("ok")
