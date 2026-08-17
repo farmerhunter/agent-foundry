@@ -80,5 +80,16 @@ def test_noncanonical_identity_holds_without_host_or_store() -> None:
     finally: temp.cleanup()
 
 
+def test_final_store_symlink_holds_before_sqlite_or_host() -> None:
+    temp, root, selected, project_id = _fixture()
+    try:
+        external = Path(temp.name) / "outside.db"; store = root / project_id / "role-topology.db"; store.symlink_to(external)
+        host = FakeHost(project_id); runtime = TrustedRuntime(); owner = NativeRoleTopologyOwner(root, selected, host, runtime=runtime)
+        result = bridge.trusted_initialize_fixture(root, selected, "link", topology_owner=owner, permit=runtime.issue_permit(host_digest="sha256:" + "2" * 64))
+        assert result["terminal_classification"] == "partial_hold" and result["attention_reason"] == "project_identity_invalid"
+        assert host.calls == 0 and not external.exists()
+    finally: temp.cleanup()
+
+
 if __name__ == "__main__":
-    test_trusted_two_call_lifecycle_and_exact_retry(); test_bad_or_replayed_permit_holds_before_store_or_host(); test_one_shot_guard_is_consumed_before_second_host_attempt(); test_noncanonical_identity_holds_without_host_or_store(); print("ok")
+    test_trusted_two_call_lifecycle_and_exact_retry(); test_bad_or_replayed_permit_holds_before_store_or_host(); test_one_shot_guard_is_consumed_before_second_host_attempt(); test_noncanonical_identity_holds_without_host_or_store(); test_final_store_symlink_holds_before_sqlite_or_host(); print("ok")

@@ -205,7 +205,8 @@ def trusted_initialize_fixture(
         if first.get("completion_state") == "native_ready":
             return _receipt("native_ready", attention_reason=None, safe_next_action=str(first.get("safe_next_action", "Use the durable scheduler.")), initialization=first)
         if first.get("completion_state") != "topology_plan_ready" or not isinstance(plan, Mapping):
-            return _receipt("partial_hold", attention_reason="topology_plan_unavailable", safe_next_action="Read owner state before native apply.", initialization=first)
+            _, identity_reason = topology_owner._identity(project.read_binding())
+            return _receipt("partial_hold", attention_reason=identity_reason or str(first.get("attention_reason", "topology_plan_unavailable")), safe_next_action="Read owner state before native apply.", initialization=first)
         binding = project.read_binding(); scheduled = scheduler.read_binding(binding)
         required = ("project_id", "project_binding_ref", "project_binding_digest", "root_digest")
         if not all(isinstance(binding.get(k), str) and binding[k] for k in required) or scheduled.get("state") != "bound":

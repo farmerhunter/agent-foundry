@@ -73,9 +73,14 @@ class NativeRoleTopologyOwner:
                 return None, "project_identity_invalid"
             authority = project_dir / "collaboration.db"
             if authority.is_symlink() or not authority.is_file(): return None, "project_identity_invalid"
+            store = project_dir / "role-topology.db"
+            # SQLite follows a final symlink when opening a missing database;
+            # reject it before constructing a connection or issuing host calls.
+            if store.is_symlink() or (store.exists() and (not store.is_file() or store.resolve(strict=True).parent != project_dir.resolve(strict=True))):
+                return None, "project_identity_invalid"
         except OSError: return None, "project_identity_invalid"
         mapping = _digest({"owner_version": VERSION, "project_id": project_id, "project_binding_digest": pd, "root_digest": rd})
-        return {"project_id": project_id, "project_binding_digest": pd, "root_digest": rd, "mapping_digest": mapping, "store": str(project_dir / "role-topology.db")}, None
+        return {"project_id": project_id, "project_binding_digest": pd, "root_digest": rd, "mapping_digest": mapping, "store": str(store)}, None
 
     def _connect(self, identity: Mapping[str, str], *, create: bool) -> sqlite3.Connection | None:
         path = Path(identity["store"])
