@@ -81,6 +81,28 @@ def test_duplicate_path_and_missing_scheduler_hold_without_topology() -> None:
         assert receipt["terminal_classification"] == "unavailable" and receipt["initialization"]["attention_reason"] == "owner_unavailable"
     finally:
         temp.cleanup()
+
+
+def test_corrupt_candidate_holds_before_topology_without_mutating_valid_authority() -> None:
+    temp, root, selected, project_id = _fixture()
+    try:
+        duplicate = LocalCollaborationLedger.create_project(projects_root=root)
+        duplicate.bind_project("path", str(selected)); duplicate.bind_project("repo", "repo-corrupt")
+        duplicate_path = duplicate.path; duplicate.close(); duplicate_path.write_bytes(b"corrupt authority"); os.chmod(duplicate_path, 0o600)
+        valid_path = root / project_id / "collaboration.db"; before = hashlib.sha256(valid_path.read_bytes()).hexdigest()
+
+        class CountingTopology:
+            def __init__(self): self.calls = 0
+            def read_topology(self, project): self.calls += 1; return {"state": "missing"}
+            def apply_topology(self, plan): self.calls += 1; raise AssertionError("apply must not run")
+            def read_completion(self, key, project): self.calls += 1; return {"state": "absent"}
+
+        topology = CountingTopology()
+        receipt = bridge.run(root, selected, "onboard-corrupt", topology_owner=topology)
+        assert receipt["terminal_classification"] == "unavailable" and topology.calls == 0
+        assert hashlib.sha256(valid_path.read_bytes()).hexdigest() == before
+    finally:
+        temp.cleanup()
     temp, root, selected, project_id = _fixture()
     try:
         db = root / project_id / "collaboration.db"
@@ -124,6 +146,7 @@ def test_in_process_fixture_topology_can_plan_but_is_never_production_eligible()
 if __name__ == "__main__":
     test_ordinary_owner_fixture_holds_without_topology_owner_or_mutation()
     test_duplicate_path_and_missing_scheduler_hold_without_topology()
+    test_corrupt_candidate_holds_before_topology_without_mutating_valid_authority()
     test_cli_rejects_injection_and_preserves_closed_json()
     test_in_process_fixture_topology_can_plan_but_is_never_production_eligible()
     print("ok")

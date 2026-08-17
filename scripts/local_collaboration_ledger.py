@@ -307,11 +307,14 @@ class LocalCollaborationLedger:
                     matches.append((project_id, str(db), bindings, snapshot))
             except LedgerError as exc:
                 holds.append(exc)
+        # A broken authority cannot be proved unrelated to the selected path.
+        # Treat the complete owner root as ambiguous rather than accepting the
+        # first readable match and risking a hidden duplicate binding.
+        if holds:
+            raise holds[0]
         if len(matches) > 1:
             raise LedgerConflictError("canonical path resolves to multiple authorities")
         if not matches:
-            if holds:
-                raise holds[0]
             raise LedgerConflictError("canonical path authority is unavailable")
         project_id, _, bindings, snapshot = matches[0]
         supported_types = {"path", "repo", "remote", "thread", "issue", "github_repository"}

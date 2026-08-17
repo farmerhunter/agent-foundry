@@ -83,6 +83,21 @@ class LedgerTests(unittest.TestCase):
         self.assertNotIn(str(project_root), repr(view)); self.assertNotIn("repo-opaque", repr(view))
         self.ledger = LocalCollaborationLedger(self.ledger.project_id, projects_root=self.tmp.name)
 
+    def test_active_path_repo_binding_snapshot_holds_for_unreadable_candidate(self):
+        project_root = Path(self.tmp.name) / "shared-project"; project_root.mkdir(mode=0o700)
+        self.ledger.bind_project("path", str(project_root.resolve())); self.ledger.bind_project("repo", "repo-primary")
+        primary_path = self.ledger.path; self.ledger.close()
+        duplicate = LocalCollaborationLedger.create_project(projects_root=self.tmp.name)
+        duplicate.bind_project("path", str(project_root.resolve())); duplicate.bind_project("repo", "repo-duplicate")
+        duplicate_path = duplicate.path; duplicate.close()
+        duplicate_path.write_bytes(b"not a sqlite authority")
+        os.chmod(duplicate_path, 0o600)
+        before = primary_path.read_bytes()
+        with self.assertRaises((LedgerIntegrityError, LedgerPermissionError, LedgerSchemaError, LedgerBusyError)):
+            LocalCollaborationLedger.active_path_repo_binding_snapshot(self.tmp.name, project_root.resolve())
+        self.assertEqual(primary_path.read_bytes(), before)
+        self.ledger = LocalCollaborationLedger(self.ledger.project_id, projects_root=self.tmp.name)
+
     def test_append_sequence_chain_and_idempotency(self):
         event_id = "11111111-1111-1111-1111-111111111111"
         first = self.ledger.append_event("work.accepted", {"title": "x"}, event_id=event_id)
