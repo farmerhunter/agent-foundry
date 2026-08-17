@@ -283,7 +283,10 @@ class PermitBoundNativeRoleTopologyOwner(NativeRoleTopologyOwner):
                 previous = self._record(con, "attempt") or {}
                 attempt = {"state": "verifying", "mapping_digest": identity["mapping_digest"], "project_id": identity["project_id"], "project_binding_digest": identity["project_binding_digest"], "root_digest": identity["root_digest"], "topology_plan_digest": plan["topology_plan_digest"], "operation_budget": [item[0] for item in _ROLES], "roles": list(created), "pending_role": role, "pending_title": title, "operation_refs": previous.get("operation_refs", {}), "native_ids": previous.get("native_ids", {}), "readback_digests": previous.get("readback_digests", {}), "operations": previous.get("operations", {})}
                 con.execute("INSERT OR REPLACE INTO topology(k,v) VALUES('attempt',?)", (_canon(attempt),)); con.commit()
-                md = self._sealed_host.create_thread(self._sealed_project_root)
+                try:
+                    md = self._sealed_host.create_thread(self._sealed_project_root)
+                except Exception:
+                    return partial_result()
                 if not isinstance(md, ThreadMetadata) or not isinstance(getattr(md, "id", None), str) or not md.id:
                     return partial_result()
                 created_before_name = {**attempt, "state": "verifying", "pending_role": role, "pending_title": title, "native_ids": {**attempt.get("native_ids", {}), role: md.id}, "operations": {**attempt.get("operations", {}), role: {"native_id": md.id, "title": title, "project_id": md.project_id, "operation_ref": "operation:" + hashlib.sha256((plan["topology_plan_digest"] + role).encode()).hexdigest()[:24], "readback_digest": None}}}
