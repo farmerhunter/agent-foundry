@@ -4,6 +4,8 @@ import os
 from pathlib import Path
 import tempfile
 import uuid
+import jsonschema
+import yaml
 
 import bounded_collaboration_runtime_bridge as bridge
 from test_bounded_collaboration_runtime_bridge import _fixture as _bridge_fixture, _request as _bridge_request
@@ -197,5 +199,17 @@ def test_unmanaged_collision_ambiguity_foreign_and_list_failure_hold_pre_store()
         finally: temp.cleanup()
 
 
+def test_public_schema_accepts_actual_ready_and_rejects_private_held_fields() -> None:
+    temp, root, selected, project_id = _fixture()
+    try:
+        host = FakeHost(project_id); runtime = TrustedRuntime(); owner = NativeRoleTopologyOwner(root, selected, host, runtime=runtime)
+        assert bridge.trusted_initialize_fixture(root, selected, "schema", topology_owner=owner, permit=runtime.issue_permit(host_digest="sha256:" + "2" * 64))["terminal_classification"] == "native_ready"
+        binding = bridge.ProjectBindingOwner(root, selected).read_binding()
+        schema = yaml.safe_load((Path(__file__).resolve().parents[1] / "schemas" / "bounded-collaboration-native-topology-owner.schema.yaml").read_text())
+        jsonschema.Draft202012Validator(schema).validate(owner.read_topology(binding)); jsonschema.Draft202012Validator(schema).validate(owner.read_completion("schema", binding))
+        assert list(jsonschema.Draft202012Validator(schema).iter_errors({"state": "held", "reason": "x", "rolehub_ref": "leak"}))
+    finally: temp.cleanup()
+
+
 if __name__ == "__main__":
-    test_trusted_two_call_lifecycle_and_exact_retry(); test_bad_or_replayed_permit_holds_before_store_or_host(); test_one_shot_guard_is_consumed_before_second_host_attempt(); test_noncanonical_identity_holds_without_host_or_store(); test_final_store_symlink_holds_before_sqlite_or_host(); test_same_permit_cannot_bind_a_second_owner_or_project(); test_bound_owner_context_swap_cannot_retarget_same_root_project(); test_bound_owner_host_and_root_swap_holds_before_either_store_or_host(); test_completed_retry_holds_on_deleted_or_replaced_host_identity(); test_completed_retry_holds_on_duplicate_or_list_error_inventory(); test_unmanaged_collision_ambiguity_foreign_and_list_failure_hold_pre_store(); print("ok")
+    test_trusted_two_call_lifecycle_and_exact_retry(); test_bad_or_replayed_permit_holds_before_store_or_host(); test_one_shot_guard_is_consumed_before_second_host_attempt(); test_noncanonical_identity_holds_without_host_or_store(); test_final_store_symlink_holds_before_sqlite_or_host(); test_same_permit_cannot_bind_a_second_owner_or_project(); test_bound_owner_context_swap_cannot_retarget_same_root_project(); test_bound_owner_host_and_root_swap_holds_before_either_store_or_host(); test_completed_retry_holds_on_deleted_or_replaced_host_identity(); test_completed_retry_holds_on_duplicate_or_list_error_inventory(); test_unmanaged_collision_ambiguity_foreign_and_list_failure_hold_pre_store(); test_public_schema_accepts_actual_ready_and_rejects_private_held_fields(); print("ok")
