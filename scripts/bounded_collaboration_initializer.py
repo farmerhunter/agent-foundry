@@ -65,6 +65,8 @@ class RoleTopologyOwner(Protocol):
 
     def apply_topology(self, plan: Mapping[str, Any]) -> Mapping[str, Any]: ...
 
+    def read_completion(self, onboarding_key: str, project_binding: Mapping[str, Any]) -> Mapping[str, Any]: ...
+
 
 @dataclass(frozen=True)
 class Owners:
@@ -228,6 +230,40 @@ def _validate_apply_binding(
     return binding["topology_apply_binding_ref"], None
 
 
+def _completion_identity(
+    onboarding_key: str,
+    project: Mapping[str, Any],
+    scheduler: Mapping[str, Any],
+    topology: Mapping[str, Any],
+    binding: Mapping[str, Any],
+) -> dict[str, Any]:
+    return {
+        "onboarding_key": onboarding_key,
+        "project_binding_ref": project["project_binding_ref"],
+        "project_binding_digest": project["project_binding_digest"],
+        "scheduler_binding_ref": scheduler["scheduler_binding_ref"],
+        "work_root_ref": scheduler["work_root_ref"],
+        "scheduler_binding_revision": scheduler["scheduler_binding_revision"],
+        "scheduler_binding_digest": scheduler["scheduler_binding_digest"],
+        "topology_plan_digest": binding["topology_plan_digest"],
+        "operation_receipt_refs": list(binding["operation_receipt_refs"]),
+        "topology_apply_binding_ref": binding["topology_apply_binding_ref"],
+        "topology_apply_binding_digest": binding["topology_apply_binding_digest"],
+        "rolehub_ref": topology["rolehub_ref"],
+        "coordinator_ref": topology["coordinator_ref"],
+        "architect_ref": topology["architect_ref"],
+        "topology_readback_digest": topology["topology_readback_digest"],
+    }
+
+
+def _validate_persistent_completion(record: Any, expected: Mapping[str, Any]) -> str | None:
+    if not isinstance(record, Mapping) or _has_private(record):
+        return "original_completion_unavailable"
+    if record.get("state") != "ready" or not isinstance(record.get("completion_receipt_ref"), str) or not record["completion_receipt_ref"]:
+        return "original_completion_unavailable"
+    return None if all(record.get(name) == value for name, value in expected.items()) else "original_completion_identity_drift"
+
+
 def initialize(
     owners: Owners,
     *,
@@ -357,6 +393,10 @@ def initialize(
         if binding_error:
             return _result("setup_incomplete", onboarding_key, attention_reason=binding_error, safe_next_action="Read topology and scheduler state before any follow-up.", mutation_performed=mutation_performed, operation_receipt_refs=operation_receipt_refs)
         assert binding_ref is not None
+        original, original_error = _call(owners.topology, "read_completion", onboarding_key, fresh_project)
+        expected = _completion_identity(onboarding_key, fresh_project, fresh_scheduler, fresh_topology, apply_binding)
+        if original_error or _validate_persistent_completion(original, expected):
+            return _result("setup_incomplete", onboarding_key, attention_reason=original_error or _validate_persistent_completion(original, expected), safe_next_action="Resolve original completion evidence before any follow-up.", mutation_performed=mutation_performed, operation_receipt_refs=operation_receipt_refs)
         return _receipt(onboarding_key, fresh_project, fresh_scheduler, fresh_topology, mutation_performed=mutation_performed, operation_receipt_refs=operation_receipt_refs, topology_apply_binding_ref=binding_ref, topology_apply_binding_digest=apply_binding["topology_apply_binding_digest"])
     if retry_binding_seen:
         retry_binding = fresh_topology.get("topology_apply_binding")
@@ -370,6 +410,11 @@ def initialize(
         if binding_error:
             return _result("partial_hold", onboarding_key, attention_reason=binding_error, safe_next_action="Resolve topology commitment drift before any follow-up.")
         assert binding_ref is not None
+        original, original_error = _call(owners.topology, "read_completion", onboarding_key, fresh_project)
+        expected = _completion_identity(onboarding_key, fresh_project, fresh_scheduler, fresh_topology, retry_binding)
+        original_reason = original_error or _validate_persistent_completion(original, expected)
+        if original_reason:
+            return _result("partial_hold", onboarding_key, attention_reason=original_reason, safe_next_action="Resolve original completion identity drift before any follow-up.")
         return _receipt(onboarding_key, fresh_project, fresh_scheduler, fresh_topology, mutation_performed=False, operation_receipt_refs=(), topology_apply_binding_ref=binding_ref, topology_apply_binding_digest=retry_binding["topology_apply_binding_digest"])
     return _receipt(onboarding_key, fresh_project, fresh_scheduler, fresh_topology, mutation_performed=False, operation_receipt_refs=operation_receipt_refs)
 

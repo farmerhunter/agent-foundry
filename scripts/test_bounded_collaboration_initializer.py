@@ -38,7 +38,7 @@ class Scheduler:
 
 class Topology:
     def __init__(self, project, state="ready"):
-        self.calls = 0; self.apply_calls = 0; self.project = project; self.state = state; self.post_apply_error = False
+        self.calls = 0; self.apply_calls = 0; self.completion_calls = 0; self.project = project; self.state = state; self.post_apply_error = False; self.completions = {}
     def read_topology(self, project):
         self.calls += 1
         if self.post_apply_error: raise RuntimeError("unshown")
@@ -58,7 +58,11 @@ class Topology:
         refs = ["receipt:coordinator", "receipt:architect"]
         self.binding = {"topology_apply_binding_ref": "binding:opaque", "onboarding_key": plan["onboarding_key"], "project_binding_digest": plan["project_binding_digest"], "scheduler_binding_digest": plan["scheduler_binding_digest"], "requested_roles": list(plan["requested_roles"]), "topology_plan_digest": plan["topology_plan_digest"], "operation_receipt_refs": refs, "operation_receipt_refs_digest": initializer._digest(refs), "rolehub_ref": "hub:opaque", "coordinator_ref": "role:c", "architect_ref": "role:a", "topology_readback_digest": "sha256:topology"}
         self.binding["topology_apply_binding_digest"] = initializer._binding_digest(self.binding)
+        self.completions[plan["onboarding_key"]] = {"state": "ready", "completion_receipt_ref": "completion:opaque", **initializer._completion_identity(plan["onboarding_key"], {"project_binding_ref": plan["project_binding_ref"], "project_binding_digest": plan["project_binding_digest"]}, {"scheduler_binding_ref": "scheduler:opaque", "work_root_ref": "work:opaque", "scheduler_binding_revision": "rev-1", "scheduler_binding_digest": plan["scheduler_binding_digest"]}, {"rolehub_ref": "hub:opaque", "coordinator_ref": "role:c", "architect_ref": "role:a", "topology_readback_digest": "sha256:topology"}, self.binding)}
         return {"state": "applied", "mutation_performed": getattr(self, "apply_mutation", True), "operation_receipt_refs": refs, "topology_apply_binding": dict(self.binding), "topology_plan_digest": plan["topology_plan_digest"]}
+    def read_completion(self, onboarding_key, project):
+        self.completion_calls += 1
+        return dict(self.completions.get(onboarding_key, {"state": "absent"}))
 
 
 def owners(scheduler_state="bound", topology_state="ready"):
@@ -101,8 +105,9 @@ def main():
     check("exact-retry-no-topology-mutation", retried["completion_state"] == "native_ready" and retried["mutation_performed"] is False and topology.apply_calls == 1 and topology.binding["topology_apply_binding_ref"] == "binding:opaque", retried)
 
     topology.foreign_after_apply = True
+    topology.binding["rolehub_ref"] = "hub:foreign"; topology.binding["coordinator_ref"] = "role:foreign-c"; topology.binding["architect_ref"] = "role:foreign-a"; topology.binding["topology_readback_digest"] = "sha256:foreign-topology"; topology.binding["topology_apply_binding_digest"] = initializer._binding_digest(topology.binding)
     foreign_retry = initializer.initialize(own, onboarding_key="onboard-3", apply_authorized=True)
-    check("same-key-retry-rereads-foreign-topology-holds", foreign_retry["completion_state"] == "partial_hold" and foreign_retry["attention_reason"] == "topology_apply_readback_identity_mismatch" and topology.apply_calls == 1, foreign_retry)
+    check("same-key-retry-rereads-self-consistent-foreign-topology-holds", foreign_retry["completion_state"] == "partial_hold" and foreign_retry["attention_reason"] == "original_completion_identity_drift" and topology.apply_calls == 1 and topology.completion_calls >= 2, foreign_retry)
 
     own, project, scheduler, topology = owners("bound", "missing")
     old_apply = topology.apply_topology

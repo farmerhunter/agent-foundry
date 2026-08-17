@@ -92,6 +92,13 @@ replacement, a missing/invalid operation receipt after a mutation, or any
 commitment drift is a typed hold; it cannot be repaired by issuing another
 create/reuse call.
 
+The topology owner must also resolve the immutable original completion identity
+for that key, not a caller cache. Each retry compares the current project,
+scheduler/Work-root, approved plan and receipt refs, RoleHub, Coordinator,
+Architect and topology readback one by one with that stored receipt. A wholly
+self-consistent replacement is still a hold when it differs from the original
+completion identity.
+
 ## Apply and rollback boundary
 
 An adapter may execute only a `plan_ready` plan whose operation keys have been
