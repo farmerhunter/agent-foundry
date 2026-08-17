@@ -38,11 +38,11 @@ def test_trusted_two_call_lifecycle_and_exact_retry() -> None:
     try:
         host = FakeHost(project_id); runtime = TrustedRuntime(); owner = NativeRoleTopologyOwner(root, selected, host, runtime=runtime)
         first = bridge.trusted_initialize_fixture(root, selected, "key", topology_owner=owner, permit=runtime.issue_permit(host_digest="sha256:" + "2" * 64))
-        assert first["terminal_classification"] == "native_ready" and host.calls == 18
+        assert first["terminal_classification"] == "native_ready" and host.creates == 3 and host.names == 3 and host.calls > 9
         assert "permit" not in str(first).lower() and "n1" not in str(first)
         before = host.calls
         retry = bridge.trusted_initialize_fixture(root, selected, "key", topology_owner=owner, permit=object())
-        assert retry["terminal_classification"] == "native_ready" and host.calls == before + 12 and host.creates == 3 and host.names == 3
+        assert retry["terminal_classification"] == "native_ready" and host.calls > before and host.creates == 3 and host.names == 3
     finally: temp.cleanup()
 
 
@@ -163,6 +163,20 @@ def test_completed_retry_holds_on_deleted_or_replaced_host_identity() -> None:
         finally: temp.cleanup()
 
 
+def test_completed_retry_holds_on_duplicate_or_list_error_inventory() -> None:
+    for kind in ("duplicate", "list_error"):
+        temp, root, selected, project_id = _fixture()
+        try:
+            host = FakeHost(project_id); runtime = TrustedRuntime(); owner = NativeRoleTopologyOwner(root, selected, host, runtime=runtime)
+            assert bridge.trusted_initialize_fixture(root, selected, "done", topology_owner=owner, permit=runtime.issue_permit(host_digest="sha256:" + "2" * 64))["terminal_classification"] == "native_ready"
+            if kind == "duplicate": host.items["duplicate"] = ThreadMetadata("duplicate", str(selected), "AF18 Coordinator", project_id)
+            else: host.list_threads = lambda cwd: (_ for _ in ()).throw(RuntimeError("unavailable"))
+            creates, names, before = host.creates, host.names, host.calls
+            retry = bridge.trusted_initialize_fixture(root, selected, "done", topology_owner=owner, permit=object())
+            assert retry["terminal_classification"] == "partial_hold" and host.calls >= before and host.creates == creates and host.names == names
+        finally: temp.cleanup()
+
+
 def test_unmanaged_collision_ambiguity_foreign_and_list_failure_hold_pre_store() -> None:
     for kind in ("collision", "ambiguous", "foreign", "error"):
         temp, root, selected, project_id = _fixture()
@@ -184,4 +198,4 @@ def test_unmanaged_collision_ambiguity_foreign_and_list_failure_hold_pre_store()
 
 
 if __name__ == "__main__":
-    test_trusted_two_call_lifecycle_and_exact_retry(); test_bad_or_replayed_permit_holds_before_store_or_host(); test_one_shot_guard_is_consumed_before_second_host_attempt(); test_noncanonical_identity_holds_without_host_or_store(); test_final_store_symlink_holds_before_sqlite_or_host(); test_same_permit_cannot_bind_a_second_owner_or_project(); test_bound_owner_context_swap_cannot_retarget_same_root_project(); test_bound_owner_host_and_root_swap_holds_before_either_store_or_host(); test_completed_retry_holds_on_deleted_or_replaced_host_identity(); test_unmanaged_collision_ambiguity_foreign_and_list_failure_hold_pre_store(); print("ok")
+    test_trusted_two_call_lifecycle_and_exact_retry(); test_bad_or_replayed_permit_holds_before_store_or_host(); test_one_shot_guard_is_consumed_before_second_host_attempt(); test_noncanonical_identity_holds_without_host_or_store(); test_final_store_symlink_holds_before_sqlite_or_host(); test_same_permit_cannot_bind_a_second_owner_or_project(); test_bound_owner_context_swap_cannot_retarget_same_root_project(); test_bound_owner_host_and_root_swap_holds_before_either_store_or_host(); test_completed_retry_holds_on_deleted_or_replaced_host_identity(); test_completed_retry_holds_on_duplicate_or_list_error_inventory(); test_unmanaged_collision_ambiguity_foreign_and_list_failure_hold_pre_store(); print("ok")

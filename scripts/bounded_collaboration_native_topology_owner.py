@@ -122,6 +122,17 @@ class NativeRoleTopologyOwner:
         try:
             host, root = self._read_target()
             for role, title in _ROLES:
+                entries = host.list_threads(root)
+                if not isinstance(entries, list):
+                    return "native_readback_unavailable"
+                matches = []
+                for item in entries:
+                    if not isinstance(item, ThreadMetadata) or item.cwd != root or item.project_id != project_id or not item.id or not item.name:
+                        return "topology_ambiguous"
+                    if item.name == title:
+                        matches.append(item)
+                if len(matches) != 1 or matches[0].id != native_ids[role]:
+                    return "topology_ambiguous"
                 metadata = host.read_thread(native_ids[role], include_turns=False)
                 if not isinstance(metadata, ThreadMetadata) or metadata.id != native_ids[role] or metadata.project_id != project_id or metadata.cwd != root or metadata.name != title or topology.get(role.lower() + "_ref") != _opaque(role, metadata.id):
                     return "native_metadata_mismatch"
