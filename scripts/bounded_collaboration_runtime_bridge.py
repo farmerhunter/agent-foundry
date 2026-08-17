@@ -50,11 +50,11 @@ def _private(value: Any) -> bool:
     return isinstance(value, (list, tuple)) and any(_private(item) for item in value)
 
 
-def _receipt(terminal: str, *, attention_reason: str | None, safe_next_action: str, initialization: Mapping[str, Any] | None = None) -> Mapping[str, Any]:
+def _receipt(terminal: str, *, attention_reason: str | None, safe_next_action: str, initialization: Mapping[str, Any] | None = None, mutation_performed: bool = False) -> Mapping[str, Any]:
     value: dict[str, Any] = {
         "bridge_version": VERSION,
         "mode": "read_only_preflight",
-        "mutation_performed": False,
+        "mutation_performed": mutation_performed,
         "production_eligible": False,
         "evidence_class": "fixture_only",
         "terminal_classification": terminal,
@@ -220,7 +220,7 @@ def trusted_initialize_fixture(
         if bound is None:
             return _receipt("partial_hold", attention_reason="authorization_unavailable", safe_next_action="Use a fresh trusted runtime authorization.")
         second = initialize(Owners(project, scheduler, bound), onboarding_key=onboarding_key, apply_authorized=True)
-        return _receipt(str(second.get("completion_state", "partial_hold")), attention_reason=second.get("attention_reason"), safe_next_action=str(second.get("safe_next_action", "Read owner state before follow-up.")), initialization=second)
+        return _receipt(str(second.get("completion_state", "partial_hold")), attention_reason=second.get("attention_reason"), safe_next_action=str(second.get("safe_next_action", "Read owner state before follow-up.")), initialization=second, mutation_performed=bool(second.get("mutation_performed")))
     except Exception:
         return _receipt("owner_unavailable", attention_reason="owner_binding_unavailable", safe_next_action="Restore owner bindings.")
 
