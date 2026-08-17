@@ -1,0 +1,53 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://agent-foundry.local/schemas/bounded-collaboration-native-topology-owner.schema.yaml
+title: Bounded collaboration native topology public envelopes
+oneOf:
+  - type: object
+    additionalProperties: false
+    required: [state]
+    properties: {state: {const: missing}}
+  - type: object
+    additionalProperties: false
+    required: [state]
+    properties: {state: {const: absent}}
+  - type: object
+    additionalProperties: false
+    required: [state, reason]
+    properties: {state: {const: held}, reason: {type: string, minLength: 1}}
+  - type: object
+    additionalProperties: false
+    required: [state, rolehub_ref, coordinator_ref, architect_ref, project_binding_digest, project_id, topology_readback_digest, topology_apply_binding_ref, topology_apply_binding_digest, coordinator_count, architect_count, topology_apply_binding]
+    properties:
+      state: {const: ready}
+      rolehub_ref: {type: string}
+      coordinator_ref: {type: string}
+      architect_ref: {type: string}
+      project_binding_digest: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}
+      project_id: {type: string}
+      topology_readback_digest: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}
+      topology_apply_binding_ref: {type: string}
+      topology_apply_binding_digest: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}
+      coordinator_count: {const: 1}
+      architect_count: {const: 1}
+      topology_apply_binding: {type: object}
+  - type: object
+    additionalProperties: false
+    required: [state, completion_receipt_ref, onboarding_key, rolehub_ref, coordinator_ref, architect_ref, project_binding_ref, project_binding_digest, scheduler_binding_ref, work_root_ref, scheduler_binding_revision, scheduler_binding_digest, topology_plan_digest, topology_apply_binding_ref, topology_apply_binding_digest, topology_readback_digest, operation_receipt_refs]
+    properties:
+      state: {const: ready}
+      completion_receipt_ref: {type: string}
+      onboarding_key: {type: string}
+      rolehub_ref: {type: string}
+      coordinator_ref: {type: string}
+      architect_ref: {type: string}
+      project_binding_ref: {type: string}
+      project_binding_digest: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}
+      scheduler_binding_ref: {type: string}
+      work_root_ref: {type: string}
+      scheduler_binding_revision: {type: string}
+      scheduler_binding_digest: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}
+      topology_plan_digest: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}
+      topology_apply_binding_ref: {type: string}
+      topology_apply_binding_digest: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}
+      topology_readback_digest: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}
+      operation_receipt_refs: {type: array, items: {type: string}}

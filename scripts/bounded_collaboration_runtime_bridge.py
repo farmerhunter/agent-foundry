@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from bounded_collaboration_initializer import Owners, initialize
+from bounded_collaboration_native_topology_owner import NativeRoleTopologyOwner
 from local_collaboration_ledger import LedgerError, LocalCollaborationLedger
 from local_collaboration_scheduler import SchedulerHold, replay_scheduler_state
 
@@ -49,11 +50,11 @@ def _private(value: Any) -> bool:
     return isinstance(value, (list, tuple)) and any(_private(item) for item in value)
 
 
-def _receipt(terminal: str, *, attention_reason: str | None, safe_next_action: str, initialization: Mapping[str, Any] | None = None) -> Mapping[str, Any]:
+def _receipt(terminal: str, *, attention_reason: str | None, safe_next_action: str, initialization: Mapping[str, Any] | None = None, mutation_performed: bool = False) -> Mapping[str, Any]:
     value: dict[str, Any] = {
         "bridge_version": VERSION,
         "mode": "read_only_preflight",
-        "mutation_performed": False,
+        "mutation_performed": mutation_performed,
         "production_eligible": False,
         "evidence_class": "fixture_only",
         "terminal_classification": terminal,
@@ -78,7 +79,7 @@ class ProjectBindingOwner:
             "state": "bound",
             "project_id": view.project_id,
             "project_binding_ref": view.project_binding_ref,
-            "project_binding_digest": view.project_binding_digest,
+            "project_binding_digest": "sha256:" + view.project_binding_digest,
             "repository_digest": "sha256:" + view.repository_digest,
             "root_digest": "sha256:" + view.root_digest,
             "authority_generation": view.authority_generation,
@@ -184,6 +185,44 @@ def run(projects_root: str | Path, project_root: str | Path, onboarding_key: str
     if terminal not in {"topology_plan_ready", "native_ready", "repo_contract_only", "partial_hold", "unavailable", "setup_incomplete"}:
         terminal = "schema_or_privacy_failure"
     return _receipt(terminal, attention_reason=result.get("attention_reason"), safe_next_action=str(result.get("safe_next_action", "Read owner state before any follow-up.")), initialization=result)
+
+
+def trusted_initialize_fixture(
+    projects_root: str | Path,
+    project_root: str | Path,
+    onboarding_key: str,
+    *,
+    topology_owner: NativeRoleTopologyOwner,
+    permit: object,
+) -> Mapping[str, Any]:
+    """In-process-only two-call seam; the public CLI cannot reach this path."""
+    try:
+        root = _validate_locator(projects_root, directory=True)
+        selected = _validate_locator(project_root, directory=True)
+        project = ProjectBindingOwner(root, selected); scheduler = SchedulerBindingOwner(root)
+        first = initialize(Owners(project, scheduler, topology_owner), onboarding_key=onboarding_key, apply_authorized=False)
+        plan = first.get("topology_plan") if isinstance(first, Mapping) else None
+        if first.get("completion_state") == "native_ready":
+            return _receipt("native_ready", attention_reason=None, safe_next_action=str(first.get("safe_next_action", "Use the durable scheduler.")), initialization=first)
+        if first.get("completion_state") != "topology_plan_ready" or not isinstance(plan, Mapping):
+            _, identity_reason = topology_owner._identity(project.read_binding())
+            return _receipt("partial_hold", attention_reason=identity_reason or str(first.get("attention_reason", "topology_plan_unavailable")), safe_next_action="Read owner state before native apply.", initialization=first)
+        binding = project.read_binding(); scheduled = scheduler.read_binding(binding)
+        required = ("project_id", "project_binding_ref", "project_binding_digest", "root_digest")
+        if not all(isinstance(binding.get(k), str) and binding[k] for k in required) or scheduled.get("state") != "bound":
+            return _receipt("owner_unavailable", attention_reason="owner_binding_unavailable", safe_next_action="Restore owner bindings.")
+        context = {**{k: binding[k] for k in required}, "scheduler_binding_digest": scheduled["scheduler_binding_digest"], "scheduler_binding_ref": scheduled["scheduler_binding_ref"], "work_root_ref": scheduled["work_root_ref"], "scheduler_binding_revision": scheduled["scheduler_binding_revision"], "onboarding_key": onboarding_key, "topology_plan_digest": plan["topology_plan_digest"], "topology_preimage_digest": plan["topology_preimage_digest"], "create_budget": {"RoleHub": 1, "Coordinator": 1, "DurableArchitect": 1}}
+        identity, reason = topology_owner._identity(binding)
+        if reason or identity is None:
+            return _receipt("partial_hold", attention_reason=reason or "project_identity_invalid", safe_next_action="Restore owner identity before native apply.")
+        context["mapping_digest"] = identity["mapping_digest"]
+        bound = topology_owner.bind_permit(permit, context)
+        if bound is None:
+            return _receipt("partial_hold", attention_reason="authorization_unavailable", safe_next_action="Use a fresh trusted runtime authorization.")
+        second = initialize(Owners(project, scheduler, bound), onboarding_key=onboarding_key, apply_authorized=True)
+        return _receipt(str(second.get("completion_state", "partial_hold")), attention_reason=second.get("attention_reason"), safe_next_action=str(second.get("safe_next_action", "Read owner state before follow-up.")), initialization=second, mutation_performed=bool(second.get("mutation_performed")))
+    except Exception:
+        return _receipt("owner_unavailable", attention_reason="owner_binding_unavailable", safe_next_action="Restore owner bindings.")
 
 
 def _arguments(argv: list[str]) -> tuple[str, str, str] | None:

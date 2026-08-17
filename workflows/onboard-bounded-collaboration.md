@@ -36,6 +36,23 @@ fixture owner may exercise plan composition, and that evidence is never a
 runtime readiness claim. Native topology apply remains a separately approved
 runtime boundary.
 
+The trusted native boundary is deliberately not a CLI feature. A trusted
+in-process runtime first obtains the read-only I1 plan, then supplies an opaque,
+non-serializable, one-shot permit to a distinct permit-bound topology owner for
+the second I1 call. The permit is never present in a plan, receipt, JSON, file,
+environment, configuration or public output. It binds the fresh canonical
+project UUID, project/root mapping digests, scheduler binding, exact plan,
+runtime/host identities and the fixed create budget (RoleHub, Coordinator and
+Durable Architect: one each). Missing, expired, replayed or drifted permits
+hold before the receipt store or host is touched. An exact completed retry uses
+only the unbound read-only owner and performs no native mutation.
+
+Before the protected topology receipt store is even opened, the owner validates
+the owner-derived lowercase UUID and digest mapping and resolves only
+`<projects-root>/<project-id>/role-topology.db`; symlinks, escapes, malformed
+identity, absent project authority or mapping drift are holds. Thread title or
+cwd is never a project-binding fallback.
+
 ## State machine
 
 `preflight -> repo_contract_only | unavailable | partial_hold | topology_plan_ready -> applying_topology -> verifying_completion -> native_ready | setup_incomplete`

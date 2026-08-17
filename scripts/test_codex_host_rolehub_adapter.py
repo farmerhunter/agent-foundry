@@ -7,16 +7,17 @@ from codex_host_rolehub_adapter import CodexHostRoleHubAdapter, ThreadMetadata, 
 
 class FakeHost:
     def __init__(self, threads=None, navigation=True):
-        self.threads = {t.id: t for t in (threads or [])}; self.navigation = navigation
+        self.project_id = "tiny-ipa"
+        self.threads = {t.id: ThreadMetadata(t.id, t.cwd, t.name, t.project_id or self.project_id) for t in (threads or [])}; self.navigation = navigation
         self.calls = []
     def list_threads(self, cwd): self.calls.append(("list", cwd)); return [t for t in self.threads.values() if t.cwd == cwd]
     def read_thread(self, id, include_turns=False):
         self.calls.append(("read", id, include_turns)); return self.threads[id]
     def create_thread(self, cwd):
-        self.calls.append(("create", cwd)); ident = "native-new"; t = ThreadMetadata(ident, cwd, "")
+        self.calls.append(("create", cwd)); ident = "native-new"; t = ThreadMetadata(ident, cwd, "", self.project_id)
         self.threads[ident] = t; return t
     def set_thread_name(self, id, title):
-        self.calls.append(("name", id, title)); t = self.threads[id]; self.threads[id] = ThreadMetadata(t.id, t.cwd, title); return self.threads[id]
+        self.calls.append(("name", id, title)); t = self.threads[id]; self.threads[id] = ThreadMetadata(t.id, t.cwd, title, t.project_id); return self.threads[id]
     def navigate_to_thread(self, id):
         self.calls.append(("navigate", id))
         if not self.navigation: raise NotImplementedError
@@ -69,5 +70,8 @@ class AdapterTests(unittest.TestCase):
         h = FakeHost([ThreadMetadata("a", "/p/tiny-ipa", "A")]); apply_rolehub(plan(op("n", "navigate", target_ref="a")), h)
         self.assertFalse(any(len(x) > 2 and x[0] == "read" and x[2] for x in h.calls))
         self.assertFalse(hasattr(h, "send_message"))
+    def test_project_binding_mismatch_holds(self):
+        h = FakeHost([ThreadMetadata("a", "/p/tiny-ipa", "A", "foreign")])
+        self.assertEqual(apply_rolehub(plan(op("n", "navigate", target_ref="a")), h)["status"], "setup_incomplete")
 
 if __name__ == "__main__": unittest.main()
