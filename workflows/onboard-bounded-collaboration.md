@@ -18,6 +18,24 @@ completion. Repository workflow text, a prompt, generated Skill text, role
 names, caller JSON, or a caller-supplied scheduler reference are never proof
 that collaboration is initialized.
 
+The public runtime preflight is locator-only and read-only:
+
+```text
+python3 scripts/bounded_collaboration_runtime_bridge.py \
+  --projects-root <ledger-owner-root> \
+  --project-root <canonical-project-root> \
+  --onboarding-key <opaque-key>
+```
+
+It discovers the active path/repository binding through LedgerStore and then
+replays the scheduler/Work-root owner. It neither loads a topology plugin nor
+accepts caller project, scheduler, receipt or apply claims. Ordinary invocation
+therefore returns a typed unavailable/hold; it does not expose a topology plan,
+install roles, or claim production `native_ready`. Only a trusted in-process
+fixture owner may exercise plan composition, and that evidence is never a
+runtime readiness claim. Native topology apply remains a separately approved
+runtime boundary.
+
 ## State machine
 
 `preflight -> repo_contract_only | unavailable | partial_hold | topology_plan_ready -> applying_topology -> verifying_completion -> native_ready | setup_incomplete`

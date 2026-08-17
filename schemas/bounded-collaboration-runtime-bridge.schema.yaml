@@ -1,0 +1,20 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://agent-foundry.local/schemas/bounded-collaboration-runtime-bridge.schema.yaml"
+title: Bounded Collaboration Runtime Bridge Receipt
+description: Locator-only, read-only runtime preflight wrapper.
+type: object
+additionalProperties: false
+required: [bridge_version, mode, mutation_performed, production_eligible, evidence_class, terminal_classification, attention_reason, safe_next_action]
+properties:
+  bridge_version: {const: bounded-collaboration-runtime-bridge-v1}
+  mode: {const: read_only_preflight}
+  mutation_performed: {const: false}
+  production_eligible: {const: false}
+  evidence_class: {const: fixture_only}
+  terminal_classification:
+    enum: [topology_plan_ready, native_ready, repo_contract_only, partial_hold, unavailable, setup_incomplete, owner_unavailable, schema_or_privacy_failure]
+  attention_reason: {type: [string, "null"]}
+  safe_next_action: {type: string, minLength: 1}
+  initialization:
+    type: object
+    additionalProperties: true
