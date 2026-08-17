@@ -90,13 +90,16 @@ Agent Foundry should use maturity stages for planning and release versions for d
 | AF-18 | Collaboration Cost-Control And Control Plane | Multi-agent collaboration becomes cost-aware, bounded, portable, and human-controllable before it becomes an assumed runtime substrate. | AF18 has one integration branch, one control-plane design path, explicit policy layers, bounded runtime-owned observations, Human-facing summaries, dogfood calibration, and separate activation/policy-freeze gates. |
 | ORCH-01 → ORCH-02 → ORCH-03 → ORCH-04 → ORCH-05-A0 | Local-first orchestration and integrated collaboration lifecycle | ORCH-01 provides the Board, ORCH-02 provides the SQLite ledger, ORCH-03 is bounded/optional remote materialization, ORCH-04 provides the single-machine lifecycle and developer front door, and ORCH-05-A0 supplies the handoff evidence boundary. Together they inform—not ship—the `v2.0.0` candidate. | Users can onboard, operate, inspect and recover collaboration from durable local state without treating GitHub Project as the scheduler. |
 
-Current planning stage: AF18 remains a completed/maintained collaboration-control
-foundation. ORCH-01 and ORCH-02 are complete. ORCH-04 has functional lifecycle
-evidence for its single-machine path and A0-Lite same-host/manual-custody
-evidence is experimental only. ORCH-03 remote materialization/convergence and
-all real second-device/cross-host transport claims remain optional, candidate or
-deferred as their evidence requires. Final readiness, main and release remain
-separate Human gates.
+Current planning stage: AF17 and AF18 are completed pre-V2 enabling foundations
+already integrated into `main`; they are not ORCH milestones and are not active
+V2 completion work. V2 consumes their semantic-loading, adapter-reachability and
+bounded-collaboration foundations by ancestry. ORCH-01 and ORCH-02 are complete.
+ORCH-04 has functional lifecycle evidence for its single-machine path and
+A0-Lite same-host/manual-custody evidence is experimental only. ORCH-03 remote
+materialization/convergence and all real second-device/cross-host transport
+claims remain optional, candidate or deferred as their evidence requires. AF19
+follow-ups remain separate. Final readiness, main and release remain separate
+Human gates.
 
 AF-0 explains the existing mixed history. AF-1 starts the stricter planning and multi-agent coordination era. AF-2 designs the productization boundary. AF-3 executes the local Core/Vault split. AF-4 proves the split system works for the current real user across existing deployments and establishes the migration discipline needed for later major upgrades. AF-5 makes onboarding humane and reliable for new users. AF-6 closes the current Foundry product lifecycle so install, pack deployment, refresh, status, and rollback are usable beyond a one-off maintainer path. AF-7 upgrades runtime adapters and adds Trae CN support around a verified global Skill path. AF-8 hardens the capability system under realistic multi-user, multi-machine, multi-runtime, long-running-agent, and drift scenarios. AF-9 adds advanced capability-pack discovery, lifecycle, privacy-safe transfer planning, and user-facing Skill workflow packaging. AF-10 optimizes the Coordinator-driven role workflow using AF9 evidence, then pauses for an AF11 pilot migration, then resumes to analyze real telemetry and harden the workflow model. AF-11 is reserved for the Tiny IPA-incubated GitHub collaboration workflow helper migration pilot. AF-12 closes the V1 user-facing UX/docs/starter-pack surface. AF-13 adds the independent external-skills import/reference workflow. AF-14 adds a Tester role and test-planning workflow as V1.x maintenance. AF-15 adds collaboration readiness audit and action workflow as V1.x maintenance. AF-16 adds branch-aware collaboration safety. AF-17 adds semantic practice loading and generated Skill reachability. AF-18 adds collaboration cost-control and control-plane governance. V2.0 moves the orchestration source of truth local-first, with GitHub Project as a sync target. Memory-system planning now uses the separate MS milestone axis.
 
@@ -156,13 +159,10 @@ This matters because Agent Foundry Core can keep receiving harvest-driven, user-
 - V2 child branches target `codex/v2-local-first-orchestration`, not `main`, unless the change is explicitly a V1.x-compatible Core maintenance improvement.
 - V2 periodically forward-merges from `main` so V1.x maintenance and harvest improvements are not lost.
 - V2 merges back to `main` only after V2 readiness is accepted and a final human-gated release/integration decision is made.
-- AF18 collaboration cost-control work uses
-  `codex/af18-collaboration-cost-policy-integration` as its only integration
-  branch. AF18 child PRs target that branch unless a specific Human Decision
-  Contract authorizes direct-to-`main`.
-- AF18 merge-back to `main`, final activation, runtime/config/hook mutation,
-  generated adapter publish, external execution, and policy freeze remain
-  separate Human-gated decisions.
+- AF17 and AF18 are completed pre-V2 foundations already on `main`; preserve
+  their historical integration evidence rather than reopening or renaming those
+  milestone lines. AF19 follow-ups have their own scope and do not become ORCH
+  work merely because V2 consumes the earlier foundations.
 
 Default harvest routing:
 
@@ -170,7 +170,7 @@ Default harvest routing:
 | --- | --- |
 | Backward-compatible Core practice/workflow/template/docs/test improvement | `main`, then forward-merge into V2 |
 | V2-only orchestration, ledger, board, migration, or sync behavior | `codex/v2-local-first-orchestration` |
-| AF18 collaboration cost-control, routing policy, lifecycle control-plane, runtime-owned observation bridge, or dogfood calibration | `codex/af18-collaboration-cost-policy-integration` |
+| Completed AF17/AF18 foundation or separate AF19 follow-up | `main` for accepted foundation lineage; a separately authorized AF19 branch when its contract requires one |
 | Private or canonical User Vault practice/asset update | selected User Vault, not Core |
 | Breaking schema/runtime/source-of-truth change | V2 branch or explicit major-version gate, not default `main` maintenance |
 
@@ -183,7 +183,7 @@ Agent Foundry `v1.0.0` is published. The active planning area is now the ORCH-03
 | Agent Foundry `v1.0.0` release | #267 | First downloadable public Core release for external users. | Completed; GitHub Release and tag published |
 | AF-14 Tester Role And Test Planning Workflow | #302 Epic; #303 through #308; PR #311 | Users need test planning and evidence that answer what was tested, why it is enough, which risks remain, and when human trial is still needed. | Completed; integrated into `main` as V1.x maintenance |
 | AF-15 Collaboration Readiness And Action Workflow | #314 Epic; #315 through #321 plus #328 through #331 | Users need a clear audit and action plan for new/existing repo collaboration readiness before any live repair/apply behavior. | Completed; integrated into `main` as V1.x maintenance |
-| AF-16 Through AF-18 Collaboration Control Path | [roadmap/milestones-af16-af18.md](roadmap/milestones-af16-af18.md) | Users need branch-aware, context-aware, and semantically loaded collaboration before long-running multi-agent work is safe to scale. | AF16/AF17 completed as maintenance; AF18 active bounded lane; #418 is the sole Epic authority; #450/#451/#452/#454 accepted; post-MVP issues #457-#462 now track calibration through limited rollout before #426/#427 |
+| AF-16 Through AF-18 Collaboration Control Path | [roadmap/milestones-af16-af18.md](roadmap/milestones-af16-af18.md) | Users need branch-aware, context-aware, and semantically loaded collaboration before long-running multi-agent work is safe to scale. | Completed pre-V2 foundations integrated into `main`; V2 consumes them by ancestry without redefining them as ORCH milestones. AF19 follow-ups remain separate. |
 | ORCH-01 Local-First Orchestration And Foundry Board | #292 (historical Epic); #293 through #299; #359 through #362 | Local durable Board foundation. | Completed |
 | ORCH-02 SQLite Local Ledger Foundation | #525; #526 through #530 | Transactional local authority, onboarding/action routing, replay and recovery. | Completed; final adopter acceptance recorded |
 | ORCH-03 Distributed Authority And Selective Sync | #400; #537, #522, #404, #405, #403, #521, #402, #406 | Bounded local authority and selective external materialization. | Candidate/readiness only; not automatic, production, or convergence evidence |

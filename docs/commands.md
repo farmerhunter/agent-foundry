@@ -22,6 +22,18 @@ second-device, cross-host, transport, device-loss, independent-credential and
 convergence requests are deferred; do not use an old JSONL/V2 command as a
 fallback.
 
+### Bounded collaboration initialization postcondition
+
+`prepare this repo for multi-agent collaboration` and the first-use phrase
+**“开启多agent协作”** are not successful merely because a repository contract
+or prompt was created. A successful result names the bound project, reports
+whether the durable Coordinator and Architect topology was reused, created or
+held, and verifies a durable scheduler/Work-root binding. It also says whether
+native role onboarding occurred or only repository-contract setup did. If any
+one of those facts is unavailable or ambiguous, the result is a hold with one
+next action—not `initialized`. See the developer/operator reference for the
+known candidate limitations (#548 and #549); do not improvise a repair.
+
 ## Other commands and historical diagnostics
 
 The V2/JSONL trial, export and diagnostic rows in the remainder of this table
@@ -58,6 +70,7 @@ maintenance commands retain their normal meanings.
 | `audit existing collaboration setup` | `审计现有 collaboration setup` | Review drift in an existing project and group next actions as informational, agent-handled, human-gated, or unsupported/deferred. Read-only. |
 | `check branch readiness for this issue or PR` | `检查这个 issue 或 PR 的 branch readiness` | Explain `Branch strategy`, `Target branch`, PR base, local branch state, and safe next action concepts such as split, switch context, forward-merge, or multi-line verification. Read-only. |
 | `show Foundry Board` | `显示 Foundry Board` | Render a read-only local-first board/report from accepted ledger replay first, with GitHub/Project as mirror drift evidence. It does not write GitHub, Project, ledger, runtime, or Vault state. |
+| **Legacy/operator diagnostics** | — | The following V2/JSONL/evidence commands are non-normal and non-authoritative; use [the helper workflow](../workflows/github-collaboration-helper.md) only when developer/operator diagnosis is explicitly needed. |
 | `onboard this existing project into V2 Local Orchestration as a ten-minute read-only trial` | `把这个 existing project 作为十分钟只读 trial 接入 V2 Local Orchestration` | Historical read-only V2/JSONL trial; diagnostic evidence only, never the normal SQLite onboarding route. |
 | `run the interactive Human onboarding trial` | `运行 interactive Human onboarding trial` | Continue the guided onboarding one step at a time with captured Human responses. The helper must not advance without a response, keeps raw JSON as debug only, defaults to no mutation, and may write only a local transcript inside the isolated trial root. |
 | `run controlled ledger dogfood for this adopter issue` | `为这个 adopter issue 运行 controlled ledger dogfood` | Run a reversible isolated-trial workflow: Human-reviewed candidate evidence becomes accepted local ledger events, then one safe local transition drives replay, Foundry Board, cockpit, dry-run Project mirror plan, recovery, and audit output. It writes only under the explicit trial root; GitHub/Project remain untouched. |

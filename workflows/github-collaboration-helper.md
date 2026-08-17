@@ -14,6 +14,16 @@ mutate GitHub state, or write Vault/private state.
 > only as historical, compatibility or diagnostic reference; they are neither
 > primary onboarding nor a fallback authority, and must not imply dual-write.
 
+> **Initialization postcondition.** The related first-use request
+> **“开启多agent协作”** is successful only when it identifies the bound project,
+> reports the durable Coordinator/Architect topology as reused, created or
+> held, and verifies a durable scheduler/Work-root binding. It must distinguish
+> native role onboarding from repository-contract-only setup. Missing or
+> ambiguous evidence is a typed hold with one next action, never `initialized`.
+> Current candidate defects #548 and #549 show why both topology and Work-root
+> evidence are required; this workflow documents the boundary and does not
+> repair it.
+
 ## Codex Target Activation
 
 Codex users should have one stable helper entry point across projects and
