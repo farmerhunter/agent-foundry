@@ -10,6 +10,7 @@ import time
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any, Mapping
 
 from codex_host_rolehub_adapter import ThreadMetadata
@@ -29,6 +30,11 @@ def _digest(value: Any) -> str:
 
 def _opaque(role: str, native_id: str) -> str:
     return role.lower() + ":" + hashlib.sha256((role + "\0" + native_id).encode()).hexdigest()[:24]
+
+
+def _permit_claim(context: Mapping[str, Any], *, host_digest: str, runtime_digest: str) -> str:
+    required = ("onboarding_key", "project_id", "project_binding_ref", "project_binding_digest", "root_digest", "scheduler_binding_digest", "topology_plan_digest", "topology_preimage_digest", "mapping_digest")
+    return _digest({key: context[key] for key in required} | {"host_digest": host_digest, "runtime_digest": runtime_digest, "budget": context.get("create_budget")})
 
 
 class TrustedRuntime:
@@ -136,27 +142,35 @@ class NativeRoleTopologyOwner:
         identity, reason = self._identity({"project_id": context["project_id"], "project_binding_digest": context["project_binding_digest"], "root_digest": context["root_digest"]})
         if reason or identity is None or identity["mapping_digest"] != context["mapping_digest"] or not _DIGEST.fullmatch(str(context["scheduler_binding_digest"])) or not _DIGEST.fullmatch(str(context["topology_plan_digest"])):
             return None
-        binding = _digest({key: context[key] for key in required} | {"host_digest": self._host_digest, "runtime_digest": self._runtime.runtime_digest, "budget": context.get("create_budget")})
+        binding = _permit_claim(context, host_digest=self._host_digest, runtime_digest=self._runtime.runtime_digest)
         if permit._binding is not None:
             return None
         # Claim before producing a bound owner, so an interrupted caller cannot
         # replay the same opaque permit against another owner/project.
         permit._binding = binding
-        return PermitBoundNativeRoleTopologyOwner(self, permit, dict(context), _Guard())
+        return PermitBoundNativeRoleTopologyOwner(self, permit, MappingProxyType(dict(context)), binding, _Guard())
 
 
 class PermitBoundNativeRoleTopologyOwner(NativeRoleTopologyOwner):
-    def __init__(self, base: NativeRoleTopologyOwner, permit: _Permit, context: Mapping[str, Any], guard: _Guard):
-        self.__dict__.update(base.__dict__); self._permit, self._context, self._guard = permit, dict(context), guard
+    def __init__(self, base: NativeRoleTopologyOwner, permit: _Permit, context: Mapping[str, Any], claim: str, guard: _Guard):
+        self.__dict__.update(base.__dict__)
+        self._permit, self._context, self._sealed_context, self._claimed_binding, self._guard = permit, context, MappingProxyType(dict(context)), claim, guard
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        if getattr(self, "_sealed", False) and name in {"_context", "_sealed_context", "_claimed_binding", "_permit", "_guard"}:
+            raise AttributeError("permit_bound_owner_immutable")
+        object.__setattr__(self, name, value)
 
     def _valid(self, plan: Mapping[str, Any]) -> tuple[dict[str, str] | None, str | None]:
-        if self._guard.consumed or self._permit.expires_at <= time.monotonic(): return None, "authorization_unavailable"
+        self._sealed = True
+        context = self._sealed_context
+        if self._guard.consumed or self._permit.expires_at <= time.monotonic() or self._permit._binding != self._claimed_binding or _permit_claim(context, host_digest=self._host_digest, runtime_digest=self._runtime.runtime_digest) != self._claimed_binding: return None, "authorization_unavailable"
         required = ("onboarding_key", "project_binding_ref", "project_binding_digest", "scheduler_binding_digest", "topology_plan_digest", "topology_preimage_digest")
-        if not isinstance(plan, Mapping) or any(plan.get(k) != self._context.get(k) for k in required) or tuple(plan.get("requested_roles", ())) != ("Coordinator", "Architect"):
+        if not isinstance(plan, Mapping) or any(plan.get(k) != context.get(k) for k in required) or tuple(plan.get("requested_roles", ())) != ("Coordinator", "Architect"):
             return None, "authorization_mismatch"
-        if self._context.get("create_budget") != {"RoleHub": 1, "Coordinator": 1, "DurableArchitect": 1}: return None, "authorization_mismatch"
-        identity, reason = self._identity({"project_id": self._context.get("project_id"), "project_binding_digest": self._context.get("project_binding_digest"), "root_digest": self._context.get("root_digest")})
-        if reason or identity is None or identity["mapping_digest"] != self._context.get("mapping_digest"): return None, reason or "project_binding_mismatch"
+        if context.get("create_budget") != {"RoleHub": 1, "Coordinator": 1, "DurableArchitect": 1}: return None, "authorization_mismatch"
+        identity, reason = self._identity({"project_id": context.get("project_id"), "project_binding_digest": context.get("project_binding_digest"), "root_digest": context.get("root_digest")})
+        if reason or identity is None or identity["mapping_digest"] != context.get("mapping_digest"): return None, reason or "project_binding_mismatch"
         return identity, None
 
     def apply_topology(self, plan: Mapping[str, Any]) -> Mapping[str, Any]:

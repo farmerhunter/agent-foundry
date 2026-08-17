@@ -6,7 +6,7 @@ import tempfile
 import uuid
 
 import bounded_collaboration_runtime_bridge as bridge
-from test_bounded_collaboration_runtime_bridge import _fixture as _bridge_fixture
+from test_bounded_collaboration_runtime_bridge import _fixture as _bridge_fixture, _request as _bridge_request
 from bounded_collaboration_initializer import Owners, initialize
 import local_collaboration_control_plane as control
 import local_collaboration_scheduler as scheduler
@@ -105,5 +105,26 @@ def test_same_permit_cannot_bind_a_second_owner_or_project() -> None:
         first_temp.cleanup(); second_temp.cleanup()
 
 
+def test_bound_owner_context_swap_cannot_retarget_same_root_project() -> None:
+    temp, root, selected, first_id = _fixture()
+    try:
+        second_selected = Path(temp.name) / "second-project"; second_selected.mkdir(); os.chmod(second_selected, 0o700); second_selected = second_selected.resolve(); second_id = str(uuid.uuid4())
+        ledger = LocalCollaborationLedger.create_project(projects_root=root, project_id=second_id); ledger.bind_project("path", str(second_selected)); ledger.bind_project("repo", "second"); ledger.close()
+        control.apply_control_request(root, second_id, _bridge_request(second_id)); scheduler.apply_scheduler_request(root, second_id, {"project_id": second_id, "work_id": "work-bridge", "operation": "initialize", "occurred_at": "2026-08-17T00:00:01Z"})
+        runtime = TrustedRuntime(); first_host = FakeHost(first_id); first_owner = NativeRoleTopologyOwner(root, selected, first_host, runtime=runtime)
+        def make_context(project_root, owner, key):
+            project = bridge.ProjectBindingOwner(root, project_root); sched = bridge.SchedulerBindingOwner(root); plan = initialize(Owners(project, sched, owner), onboarding_key=key, apply_authorized=False)["topology_plan"]
+            binding = project.read_binding(); scheduler_binding = sched.read_binding(binding); identity, reason = owner._identity(binding); assert reason is None and identity is not None
+            return plan, {"project_id": binding["project_id"], "project_binding_ref": binding["project_binding_ref"], "project_binding_digest": binding["project_binding_digest"], "root_digest": binding["root_digest"], "scheduler_binding_digest": scheduler_binding["scheduler_binding_digest"], "scheduler_binding_ref": scheduler_binding["scheduler_binding_ref"], "work_root_ref": scheduler_binding["work_root_ref"], "scheduler_binding_revision": scheduler_binding["scheduler_binding_revision"], "onboarding_key": key, "topology_plan_digest": plan["topology_plan_digest"], "topology_preimage_digest": plan["topology_preimage_digest"], "mapping_digest": identity["mapping_digest"], "create_budget": {"RoleHub": 1, "Coordinator": 1, "DurableArchitect": 1}}
+        first_plan, first_context = make_context(selected, first_owner, "first")
+        bound = first_owner.bind_permit(runtime.issue_permit(host_digest="sha256:" + "2" * 64), first_context); assert bound is not None
+        second_host = FakeHost(second_id); second_owner = NativeRoleTopologyOwner(root, second_selected, second_host, runtime=runtime)
+        second_plan, second_context = make_context(second_selected, second_owner, "second")
+        bound.__dict__["_context"] = second_context
+        assert bound.apply_topology(second_plan)["reason"] == "authorization_mismatch"
+        assert second_host.calls == 0 and not (root / second_id / "role-topology.db").exists()
+    finally: temp.cleanup()
+
+
 if __name__ == "__main__":
-    test_trusted_two_call_lifecycle_and_exact_retry(); test_bad_or_replayed_permit_holds_before_store_or_host(); test_one_shot_guard_is_consumed_before_second_host_attempt(); test_noncanonical_identity_holds_without_host_or_store(); test_final_store_symlink_holds_before_sqlite_or_host(); test_same_permit_cannot_bind_a_second_owner_or_project(); print("ok")
+    test_trusted_two_call_lifecycle_and_exact_retry(); test_bad_or_replayed_permit_holds_before_store_or_host(); test_one_shot_guard_is_consumed_before_second_host_attempt(); test_noncanonical_identity_holds_without_host_or_store(); test_final_store_symlink_holds_before_sqlite_or_host(); test_same_permit_cannot_bind_a_second_owner_or_project(); test_bound_owner_context_swap_cannot_retarget_same_root_project(); print("ok")
