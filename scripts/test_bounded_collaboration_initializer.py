@@ -49,13 +49,14 @@ class Topology:
         if hasattr(self, "binding"):
             value["topology_apply_binding_ref"] = self.binding["topology_apply_binding_ref"]
             value["topology_apply_binding_digest"] = self.binding["topology_apply_binding_digest"]
+            value["topology_apply_binding"] = dict(self.binding)
         return value
     def apply_topology(self, plan):
         self.apply_calls += 1
         assert plan["requested_roles"] == ("Coordinator", "Architect")
         self.state = "ready"
         refs = ["receipt:coordinator", "receipt:architect"]
-        self.binding = {"topology_apply_binding_ref": "binding:opaque", "topology_plan_digest": plan["topology_plan_digest"], "operation_receipt_refs_digest": initializer._digest(refs), "rolehub_ref": "hub:opaque", "coordinator_ref": "role:c", "architect_ref": "role:a", "topology_readback_digest": "sha256:topology"}
+        self.binding = {"topology_apply_binding_ref": "binding:opaque", "onboarding_key": plan["onboarding_key"], "project_binding_digest": plan["project_binding_digest"], "scheduler_binding_digest": plan["scheduler_binding_digest"], "requested_roles": list(plan["requested_roles"]), "topology_plan_digest": plan["topology_plan_digest"], "operation_receipt_refs": refs, "operation_receipt_refs_digest": initializer._digest(refs), "rolehub_ref": "hub:opaque", "coordinator_ref": "role:c", "architect_ref": "role:a", "topology_readback_digest": "sha256:topology"}
         self.binding["topology_apply_binding_digest"] = initializer._binding_digest(self.binding)
         return {"state": "applied", "mutation_performed": getattr(self, "apply_mutation", True), "operation_receipt_refs": refs, "topology_apply_binding": dict(self.binding), "topology_plan_digest": plan["topology_plan_digest"]}
 
@@ -99,6 +100,10 @@ def main():
     retried = initializer.initialize(own, onboarding_key="onboard-3", apply_authorized=True)
     check("exact-retry-no-topology-mutation", retried["completion_state"] == "native_ready" and retried["mutation_performed"] is False and topology.apply_calls == 1 and topology.binding["topology_apply_binding_ref"] == "binding:opaque", retried)
 
+    topology.foreign_after_apply = True
+    foreign_retry = initializer.initialize(own, onboarding_key="onboard-3", apply_authorized=True)
+    check("same-key-retry-rereads-foreign-topology-holds", foreign_retry["completion_state"] == "partial_hold" and foreign_retry["attention_reason"] == "topology_apply_readback_identity_mismatch" and topology.apply_calls == 1, foreign_retry)
+
     own, project, scheduler, topology = owners("bound", "missing")
     old_apply = topology.apply_topology
     def apply_then_replace(plan):
@@ -133,6 +138,16 @@ def main():
     topology.apply_topology = apply_without_binding
     absent_binding = initializer.initialize(own, onboarding_key="onboard-absent-binding", apply_authorized=True)
     check("absent-apply-binding-holds", absent_binding["completion_state"] == "setup_incomplete" and absent_binding["attention_reason"] == "topology_apply_incomplete", absent_binding)
+
+    own, project, scheduler, topology = owners("bound", "missing")
+    old_apply = topology.apply_topology
+    def apply_mutation_without_receipt(plan):
+        value = old_apply(plan)
+        value["operation_receipt_refs"] = []
+        return value
+    topology.apply_topology = apply_mutation_without_receipt
+    missing_receipt = initializer.initialize(own, onboarding_key="onboard-missing-receipt", apply_authorized=True)
+    check("mutation-true-without-receipt-holds", missing_receipt["completion_state"] == "setup_incomplete" and missing_receipt["attention_reason"] == "topology_apply_incomplete", missing_receipt)
 
     own, _, scheduler, topology = owners("bound", "duplicate")
     duplicate = initializer.initialize(own, onboarding_key="onboard-4", apply_authorized=True)

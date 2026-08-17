@@ -188,23 +188,35 @@ def _binding_digest(value: Mapping[str, Any]) -> str:
 
 def _validate_apply_binding(
     binding: Any,
-    plan: Mapping[str, Any],
-    operation_receipt_refs: tuple[str, ...],
+    *,
+    onboarding_key: str,
+    project: Mapping[str, Any],
+    scheduler: Mapping[str, Any],
     topology: Mapping[str, Any],
+    plan: Mapping[str, Any] | None = None,
+    operation_receipt_refs: tuple[str, ...] | None = None,
 ) -> tuple[str | None, str | None]:
     """Validate an owner commitment to the exact plan, receipts and readback."""
     if not isinstance(binding, Mapping) or _has_private(binding):
         return None, "topology_apply_readback_binding_missing"
     required = (
         "topology_apply_binding_ref", "topology_apply_binding_digest", "topology_plan_digest",
-        "operation_receipt_refs_digest", "rolehub_ref", "coordinator_ref", "architect_ref",
-        "topology_readback_digest",
+        "onboarding_key", "project_binding_digest", "scheduler_binding_digest",
+        "operation_receipt_refs_digest", "rolehub_ref", "coordinator_ref",
+        "architect_ref", "topology_readback_digest",
     )
-    if not _nonempty(binding, *required):
+    if not _nonempty(binding, *required) or not isinstance(binding.get("requested_roles"), (list, tuple)):
         return None, "topology_apply_readback_binding_missing"
-    if binding["topology_plan_digest"] != plan["topology_plan_digest"]:
+    if binding["onboarding_key"] != onboarding_key or binding["project_binding_digest"] != project["project_binding_digest"] or binding["scheduler_binding_digest"] != scheduler["scheduler_binding_digest"] or tuple(binding["requested_roles"]) != ROLES:
+        return None, "topology_apply_binding_context_mismatch"
+    stored_refs = binding["operation_receipt_refs"]
+    if not isinstance(stored_refs, (list, tuple)) or not all(isinstance(item, str) and item for item in stored_refs):
+        return None, "topology_apply_readback_binding_missing"
+    if binding["operation_receipt_refs_digest"] != _digest(list(stored_refs)):
+        return None, "topology_apply_receipt_binding_mismatch"
+    if plan is not None and binding["topology_plan_digest"] != plan["topology_plan_digest"]:
         return None, "topology_apply_plan_binding_mismatch"
-    if binding["operation_receipt_refs_digest"] != _digest(list(operation_receipt_refs)):
+    if operation_receipt_refs is not None and tuple(stored_refs) != operation_receipt_refs:
         return None, "topology_apply_receipt_binding_mismatch"
     if binding["topology_apply_binding_digest"] != _binding_digest(binding):
         return None, "topology_apply_readback_binding_forged"
@@ -258,6 +270,19 @@ def initialize(
     if caller_claims is not None:
         return _result("partial_hold", onboarding_key, attention_reason="caller_claims_not_authoritative", safe_next_action="Remove caller-produced completion claims and use owner readbacks only.")
 
+    retry_binding_seen = topology.get("state") == "ready" and isinstance(topology.get("topology_apply_binding"), Mapping) and topology["topology_apply_binding"].get("onboarding_key") == onboarding_key
+    if retry_binding_seen:
+        binding_ref, binding_error = _validate_apply_binding(
+            topology["topology_apply_binding"],
+            onboarding_key=onboarding_key,
+            project=project,
+            scheduler=scheduler,
+            topology=topology,
+        )
+        if binding_error:
+            return _result("partial_hold", onboarding_key, attention_reason=binding_error, safe_next_action="Resolve topology commitment drift before any follow-up.")
+        assert binding_ref is not None
+
     if topology.get("state") == "missing" and not apply_authorized:
         plan = {
             "contract_version": VERSION,
@@ -298,6 +323,7 @@ def initialize(
             or not all(isinstance(item, str) and item for item in refs)
             or applied.get("topology_plan_digest") != plan["topology_plan_digest"]
             or not isinstance(applied.get("topology_apply_binding"), Mapping)
+            or (bool(applied.get("mutation_performed")) and not refs)
         ):
             return _result("setup_incomplete", onboarding_key, attention_reason="topology_apply_incomplete", safe_next_action="Read topology and scheduler state before any follow-up.")
         mutation_performed = bool(applied.get("mutation_performed"))
@@ -319,11 +345,32 @@ def initialize(
         return _result("setup_incomplete", onboarding_key, attention_reason="scheduler_binding_drift", safe_next_action="Resolve scheduler/Work-root drift before any follow-up.", mutation_performed=mutation_performed, operation_receipt_refs=operation_receipt_refs)
     if apply_invoked:
         assert apply_binding is not None
-        binding_ref, binding_error = _validate_apply_binding(apply_binding, plan, operation_receipt_refs, fresh_topology)
+        binding_ref, binding_error = _validate_apply_binding(
+            apply_binding,
+            onboarding_key=onboarding_key,
+            project=fresh_project,
+            scheduler=fresh_scheduler,
+            topology=fresh_topology,
+            plan=plan,
+            operation_receipt_refs=operation_receipt_refs,
+        )
         if binding_error:
             return _result("setup_incomplete", onboarding_key, attention_reason=binding_error, safe_next_action="Read topology and scheduler state before any follow-up.", mutation_performed=mutation_performed, operation_receipt_refs=operation_receipt_refs)
         assert binding_ref is not None
         return _receipt(onboarding_key, fresh_project, fresh_scheduler, fresh_topology, mutation_performed=mutation_performed, operation_receipt_refs=operation_receipt_refs, topology_apply_binding_ref=binding_ref, topology_apply_binding_digest=apply_binding["topology_apply_binding_digest"])
+    if retry_binding_seen:
+        retry_binding = fresh_topology.get("topology_apply_binding")
+        binding_ref, binding_error = _validate_apply_binding(
+            retry_binding,
+            onboarding_key=onboarding_key,
+            project=fresh_project,
+            scheduler=fresh_scheduler,
+            topology=fresh_topology,
+        )
+        if binding_error:
+            return _result("partial_hold", onboarding_key, attention_reason=binding_error, safe_next_action="Resolve topology commitment drift before any follow-up.")
+        assert binding_ref is not None
+        return _receipt(onboarding_key, fresh_project, fresh_scheduler, fresh_topology, mutation_performed=False, operation_receipt_refs=(), topology_apply_binding_ref=binding_ref, topology_apply_binding_digest=retry_binding["topology_apply_binding_digest"])
     return _receipt(onboarding_key, fresh_project, fresh_scheduler, fresh_topology, mutation_performed=False, operation_receipt_refs=operation_receipt_refs)
 
 

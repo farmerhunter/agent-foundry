@@ -85,6 +85,13 @@ zero mutation/reuse. A missing, changed, replayed or foreign binding is
 `setup_incomplete`, not `native_ready`; preserve the applied receipt and do not
 retry automatically.
 
+For the same onboarding key, a retry never replays a cached success. Read the
+current owner topology again and recompute its stored commitment against the
+current project/scheduler digests and exact final identity. A topology
+replacement, a missing/invalid operation receipt after a mutation, or any
+commitment drift is a typed hold; it cannot be repaired by issuing another
+create/reuse call.
+
 ## Apply and rollback boundary
 
 An adapter may execute only a `plan_ready` plan whose operation keys have been
