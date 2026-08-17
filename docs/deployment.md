@@ -74,6 +74,18 @@ Use this on a new machine after cloning or unpacking the Agent Foundry Core chec
 
 Restore local state from public Core plus the selected Vault. Do not restore by copying runtime directories from another machine.
 
+### This is not collaboration-authority handoff
+
+Core/Vault snapshot restore rebuilds product records and machine-local runtime
+setup. It does **not** transfer a SQLite collaboration authority. Never copy,
+share, mount, rsync, or treat a SQLite authority file as a cross-machine
+handoff mechanism. A supported single-machine collaboration flow owns its
+authority locally; A0-Lite is only experimental same-host/manual custody. Real
+second-device/cross-host transfer, device-loss recovery, independent credentials,
+transport and convergence remain `held_real_second_device_deferred` pending a
+separate Human decision and evidence. A restored Core/Vault does not unlock a
+source authority or establish target activation.
+
 1. Clone or update Core.
 
    ```bash

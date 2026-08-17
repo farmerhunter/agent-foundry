@@ -391,6 +391,11 @@ human gate 的价值超过协调成本时，才使用更重的协作模式。
 
 ## Bounded Collaboration Project Onboarding
 
+AF17 and AF18 are completed pre-V2 enabling foundations already integrated into
+`main`. Their semantic-loading, adapter-reachability and bounded collaboration
+capabilities are consumed by V2 through ancestry; they are not ORCH milestones
+or active V2 completion work. AF19 follow-ups remain separately scoped.
+
 For a project that explicitly asks to set up bounded collaboration, first run
 the metadata-only onboarding preflight in
 [`workflows/onboard-bounded-collaboration.md`](../workflows/onboard-bounded-collaboration.md).
@@ -413,6 +418,21 @@ receipts. Ambiguity, duplicate roles, legacy adoption, unavailable capability,
 privacy exposure, forged/unknown receipts and partial failures are held rather
 than guessed.
 
+### What counts as initialized
+
+For the first-use phrase **“开启多agent协作”**, repository contracts or prompts
+alone are not successful initialization. The result must name the bound project,
+say whether the durable Coordinator/Architect topology was reused, created or
+held, verify a durable scheduler/Work-root binding, and distinguish native role
+onboarding from repository-contract-only setup. If any part is missing or
+ambiguous, report a hold with one next action instead of `initialized`.
+
+Two current candidate limitations make this explicit: [#548](https://github.com/farmerhunter/agent-foundry/issues/548)
+records an onboarding path that lacked durable role topology, while [#549](https://github.com/farmerhunter/agent-foundry/issues/549)
+records topology without a durable scheduler/Work root. They are separate
+Architect-owned fixes; users should not repair them by creating roles, scheduler
+state, or Work roots manually.
+
 ## Start Local Collaboration
 
 For the user-facing intent **“开启本地多-agent协作”** (English alias:
@@ -432,6 +452,10 @@ The normal path remains single-machine onboarding/status/recovery through
 existing owner APIs. Every create, accepted backfill, recovery, activation,
 retention, or disposal has an explicit Human decision; holds name one safe next
 action and never auto-repair or fall back to a different store.
+
+This is accepted functional lifecycle evidence, not a production or universal
+performance claim. Real-adopter friction, latency, scale and cross-device
+operation remain `unknown/not_exposed` or deferred until separately observed.
 
 `experimental_same_host_manual_custody` is deliberately not automatic
 cross-device sync or transport resilience. Manual custody, source lock,
