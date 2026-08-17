@@ -106,6 +106,29 @@ class NativeRoleTopologyOwner:
         row = con.execute("SELECT v FROM topology WHERE k=?", (key,)).fetchone()
         return json.loads(row[0]) if row else None
 
+    def _read_target(self) -> tuple[Any, str]:
+        return self._host, str(self._project_root.resolve(strict=True))
+
+    def _verify_stored_host(self, record: Mapping[str, Any]) -> str | None:
+        """Re-read private IDs without ever projecting them into public output."""
+        topology, native_ids = record.get("topology"), record.get("native_ids")
+        if not isinstance(topology, Mapping) or not isinstance(native_ids, Mapping) or set(native_ids) != {role for role, _ in _ROLES}:
+            return "owner_store_integrity_hold"
+        if not all(isinstance(native_ids[role], str) and native_ids[role] for role, _ in _ROLES) or len(set(native_ids.values())) != 3:
+            return "owner_store_integrity_hold"
+        project_id = topology.get("project_id")
+        if not isinstance(project_id, str):
+            return "owner_store_integrity_hold"
+        try:
+            host, root = self._read_target()
+            for role, title in _ROLES:
+                metadata = host.read_thread(native_ids[role], include_turns=False)
+                if not isinstance(metadata, ThreadMetadata) or metadata.id != native_ids[role] or metadata.project_id != project_id or metadata.cwd != root or metadata.name != title or topology.get(role.lower() + "_ref") != _opaque(role, metadata.id):
+                    return "native_metadata_mismatch"
+        except Exception:
+            return "native_readback_unavailable"
+        return None
+
     def read_topology(self, project_binding: Mapping[str, Any]) -> Mapping[str, Any]:
         identity, reason = self._identity(project_binding)
         if reason: return {"state": "held", "reason": reason}
@@ -115,6 +138,8 @@ class NativeRoleTopologyOwner:
         try:
             rec = self._record(con, "completion")
             if rec is None: return {"state": "missing"}
+            reason = self._verify_stored_host(rec)
+            if reason: return {"state": "held", "reason": reason}
             return {"state": "ready", **rec["topology"]}
         finally: con.close()
 
@@ -127,6 +152,8 @@ class NativeRoleTopologyOwner:
         try:
             rec = self._record(con, "completion")
             if rec is None or rec.get("onboarding_key") != onboarding_key: return {"state": "absent"}
+            reason = self._verify_stored_host(rec)
+            if reason: return {"state": "held", "reason": reason}
             return {"state": "ready", **rec["completion"]}
         finally: con.close()
 
@@ -179,6 +206,9 @@ class PermitBoundNativeRoleTopologyOwner(NativeRoleTopologyOwner):
             return None, "project_binding_mismatch"
         return dict(identity), None
 
+    def _read_target(self) -> tuple[Any, str]:
+        return self._sealed_host, self._sealed_project_root
+
     def apply_topology(self, plan: Mapping[str, Any]) -> Mapping[str, Any]:
         identity, reason = self._valid(plan)
         if reason: return {"state": "held", "reason": reason}
@@ -200,9 +230,11 @@ class PermitBoundNativeRoleTopologyOwner(NativeRoleTopologyOwner):
             topology_digest = _digest({role: _opaque(role, md.id) for role, md in created.items()})
             binding = {"topology_apply_binding_ref": "topology-apply:" + hashlib.sha256((plan["topology_plan_digest"] + identity["mapping_digest"]).encode()).hexdigest()[:24], "topology_plan_digest": plan["topology_plan_digest"], "onboarding_key": plan["onboarding_key"], "project_binding_digest": plan["project_binding_digest"], "scheduler_binding_digest": plan["scheduler_binding_digest"], "operation_receipt_refs": list(refs), "operation_receipt_refs_digest": _digest(list(refs)), "requested_roles": ["Coordinator", "Architect"], "rolehub_ref": _opaque("RoleHub", created["RoleHub"].id), "coordinator_ref": _opaque("Coordinator", created["Coordinator"].id), "architect_ref": _opaque("Architect", created["Architect"].id), "topology_readback_digest": topology_digest}
             binding["topology_apply_binding_digest"] = _digest(binding)
-            topology = {"rolehub_ref": binding["rolehub_ref"], "coordinator_ref": binding["coordinator_ref"], "architect_ref": binding["architect_ref"], "topology_readback_digest": topology_digest, "project_binding_digest": plan["project_binding_digest"], "coordinator_count": 1, "architect_count": 1, "topology_apply_binding_ref": binding["topology_apply_binding_ref"], "topology_apply_binding_digest": binding["topology_apply_binding_digest"], "topology_apply_binding": binding}
+            topology = {"project_id": identity["project_id"], "rolehub_ref": binding["rolehub_ref"], "coordinator_ref": binding["coordinator_ref"], "architect_ref": binding["architect_ref"], "topology_readback_digest": topology_digest, "project_binding_digest": plan["project_binding_digest"], "coordinator_count": 1, "architect_count": 1, "topology_apply_binding_ref": binding["topology_apply_binding_ref"], "topology_apply_binding_digest": binding["topology_apply_binding_digest"], "topology_apply_binding": binding}
             completion = {"completion_receipt_ref": "completion:" + hashlib.sha256((plan["onboarding_key"] + binding["topology_apply_binding_digest"]).encode()).hexdigest()[:24], "onboarding_key": plan["onboarding_key"], "project_binding_ref": plan["project_binding_ref"], "project_binding_digest": plan["project_binding_digest"], "scheduler_binding_ref": self._sealed_context["scheduler_binding_ref"], "work_root_ref": self._sealed_context["work_root_ref"], "scheduler_binding_revision": self._sealed_context["scheduler_binding_revision"], "scheduler_binding_digest": plan["scheduler_binding_digest"], "topology_plan_digest": plan["topology_plan_digest"], "operation_receipt_refs": list(refs), "topology_apply_binding_ref": binding["topology_apply_binding_ref"], "topology_apply_binding_digest": binding["topology_apply_binding_digest"], "rolehub_ref": topology["rolehub_ref"], "coordinator_ref": topology["coordinator_ref"], "architect_ref": topology["architect_ref"], "topology_readback_digest": topology_digest}
-            con.execute("INSERT OR REPLACE INTO topology(k,v) VALUES('completion',?)", (_canon({"onboarding_key": plan["onboarding_key"], "topology": topology, "completion": completion}),)); con.commit()
+            # IDs remain in this protected owner store only; public topology and
+            # completion envelopes contain opaque refs/digests exclusively.
+            con.execute("INSERT OR REPLACE INTO topology(k,v) VALUES('completion',?)", (_canon({"onboarding_key": plan["onboarding_key"], "topology": topology, "completion": completion, "native_ids": {role: created[role].id for role, _ in _ROLES}}),)); con.commit()
             return {"state": "applied", "mutation_performed": True, "topology_plan_digest": plan["topology_plan_digest"], "operation_receipt_refs": refs, "topology_apply_binding": binding}
         finally: con.close()
 

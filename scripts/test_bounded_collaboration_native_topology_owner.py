@@ -16,12 +16,12 @@ from local_collaboration_ledger import LocalCollaborationLedger
 
 
 class FakeHost:
-    def __init__(self, project_id: str): self.project_id = project_id; self.items = {}; self.calls = 0
+    def __init__(self, project_id: str): self.project_id = project_id; self.items = {}; self.calls = self.creates = self.names = self.reads = 0
     def create_thread(self, cwd: str):
-        self.calls += 1; key = "n" + str(self.calls); self.items[key] = ThreadMetadata(key, cwd, "", self.project_id); return self.items[key]
+        self.calls += 1; self.creates += 1; key = "n" + str(self.calls); self.items[key] = ThreadMetadata(key, cwd, "", self.project_id); return self.items[key]
     def set_thread_name(self, ident: str, title: str):
-        self.calls += 1; old = self.items[ident]; self.items[ident] = ThreadMetadata(ident, old.cwd, title, old.project_id); return self.items[ident]
-    def read_thread(self, ident: str, include_turns=False): self.calls += 1; return self.items[ident]
+        self.calls += 1; self.names += 1; old = self.items[ident]; self.items[ident] = ThreadMetadata(ident, old.cwd, title, old.project_id); return self.items[ident]
+    def read_thread(self, ident: str, include_turns=False): self.calls += 1; self.reads += 1; return self.items[ident]
 
 
 def _request(project_id: str) -> dict:
@@ -37,10 +37,11 @@ def test_trusted_two_call_lifecycle_and_exact_retry() -> None:
     try:
         host = FakeHost(project_id); runtime = TrustedRuntime(); owner = NativeRoleTopologyOwner(root, selected, host, runtime=runtime)
         first = bridge.trusted_initialize_fixture(root, selected, "key", topology_owner=owner, permit=runtime.issue_permit(host_digest="sha256:" + "2" * 64))
-        assert first["terminal_classification"] == "native_ready" and host.calls == 9
+        assert first["terminal_classification"] == "native_ready" and host.calls == 15
         assert "permit" not in str(first).lower() and "n1" not in str(first)
+        before = host.calls
         retry = bridge.trusted_initialize_fixture(root, selected, "key", topology_owner=owner, permit=object())
-        assert retry["terminal_classification"] == "native_ready" and host.calls == 9
+        assert retry["terminal_classification"] == "native_ready" and host.calls == before + 12 and host.creates == 3 and host.names == 3
     finally: temp.cleanup()
 
 
@@ -144,5 +145,22 @@ def test_bound_owner_host_and_root_swap_holds_before_either_store_or_host() -> N
     finally: temp.cleanup()
 
 
+def test_completed_retry_holds_on_deleted_or_replaced_host_identity() -> None:
+    for replacement in (False, True):
+        temp, root, selected, project_id = _fixture()
+        try:
+            host = FakeHost(project_id); runtime = TrustedRuntime(); owner = NativeRoleTopologyOwner(root, selected, host, runtime=runtime)
+            assert bridge.trusted_initialize_fixture(root, selected, "done", topology_owner=owner, permit=runtime.issue_permit(host_digest="sha256:" + "2" * 64))["terminal_classification"] == "native_ready"
+            if replacement:
+                host.items["n1"] = ThreadMetadata("n1", str(selected), "AF18 RoleHub", "foreign-project")
+            else:
+                host.items.clear()
+            creates, names, before = host.creates, host.names, host.calls
+            retry = bridge.trusted_initialize_fixture(root, selected, "done", topology_owner=owner, permit=object())
+            assert retry["terminal_classification"] == "partial_hold" and host.calls > before
+            assert host.creates == creates and host.names == names
+        finally: temp.cleanup()
+
+
 if __name__ == "__main__":
-    test_trusted_two_call_lifecycle_and_exact_retry(); test_bad_or_replayed_permit_holds_before_store_or_host(); test_one_shot_guard_is_consumed_before_second_host_attempt(); test_noncanonical_identity_holds_without_host_or_store(); test_final_store_symlink_holds_before_sqlite_or_host(); test_same_permit_cannot_bind_a_second_owner_or_project(); test_bound_owner_context_swap_cannot_retarget_same_root_project(); test_bound_owner_host_and_root_swap_holds_before_either_store_or_host(); print("ok")
+    test_trusted_two_call_lifecycle_and_exact_retry(); test_bad_or_replayed_permit_holds_before_store_or_host(); test_one_shot_guard_is_consumed_before_second_host_attempt(); test_noncanonical_identity_holds_without_host_or_store(); test_final_store_symlink_holds_before_sqlite_or_host(); test_same_permit_cannot_bind_a_second_owner_or_project(); test_bound_owner_context_swap_cannot_retarget_same_root_project(); test_bound_owner_host_and_root_swap_holds_before_either_store_or_host(); test_completed_retry_holds_on_deleted_or_replaced_host_identity(); print("ok")
