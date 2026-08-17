@@ -93,6 +93,19 @@ class LedgerSnapshot:
 
 
 @dataclass(frozen=True)
+class ProjectBindingSnapshot:
+    """Privacy-safe owner view for the runtime onboarding bridge."""
+    project_id: str
+    schema_version: str
+    authority_generation: int
+    authority_head: str
+    project_binding_ref: str
+    project_binding_digest: str
+    repository_digest: str
+    root_digest: str
+
+
+@dataclass(frozen=True)
 class ConditionalAppendResult:
     status: str
     generation: int
@@ -259,6 +272,122 @@ class LocalCollaborationLedger:
         business rows, bindings, holds, projections, metadata, or schema.
         """
         return cls._authority_snapshot(db_path, expected_project_id=expected_project_id)
+
+    @classmethod
+    def active_path_repo_binding_snapshot(cls, projects_root: str | Path, project_root: str | Path) -> ProjectBindingSnapshot:
+        """Discover one authority by its canonical active path binding.
+
+        This is deliberately separate from ``discover_by_binding``: it keeps
+        the active path/repository bindings and ledger pair in one owner-owned
+        SQLite read transaction and returns no locator or binding value.
+        """
+        root = Path(projects_root).expanduser()
+        selected = Path(project_root).expanduser()
+        if not root.is_absolute() or not selected.is_absolute() or root.is_symlink() or selected.is_symlink():
+            raise LedgerIdentityError("canonical owner locators are required")
+        try:
+            canonical_selected = str(selected.resolve(strict=True))
+        except OSError as exc:
+            raise LedgerIdentityError("canonical project locator is unavailable") from exc
+        if str(selected) != canonical_selected or not root.is_dir() or not selected.is_dir():
+            raise LedgerIdentityError("canonical owner locators are required")
+        matches: list[tuple[str, str, dict[str, str], LedgerSnapshot]] = []
+        holds: list[LedgerError] = []
+        try:
+            directories = list(root.iterdir())
+        except OSError as exc:
+            raise LedgerPermissionError("projects root cannot be read") from exc
+        for directory in directories:
+            db = directory / "collaboration.db"
+            if not directory.is_dir() or directory.is_symlink() or db.is_symlink() or not db.is_file():
+                continue
+            try:
+                project_id, bindings, snapshot = cls._authority_binding_view(db)
+                if bindings.get("path") == canonical_selected:
+                    matches.append((project_id, str(db), bindings, snapshot))
+            except LedgerError as exc:
+                holds.append(exc)
+        if len(matches) > 1:
+            raise LedgerConflictError("canonical path resolves to multiple authorities")
+        if not matches:
+            if holds:
+                raise holds[0]
+            raise LedgerConflictError("canonical path authority is unavailable")
+        project_id, _, bindings, snapshot = matches[0]
+        supported_types = {"path", "repo", "remote", "thread", "issue", "github_repository"}
+        if not {"path", "repo"}.issubset(bindings) or set(bindings) - supported_types or not isinstance(bindings.get("repo"), str) or not bindings["repo"]:
+            raise LedgerConflictError("active binding set is unsupported")
+        path_digest = _hash(bindings["path"])
+        repo_digest = _hash(bindings["repo"])
+        binding = {
+            "project_id": project_id,
+            "schema_version": SCHEMA_VERSION,
+            "path_binding_digest": path_digest,
+            "repo_binding_digest": repo_digest,
+            "authority_generation": snapshot.authority_generation,
+            "authority_head": snapshot.authority_head,
+        }
+        binding_digest = _hash(binding)
+        return ProjectBindingSnapshot(
+            project_id=project_id,
+            schema_version=SCHEMA_VERSION,
+            authority_generation=snapshot.authority_generation,
+            authority_head=snapshot.authority_head,
+            project_binding_ref="project-binding:" + binding_digest,
+            project_binding_digest=binding_digest,
+            repository_digest=repo_digest,
+            root_digest=path_digest,
+        )
+
+    @classmethod
+    def _authority_binding_view(cls, db_path: str | Path) -> tuple[str, dict[str, str], LedgerSnapshot]:
+        """Private single-transaction implementation for binding discovery."""
+        path = Path(db_path).expanduser()
+        try:
+            if path.is_symlink() or not path.is_file() or path.parent.is_symlink() or _mode(path.parent) != 0o700 or _mode(path) != 0o600:
+                raise LedgerPermissionError("authority storage permissions are invalid")
+            conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=5, isolation_level=None)
+            conn.row_factory = sqlite3.Row
+        except LedgerError:
+            raise
+        except (OSError, PermissionError, sqlite3.OperationalError) as exc:
+            if "busy" in str(exc).lower() or "locked" in str(exc).lower():
+                raise LedgerBusyError("database busy") from None
+            raise LedgerPermissionError("authority cannot be opened read-only") from None
+        try:
+            conn.execute("PRAGMA query_only=ON"); conn.execute("PRAGMA foreign_keys=ON")
+            conn.execute("PRAGMA trusted_schema=OFF"); conn.execute("PRAGMA busy_timeout=5000")
+            conn.execute("BEGIN")
+            tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            required = {"ledger_metadata", "events", "holds", "project_bindings", "binding_decisions", "projections"}
+            if not required.issubset(tables):
+                raise LedgerSchemaError("authority schema is incomplete")
+            metadata = {row["key"]: row["value"] for row in conn.execute("SELECT key,value FROM ledger_metadata")}
+            project_id = metadata.get("project_id")
+            if metadata.get("schema_version") != SCHEMA_VERSION or not project_id or str(uuid.UUID(project_id)) != project_id:
+                raise LedgerSchemaError("authority metadata is invalid")
+            events = tuple(cls._verified_snapshot_events(list(conn.execute("SELECT * FROM events ORDER BY sequence")), project_id))
+            rows = list(conn.execute("SELECT binding_type,binding_value FROM project_bindings WHERE active=1"))
+            bindings: dict[str, str] = {}
+            for row in rows:
+                kind, value = row["binding_type"], row["binding_value"]
+                if not isinstance(kind, str) or not _TYPE.fullmatch(kind) or not isinstance(value, str) or not value or kind in bindings:
+                    raise LedgerIntegrityError("active binding set is invalid")
+                bindings[kind] = value
+            generation = events[-1].sequence if events else 0
+            head = events[-1].event_hash if events else GENESIS
+            conn.execute("COMMIT")
+            return project_id, bindings, LedgerSnapshot(project_id, SCHEMA_VERSION, generation, head, events)
+        except LedgerError:
+            if conn.in_transaction: conn.execute("ROLLBACK")
+            raise
+        except (sqlite3.DatabaseError, json.JSONDecodeError, UnicodeDecodeError, ValueError) as exc:
+            if conn.in_transaction: conn.execute("ROLLBACK")
+            if "busy" in str(exc).lower() or "locked" in str(exc).lower():
+                raise LedgerBusyError("database busy") from None
+            raise LedgerIntegrityError("authority binding snapshot integrity failed") from None
+        finally:
+            conn.close()
 
     @classmethod
     def _authority_snapshot(cls, db_path: str | Path, *, expected_project_id: str,
@@ -786,4 +915,4 @@ class LocalCollaborationLedger:
         self.integrity_check_path(self.path); self.verify(); return "ok"
 
 
-__all__=["LocalCollaborationLedger","LedgerEvent","LedgerSnapshot","LedgerError","LedgerIntegrityError","LedgerConflictError","LedgerPermissionError","LedgerBusyError","LedgerSchemaError","LedgerIdentityError","LedgerBackupError"]
+__all__=["LocalCollaborationLedger","LedgerEvent","LedgerSnapshot","ProjectBindingSnapshot","LedgerError","LedgerIntegrityError","LedgerConflictError","LedgerPermissionError","LedgerBusyError","LedgerSchemaError","LedgerIdentityError","LedgerBackupError"]

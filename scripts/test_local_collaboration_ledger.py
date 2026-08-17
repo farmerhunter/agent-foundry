@@ -70,6 +70,19 @@ class LedgerTests(unittest.TestCase):
         self.assertEqual(self.ledger.load_projection("board")["payload"], {"count": 1})
         self.assertTrue(self.ledger.delete_projection("board")); self.assertFalse(self.ledger.verify_projection("board"))
 
+    def test_active_path_repo_binding_snapshot_is_same_view_and_sanitized(self):
+        project_root = Path(self.tmp.name) / "canonical-project"; project_root.mkdir(mode=0o700)
+        self.ledger.bind_project("path", str(project_root.resolve()))
+        self.ledger.bind_project("repo", "repo-opaque")
+        self.ledger.append_event("work.accepted", {"id": 1})
+        expected = self.ledger.list_events()[-1]
+        self.ledger.close()
+        view = LocalCollaborationLedger.active_path_repo_binding_snapshot(self.tmp.name, project_root.resolve())
+        self.assertEqual(view.project_id, self.ledger.project_id)
+        self.assertEqual((view.authority_generation, view.authority_head), (expected.sequence, expected.event_hash))
+        self.assertNotIn(str(project_root), repr(view)); self.assertNotIn("repo-opaque", repr(view))
+        self.ledger = LocalCollaborationLedger(self.ledger.project_id, projects_root=self.tmp.name)
+
     def test_append_sequence_chain_and_idempotency(self):
         event_id = "11111111-1111-1111-1111-111111111111"
         first = self.ledger.append_event("work.accepted", {"title": "x"}, event_id=event_id)
