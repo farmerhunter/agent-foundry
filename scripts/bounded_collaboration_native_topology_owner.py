@@ -278,6 +278,10 @@ class PermitBoundNativeRoleTopologyOwner(NativeRoleTopologyOwner):
             created: dict[str, ThreadMetadata] = {}
             def partial_result() -> Mapping[str, Any]:
                 refs = tuple("operation:" + hashlib.sha256((plan["topology_plan_digest"] + item).encode()).hexdigest()[:24] for item in created)
+                persisted = self._record(con, "attempt") or {}
+                mutated = bool(created or persisted.get("operations"))
+                if not mutated:
+                    return {"state": "held", "reason": "native_create_unavailable", "mutation_performed": False}
                 return {"state": "applied", "mutation_performed": True, "topology_plan_digest": plan["topology_plan_digest"], "operation_receipt_refs": refs or ("operation:partial",), "topology_apply_binding": {}}
             for role, title in _ROLES:
                 previous = self._record(con, "attempt") or {}
