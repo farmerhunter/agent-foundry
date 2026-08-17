@@ -55,14 +55,15 @@ def _walk_no_raw(value, forbidden: set[str]) -> None:
         assert value not in forbidden
 
 
-def test_real_owner_fixture_reaches_plan_without_mutation() -> None:
+def test_ordinary_owner_fixture_holds_without_topology_owner_or_mutation() -> None:
     temp, root, selected, project_id = _fixture()
     try:
         db = root / project_id / "collaboration.db"; before = hashlib.sha256(db.read_bytes()).hexdigest()
         before_events = len(LocalCollaborationLedger.authority_snapshot(db, expected_project_id=project_id).events)
         receipt = bridge.run(root, selected, "onboard-bridge")
         jsonschema.Draft202012Validator(SCHEMA).validate(json.loads(json.dumps(receipt)))
-        assert receipt["terminal_classification"] == "topology_plan_ready"
+        assert receipt["terminal_classification"] == "unavailable"
+        assert "topology_plan" not in json.dumps(receipt)
         assert receipt["mutation_performed"] is False and receipt["production_eligible"] is False and receipt["evidence_class"] == "fixture_only"
         assert hashlib.sha256(db.read_bytes()).hexdigest() == before
         assert len(LocalCollaborationLedger.authority_snapshot(db, expected_project_id=project_id).events) == before_events
@@ -102,14 +103,18 @@ def test_cli_rejects_injection_and_preserves_closed_json() -> None:
         assert result.returncode == 3 and result.stderr == ""
         value = json.loads(result.stdout); assert value["terminal_classification"] == "schema_or_privacy_failure"
         assert str(root) not in result.stdout and str(selected) not in result.stdout
+        ordinary = subprocess.run([sys.executable, str(ROOT / "scripts" / "bounded_collaboration_runtime_bridge.py"), "--projects-root", str(root), "--project-root", str(selected), "--onboarding-key", "onboard-cli"], env={**os.environ, "PYTHONPATH": str(ROOT / "scripts")}, text=True, capture_output=True, check=False)
+        ordinary_value = json.loads(ordinary.stdout)
+        assert ordinary.returncode == 2 and ordinary.stderr == ""
+        assert ordinary_value["terminal_classification"] == "unavailable" and "topology_plan" not in ordinary.stdout
     finally:
         temp.cleanup()
 
 
-def test_fixture_topology_is_never_production_eligible() -> None:
+def test_in_process_fixture_topology_can_plan_but_is_never_production_eligible() -> None:
     temp, root, selected, _ = _fixture()
     try:
-        receipt = bridge.run(root, selected, "onboard-fixture", topology_owner=bridge.UnavailableTopologyOwner())
+        receipt = bridge.run(root, selected, "onboard-fixture", topology_owner=bridge.FixtureMissingTopologyOwner())
         assert receipt["terminal_classification"] == "topology_plan_ready"
         assert receipt["evidence_class"] == "fixture_only" and receipt["production_eligible"] is False
     finally:
@@ -117,8 +122,8 @@ def test_fixture_topology_is_never_production_eligible() -> None:
 
 
 if __name__ == "__main__":
-    test_real_owner_fixture_reaches_plan_without_mutation()
+    test_ordinary_owner_fixture_holds_without_topology_owner_or_mutation()
     test_duplicate_path_and_missing_scheduler_hold_without_topology()
     test_cli_rejects_injection_and_preserves_closed_json()
-    test_fixture_topology_is_never_production_eligible()
+    test_in_process_fixture_topology_can_plan_but_is_never_production_eligible()
     print("ok")

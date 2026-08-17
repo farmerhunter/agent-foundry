@@ -127,10 +127,23 @@ class UnavailableTopologyOwner:
     """Ordinary CLI deliberately has no native topology authority."""
 
     def read_topology(self, project_binding: Mapping[str, Any]) -> Mapping[str, Any]:
-        return _freeze({"state": "missing"})
+        raise RuntimeError("topology_owner_unavailable")
 
     def apply_topology(self, plan: Mapping[str, Any]) -> Mapping[str, Any]:
         raise RuntimeError("topology_apply_unavailable")
+
+    def read_completion(self, onboarding_key: str, project_binding: Mapping[str, Any]) -> Mapping[str, Any]:
+        raise RuntimeError("topology_owner_unavailable")
+
+
+class FixtureMissingTopologyOwner:
+    """Test-only in-process owner used to exercise I1 planning semantics."""
+
+    def read_topology(self, project_binding: Mapping[str, Any]) -> Mapping[str, Any]:
+        return _freeze({"state": "missing"})
+
+    def apply_topology(self, plan: Mapping[str, Any]) -> Mapping[str, Any]:
+        raise RuntimeError("fixture_apply_not_authorized")
 
     def read_completion(self, onboarding_key: str, project_binding: Mapping[str, Any]) -> Mapping[str, Any]:
         return _freeze({"state": "absent"})

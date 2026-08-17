@@ -30,8 +30,10 @@ python3 scripts/bounded_collaboration_runtime_bridge.py \
 It discovers the active path/repository binding through LedgerStore and then
 replays the scheduler/Work-root owner. It neither loads a topology plugin nor
 accepts caller project, scheduler, receipt or apply claims. Ordinary invocation
-therefore returns a plan or typed hold; it does not install roles or claim
-production `native_ready`. Native topology apply remains a separately approved
+therefore returns a typed unavailable/hold; it does not expose a topology plan,
+install roles, or claim production `native_ready`. Only a trusted in-process
+fixture owner may exercise plan composition, and that evidence is never a
+runtime readiness claim. Native topology apply remains a separately approved
 runtime boundary.
 
 ## State machine
