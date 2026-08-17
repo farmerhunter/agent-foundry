@@ -44,12 +44,19 @@ class Topology:
         if self.post_apply_error: raise RuntimeError("unshown")
         if self.state == "missing": return {"state": "missing"}
         if self.state == "duplicate": return {"state": "ready", "rolehub_ref": "hub:opaque", "coordinator_ref": "role:c", "architect_ref": "role:a", "topology_readback_digest": "sha256:topology", "project_binding_digest": project["project_binding_digest"], "coordinator_count": 2, "architect_count": 1}
-        return {"state": "ready", "rolehub_ref": "hub:opaque", "coordinator_ref": "role:c", "architect_ref": "role:a", "topology_readback_digest": "sha256:topology", "project_binding_digest": project["project_binding_digest"], "coordinator_count": 1, "architect_count": 1}
+        foreign = getattr(self, "foreign_after_apply", False)
+        value = {"state": "ready", "rolehub_ref": "hub:foreign" if foreign else "hub:opaque", "coordinator_ref": "role:foreign-c" if foreign else "role:c", "architect_ref": "role:foreign-a" if foreign else "role:a", "topology_readback_digest": "sha256:foreign-topology" if foreign else "sha256:topology", "project_binding_digest": project["project_binding_digest"], "coordinator_count": 1, "architect_count": 1}
+        if hasattr(self, "binding_ref"):
+            value["topology_apply_binding_ref"] = self.binding_ref
+            value["topology_apply_binding_digest"] = self.binding_digest
+        return value
     def apply_topology(self, plan):
         self.apply_calls += 1
         assert plan["requested_roles"] == ("Coordinator", "Architect")
         self.state = "ready"
-        return {"state": "applied", "mutation_performed": True, "operation_receipt_refs": ["receipt:coordinator", "receipt:architect"]}
+        self.binding_ref = "binding:opaque"
+        self.binding_digest = "sha256:apply-readback-binding"
+        return {"state": "applied", "mutation_performed": True, "operation_receipt_refs": ["receipt:coordinator", "receipt:architect"], "topology_apply_binding_ref": self.binding_ref, "topology_apply_binding_digest": self.binding_digest, "topology_plan_digest": plan["topology_plan_digest"]}
 
 
 def owners(scheduler_state="bound", topology_state="ready"):
@@ -87,9 +94,21 @@ def main():
     check("548-absent-role-not-ready", repo_only["completion_state"] == "topology_plan_ready" and topology.apply_calls == 0, repo_only)
     schema("plan", repo_only)
     applied = initializer.initialize(own, onboarding_key="onboard-3", apply_authorized=True)
-    check("ordered-apply-and-readback", applied["completion_state"] == "native_ready" and applied["mutation_performed"] and topology.apply_calls == 1, applied)
+    check("ordered-apply-and-bound-readback", applied["completion_state"] == "native_ready" and applied["mutation_performed"] and applied["topology_apply_binding_ref"] == "binding:opaque" and topology.apply_calls == 1, applied)
     retried = initializer.initialize(own, onboarding_key="onboard-3", apply_authorized=True)
-    check("exact-retry-no-topology-mutation", retried["completion_state"] == "native_ready" and retried["mutation_performed"] is False and topology.apply_calls == 1, retried)
+    check("exact-retry-no-topology-mutation", retried["completion_state"] == "native_ready" and retried["mutation_performed"] is False and topology.apply_calls == 1 and topology.binding_ref == "binding:opaque", retried)
+
+    own, project, scheduler, topology = owners("bound", "missing")
+    old_apply = topology.apply_topology
+    def apply_then_replace(plan):
+        value = old_apply(plan)
+        topology.foreign_after_apply = True
+        topology.binding_ref = "binding:foreign"
+        topology.binding_digest = "sha256:foreign"
+        return value
+    topology.apply_topology = apply_then_replace
+    foreign = initializer.initialize(own, onboarding_key="onboard-foreign", apply_authorized=True)
+    check("foreign-final-topology-replacement-holds", foreign["completion_state"] == "setup_incomplete" and foreign["attention_reason"] == "topology_apply_readback_binding_mismatch", foreign)
 
     own, _, scheduler, topology = owners("bound", "duplicate")
     duplicate = initializer.initialize(own, onboarding_key="onboard-4", apply_authorized=True)

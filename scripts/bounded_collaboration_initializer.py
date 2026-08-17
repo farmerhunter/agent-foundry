@@ -147,25 +147,33 @@ def _receipt(
     *,
     mutation_performed: bool,
     operation_receipt_refs: tuple[str, ...],
+    topology_apply_binding_ref: str | None = None,
+    topology_apply_binding_digest: str | None = None,
 ) -> _FrozenDict:
+    fields: dict[str, Any] = {
+        "project_binding_ref": project["project_binding_ref"],
+        "project_binding_digest": project["project_binding_digest"],
+        "rolehub_ref": topology["rolehub_ref"],
+        "coordinator_ref": topology["coordinator_ref"],
+        "architect_ref": topology["architect_ref"],
+        "topology_readback_digest": topology["topology_readback_digest"],
+        "scheduler_binding_ref": scheduler["scheduler_binding_ref"],
+        "work_root_ref": scheduler["work_root_ref"],
+        "scheduler_binding_revision": scheduler["scheduler_binding_revision"],
+        "scheduler_binding_digest": scheduler["scheduler_binding_digest"],
+        "repo_contract_status": "not_authoritative",
+        "operation_receipt_refs": operation_receipt_refs,
+    }
+    if topology_apply_binding_ref is not None and topology_apply_binding_digest is not None:
+        fields["topology_apply_binding_ref"] = topology_apply_binding_ref
+        fields["topology_apply_binding_digest"] = topology_apply_binding_digest
     receipt = _result(
         "native_ready",
         onboarding_key,
         attention_reason=None,
         safe_next_action="Create or reuse one approved Work through the durable scheduler.",
         mutation_performed=mutation_performed,
-        project_binding_ref=project["project_binding_ref"],
-        project_binding_digest=project["project_binding_digest"],
-        rolehub_ref=topology["rolehub_ref"],
-        coordinator_ref=topology["coordinator_ref"],
-        architect_ref=topology["architect_ref"],
-        topology_readback_digest=topology["topology_readback_digest"],
-        scheduler_binding_ref=scheduler["scheduler_binding_ref"],
-        work_root_ref=scheduler["work_root_ref"],
-        scheduler_binding_revision=scheduler["scheduler_binding_revision"],
-        scheduler_binding_digest=scheduler["scheduler_binding_digest"],
-        repo_contract_status="not_authoritative",
-        operation_receipt_refs=operation_receipt_refs,
+        **fields,
     )
     return receipt
 
@@ -226,6 +234,7 @@ def initialize(
             "requested_roles": ROLES,
             "topology_preimage_digest": _digest({"state": "missing", "project_binding_digest": project["project_binding_digest"]}),
         }
+        plan["topology_plan_digest"] = _digest(plan)
         return _result("topology_plan_ready", onboarding_key, attention_reason=None, safe_next_action="Obtain bounded topology-apply authorization.", topology_plan=_freeze(plan))
 
     mutation_performed = False
@@ -240,12 +249,24 @@ def initialize(
             "requested_roles": ROLES,
             "topology_preimage_digest": _digest({"state": "missing", "project_binding_digest": project["project_binding_digest"]}),
         }
+        plan["topology_plan_digest"] = _digest(plan)
         applied, error = _call(owners.topology, "apply_topology", _freeze(plan))
         if error:
             return _result("setup_incomplete", onboarding_key, attention_reason=error, safe_next_action="Read topology and scheduler state before any follow-up.")
         assert applied is not None
         refs = applied.get("operation_receipt_refs")
-        if applied.get("state") != "applied" or not isinstance(refs, (list, tuple)) or not all(isinstance(item, str) and item for item in refs):
+        binding_ref = applied.get("topology_apply_binding_ref")
+        binding_digest = applied.get("topology_apply_binding_digest")
+        if (
+            applied.get("state") != "applied"
+            or not isinstance(refs, (list, tuple))
+            or not all(isinstance(item, str) and item for item in refs)
+            or not isinstance(binding_ref, str)
+            or not binding_ref
+            or not isinstance(binding_digest, str)
+            or not binding_digest
+            or applied.get("topology_plan_digest") != plan["topology_plan_digest"]
+        ):
             return _result("setup_incomplete", onboarding_key, attention_reason="topology_apply_incomplete", safe_next_action="Read topology and scheduler state before any follow-up.")
         mutation_performed = bool(applied.get("mutation_performed"))
         operation_receipt_refs = tuple(refs)
@@ -263,7 +284,14 @@ def initialize(
         return _result("setup_incomplete", onboarding_key, attention_reason="project_binding_drift", safe_next_action="Resolve project binding drift before any follow-up.", mutation_performed=mutation_performed, operation_receipt_refs=operation_receipt_refs)
     if not _same_fresh_binding(scheduler, fresh_scheduler, ("scheduler_binding_ref", "work_root_ref", "scheduler_binding_revision", "scheduler_binding_digest", "project_binding_digest")):
         return _result("setup_incomplete", onboarding_key, attention_reason="scheduler_binding_drift", safe_next_action="Resolve scheduler/Work-root drift before any follow-up.", mutation_performed=mutation_performed, operation_receipt_refs=operation_receipt_refs)
-    return _receipt(onboarding_key, fresh_project, fresh_scheduler, fresh_topology, mutation_performed=mutation_performed, operation_receipt_refs=operation_receipt_refs)
+    if mutation_performed:
+        if (
+            fresh_topology.get("topology_apply_binding_ref") != binding_ref
+            or fresh_topology.get("topology_apply_binding_digest") != binding_digest
+        ):
+            return _result("setup_incomplete", onboarding_key, attention_reason="topology_apply_readback_binding_mismatch", safe_next_action="Read topology and scheduler state before any follow-up.", mutation_performed=True, operation_receipt_refs=operation_receipt_refs)
+        return _receipt(onboarding_key, fresh_project, fresh_scheduler, fresh_topology, mutation_performed=True, operation_receipt_refs=operation_receipt_refs, topology_apply_binding_ref=binding_ref, topology_apply_binding_digest=binding_digest)
+    return _receipt(onboarding_key, fresh_project, fresh_scheduler, fresh_topology, mutation_performed=False, operation_receipt_refs=operation_receipt_refs)
 
 
 __all__ = ["Owners", "ProjectBindingOwner", "SchedulerBindingOwner", "RoleTopologyOwner", "VERSION", "initialize"]

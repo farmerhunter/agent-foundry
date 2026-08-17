@@ -76,6 +76,12 @@ owner-composed `OnboardingCompletionReceipt` is the only native completion
 record; it binds fresh project, topology and scheduler/Work-root readbacks and
 uses privacy-safe opaque refs/digests only.
 
+When topology was applied during this attempt, its owner must additionally
+return an opaque apply/readback binding for the exact topology plan and its
+operation receipt. The final authoritative topology readback must present the
+same binding. A missing, changed or foreign binding is `setup_incomplete`, not
+`native_ready`; preserve the applied receipt and do not retry automatically.
+
 ## Apply and rollback boundary
 
 An adapter may execute only a `plan_ready` plan whose operation keys have been
