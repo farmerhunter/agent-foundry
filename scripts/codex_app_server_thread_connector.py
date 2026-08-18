@@ -269,8 +269,11 @@ class CodexAppServerThreadConnector:
         self._cwd(cwd)
         try:
             result = self._transport.request("thread/start", {"cwd": self._root, "ephemeral": False})
-            return self._metadata(result.get("thread"))
         except PostDispatchHold:
+            return ThreadMetadata("", self._root, "", self._project_id)
+        try:
+            return self._metadata(result.get("thread"))
+        except ConnectorHold:
             return ThreadMetadata("", self._root, "", self._project_id)
 
     def set_thread_name(self, id: str, title: str) -> ThreadMetadata:

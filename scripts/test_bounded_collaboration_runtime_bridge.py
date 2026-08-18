@@ -152,6 +152,7 @@ class _FakeAppServer:
         self.creates = 0
         self.names = 0
         self.fail_start_after_dispatch = False
+        self.malformed_start_return = False
         self.fail_read_after_name = False
         self.page_size = 100
 
@@ -174,6 +175,8 @@ class _FakeAppServer:
                     server.items.append(item)
                     if server.fail_start_after_dispatch:
                         raise PostDispatchHold("response_lost")
+                    if server.malformed_start_return:
+                        return {"thread": {"id": item["id"], "name": None}}
                     return {"thread": dict(item)}
                 if method == "thread/name/set":
                     server.names += 1
@@ -242,6 +245,24 @@ def test_production_post_dispatch_create_ambiguity_is_truthful_and_not_retried()
         assert (server.creates, server.names) == (1, 0)
         before = (server.creates, server.names)
         retry = _production_run(root, selected, server, binary, digest, "production-ambiguous")
+        assert retry["terminal_classification"] == "partial_hold" and retry["mutation_performed"] is False
+        assert (server.creates, server.names) == before
+    finally:
+        temp.cleanup()
+
+
+def test_production_malformed_successful_create_is_truthful_and_not_retried() -> None:
+    temp, root, selected, _ = _fixture()
+    try:
+        binary = Path(temp.name) / "codex-fixture"; binary.write_bytes(b"fixture codex malformed create"); os.chmod(binary, 0o700)
+        digest = hashlib.sha256(binary.read_bytes()).hexdigest()
+        server = _FakeAppServer(str(selected)); server.malformed_start_return = True
+        result = _production_run(root, selected, server, binary, digest, "production-malformed-create")
+        assert result["terminal_classification"] == "setup_incomplete" and result["mutation_performed"] is True
+        assert result["initialization"]["mutation_performed"] is True
+        assert (server.creates, server.names) == (1, 0)
+        before = (server.creates, server.names)
+        retry = _production_run(root, selected, server, binary, digest, "production-malformed-create")
         assert retry["terminal_classification"] == "partial_hold" and retry["mutation_performed"] is False
         assert (server.creates, server.names) == before
     finally:
@@ -319,6 +340,7 @@ if __name__ == "__main__":
     test_in_process_fixture_topology_can_plan_but_is_never_production_eligible()
     test_owner_verified_production_happy_path_and_exact_retry_are_closed()
     test_production_post_dispatch_create_ambiguity_is_truthful_and_not_retried()
+    test_production_malformed_successful_create_is_truthful_and_not_retried()
     test_production_post_name_readback_failure_is_truthful()
     test_binary_mismatch_holds_before_transport_factory()
     test_paginated_unmanaged_duplicate_and_returned_cwd_drift_hold_before_create()
