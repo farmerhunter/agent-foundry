@@ -167,7 +167,7 @@ def test_completed_retry_holds_on_deleted_or_replaced_host_identity() -> None:
         finally: temp.cleanup()
 
 
-def test_completed_retry_holds_on_duplicate_or_list_error_inventory() -> None:
+def test_completed_retry_uses_protected_direct_reads_not_list_inventory() -> None:
     for kind in ("duplicate", "list_error"):
         temp, root, selected, project_id = _fixture()
         try:
@@ -177,8 +177,69 @@ def test_completed_retry_holds_on_duplicate_or_list_error_inventory() -> None:
             else: host.list_threads = lambda cwd: (_ for _ in ()).throw(RuntimeError("unavailable"))
             creates, names, before = host.creates, host.names, host.calls
             retry = bridge.trusted_initialize_fixture(root, selected, "done", topology_owner=owner, permit=object())
-            assert retry["terminal_classification"] == "partial_hold" and host.calls >= before and host.creates == creates and host.names == names
+            assert retry["terminal_classification"] == "native_ready" and host.calls > before and host.creates == creates and host.names == names
         finally: temp.cleanup()
+
+
+def test_fresh_success_does_not_require_post_write_list_visibility() -> None:
+    temp, root, selected, project_id = _fixture()
+    try:
+        class DelayedListHost(FakeHost):
+            def list_threads(self, cwd):
+                self.calls += 1; self.lists += 1
+                return [] if self.creates else list(self.items.values())
+        host = DelayedListHost(project_id); runtime = TrustedRuntime(); owner = NativeRoleTopologyOwner(root, selected, host, runtime=runtime)
+        result = bridge.trusted_initialize_fixture(root, selected, "delayed-list", topology_owner=owner, permit=runtime.issue_permit(host_digest="sha256:" + "2" * 64))
+        assert result["terminal_classification"] == "native_ready"
+        assert host.creates == 2 and host.names == 2 and host.lists == 2
+        assert "native_id" not in json.dumps(result).lower() and "n1" not in str(result)
+    finally: temp.cleanup()
+
+
+def test_exact_final_inventory_reconciles_then_retries_without_native_mutation() -> None:
+    temp, root, selected, project_id = _fixture()
+    try:
+        class InterruptedFinalRead(FakeHost):
+            fail_final = True
+            def read_thread(self, ident, include_turns=False):
+                if self.fail_final and self.reads >= 2:
+                    self.calls += 1; self.reads += 1
+                    raise RuntimeError("final inventory unavailable")
+                return super().read_thread(ident, include_turns)
+        host = InterruptedFinalRead(project_id); runtime = TrustedRuntime(); owner = NativeRoleTopologyOwner(root, selected, host, runtime=runtime)
+        first = bridge.trusted_initialize_fixture(root, selected, "reconcile", topology_owner=owner, permit=runtime.issue_permit(host_digest="sha256:" + "2" * 64))
+        assert first["terminal_classification"] == "setup_incomplete" and host.creates == 2 and host.names == 2
+        host.fail_final = False
+        before = (host.creates, host.names)
+        reconciled = bridge.trusted_initialize_fixture(root, selected, "reconcile", topology_owner=owner, permit=runtime.issue_permit(host_digest="sha256:" + "2" * 64))
+        assert reconciled["terminal_classification"] == "native_ready" and (host.creates, host.names) == before
+        refs = tuple(reconciled["initialization"]["operation_receipt_refs"])
+        retry = bridge.trusted_initialize_fixture(root, selected, "reconcile", topology_owner=owner, permit=object())
+        assert retry["terminal_classification"] == "native_ready" and (host.creates, host.names) == before
+        assert tuple(retry["initialization"]["operation_receipt_refs"]) == refs
+    finally: temp.cleanup()
+
+
+def test_final_inventory_mismatch_holds_before_new_native_mutation() -> None:
+    temp, root, selected, project_id = _fixture()
+    try:
+        class InterruptedFinalRead(FakeHost):
+            fail_final = True
+            def read_thread(self, ident, include_turns=False):
+                if self.fail_final and self.reads >= 2:
+                    self.calls += 1; self.reads += 1
+                    raise RuntimeError("final inventory unavailable")
+                return super().read_thread(ident, include_turns)
+        host = InterruptedFinalRead(project_id); runtime = TrustedRuntime(); owner = NativeRoleTopologyOwner(root, selected, host, runtime=runtime)
+        assert bridge.trusted_initialize_fixture(root, selected, "mismatch", topology_owner=owner, permit=runtime.issue_permit(host_digest="sha256:" + "2" * 64))["terminal_classification"] == "setup_incomplete"
+        host.fail_final = False
+        native_id = next(iter(host.items))
+        item = host.items[native_id]
+        host.items[native_id] = ThreadMetadata(item.id, item.cwd, "wrong-title", item.project_id)
+        before = (host.creates, host.names)
+        held = bridge.trusted_initialize_fixture(root, selected, "mismatch", topology_owner=owner, permit=runtime.issue_permit(host_digest="sha256:" + "2" * 64))
+        assert held["terminal_classification"] == "setup_incomplete" and (host.creates, host.names) == before
+    finally: temp.cleanup()
 
 
 def test_unmanaged_collision_ambiguity_foreign_and_list_failure_hold_pre_store() -> None:
@@ -320,4 +381,4 @@ def test_malformed_create_metadata_retains_unknown_host_mutation() -> None:
 
 
 if __name__ == "__main__":
-    test_trusted_two_call_lifecycle_and_exact_retry(); test_bad_or_replayed_permit_holds_before_store_or_host(); test_one_shot_guard_is_consumed_before_second_host_attempt(); test_noncanonical_identity_holds_without_host_or_store(); test_final_store_symlink_holds_before_sqlite_or_host(); test_same_permit_cannot_bind_a_second_owner_or_project(); test_bound_owner_context_swap_cannot_retarget_same_root_project(); test_bound_owner_host_and_root_swap_holds_before_either_store_or_host(); test_completed_retry_holds_on_deleted_or_replaced_host_identity(); test_completed_retry_holds_on_duplicate_or_list_error_inventory(); test_unmanaged_collision_ambiguity_foreign_and_list_failure_hold_pre_store(); test_public_schema_accepts_actual_ready_and_rejects_private_held_fields(); test_unrelated_rolehub_title_is_ignored_by_two_role_onboarding(); test_legacy_three_role_store_holds_before_permit_or_host(); test_bridge_surfaces_wrong_project_create_as_retained_partial_mutation(); test_bridge_surfaces_invalid_post_name_readback_as_retained_partial_mutation(); test_second_create_exception_retains_first_role_mutation_truthfully(); test_first_create_exception_has_no_mutation_claim(); test_malformed_create_metadata_retains_unknown_host_mutation(); print("ok")
+    test_trusted_two_call_lifecycle_and_exact_retry(); test_bad_or_replayed_permit_holds_before_store_or_host(); test_one_shot_guard_is_consumed_before_second_host_attempt(); test_noncanonical_identity_holds_without_host_or_store(); test_final_store_symlink_holds_before_sqlite_or_host(); test_same_permit_cannot_bind_a_second_owner_or_project(); test_bound_owner_context_swap_cannot_retarget_same_root_project(); test_bound_owner_host_and_root_swap_holds_before_either_store_or_host(); test_completed_retry_holds_on_deleted_or_replaced_host_identity(); test_completed_retry_uses_protected_direct_reads_not_list_inventory(); test_fresh_success_does_not_require_post_write_list_visibility(); test_exact_final_inventory_reconciles_then_retries_without_native_mutation(); test_final_inventory_mismatch_holds_before_new_native_mutation(); test_unmanaged_collision_ambiguity_foreign_and_list_failure_hold_pre_store(); test_public_schema_accepts_actual_ready_and_rejects_private_held_fields(); test_unrelated_rolehub_title_is_ignored_by_two_role_onboarding(); test_legacy_three_role_store_holds_before_permit_or_host(); test_bridge_surfaces_wrong_project_create_as_retained_partial_mutation(); test_bridge_surfaces_invalid_post_name_readback_as_retained_partial_mutation(); test_second_create_exception_retains_first_role_mutation_truthfully(); test_first_create_exception_has_no_mutation_claim(); test_malformed_create_metadata_retains_unknown_host_mutation(); print("ok")
