@@ -16,9 +16,14 @@ from typing import Any, Mapping
 
 from codex_host_rolehub_adapter import ThreadMetadata
 
-VERSION = "bounded-collaboration-native-topology-owner-v1"
+VERSION = "bounded-collaboration-native-topology-owner-v2"
+LEGACY_VERSION = "bounded-collaboration-native-topology-owner-v1"
 _DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
-_ROLES = (("RoleHub", "AF18 RoleHub"), ("Coordinator", "AF18 Coordinator"), ("Architect", "AF18 Durable Architect"))
+_ROLES = (("Coordinator", "AF18 Coordinator"), ("Architect", "AF18 Durable Architect"))
+
+
+class _LegacyTopologyHold(ValueError):
+    pass
 
 
 def _canon(value: Any) -> str:
@@ -111,6 +116,8 @@ class NativeRoleTopologyOwner:
             if con.execute("PRAGMA integrity_check").fetchone()[0] != "ok": con.close(); raise ValueError("owner_store_integrity_hold")
             if not any(row[0] == "topology" for row in con.execute("SELECT name FROM sqlite_master WHERE type='table'")): con.close(); raise ValueError("owner_store_schema_unknown")
             schema = con.execute("SELECT v FROM topology WHERE k='schema_version'").fetchone()
+            if schema is not None and schema[0] == LEGACY_VERSION:
+                con.close(); raise _LegacyTopologyHold("legacy_topology_migration_required")
             if schema is None or schema[0] != VERSION: con.close(); raise ValueError("owner_store_schema_unknown")
         row = con.execute("SELECT v FROM topology WHERE k='mapping'").fetchone()
         if row is None:
@@ -132,7 +139,7 @@ class NativeRoleTopologyOwner:
         topology, native_ids = record.get("topology"), record.get("native_ids")
         if not isinstance(topology, Mapping) or not isinstance(native_ids, Mapping) or set(native_ids) != {role for role, _ in _ROLES}:
             return "owner_store_integrity_hold"
-        if not all(isinstance(native_ids[role], str) and native_ids[role] for role, _ in _ROLES) or len(set(native_ids.values())) != 3:
+        if not all(isinstance(native_ids[role], str) and native_ids[role] for role, _ in _ROLES) or len(set(native_ids.values())) != 2:
             return "owner_store_integrity_hold"
         project_id = topology.get("project_id")
         if not isinstance(project_id, str):
@@ -162,6 +169,7 @@ class NativeRoleTopologyOwner:
         identity, reason = self._identity(project_binding)
         if reason: return {"state": "held", "reason": reason}
         try: con = self._connect(identity, create=False)
+        except _LegacyTopologyHold: return {"state": "held", "reason": "legacy_topology_migration_required"}
         except (OSError, sqlite3.Error, ValueError): return {"state": "held", "reason": "owner_store_unavailable"}
         if con is None: return {"state": "missing"}
         try:
@@ -177,6 +185,7 @@ class NativeRoleTopologyOwner:
         identity, reason = self._identity(project_binding)
         if reason: return {"state": "held", "reason": reason}
         try: con = self._connect(identity, create=False)
+        except _LegacyTopologyHold: return {"state": "held", "reason": "legacy_topology_migration_required"}
         except (OSError, sqlite3.Error, ValueError): return {"state": "held", "reason": "owner_store_unavailable"}
         if con is None: return {"state": "absent"}
         try:
@@ -229,7 +238,7 @@ class PermitBoundNativeRoleTopologyOwner(NativeRoleTopologyOwner):
         required = ("onboarding_key", "project_binding_ref", "project_binding_digest", "scheduler_binding_digest", "topology_plan_digest", "topology_preimage_digest")
         if not isinstance(plan, Mapping) or any(plan.get(k) != context.get(k) for k in required) or tuple(plan.get("requested_roles", ())) != ("Coordinator", "Architect"):
             return None, "authorization_mismatch"
-        if context.get("create_budget") != {"RoleHub": 1, "Coordinator": 1, "DurableArchitect": 1}: return None, "authorization_mismatch"
+        if context.get("create_budget") != {"Coordinator": 1, "DurableArchitect": 1}: return None, "authorization_mismatch"
         identity = self._sealed_identity
         store = Path(identity["store"]); authority = store.parent / "collaboration.db"
         if store.is_symlink() or (store.exists() and (not store.is_file() or store.resolve(strict=True).parent != store.parent.resolve(strict=True))) or authority.is_symlink() or not authority.is_file():
@@ -316,10 +325,10 @@ class PermitBoundNativeRoleTopologyOwner(NativeRoleTopologyOwner):
                 return partial_result()
             refs = tuple("operation:" + hashlib.sha256((plan["topology_plan_digest"] + role).encode()).hexdigest()[:24] for role, _ in _ROLES)
             topology_digest = _digest({role: _opaque(role, md.id) for role, md in created.items()})
-            binding = {"topology_apply_binding_ref": "topology-apply:" + hashlib.sha256((plan["topology_plan_digest"] + identity["mapping_digest"]).encode()).hexdigest()[:24], "topology_plan_digest": plan["topology_plan_digest"], "onboarding_key": plan["onboarding_key"], "project_binding_digest": plan["project_binding_digest"], "scheduler_binding_digest": plan["scheduler_binding_digest"], "operation_receipt_refs": list(refs), "operation_receipt_refs_digest": _digest(list(refs)), "requested_roles": ["Coordinator", "Architect"], "rolehub_ref": _opaque("RoleHub", created["RoleHub"].id), "coordinator_ref": _opaque("Coordinator", created["Coordinator"].id), "architect_ref": _opaque("Architect", created["Architect"].id), "topology_readback_digest": topology_digest}
+            binding = {"topology_apply_binding_ref": "topology-apply:" + hashlib.sha256((plan["topology_plan_digest"] + identity["mapping_digest"]).encode()).hexdigest()[:24], "topology_plan_digest": plan["topology_plan_digest"], "onboarding_key": plan["onboarding_key"], "project_binding_digest": plan["project_binding_digest"], "scheduler_binding_digest": plan["scheduler_binding_digest"], "operation_receipt_refs": list(refs), "operation_receipt_refs_digest": _digest(list(refs)), "requested_roles": ["Coordinator", "Architect"], "coordinator_ref": _opaque("Coordinator", created["Coordinator"].id), "architect_ref": _opaque("Architect", created["Architect"].id), "topology_readback_digest": topology_digest}
             binding["topology_apply_binding_digest"] = _digest(binding)
-            topology = {"project_id": identity["project_id"], "rolehub_ref": binding["rolehub_ref"], "coordinator_ref": binding["coordinator_ref"], "architect_ref": binding["architect_ref"], "topology_readback_digest": topology_digest, "project_binding_digest": plan["project_binding_digest"], "coordinator_count": 1, "architect_count": 1, "topology_apply_binding_ref": binding["topology_apply_binding_ref"], "topology_apply_binding_digest": binding["topology_apply_binding_digest"], "topology_apply_binding": binding}
-            completion = {"completion_receipt_ref": "completion:" + hashlib.sha256((plan["onboarding_key"] + binding["topology_apply_binding_digest"]).encode()).hexdigest()[:24], "onboarding_key": plan["onboarding_key"], "project_binding_ref": plan["project_binding_ref"], "project_binding_digest": plan["project_binding_digest"], "scheduler_binding_ref": self._sealed_context["scheduler_binding_ref"], "work_root_ref": self._sealed_context["work_root_ref"], "scheduler_binding_revision": self._sealed_context["scheduler_binding_revision"], "scheduler_binding_digest": plan["scheduler_binding_digest"], "topology_plan_digest": plan["topology_plan_digest"], "operation_receipt_refs": list(refs), "topology_apply_binding_ref": binding["topology_apply_binding_ref"], "topology_apply_binding_digest": binding["topology_apply_binding_digest"], "rolehub_ref": topology["rolehub_ref"], "coordinator_ref": topology["coordinator_ref"], "architect_ref": topology["architect_ref"], "topology_readback_digest": topology_digest}
+            topology = {"owner_version": VERSION, "project_id": identity["project_id"], "coordinator_ref": binding["coordinator_ref"], "architect_ref": binding["architect_ref"], "topology_readback_digest": topology_digest, "project_binding_digest": plan["project_binding_digest"], "coordinator_count": 1, "architect_count": 1, "topology_apply_binding_ref": binding["topology_apply_binding_ref"], "topology_apply_binding_digest": binding["topology_apply_binding_digest"], "topology_apply_binding": binding}
+            completion = {"owner_version": VERSION, "completion_receipt_ref": "completion:" + hashlib.sha256((plan["onboarding_key"] + binding["topology_apply_binding_digest"]).encode()).hexdigest()[:24], "onboarding_key": plan["onboarding_key"], "project_binding_ref": plan["project_binding_ref"], "project_binding_digest": plan["project_binding_digest"], "scheduler_binding_ref": self._sealed_context["scheduler_binding_ref"], "work_root_ref": self._sealed_context["work_root_ref"], "scheduler_binding_revision": self._sealed_context["scheduler_binding_revision"], "scheduler_binding_digest": plan["scheduler_binding_digest"], "topology_plan_digest": plan["topology_plan_digest"], "operation_receipt_refs": list(refs), "topology_apply_binding_ref": binding["topology_apply_binding_ref"], "topology_apply_binding_digest": binding["topology_apply_binding_digest"], "coordinator_ref": topology["coordinator_ref"], "architect_ref": topology["architect_ref"], "topology_readback_digest": topology_digest}
             # IDs remain in this protected owner store only; public topology and
             # completion envelopes contain opaque refs/digests exclusively.
             con.execute("INSERT OR REPLACE INTO topology(k,v) VALUES('completion',?)", (_canon({"onboarding_key": plan["onboarding_key"], "topology": topology, "completion": completion, "native_ids": {role: created[role].id for role, _ in _ROLES}}),)); con.commit()

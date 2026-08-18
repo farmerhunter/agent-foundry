@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from typing import Any, Mapping, Protocol
 
 
-VERSION = "bounded-collaboration-initialization-v1"
+VERSION = "bounded-collaboration-initialization-v2"
 ROLES = ("Coordinator", "Architect")
 PRIVATE_KEYS = {
     "body", "content", "credential", "exception", "history", "message",
@@ -131,9 +131,11 @@ def _scheduler(value: Mapping[str, Any], project: Mapping[str, Any]) -> str | No
 def _topology(value: Mapping[str, Any], project: Mapping[str, Any]) -> str | None:
     if value.get("state") == "missing":
         return None
+    if value.get("state") == "held" and value.get("reason") == "legacy_topology_migration_required":
+        return "legacy_topology_migration_required"
     if value.get("state") != "ready":
         return "topology_unavailable"
-    required = ("rolehub_ref", "coordinator_ref", "architect_ref", "topology_readback_digest", "project_binding_digest")
+    required = ("owner_version", "coordinator_ref", "architect_ref", "topology_readback_digest", "project_binding_digest")
     if not _nonempty(value, *required):
         return "topology_invalid"
     if value.get("coordinator_count") != 1 or value.get("architect_count") != 1:
@@ -155,7 +157,6 @@ def _receipt(
     fields: dict[str, Any] = {
         "project_binding_ref": project["project_binding_ref"],
         "project_binding_digest": project["project_binding_digest"],
-        "rolehub_ref": topology["rolehub_ref"],
         "coordinator_ref": topology["coordinator_ref"],
         "architect_ref": topology["architect_ref"],
         "topology_readback_digest": topology["topology_readback_digest"],
@@ -204,7 +205,7 @@ def _validate_apply_binding(
     required = (
         "topology_apply_binding_ref", "topology_apply_binding_digest", "topology_plan_digest",
         "onboarding_key", "project_binding_digest", "scheduler_binding_digest",
-        "operation_receipt_refs_digest", "rolehub_ref", "coordinator_ref",
+        "operation_receipt_refs_digest", "coordinator_ref",
         "architect_ref", "topology_readback_digest",
     )
     if not _nonempty(binding, *required) or not isinstance(binding.get("requested_roles"), (list, tuple)):
@@ -222,7 +223,7 @@ def _validate_apply_binding(
         return None, "topology_apply_receipt_binding_mismatch"
     if binding["topology_apply_binding_digest"] != _binding_digest(binding):
         return None, "topology_apply_readback_binding_forged"
-    final_fields = ("rolehub_ref", "coordinator_ref", "architect_ref", "topology_readback_digest")
+    final_fields = ("coordinator_ref", "architect_ref", "topology_readback_digest")
     if any(topology.get(name) != binding.get(name) for name in final_fields):
         return None, "topology_apply_readback_identity_mismatch"
     if topology.get("topology_apply_binding_ref") != binding["topology_apply_binding_ref"] or topology.get("topology_apply_binding_digest") != binding["topology_apply_binding_digest"]:
@@ -249,7 +250,6 @@ def _completion_identity(
         "operation_receipt_refs": list(binding["operation_receipt_refs"]),
         "topology_apply_binding_ref": binding["topology_apply_binding_ref"],
         "topology_apply_binding_digest": binding["topology_apply_binding_digest"],
-        "rolehub_ref": topology["rolehub_ref"],
         "coordinator_ref": topology["coordinator_ref"],
         "architect_ref": topology["architect_ref"],
         "topology_readback_digest": topology["topology_readback_digest"],
@@ -430,7 +430,7 @@ def initialize(
         original_reason = original_error or _validate_persistent_completion(original, expected)
         if original_reason:
             return _result("partial_hold", onboarding_key, attention_reason=original_reason, safe_next_action="Resolve original completion identity drift before any follow-up.")
-        return _receipt(onboarding_key, fresh_project, fresh_scheduler, fresh_topology, mutation_performed=False, operation_receipt_refs=(), topology_apply_binding_ref=binding_ref, topology_apply_binding_digest=retry_binding["topology_apply_binding_digest"])
+        return _receipt(onboarding_key, fresh_project, fresh_scheduler, fresh_topology, mutation_performed=False, operation_receipt_refs=tuple(retry_binding["operation_receipt_refs"]), topology_apply_binding_ref=binding_ref, topology_apply_binding_digest=retry_binding["topology_apply_binding_digest"])
     return _receipt(onboarding_key, fresh_project, fresh_scheduler, fresh_topology, mutation_performed=False, operation_receipt_refs=operation_receipt_refs)
 
 

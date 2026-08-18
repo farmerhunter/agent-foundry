@@ -222,7 +222,7 @@ def test_owner_verified_production_happy_path_and_exact_retry_are_closed() -> No
         assert first["terminal_classification"] == "native_ready"
         assert first["mode"] == "trusted_local_host_apply" and first["production_eligible"] is True
         assert first["evidence_class"] == "owner_verified_local_host" and first["mutation_performed"] is True
-        assert (server.creates, server.names) == (3, 3)
+        assert (server.creates, server.names) == (2, 2)
         _walk_no_raw(json.loads(json.dumps(first)), {str(root), str(selected), str(binary), *(item["id"] for item in server.items)})
         before = (server.creates, server.names)
         retry = _production_run(root, selected, server, binary, digest, "production-happy")
@@ -300,7 +300,7 @@ def test_binary_mismatch_holds_before_transport_factory() -> None:
         temp.cleanup()
 
 
-def test_paginated_unmanaged_duplicate_and_returned_cwd_drift_hold_before_create() -> None:
+def test_unrelated_rolehub_is_ignored_while_returned_cwd_drift_holds() -> None:
     for drift in (False, True):
         temp, root, selected, _ = _fixture()
         try:
@@ -315,8 +315,13 @@ def test_paginated_unmanaged_duplicate_and_returned_cwd_drift_hold_before_create
                     {"id": "two", "cwd": str(selected), "name": "AF18 RoleHub"},
                 ]
             result = _production_run(root, selected, server, binary, digest, "production-held")
-            assert result["terminal_classification"] == "setup_incomplete" and result["mutation_performed"] is False
-            assert (server.creates, server.names) == (0, 0)
+            if drift:
+                assert result["terminal_classification"] == "setup_incomplete" and result["mutation_performed"] is False
+                assert (server.creates, server.names) == (0, 0)
+            else:
+                assert result["terminal_classification"] == "native_ready" and result["mutation_performed"] is True
+                assert (server.creates, server.names) == (2, 2)
+                assert [item["name"] for item in server.items[:2]] == ["AF18 RoleHub", "AF18 RoleHub"]
         finally:
             temp.cleanup()
 
@@ -343,6 +348,6 @@ if __name__ == "__main__":
     test_production_malformed_successful_create_is_truthful_and_not_retried()
     test_production_post_name_readback_failure_is_truthful()
     test_binary_mismatch_holds_before_transport_factory()
-    test_paginated_unmanaged_duplicate_and_returned_cwd_drift_hold_before_create()
+    test_unrelated_rolehub_is_ignored_while_returned_cwd_drift_holds()
     test_fixture_receipt_cannot_validate_as_production_branch()
     print("ok")

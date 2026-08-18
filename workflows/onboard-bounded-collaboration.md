@@ -42,8 +42,9 @@ non-serializable, one-shot permit to a distinct permit-bound topology owner for
 the second I1 call. The permit is never present in a plan, receipt, JSON, file,
 environment, configuration or public output. It binds the fresh canonical
 project UUID, project/root mapping digests, scheduler binding, exact plan,
-runtime/host identities and the fixed create budget (RoleHub, Coordinator and
-Durable Architect: one each). Missing, expired, replayed or drifted permits
+runtime/host identities and the fixed create budget (Coordinator and Durable
+Architect: one each). RoleHub is an optional logical read-only projection, not
+a native thread or readiness prerequisite. Missing, expired, replayed or drifted permits
 hold before the receipt store or host is touched. An exact completed retry uses
 only the unbound read-only owner and performs no native mutation.
 
@@ -113,7 +114,7 @@ uses privacy-safe opaque refs/digests only.
 
 When topology was applied during this attempt, its owner must additionally
 return an opaque apply/readback commitment derived from the exact topology-plan
-digest, operation-receipt digest, and final RoleHub/Coordinator/Architect plus
+digest, operation-receipt digest, and final Coordinator/Architect plus
 topology-readback identity. The final authoritative topology readback must
 present that exact commitment. Validate it even if the invoked owner reports
 zero mutation/reuse. A missing, changed, replayed or foreign binding is
@@ -131,8 +132,8 @@ The topology owner must also resolve the immutable original completion identity
 for that key on every ready-topology path, not a caller cache. An absent record,
 key collision or invalid stored receipt is a hold; do not create or overwrite a
 successful record to make it pass. Each retry compares the current project,
-scheduler/Work-root, approved plan and receipt refs, RoleHub, Coordinator,
-Architect and topology readback one by one with that stored receipt. A wholly
+scheduler/Work-root, approved plan and receipt refs, Coordinator, Architect and
+topology readback one by one with that stored receipt. A wholly
 self-consistent replacement is still a hold when it differs from the original
 completion identity.
 
