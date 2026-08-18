@@ -14,7 +14,7 @@ from test_bounded_collaboration_runtime_bridge import _fixture as _bridge_fixtur
 from bounded_collaboration_initializer import Owners, initialize
 import local_collaboration_control_plane as control
 import local_collaboration_scheduler as scheduler
-from bounded_collaboration_native_topology_owner import NativeRoleTopologyOwner, TrustedRuntime
+from bounded_collaboration_native_topology_owner import NativeRoleTopologyOwner, ProtectedLocalTopologyProjectionOwner, TrustedRuntime
 from codex_host_rolehub_adapter import ThreadMetadata
 from local_collaboration_ledger import LocalCollaborationLedger
 
@@ -274,6 +274,25 @@ def test_public_schema_accepts_actual_ready_and_rejects_private_held_fields() ->
     finally: temp.cleanup()
 
 
+def test_protected_projection_holds_on_completion_binding_mismatch_without_host() -> None:
+    temp, root, selected, project_id = _fixture()
+    try:
+        host = FakeHost(project_id); runtime = TrustedRuntime(); owner = NativeRoleTopologyOwner(root, selected, host, runtime=runtime)
+        assert bridge.trusted_initialize_fixture(root, selected, "projection-mismatch", topology_owner=owner, permit=runtime.issue_permit(host_digest="sha256:" + "2" * 64))["terminal_classification"] == "native_ready"
+        store = root / project_id / "role-topology.db"
+        con = sqlite3.connect(store)
+        row = con.execute("SELECT v FROM topology WHERE k='completion'").fetchone()
+        record = json.loads(row[0]); record["completion"]["scheduler_binding_digest"] = "sha256:" + "0" * 64
+        con.execute("UPDATE topology SET v=? WHERE k='completion'", (json.dumps(record, sort_keys=True, separators=(",", ":")),)); con.commit(); con.close()
+        before = store.read_bytes()
+        binding = bridge.ProjectBindingOwner(root, selected).read_binding()
+        projection = ProtectedLocalTopologyProjectionOwner(root, selected)
+        assert projection.read_topology(binding) == {"state": "held", "reason": "owner_completion_binding_mismatch"}
+        assert projection.apply_topology({}) == {"state": "held", "reason": "authorization_unavailable"}
+        assert store.read_bytes() == before
+    finally: temp.cleanup()
+
+
 def test_unrelated_rolehub_title_is_ignored_by_two_role_onboarding() -> None:
     temp, root, selected, project_id = _fixture()
     try:
@@ -381,4 +400,4 @@ def test_malformed_create_metadata_retains_unknown_host_mutation() -> None:
 
 
 if __name__ == "__main__":
-    test_trusted_two_call_lifecycle_and_exact_retry(); test_bad_or_replayed_permit_holds_before_store_or_host(); test_one_shot_guard_is_consumed_before_second_host_attempt(); test_noncanonical_identity_holds_without_host_or_store(); test_final_store_symlink_holds_before_sqlite_or_host(); test_same_permit_cannot_bind_a_second_owner_or_project(); test_bound_owner_context_swap_cannot_retarget_same_root_project(); test_bound_owner_host_and_root_swap_holds_before_either_store_or_host(); test_completed_retry_holds_on_deleted_or_replaced_host_identity(); test_completed_retry_uses_protected_direct_reads_not_list_inventory(); test_fresh_success_does_not_require_post_write_list_visibility(); test_exact_final_inventory_reconciles_then_retries_without_native_mutation(); test_final_inventory_mismatch_holds_before_new_native_mutation(); test_unmanaged_collision_ambiguity_foreign_and_list_failure_hold_pre_store(); test_public_schema_accepts_actual_ready_and_rejects_private_held_fields(); test_unrelated_rolehub_title_is_ignored_by_two_role_onboarding(); test_legacy_three_role_store_holds_before_permit_or_host(); test_bridge_surfaces_wrong_project_create_as_retained_partial_mutation(); test_bridge_surfaces_invalid_post_name_readback_as_retained_partial_mutation(); test_second_create_exception_retains_first_role_mutation_truthfully(); test_first_create_exception_has_no_mutation_claim(); test_malformed_create_metadata_retains_unknown_host_mutation(); print("ok")
+    test_trusted_two_call_lifecycle_and_exact_retry(); test_bad_or_replayed_permit_holds_before_store_or_host(); test_one_shot_guard_is_consumed_before_second_host_attempt(); test_noncanonical_identity_holds_without_host_or_store(); test_final_store_symlink_holds_before_sqlite_or_host(); test_same_permit_cannot_bind_a_second_owner_or_project(); test_bound_owner_context_swap_cannot_retarget_same_root_project(); test_bound_owner_host_and_root_swap_holds_before_either_store_or_host(); test_completed_retry_holds_on_deleted_or_replaced_host_identity(); test_completed_retry_uses_protected_direct_reads_not_list_inventory(); test_fresh_success_does_not_require_post_write_list_visibility(); test_exact_final_inventory_reconciles_then_retries_without_native_mutation(); test_final_inventory_mismatch_holds_before_new_native_mutation(); test_unmanaged_collision_ambiguity_foreign_and_list_failure_hold_pre_store(); test_public_schema_accepts_actual_ready_and_rejects_private_held_fields(); test_protected_projection_holds_on_completion_binding_mismatch_without_host(); test_unrelated_rolehub_title_is_ignored_by_two_role_onboarding(); test_legacy_three_role_store_holds_before_permit_or_host(); test_bridge_surfaces_wrong_project_create_as_retained_partial_mutation(); test_bridge_surfaces_invalid_post_name_readback_as_retained_partial_mutation(); test_second_create_exception_retains_first_role_mutation_truthfully(); test_first_create_exception_has_no_mutation_claim(); test_malformed_create_metadata_retains_unknown_host_mutation(); print("ok")

@@ -4,6 +4,7 @@ title: Bounded Collaboration Runtime Bridge Receipt
 description: Closed fixture-preflight or owner-verified local-host receipt.
 oneOf:
   - $ref: "#/$defs/fixtureReceipt"
+  - $ref: "#/$defs/localStoreReceipt"
   - $ref: "#/$defs/productionReceipt"
 $defs:
   commonProperties:
@@ -23,6 +24,18 @@ $defs:
       initialization:
         type: object
         additionalProperties: true
+      status_projection:
+        type: object
+        additionalProperties: false
+        required: [project_binding, control, scheduler, work_root, native_topology, native_reachability, rolehub]
+        properties:
+          project_binding: {const: bound}
+          control: {const: initialized}
+          scheduler: {const: enabled}
+          work_root: {const: bound}
+          native_topology: {const: native_ready}
+          native_reachability: {const: not_checked}
+          rolehub: {const: non_authoritative}
   fixtureReceipt:
     allOf:
       - $ref: "#/$defs/commonProperties"
@@ -40,3 +53,15 @@ $defs:
           mode: {const: trusted_local_host_apply}
           production_eligible: {const: true}
           evidence_class: {const: owner_verified_local_host}
+  localStoreReceipt:
+    allOf:
+      - $ref: "#/$defs/commonProperties"
+      - type: object
+        required: [status_projection]
+        properties:
+          mode: {const: read_only_status}
+          mutation_performed: {const: false}
+          production_eligible: {const: false}
+          evidence_class: {const: owner_verified_local_store}
+          terminal_classification: {const: native_ready}
+          attention_reason: {type: "null"}

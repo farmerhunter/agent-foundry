@@ -275,6 +275,125 @@ class NativeRoleTopologyOwner:
         return PermitBoundNativeRoleTopologyOwner(self, permit, MappingProxyType(dict(context)), MappingProxyType(dict(identity)), str(self._project_root.resolve(strict=True)), self._host, self._runtime, self._host_digest, binding, _Guard())
 
 
+class ProtectedLocalTopologyProjectionOwner:
+    """Host-free read-only projection of a protected completed topology."""
+
+    def __init__(self, projects_root: str | Path, project_root: str | Path):
+        self._reader = NativeRoleTopologyOwner(projects_root, project_root, None)
+
+    def _validated_record(
+        self,
+        project_binding: Mapping[str, Any],
+    ) -> tuple[Mapping[str, Any] | None, str | None]:
+        identity, reason = self._reader._identity(project_binding)
+        if reason or identity is None:
+            return None, reason or "project_identity_invalid"
+        try:
+            con = self._reader._connect(identity, create=False)
+        except _LegacyTopologyHold:
+            return None, "legacy_topology_migration_required"
+        except (OSError, sqlite3.Error, ValueError):
+            return None, "owner_store_unavailable"
+        if con is None:
+            return None, "owner_store_missing"
+        try:
+            record = self._reader._record(con, "completion")
+        except (json.JSONDecodeError, sqlite3.Error, TypeError, ValueError):
+            return None, "owner_store_integrity_hold"
+        finally:
+            con.close()
+        if not isinstance(record, Mapping) or set(record) != {"onboarding_key", "topology", "completion", "native_ids"}:
+            return None, "owner_store_integrity_hold"
+        topology = record.get("topology")
+        completion = record.get("completion")
+        native_ids = record.get("native_ids")
+        if not isinstance(topology, Mapping) or not isinstance(completion, Mapping) or not isinstance(native_ids, Mapping):
+            return None, "owner_store_integrity_hold"
+        topology_keys = {
+            "owner_version", "project_id", "coordinator_ref", "architect_ref",
+            "topology_readback_digest", "project_binding_digest", "coordinator_count",
+            "architect_count", "topology_apply_binding_ref",
+            "topology_apply_binding_digest", "topology_apply_binding",
+        }
+        completion_keys = {
+            "owner_version", "completion_receipt_ref", "onboarding_key",
+            "project_binding_ref", "project_binding_digest", "scheduler_binding_ref",
+            "work_root_ref", "scheduler_binding_revision", "scheduler_binding_digest",
+            "topology_plan_digest", "operation_receipt_refs",
+            "topology_apply_binding_ref", "topology_apply_binding_digest",
+            "coordinator_ref", "architect_ref", "topology_readback_digest",
+        }
+        binding = topology.get("topology_apply_binding")
+        binding_keys = {
+            "topology_apply_binding_ref", "topology_plan_digest", "onboarding_key",
+            "project_binding_digest", "scheduler_binding_digest",
+            "operation_receipt_refs", "operation_receipt_refs_digest",
+            "requested_roles", "coordinator_ref", "architect_ref",
+            "topology_readback_digest", "topology_apply_binding_digest",
+        }
+        roles = {role for role, _ in _ROLES}
+        if set(topology) != topology_keys or set(completion) != completion_keys or not isinstance(binding, Mapping) or set(binding) != binding_keys or set(native_ids) != roles:
+            return None, "owner_store_integrity_hold"
+        if not all(isinstance(native_ids[role], str) and native_ids[role] for role in roles) or len(set(native_ids.values())) != len(roles):
+            return None, "owner_store_integrity_hold"
+        onboarding_key = record.get("onboarding_key")
+        plan_digest = binding.get("topology_plan_digest")
+        if not isinstance(onboarding_key, str) or not onboarding_key or not isinstance(plan_digest, str) or not _DIGEST.fullmatch(plan_digest):
+            return None, "owner_store_integrity_hold"
+        refs = ["operation:" + hashlib.sha256((plan_digest + role).encode()).hexdigest()[:24] for role, _ in _ROLES]
+        opaque = {role: _opaque(role, native_ids[role]) for role, _ in _ROLES}
+        topology_digest = _digest(opaque)
+        apply_ref = "topology-apply:" + hashlib.sha256((plan_digest + identity["mapping_digest"]).encode()).hexdigest()[:24]
+        apply_digest = _digest({key: value for key, value in binding.items() if key != "topology_apply_binding_digest"})
+        expected_shared = {
+            "onboarding_key": onboarding_key,
+            "project_binding_digest": identity["project_binding_digest"],
+            "topology_plan_digest": plan_digest,
+            "operation_receipt_refs": refs,
+            "topology_apply_binding_ref": apply_ref,
+            "topology_apply_binding_digest": apply_digest,
+            "coordinator_ref": opaque["Coordinator"],
+            "architect_ref": opaque["Architect"],
+            "topology_readback_digest": topology_digest,
+        }
+        if (
+            topology.get("owner_version") != VERSION
+            or topology.get("project_id") != identity["project_id"]
+            or topology.get("project_binding_digest") != identity["project_binding_digest"]
+            or topology.get("coordinator_count") != 1
+            or topology.get("architect_count") != 1
+            or completion.get("owner_version") != VERSION
+            or binding.get("requested_roles") != ["Coordinator", "Architect"]
+            or binding.get("operation_receipt_refs_digest") != _digest(refs)
+            or any(binding.get(key) != value for key, value in expected_shared.items())
+            or any(topology.get(key) != value for key, value in expected_shared.items() if key in topology)
+            or any(completion.get(key) != value for key, value in expected_shared.items())
+            or completion.get("scheduler_binding_digest") != binding.get("scheduler_binding_digest")
+            or topology.get("topology_apply_binding") != binding
+            or completion.get("project_binding_ref") != project_binding.get("project_binding_ref")
+            or completion.get("completion_receipt_ref") != "completion:" + hashlib.sha256((onboarding_key + apply_digest).encode()).hexdigest()[:24]
+        ):
+            return None, "owner_completion_binding_mismatch"
+        return record, None
+
+    def read_topology(self, project_binding: Mapping[str, Any]) -> Mapping[str, Any]:
+        record, reason = self._validated_record(project_binding)
+        if reason or record is None:
+            return {"state": "held", "reason": reason or "owner_store_unavailable"}
+        return {"state": "ready", **record["topology"]}
+
+    def read_completion(self, onboarding_key: str, project_binding: Mapping[str, Any]) -> Mapping[str, Any]:
+        record, reason = self._validated_record(project_binding)
+        if reason or record is None:
+            return {"state": "held", "reason": reason or "owner_store_unavailable"}
+        if record["onboarding_key"] != onboarding_key:
+            return {"state": "absent"}
+        return {"state": "ready", **record["completion"]}
+
+    def apply_topology(self, plan: Mapping[str, Any]) -> Mapping[str, Any]:
+        return {"state": "held", "reason": "authorization_unavailable"}
+
+
 class PermitBoundNativeRoleTopologyOwner(NativeRoleTopologyOwner):
     def __init__(self, base: NativeRoleTopologyOwner, permit: _Permit, context: Mapping[str, Any], identity: Mapping[str, str], project_root: str, host: Any, runtime: TrustedRuntime, host_digest: str, claim: str, guard: _Guard):
         self.__dict__.update(base.__dict__)
@@ -402,4 +521,4 @@ class PermitBoundNativeRoleTopologyOwner(NativeRoleTopologyOwner):
         finally: con.close()
 
 
-__all__ = ["NativeRoleTopologyOwner", "PermitBoundNativeRoleTopologyOwner", "TrustedRuntime", "VERSION"]
+__all__ = ["NativeRoleTopologyOwner", "PermitBoundNativeRoleTopologyOwner", "ProtectedLocalTopologyProjectionOwner", "TrustedRuntime", "VERSION"]

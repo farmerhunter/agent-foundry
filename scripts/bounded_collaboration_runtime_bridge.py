@@ -17,7 +17,7 @@ from codex_app_server_thread_connector import (
     verify_codex_binary,
 )
 from bounded_collaboration_initializer import Owners, initialize
-from bounded_collaboration_native_topology_owner import NativeRoleTopologyOwner, TrustedRuntime
+from bounded_collaboration_native_topology_owner import NativeRoleTopologyOwner, ProtectedLocalTopologyProjectionOwner, TrustedRuntime
 from local_collaboration_ledger import LedgerError, LocalCollaborationLedger
 from local_collaboration_scheduler import SchedulerHold, replay_scheduler_state
 
@@ -58,17 +58,27 @@ def _private(value: Any) -> bool:
     return isinstance(value, (list, tuple)) and any(_private(item) for item in value)
 
 
-def _receipt(terminal: str, *, attention_reason: str | None, safe_next_action: str, initialization: Mapping[str, Any] | None = None, mutation_performed: bool = False) -> Mapping[str, Any]:
+def _receipt(terminal: str, *, attention_reason: str | None, safe_next_action: str, initialization: Mapping[str, Any] | None = None, mutation_performed: bool = False, owner_verified_local_store: bool = False) -> Mapping[str, Any]:
     value: dict[str, Any] = {
         "bridge_version": VERSION,
-        "mode": "read_only_preflight",
+        "mode": "read_only_status" if owner_verified_local_store else "read_only_preflight",
         "mutation_performed": mutation_performed,
         "production_eligible": False,
-        "evidence_class": "fixture_only",
+        "evidence_class": "owner_verified_local_store" if owner_verified_local_store else "fixture_only",
         "terminal_classification": terminal,
         "attention_reason": attention_reason,
         "safe_next_action": safe_next_action,
     }
+    if owner_verified_local_store:
+        value["status_projection"] = {
+            "project_binding": "bound",
+            "control": "initialized",
+            "scheduler": "enabled",
+            "work_root": "bound",
+            "native_topology": "native_ready",
+            "native_reachability": "not_checked",
+            "rolehub": "non_authoritative",
+        }
     if initialization is not None and not _private(initialization):
         value["initialization"] = dict(initialization)
     return _freeze(value)
@@ -197,7 +207,7 @@ def run(projects_root: str | Path, project_root: str | Path, onboarding_key: str
     except ValueError:
         return _receipt("schema_or_privacy_failure", attention_reason="invalid_locator_or_onboarding_key", safe_next_action="Use canonical locator-only inputs.")
     try:
-        owners = Owners(ProjectBindingOwner(root, selected), SchedulerBindingOwner(root), topology_owner or UnavailableTopologyOwner())
+        owners = Owners(ProjectBindingOwner(root, selected), SchedulerBindingOwner(root), topology_owner or ProtectedLocalTopologyProjectionOwner(root, selected))
         result = initialize(owners, onboarding_key=onboarding_key, apply_authorized=False)
     except (LedgerError, SchedulerHold):
         return _receipt("owner_unavailable", attention_reason="owner_binding_unavailable", safe_next_action="Restore the owner-backed project and scheduler bindings.")
@@ -208,7 +218,7 @@ def run(projects_root: str | Path, project_root: str | Path, onboarding_key: str
     terminal = str(result.get("completion_state", "partial_hold"))
     if terminal not in {"topology_plan_ready", "native_ready", "repo_contract_only", "partial_hold", "unavailable", "setup_incomplete"}:
         terminal = "schema_or_privacy_failure"
-    return _receipt(terminal, attention_reason=result.get("attention_reason"), safe_next_action=str(result.get("safe_next_action", "Read owner state before any follow-up.")), initialization=result)
+    return _receipt(terminal, attention_reason=result.get("attention_reason"), safe_next_action=str(result.get("safe_next_action", "Read owner state before any follow-up.")), initialization=result, owner_verified_local_store=topology_owner is None and terminal == "native_ready")
 
 
 def trusted_initialize_fixture(
