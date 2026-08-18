@@ -113,7 +113,12 @@ def main():
     applied = initializer.initialize(own, onboarding_key="onboard-3", apply_authorized=True)
     check("ordered-apply-and-bound-readback", applied["completion_state"] == "native_ready" and applied["mutation_performed"] and applied["topology_apply_binding_ref"] == "binding:opaque" and topology.apply_calls == 1, applied)
     retried = initializer.initialize(own, onboarding_key="onboard-3", apply_authorized=True)
-    check("exact-retry-no-topology-mutation", retried["completion_state"] == "native_ready" and retried["mutation_performed"] is False and topology.apply_calls == 1 and topology.binding["topology_apply_binding_ref"] == "binding:opaque", retried)
+    check("exact-retry-no-topology-mutation", retried["completion_state"] == "native_ready" and retried["mutation_performed"] is False and len(retried["operation_receipt_refs"]) == 2 and topology.apply_calls == 1 and topology.binding["topology_apply_binding_ref"] == "binding:opaque", retried)
+    schema("retry", retried)
+    for count in (0, 1, 3):
+        invalid = json.loads(json.dumps(retried))
+        invalid["operation_receipt_refs"] = [f"receipt:{index}" for index in range(count)]
+        check(f"native-ready-{count}-operation-refs-rejected", bool(list(jsonschema.Draft202012Validator(SCHEMA).iter_errors(invalid))), invalid)
 
     topology.foreign_after_apply = True
     topology.binding["coordinator_ref"] = "role:foreign-c"; topology.binding["architect_ref"] = "role:foreign-a"; topology.binding["topology_readback_digest"] = "sha256:foreign-topology"; topology.binding["topology_apply_binding_digest"] = initializer._binding_digest(topology.binding)

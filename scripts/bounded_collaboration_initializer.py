@@ -430,7 +430,7 @@ def initialize(
         original_reason = original_error or _validate_persistent_completion(original, expected)
         if original_reason:
             return _result("partial_hold", onboarding_key, attention_reason=original_reason, safe_next_action="Resolve original completion identity drift before any follow-up.")
-        return _receipt(onboarding_key, fresh_project, fresh_scheduler, fresh_topology, mutation_performed=False, operation_receipt_refs=(), topology_apply_binding_ref=binding_ref, topology_apply_binding_digest=retry_binding["topology_apply_binding_digest"])
+        return _receipt(onboarding_key, fresh_project, fresh_scheduler, fresh_topology, mutation_performed=False, operation_receipt_refs=tuple(retry_binding["operation_receipt_refs"]), topology_apply_binding_ref=binding_ref, topology_apply_binding_digest=retry_binding["topology_apply_binding_digest"])
     return _receipt(onboarding_key, fresh_project, fresh_scheduler, fresh_topology, mutation_performed=False, operation_receipt_refs=operation_receipt_refs)
 
 

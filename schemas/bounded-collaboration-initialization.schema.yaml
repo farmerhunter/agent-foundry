@@ -41,11 +41,14 @@ properties:
   repo_contract_status: {const: not_authoritative}
   operation_receipt_refs:
     type: array
+    maxItems: 2
     items: {type: string, minLength: 1}
 allOf:
   - if: {properties: {completion_state: {const: native_ready}}}
     then:
       required: [project_binding_ref, project_binding_digest, coordinator_ref, architect_ref, topology_readback_digest, scheduler_binding_ref, work_root_ref, scheduler_binding_revision, scheduler_binding_digest, repo_contract_status, operation_receipt_refs]
+      properties:
+        operation_receipt_refs: {minItems: 2, maxItems: 2}
   - if: {properties: {completion_state: {const: topology_plan_ready}}}
     then: {required: [topology_plan]}
   - if:
