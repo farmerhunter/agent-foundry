@@ -154,11 +154,10 @@ class NativeRoleTopologyOwner:
             return "native_readback_unavailable"
         return None
 
-    def _final_inventory_attempt(self, attempt: Mapping[str, Any] | None, identity: Mapping[str, str]) -> bool:
+    def _final_inventory_attempt(self, attempt: Mapping[str, Any] | None, identity: Mapping[str, str], plan: Mapping[str, Any] | None = None) -> bool:
         if not isinstance(attempt, Mapping):
             return False
         required = {
-            "owner_version": VERSION,
             "state": "verifying",
             "pending_role": "final_inventory",
             "pending_title": None,
@@ -169,8 +168,9 @@ class NativeRoleTopologyOwner:
         }
         if any(attempt.get(key) != value for key, value in required.items()):
             return False
-        string_fields = ("onboarding_key", "project_binding_ref", "scheduler_binding_ref", "work_root_ref", "scheduler_binding_revision", "scheduler_binding_digest", "topology_plan_digest")
-        if not all(isinstance(attempt.get(key), str) and attempt[key] for key in string_fields):
+        if not isinstance(attempt.get("topology_plan_digest"), str) or not attempt["topology_plan_digest"]:
+            return False
+        if plan is not None and attempt["topology_plan_digest"] != plan.get("topology_plan_digest"):
             return False
         if attempt.get("operation_budget") != [role for role, _ in _ROLES] or attempt.get("roles") != [role for role, _ in _ROLES]:
             return False
@@ -192,8 +192,8 @@ class NativeRoleTopologyOwner:
                 return False
         return True
 
-    def _completion_from_attempt(self, con: sqlite3.Connection, identity: Mapping[str, str], attempt: Mapping[str, Any]) -> tuple[Mapping[str, Any] | None, str | None]:
-        if not self._final_inventory_attempt(attempt, identity):
+    def _completion_from_attempt(self, con: sqlite3.Connection, identity: Mapping[str, str], attempt: Mapping[str, Any], source: Mapping[str, Any]) -> tuple[Mapping[str, Any] | None, str | None]:
+        if not self._final_inventory_attempt(attempt, identity, source):
             return None, "partial_native_apply"
         created: dict[str, ThreadMetadata] = {}
         try:
@@ -208,7 +208,7 @@ class NativeRoleTopologyOwner:
                 created[role] = metadata
         except Exception:
             return None, "native_readback_unavailable"
-        record, binding = self._build_completion(identity, attempt, created)
+        record, binding = self._build_completion(identity, source, created)
         con.execute("INSERT OR REPLACE INTO topology(k,v) VALUES('completion',?)", (_canon(record),)); con.commit()
         return binding, None
 
@@ -221,54 +221,38 @@ class NativeRoleTopologyOwner:
         completion = {"owner_version": VERSION, "completion_receipt_ref": "completion:" + hashlib.sha256((source["onboarding_key"] + binding["topology_apply_binding_digest"]).encode()).hexdigest()[:24], "onboarding_key": source["onboarding_key"], "project_binding_ref": source["project_binding_ref"], "project_binding_digest": source["project_binding_digest"], "scheduler_binding_ref": source["scheduler_binding_ref"], "work_root_ref": source["work_root_ref"], "scheduler_binding_revision": source["scheduler_binding_revision"], "scheduler_binding_digest": source["scheduler_binding_digest"], "topology_plan_digest": source["topology_plan_digest"], "operation_receipt_refs": list(refs), "topology_apply_binding_ref": binding["topology_apply_binding_ref"], "topology_apply_binding_digest": binding["topology_apply_binding_digest"], "coordinator_ref": topology["coordinator_ref"], "architect_ref": topology["architect_ref"], "topology_readback_digest": topology_digest}
         return {"onboarding_key": source["onboarding_key"], "topology": topology, "completion": completion, "native_ids": {role: created[role].id for role, _ in _ROLES}}, binding
 
-    def _completion_record(self, identity: Mapping[str, str]) -> tuple[Mapping[str, Any] | None, str | None, bool]:
-        con = self._connect(identity, create=False)
-        if con is None:
-            return None, None, False
-        try:
-            completion = self._record(con, "completion")
-            if completion is not None:
-                return completion, None, False
-            attempt = self._record(con, "attempt")
-            if not self._final_inventory_attempt(attempt, identity):
-                return None, "partial_native_apply", False
-        finally:
-            con.close()
-        con = self._connect(identity, create=True)
-        assert con is not None
-        try:
-            completion = self._record(con, "completion")
-            if completion is not None:
-                return completion, None, False
-            _, reason = self._completion_from_attempt(con, identity, self._record(con, "attempt") or {})
-            if reason:
-                return None, reason, False
-            return self._record(con, "completion"), None, True
-        finally:
-            con.close()
-
     def read_topology(self, project_binding: Mapping[str, Any]) -> Mapping[str, Any]:
         identity, reason = self._identity(project_binding)
         if reason: return {"state": "held", "reason": reason}
-        try: rec, completion_reason, _ = self._completion_record(identity)
+        try: con = self._connect(identity, create=False)
         except _LegacyTopologyHold: return {"state": "held", "reason": "legacy_topology_migration_required"}
         except (OSError, sqlite3.Error, ValueError): return {"state": "held", "reason": "owner_store_unavailable"}
-        if rec is None: return {"state": "held", "reason": completion_reason} if completion_reason else {"state": "missing"}
-        reason = self._verify_stored_host(rec)
-        if reason: return {"state": "held", "reason": reason}
-        return {"state": "ready", **rec["topology"]}
+        if con is None: return {"state": "missing"}
+        try:
+            rec = self._record(con, "completion")
+            if rec is None:
+                return {"state": "missing"} if self._final_inventory_attempt(self._record(con, "attempt"), identity) else {"state": "held", "reason": "partial_native_apply"}
+            reason = self._verify_stored_host(rec)
+            if reason: return {"state": "held", "reason": reason}
+            return {"state": "ready", **rec["topology"]}
+        finally: con.close()
 
     def read_completion(self, onboarding_key: str, project_binding: Mapping[str, Any]) -> Mapping[str, Any]:
         identity, reason = self._identity(project_binding)
         if reason: return {"state": "held", "reason": reason}
-        try: rec, completion_reason, _ = self._completion_record(identity)
+        try: con = self._connect(identity, create=False)
         except _LegacyTopologyHold: return {"state": "held", "reason": "legacy_topology_migration_required"}
         except (OSError, sqlite3.Error, ValueError): return {"state": "held", "reason": "owner_store_unavailable"}
-        if rec is None: return {"state": "held", "reason": completion_reason} if completion_reason else {"state": "absent"}
-        if rec.get("onboarding_key") != onboarding_key: return {"state": "absent"}
-        reason = self._verify_stored_host(rec)
-        if reason: return {"state": "held", "reason": reason}
-        return {"state": "ready", **rec["completion"]}
+        if con is None: return {"state": "absent"}
+        try:
+            rec = self._record(con, "completion")
+            if rec is None:
+                return {"state": "absent"} if self._final_inventory_attempt(self._record(con, "attempt"), identity) else {"state": "held", "reason": "partial_native_apply"}
+            if rec.get("onboarding_key") != onboarding_key: return {"state": "absent"}
+            reason = self._verify_stored_host(rec)
+            if reason: return {"state": "held", "reason": reason}
+            return {"state": "ready", **rec["completion"]}
+        finally: con.close()
 
     def apply_topology(self, plan: Mapping[str, Any]) -> Mapping[str, Any]:
         return {"state": "held", "reason": "authorization_unavailable"}
@@ -348,6 +332,28 @@ class PermitBoundNativeRoleTopologyOwner(NativeRoleTopologyOwner):
         identity, reason = self._valid(plan)
         if reason: return {"state": "held", "reason": reason}
         self._guard.consumed = True
+        try: existing = self._connect(identity, create=False)
+        except (OSError, sqlite3.Error, ValueError): return {"state": "held", "reason": "owner_store_unavailable"}
+        if existing is not None:
+            try:
+                if self._record(existing, "completion") is not None:
+                    return {"state": "held", "reason": "completion_drift"}
+                attempt = self._record(existing, "attempt")
+                if not self._final_inventory_attempt(attempt, identity, plan):
+                    return {"state": "held", "reason": "partial_native_apply"}
+            finally:
+                existing.close()
+            try: con = self._connect(identity, create=True)
+            except (OSError, sqlite3.Error, ValueError): return {"state": "held", "reason": "owner_store_unavailable"}
+            assert con is not None
+            try:
+                source = {**plan, "scheduler_binding_ref": self._sealed_context["scheduler_binding_ref"], "work_root_ref": self._sealed_context["work_root_ref"], "scheduler_binding_revision": self._sealed_context["scheduler_binding_revision"]}
+                binding, reason = self._completion_from_attempt(con, identity, self._record(con, "attempt") or {}, source)
+                if reason or binding is None:
+                    return {"state": "held", "reason": reason or "partial_native_apply"}
+                return {"state": "applied", "mutation_performed": True, "topology_plan_digest": plan["topology_plan_digest"], "operation_receipt_refs": tuple(binding["operation_receipt_refs"]), "topology_apply_binding": binding}
+            finally:
+                con.close()
         reason = self._preflight_unmanaged_topology(identity)
         if reason: return {"state": "held", "reason": reason}
         try: con = self._connect(identity, create=True)
@@ -366,7 +372,7 @@ class PermitBoundNativeRoleTopologyOwner(NativeRoleTopologyOwner):
                 return {"state": "applied", "mutation_performed": True, "topology_plan_digest": plan["topology_plan_digest"], "operation_receipt_refs": refs or ("operation:partial",), "topology_apply_binding": {}}
             for role, title in _ROLES:
                 previous = self._record(con, "attempt") or {}
-                attempt = {"owner_version": VERSION, "state": "verifying", "mapping_digest": identity["mapping_digest"], "project_id": identity["project_id"], "project_binding_ref": plan["project_binding_ref"], "project_binding_digest": identity["project_binding_digest"], "root_digest": identity["root_digest"], "scheduler_binding_ref": self._sealed_context["scheduler_binding_ref"], "work_root_ref": self._sealed_context["work_root_ref"], "scheduler_binding_revision": self._sealed_context["scheduler_binding_revision"], "scheduler_binding_digest": plan["scheduler_binding_digest"], "onboarding_key": plan["onboarding_key"], "topology_plan_digest": plan["topology_plan_digest"], "operation_budget": [item[0] for item in _ROLES], "roles": list(created), "pending_role": role, "pending_title": title, "operation_refs": previous.get("operation_refs", {}), "native_ids": previous.get("native_ids", {}), "readback_digests": previous.get("readback_digests", {}), "operations": previous.get("operations", {})}
+                attempt = {"state": "verifying", "mapping_digest": identity["mapping_digest"], "project_id": identity["project_id"], "project_binding_digest": identity["project_binding_digest"], "root_digest": identity["root_digest"], "topology_plan_digest": plan["topology_plan_digest"], "operation_budget": [item[0] for item in _ROLES], "roles": list(created), "pending_role": role, "pending_title": title, "operation_refs": previous.get("operation_refs", {}), "native_ids": previous.get("native_ids", {}), "readback_digests": previous.get("readback_digests", {}), "operations": previous.get("operations", {})}
                 con.execute("INSERT OR REPLACE INTO topology(k,v) VALUES('attempt',?)", (_canon(attempt),)); con.commit()
                 try:
                     md = self._sealed_host.create_thread(self._sealed_project_root)
@@ -387,7 +393,8 @@ class PermitBoundNativeRoleTopologyOwner(NativeRoleTopologyOwner):
                 con.execute("INSERT OR REPLACE INTO topology(k,v) VALUES('attempt',?)", (_canon({**attempt, "state": "applying", "roles": list(created), "operation_refs": {item: "operation:" + hashlib.sha256((plan["topology_plan_digest"] + item).encode()).hexdigest()[:24] for item in created}, "native_ids": {item: created[item].id for item in created}, "readback_digests": {item: _digest({"id": created[item].id, "project_id": created[item].project_id, "cwd": created[item].cwd, "name": created[item].name}) for item in created}, "operations": {item: {"native_id": created[item].id, "title": created[item].name, "project_id": created[item].project_id, "readback_digest": _digest({"id": created[item].id, "project_id": created[item].project_id, "cwd": created[item].cwd, "name": created[item].name}), "operation_ref": "operation:" + hashlib.sha256((plan["topology_plan_digest"] + item).encode()).hexdigest()[:24]} for item in created}}),)); con.commit()
             prior = self._record(con, "attempt") or {}
             con.execute("INSERT OR REPLACE INTO topology(k,v) VALUES('attempt',?)", (_canon({**prior, "state": "verifying", "pending_role": "final_inventory", "pending_title": None}),)); con.commit()
-            binding, reason = self._completion_from_attempt(con, identity, self._record(con, "attempt") or {})
+            source = {**plan, "scheduler_binding_ref": self._sealed_context["scheduler_binding_ref"], "work_root_ref": self._sealed_context["work_root_ref"], "scheduler_binding_revision": self._sealed_context["scheduler_binding_revision"]}
+            binding, reason = self._completion_from_attempt(con, identity, self._record(con, "attempt") or {}, source)
             if reason or binding is None:
                 return partial_result()
             refs = tuple(binding["operation_receipt_refs"])

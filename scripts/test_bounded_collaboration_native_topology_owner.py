@@ -211,7 +211,7 @@ def test_exact_final_inventory_reconciles_then_retries_without_native_mutation()
         assert first["terminal_classification"] == "setup_incomplete" and host.creates == 2 and host.names == 2
         host.fail_final = False
         before = (host.creates, host.names)
-        reconciled = bridge.trusted_initialize_fixture(root, selected, "reconcile", topology_owner=owner, permit=object())
+        reconciled = bridge.trusted_initialize_fixture(root, selected, "reconcile", topology_owner=owner, permit=runtime.issue_permit(host_digest="sha256:" + "2" * 64))
         assert reconciled["terminal_classification"] == "native_ready" and (host.creates, host.names) == before
         refs = tuple(reconciled["initialization"]["operation_receipt_refs"])
         retry = bridge.trusted_initialize_fixture(root, selected, "reconcile", topology_owner=owner, permit=object())
@@ -237,8 +237,8 @@ def test_final_inventory_mismatch_holds_before_new_native_mutation() -> None:
         item = host.items[native_id]
         host.items[native_id] = ThreadMetadata(item.id, item.cwd, "wrong-title", item.project_id)
         before = (host.creates, host.names)
-        held = bridge.trusted_initialize_fixture(root, selected, "mismatch", topology_owner=owner, permit=object())
-        assert held["terminal_classification"] == "partial_hold" and (host.creates, host.names) == before
+        held = bridge.trusted_initialize_fixture(root, selected, "mismatch", topology_owner=owner, permit=runtime.issue_permit(host_digest="sha256:" + "2" * 64))
+        assert held["terminal_classification"] == "setup_incomplete" and (host.creates, host.names) == before
     finally: temp.cleanup()
 
 
