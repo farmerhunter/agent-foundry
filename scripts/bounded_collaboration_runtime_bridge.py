@@ -235,7 +235,7 @@ def trusted_initialize_fixture(
         required = ("project_id", "project_binding_ref", "project_binding_digest", "root_digest")
         if not all(isinstance(binding.get(k), str) and binding[k] for k in required) or scheduled.get("state") != "bound":
             return _receipt("owner_unavailable", attention_reason="owner_binding_unavailable", safe_next_action="Restore owner bindings.")
-        context = {**{k: binding[k] for k in required}, "scheduler_binding_digest": scheduled["scheduler_binding_digest"], "scheduler_binding_ref": scheduled["scheduler_binding_ref"], "work_root_ref": scheduled["work_root_ref"], "scheduler_binding_revision": scheduled["scheduler_binding_revision"], "onboarding_key": onboarding_key, "topology_plan_digest": plan["topology_plan_digest"], "topology_preimage_digest": plan["topology_preimage_digest"], "create_budget": {"RoleHub": 1, "Coordinator": 1, "DurableArchitect": 1}}
+        context = {**{k: binding[k] for k in required}, "scheduler_binding_digest": scheduled["scheduler_binding_digest"], "scheduler_binding_ref": scheduled["scheduler_binding_ref"], "work_root_ref": scheduled["work_root_ref"], "scheduler_binding_revision": scheduled["scheduler_binding_revision"], "onboarding_key": onboarding_key, "topology_plan_digest": plan["topology_plan_digest"], "topology_preimage_digest": plan["topology_preimage_digest"], "create_budget": {"Coordinator": 1, "DurableArchitect": 1}}
         identity, reason = topology_owner._identity(binding)
         if reason or identity is None:
             return _receipt("partial_hold", attention_reason=reason or "project_identity_invalid", safe_next_action="Restore owner identity before native apply.")

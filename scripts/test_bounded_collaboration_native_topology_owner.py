@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import json
+import sqlite3
 import tempfile
 import uuid
 import jsonschema
@@ -40,11 +42,11 @@ def test_trusted_two_call_lifecycle_and_exact_retry() -> None:
     try:
         host = FakeHost(project_id); runtime = TrustedRuntime(); owner = NativeRoleTopologyOwner(root, selected, host, runtime=runtime)
         first = bridge.trusted_initialize_fixture(root, selected, "key", topology_owner=owner, permit=runtime.issue_permit(host_digest="sha256:" + "2" * 64))
-        assert first["terminal_classification"] == "native_ready" and host.creates == 3 and host.names == 3 and host.calls > 9
+        assert first["terminal_classification"] == "native_ready" and host.creates == 2 and host.names == 2 and host.calls > 6
         assert "permit" not in str(first).lower() and "n1" not in str(first)
         before = host.calls
         retry = bridge.trusted_initialize_fixture(root, selected, "key", topology_owner=owner, permit=object())
-        assert retry["terminal_classification"] == "native_ready" and host.calls > before and host.creates == 3 and host.names == 3
+        assert retry["terminal_classification"] == "native_ready" and host.calls > before and host.creates == 2 and host.names == 2
     finally: temp.cleanup()
 
 
@@ -68,7 +70,7 @@ def test_one_shot_guard_is_consumed_before_second_host_attempt() -> None:
         plan = initialize(Owners(project, scheduler_owner, owner), onboarding_key="guard", apply_authorized=False)["topology_plan"]
         binding = project.read_binding(); scheduler_binding = scheduler_owner.read_binding(binding); identity, reason = owner._identity(binding)
         assert reason is None and identity is not None
-        context = {"project_id": binding["project_id"], "project_binding_ref": binding["project_binding_ref"], "project_binding_digest": binding["project_binding_digest"], "root_digest": binding["root_digest"], "scheduler_binding_digest": scheduler_binding["scheduler_binding_digest"], "scheduler_binding_ref": scheduler_binding["scheduler_binding_ref"], "work_root_ref": scheduler_binding["work_root_ref"], "scheduler_binding_revision": scheduler_binding["scheduler_binding_revision"], "onboarding_key": "guard", "topology_plan_digest": plan["topology_plan_digest"], "topology_preimage_digest": plan["topology_preimage_digest"], "mapping_digest": identity["mapping_digest"], "create_budget": {"RoleHub": 1, "Coordinator": 1, "DurableArchitect": 1}}
+        context = {"project_id": binding["project_id"], "project_binding_ref": binding["project_binding_ref"], "project_binding_digest": binding["project_binding_digest"], "root_digest": binding["root_digest"], "scheduler_binding_digest": scheduler_binding["scheduler_binding_digest"], "scheduler_binding_ref": scheduler_binding["scheduler_binding_ref"], "work_root_ref": scheduler_binding["work_root_ref"], "scheduler_binding_revision": scheduler_binding["scheduler_binding_revision"], "onboarding_key": "guard", "topology_plan_digest": plan["topology_plan_digest"], "topology_preimage_digest": plan["topology_preimage_digest"], "mapping_digest": identity["mapping_digest"], "create_budget": {"Coordinator": 1, "DurableArchitect": 1}}
         bound = owner.bind_permit(runtime.issue_permit(host_digest="sha256:" + "2" * 64), context); assert bound is not None
         assert bound.apply_topology(plan)["state"] == "applied"; calls = host.calls
         assert bound.apply_topology(plan)["reason"] == "authorization_unavailable" and host.calls == calls
@@ -119,7 +121,7 @@ def test_bound_owner_context_swap_cannot_retarget_same_root_project() -> None:
         def make_context(project_root, owner, key):
             project = bridge.ProjectBindingOwner(root, project_root); sched = bridge.SchedulerBindingOwner(root); plan = initialize(Owners(project, sched, owner), onboarding_key=key, apply_authorized=False)["topology_plan"]
             binding = project.read_binding(); scheduler_binding = sched.read_binding(binding); identity, reason = owner._identity(binding); assert reason is None and identity is not None
-            return plan, {"project_id": binding["project_id"], "project_binding_ref": binding["project_binding_ref"], "project_binding_digest": binding["project_binding_digest"], "root_digest": binding["root_digest"], "scheduler_binding_digest": scheduler_binding["scheduler_binding_digest"], "scheduler_binding_ref": scheduler_binding["scheduler_binding_ref"], "work_root_ref": scheduler_binding["work_root_ref"], "scheduler_binding_revision": scheduler_binding["scheduler_binding_revision"], "onboarding_key": key, "topology_plan_digest": plan["topology_plan_digest"], "topology_preimage_digest": plan["topology_preimage_digest"], "mapping_digest": identity["mapping_digest"], "create_budget": {"RoleHub": 1, "Coordinator": 1, "DurableArchitect": 1}}
+            return plan, {"project_id": binding["project_id"], "project_binding_ref": binding["project_binding_ref"], "project_binding_digest": binding["project_binding_digest"], "root_digest": binding["root_digest"], "scheduler_binding_digest": scheduler_binding["scheduler_binding_digest"], "scheduler_binding_ref": scheduler_binding["scheduler_binding_ref"], "work_root_ref": scheduler_binding["work_root_ref"], "scheduler_binding_revision": scheduler_binding["scheduler_binding_revision"], "onboarding_key": key, "topology_plan_digest": plan["topology_plan_digest"], "topology_preimage_digest": plan["topology_preimage_digest"], "mapping_digest": identity["mapping_digest"], "create_budget": {"Coordinator": 1, "DurableArchitect": 1}}
         first_plan, first_context = make_context(selected, first_owner, "first")
         bound = first_owner.bind_permit(runtime.issue_permit(host_digest="sha256:" + "2" * 64), first_context); assert bound is not None
         second_host = FakeHost(second_id); second_owner = NativeRoleTopologyOwner(root, second_selected, second_host, runtime=runtime)
@@ -139,7 +141,7 @@ def test_bound_owner_host_and_root_swap_holds_before_either_store_or_host() -> N
         runtime = TrustedRuntime(); first_host = FakeHost(first_id); owner = NativeRoleTopologyOwner(root, selected, first_host, runtime=runtime)
         project = bridge.ProjectBindingOwner(root, selected); sched = bridge.SchedulerBindingOwner(root); plan = initialize(Owners(project, sched, owner), onboarding_key="first", apply_authorized=False)["topology_plan"]
         binding = project.read_binding(); scheduler_binding = sched.read_binding(binding); identity, reason = owner._identity(binding); assert reason is None and identity is not None
-        context = {"project_id": binding["project_id"], "project_binding_ref": binding["project_binding_ref"], "project_binding_digest": binding["project_binding_digest"], "root_digest": binding["root_digest"], "scheduler_binding_digest": scheduler_binding["scheduler_binding_digest"], "scheduler_binding_ref": scheduler_binding["scheduler_binding_ref"], "work_root_ref": scheduler_binding["work_root_ref"], "scheduler_binding_revision": scheduler_binding["scheduler_binding_revision"], "onboarding_key": "first", "topology_plan_digest": plan["topology_plan_digest"], "topology_preimage_digest": plan["topology_preimage_digest"], "mapping_digest": identity["mapping_digest"], "create_budget": {"RoleHub": 1, "Coordinator": 1, "DurableArchitect": 1}}
+        context = {"project_id": binding["project_id"], "project_binding_ref": binding["project_binding_ref"], "project_binding_digest": binding["project_binding_digest"], "root_digest": binding["root_digest"], "scheduler_binding_digest": scheduler_binding["scheduler_binding_digest"], "scheduler_binding_ref": scheduler_binding["scheduler_binding_ref"], "work_root_ref": scheduler_binding["work_root_ref"], "scheduler_binding_revision": scheduler_binding["scheduler_binding_revision"], "onboarding_key": "first", "topology_plan_digest": plan["topology_plan_digest"], "topology_preimage_digest": plan["topology_preimage_digest"], "mapping_digest": identity["mapping_digest"], "create_budget": {"Coordinator": 1, "DurableArchitect": 1}}
         bound = owner.bind_permit(runtime.issue_permit(host_digest="sha256:" + "2" * 64), context); assert bound is not None
         second_host = FakeHost(second_id); bound.__dict__["_project_root"] = second_selected; bound.__dict__["_host"] = second_host
         assert bound.apply_topology(plan)["reason"] == "authorization_mismatch"
@@ -186,7 +188,7 @@ def test_unmanaged_collision_ambiguity_foreign_and_list_failure_hold_pre_store()
             host = FakeHost(project_id); runtime = TrustedRuntime(); owner = NativeRoleTopologyOwner(root, selected, host, runtime=runtime)
             project = bridge.ProjectBindingOwner(root, selected); sched = bridge.SchedulerBindingOwner(root); plan = initialize(Owners(project, sched, owner), onboarding_key=kind, apply_authorized=False)["topology_plan"]
             binding = project.read_binding(); scheduler_binding = sched.read_binding(binding); identity, reason = owner._identity(binding); assert reason is None and identity is not None
-            context = {"project_id": binding["project_id"], "project_binding_ref": binding["project_binding_ref"], "project_binding_digest": binding["project_binding_digest"], "root_digest": binding["root_digest"], "scheduler_binding_digest": scheduler_binding["scheduler_binding_digest"], "scheduler_binding_ref": scheduler_binding["scheduler_binding_ref"], "work_root_ref": scheduler_binding["work_root_ref"], "scheduler_binding_revision": scheduler_binding["scheduler_binding_revision"], "onboarding_key": kind, "topology_plan_digest": plan["topology_plan_digest"], "topology_preimage_digest": plan["topology_preimage_digest"], "mapping_digest": identity["mapping_digest"], "create_budget": {"RoleHub": 1, "Coordinator": 1, "DurableArchitect": 1}}
+            context = {"project_id": binding["project_id"], "project_binding_ref": binding["project_binding_ref"], "project_binding_digest": binding["project_binding_digest"], "root_digest": binding["root_digest"], "scheduler_binding_digest": scheduler_binding["scheduler_binding_digest"], "scheduler_binding_ref": scheduler_binding["scheduler_binding_ref"], "work_root_ref": scheduler_binding["work_root_ref"], "scheduler_binding_revision": scheduler_binding["scheduler_binding_revision"], "onboarding_key": kind, "topology_plan_digest": plan["topology_plan_digest"], "topology_preimage_digest": plan["topology_preimage_digest"], "mapping_digest": identity["mapping_digest"], "create_budget": {"Coordinator": 1, "DurableArchitect": 1}}
             bound = owner.bind_permit(runtime.issue_permit(host_digest="sha256:" + "2" * 64), context); assert bound is not None
             if kind == "collision": host.items["u"] = ThreadMetadata("u", str(selected), "AF18 Coordinator", project_id)
             elif kind == "ambiguous":
@@ -208,6 +210,40 @@ def test_public_schema_accepts_actual_ready_and_rejects_private_held_fields() ->
         schema = yaml.safe_load((Path(__file__).resolve().parents[1] / "schemas" / "bounded-collaboration-native-topology-owner.schema.yaml").read_text())
         jsonschema.Draft202012Validator(schema).validate(owner.read_topology(binding)); jsonschema.Draft202012Validator(schema).validate(owner.read_completion("schema", binding))
         assert list(jsonschema.Draft202012Validator(schema).iter_errors({"state": "held", "reason": "x", "rolehub_ref": "leak"}))
+    finally: temp.cleanup()
+
+
+def test_unrelated_rolehub_title_is_ignored_by_two_role_onboarding() -> None:
+    temp, root, selected, project_id = _fixture()
+    try:
+        host = FakeHost(project_id)
+        host.items["unmanaged-rolehub"] = ThreadMetadata("unmanaged-rolehub", str(selected), "AF18 RoleHub", project_id)
+        runtime = TrustedRuntime(); owner = NativeRoleTopologyOwner(root, selected, host, runtime=runtime)
+        result = bridge.trusted_initialize_fixture(root, selected, "ignore-rolehub", topology_owner=owner, permit=runtime.issue_permit(host_digest="sha256:" + "2" * 64))
+        assert result["terminal_classification"] == "native_ready"
+        assert host.creates == 2 and host.names == 2
+        assert "rolehub_ref" not in json.dumps(result).lower()
+        assert host.items["unmanaged-rolehub"].name == "AF18 RoleHub"
+    finally: temp.cleanup()
+
+
+def test_legacy_three_role_store_holds_before_permit_or_host() -> None:
+    temp, root, selected, project_id = _fixture()
+    try:
+        store = root / project_id / "role-topology.db"
+        con = sqlite3.connect(store)
+        con.execute("PRAGMA journal_mode=WAL"); con.execute("PRAGMA synchronous=FULL")
+        con.execute("CREATE TABLE topology (k TEXT PRIMARY KEY, v TEXT NOT NULL)")
+        con.execute("INSERT INTO topology(k,v) VALUES('schema_version',?)", ("bounded-collaboration-native-topology-owner-v1",))
+        con.execute("INSERT INTO topology(k,v) VALUES('mapping','legacy')")
+        con.execute("INSERT INTO topology(k,v) VALUES('completion',?)", ('{"native_ids":{"RoleHub":"legacy-r","Coordinator":"legacy-c","Architect":"legacy-a"}}',))
+        con.commit(); con.close(); os.chmod(store, 0o600)
+        host = FakeHost(project_id); runtime = TrustedRuntime(); permit = runtime.issue_permit(host_digest="sha256:" + "2" * 64)
+        owner = NativeRoleTopologyOwner(root, selected, host, runtime=runtime)
+        result = bridge.trusted_initialize_fixture(root, selected, "legacy", topology_owner=owner, permit=permit)
+        assert result["terminal_classification"] == "partial_hold"
+        assert result["attention_reason"] == "legacy_topology_migration_required"
+        assert host.calls == 0 and permit._binding is None
     finally: temp.cleanup()
 
 
@@ -284,4 +320,4 @@ def test_malformed_create_metadata_retains_unknown_host_mutation() -> None:
 
 
 if __name__ == "__main__":
-    test_trusted_two_call_lifecycle_and_exact_retry(); test_bad_or_replayed_permit_holds_before_store_or_host(); test_one_shot_guard_is_consumed_before_second_host_attempt(); test_noncanonical_identity_holds_without_host_or_store(); test_final_store_symlink_holds_before_sqlite_or_host(); test_same_permit_cannot_bind_a_second_owner_or_project(); test_bound_owner_context_swap_cannot_retarget_same_root_project(); test_bound_owner_host_and_root_swap_holds_before_either_store_or_host(); test_completed_retry_holds_on_deleted_or_replaced_host_identity(); test_completed_retry_holds_on_duplicate_or_list_error_inventory(); test_unmanaged_collision_ambiguity_foreign_and_list_failure_hold_pre_store(); test_public_schema_accepts_actual_ready_and_rejects_private_held_fields(); test_bridge_surfaces_wrong_project_create_as_retained_partial_mutation(); test_bridge_surfaces_invalid_post_name_readback_as_retained_partial_mutation(); test_second_create_exception_retains_first_role_mutation_truthfully(); test_first_create_exception_has_no_mutation_claim(); test_malformed_create_metadata_retains_unknown_host_mutation(); print("ok")
+    test_trusted_two_call_lifecycle_and_exact_retry(); test_bad_or_replayed_permit_holds_before_store_or_host(); test_one_shot_guard_is_consumed_before_second_host_attempt(); test_noncanonical_identity_holds_without_host_or_store(); test_final_store_symlink_holds_before_sqlite_or_host(); test_same_permit_cannot_bind_a_second_owner_or_project(); test_bound_owner_context_swap_cannot_retarget_same_root_project(); test_bound_owner_host_and_root_swap_holds_before_either_store_or_host(); test_completed_retry_holds_on_deleted_or_replaced_host_identity(); test_completed_retry_holds_on_duplicate_or_list_error_inventory(); test_unmanaged_collision_ambiguity_foreign_and_list_failure_hold_pre_store(); test_public_schema_accepts_actual_ready_and_rejects_private_held_fields(); test_unrelated_rolehub_title_is_ignored_by_two_role_onboarding(); test_legacy_three_role_store_holds_before_permit_or_host(); test_bridge_surfaces_wrong_project_create_as_retained_partial_mutation(); test_bridge_surfaces_invalid_post_name_readback_as_retained_partial_mutation(); test_second_create_exception_retains_first_role_mutation_truthfully(); test_first_create_exception_has_no_mutation_claim(); test_malformed_create_metadata_retains_unknown_host_mutation(); print("ok")
