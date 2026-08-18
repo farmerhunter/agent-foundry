@@ -55,6 +55,31 @@ def active_entries(vault_root: Path, index_rel: str, list_key: str) -> list[dict
     return [entry for entry in entries if entry.get("status") in ACTIVE_STATUSES]
 
 
+def index_updated_date(vault_root: Path, index_rel: str) -> date:
+    path = vault_root / index_rel
+    try:
+        text = read(path)
+    except OSError as error:
+        raise ValueError(f"selected Vault index unreadable: {index_rel}") from error
+    values = [line.removeprefix("updated:").strip() for line in text.splitlines() if line.startswith("updated:")]
+    if len(values) != 1:
+        raise ValueError(f"selected Vault index must contain exactly one top-level updated date: {index_rel}")
+    value = values[0]
+    try:
+        parsed = date.fromisoformat(value)
+    except ValueError as error:
+        raise ValueError(f"selected Vault index updated date is invalid: {index_rel}") from error
+    if parsed.isoformat() != value:
+        raise ValueError(f"selected Vault index updated date is not canonical YYYY-MM-DD: {index_rel}")
+    return parsed
+
+
+def manifest_updated_date(vault_root: Path) -> str:
+    practice_updated = index_updated_date(vault_root, "indexes/practice_index.yaml")
+    asset_updated = index_updated_date(vault_root, "indexes/asset_index.yaml")
+    return max(practice_updated, asset_updated).isoformat()
+
+
 def active_practice_records(vault_root: Path) -> dict[str, dict[str, str]]:
     return {
         entry["id"]: entry
@@ -297,10 +322,11 @@ def manifest_text(
     active_practices: list[dict[str, str]],
     active_assets: list[dict[str, str]],
     skill_artifacts: list[dict[str, str]],
+    updated: str,
 ) -> str:
     lines = [
         "schema_version: 1",
-        f"updated: {date.today().isoformat()}",
+        f"updated: {updated}",
         "source: selected_vault",
         "private_paths_recorded: false",
         "semantic_reachability_manifest: semantic-reachability-manifest.yaml",
@@ -620,12 +646,18 @@ def publish(core_root: Path, vault_root: Path, output_root: Path, apply: bool) -
             print(f"- {error}")
         return 1
 
+    try:
+        manifest_updated = manifest_updated_date(vault_root)
+    except ValueError as error:
+        print(f"Adapter publish failed selected Vault metadata validation: {error}")
+        return 1
+
     active_practices = active_entries(vault_root, "indexes/practice_index.yaml", "practices")
     active_assets = active_entries(vault_root, "indexes/asset_index.yaml", "assets")
     if not active_practices and not active_assets:
         print("Selected Vault has no active or revised practices/assets. Nothing to publish.")
         write_semantic_manifest(output_root, [], apply)
-        write_manifest(output_root, manifest_text(active_practices, active_assets, []), apply)
+        write_manifest(output_root, manifest_text(active_practices, active_assets, [], manifest_updated), apply)
         print_follow_up_commands(core_root, vault_root, output_root)
         return 0
 
@@ -650,7 +682,11 @@ def publish(core_root: Path, vault_root: Path, output_root: Path, apply: bool) -
     written.extend(write_generated_skill_outputs(output_root, skill_assets, semantic_routes, apply))
     written.extend(write_semantic_reference_outputs(vault_root, output_root, semantic_routes, apply))
     write_semantic_manifest(output_root, semantic_routes, apply)
-    write_manifest(output_root, manifest_text(active_practices, active_assets, skill_artifacts), apply)
+    write_manifest(
+        output_root,
+        manifest_text(active_practices, active_assets, skill_artifacts, manifest_updated),
+        apply,
+    )
     print(f"Adapter publish {'wrote' if apply else 'planned'} {len(written)} files.")
     print(f"Active practices selected: {len(active_practices)}")
     print(f"Active assets selected: {len(active_assets)}")
