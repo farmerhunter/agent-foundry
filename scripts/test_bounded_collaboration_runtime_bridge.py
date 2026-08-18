@@ -57,14 +57,15 @@ def _walk_no_raw(value, forbidden: set[str]) -> None:
         assert value not in forbidden
 
 
-def test_ordinary_owner_fixture_holds_without_topology_owner_or_mutation() -> None:
+def test_ordinary_owner_fixture_holds_without_completed_topology_or_mutation() -> None:
     temp, root, selected, project_id = _fixture()
     try:
         db = root / project_id / "collaboration.db"; before = hashlib.sha256(db.read_bytes()).hexdigest()
         before_events = len(LocalCollaborationLedger.authority_snapshot(db, expected_project_id=project_id).events)
         receipt = bridge.run(root, selected, "onboard-bridge")
         jsonschema.Draft202012Validator(SCHEMA).validate(json.loads(json.dumps(receipt)))
-        assert receipt["terminal_classification"] == "unavailable"
+        assert receipt["terminal_classification"] == "partial_hold"
+        assert receipt["initialization"]["attention_reason"] == "topology_unavailable"
         assert "topology_plan" not in json.dumps(receipt)
         assert receipt["mutation_performed"] is False and receipt["production_eligible"] is False and receipt["evidence_class"] == "fixture_only"
         assert hashlib.sha256(db.read_bytes()).hexdigest() == before
@@ -130,7 +131,7 @@ def test_cli_rejects_injection_and_preserves_closed_json() -> None:
         ordinary = subprocess.run([sys.executable, str(ROOT / "scripts" / "bounded_collaboration_runtime_bridge.py"), "--projects-root", str(root), "--project-root", str(selected), "--onboarding-key", "onboard-cli"], env={**os.environ, "PYTHONPATH": str(ROOT / "scripts")}, text=True, capture_output=True, check=False)
         ordinary_value = json.loads(ordinary.stdout)
         assert ordinary.returncode == 2 and ordinary.stderr == ""
-        assert ordinary_value["terminal_classification"] == "unavailable" and "topology_plan" not in ordinary.stdout
+        assert ordinary_value["terminal_classification"] == "partial_hold" and "topology_plan" not in ordinary.stdout
     finally:
         temp.cleanup()
 
@@ -229,6 +230,42 @@ def test_owner_verified_production_happy_path_and_exact_retry_are_closed() -> No
         jsonschema.Draft202012Validator(SCHEMA).validate(json.loads(json.dumps(retry)))
         assert retry["terminal_classification"] == "native_ready" and retry["mutation_performed"] is False
         assert (server.creates, server.names) == before
+    finally:
+        temp.cleanup()
+
+
+def test_ordinary_status_reads_protected_completion_without_host_or_mutation() -> None:
+    temp, root, selected, project_id = _fixture()
+    try:
+        binary = Path(temp.name) / "codex-fixture"; binary.write_bytes(b"fixture codex status"); os.chmod(binary, 0o700)
+        digest = hashlib.sha256(binary.read_bytes()).hexdigest()
+        server = _FakeAppServer(str(selected))
+        assert _production_run(root, selected, server, binary, digest, "ordinary-status")["terminal_classification"] == "native_ready"
+        collaboration_db = root / project_id / "collaboration.db"
+        topology_db = root / project_id / "role-topology.db"
+        before_hashes = (hashlib.sha256(collaboration_db.read_bytes()).hexdigest(), hashlib.sha256(topology_db.read_bytes()).hexdigest())
+        before_events = len(LocalCollaborationLedger.authority_snapshot(collaboration_db, expected_project_id=project_id).events)
+        before_host = (server.creates, server.names, len(server.items))
+        first = bridge.run(root, selected, "ordinary-status")
+        second = bridge.run(root, selected, "ordinary-status")
+        for receipt in (first, second):
+            jsonschema.Draft202012Validator(SCHEMA).validate(json.loads(json.dumps(receipt)))
+            assert receipt["terminal_classification"] == "native_ready"
+            assert receipt["mode"] == "read_only_status"
+            assert receipt["evidence_class"] == "owner_verified_local_store"
+            assert receipt["mutation_performed"] is False and receipt["production_eligible"] is False
+            assert receipt["status_projection"] == {
+                "project_binding": "bound", "control": "initialized", "scheduler": "enabled",
+                "work_root": "bound", "native_topology": "native_ready",
+                "native_reachability": "not_checked", "rolehub": "non_authoritative",
+            }
+            assert receipt["initialization"]["coordinator_ref"].startswith("coordinator:")
+            assert receipt["initialization"]["architect_ref"].startswith("architect:")
+        assert json.loads(json.dumps(first)) == json.loads(json.dumps(second))
+        assert (server.creates, server.names, len(server.items)) == before_host
+        assert (hashlib.sha256(collaboration_db.read_bytes()).hexdigest(), hashlib.sha256(topology_db.read_bytes()).hexdigest()) == before_hashes
+        assert len(LocalCollaborationLedger.authority_snapshot(collaboration_db, expected_project_id=project_id).events) == before_events
+        _walk_no_raw(json.loads(json.dumps(first)), {str(root), str(selected), str(binary), *(item["id"] for item in server.items)})
     finally:
         temp.cleanup()
 
@@ -338,12 +375,13 @@ def test_fixture_receipt_cannot_validate_as_production_branch() -> None:
 
 
 if __name__ == "__main__":
-    test_ordinary_owner_fixture_holds_without_topology_owner_or_mutation()
+    test_ordinary_owner_fixture_holds_without_completed_topology_or_mutation()
     test_duplicate_path_and_missing_scheduler_hold_without_topology()
     test_corrupt_candidate_holds_before_topology_without_mutating_valid_authority()
     test_cli_rejects_injection_and_preserves_closed_json()
     test_in_process_fixture_topology_can_plan_but_is_never_production_eligible()
     test_owner_verified_production_happy_path_and_exact_retry_are_closed()
+    test_ordinary_status_reads_protected_completion_without_host_or_mutation()
     test_production_post_dispatch_create_ambiguity_is_truthful_and_not_retried()
     test_production_malformed_successful_create_is_truthful_and_not_retried()
     test_production_post_name_readback_failure_is_truthful()
