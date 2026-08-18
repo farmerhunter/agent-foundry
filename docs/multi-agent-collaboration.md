@@ -396,27 +396,27 @@ AF17 and AF18 are completed pre-V2 enabling foundations already integrated into
 capabilities are consumed by V2 through ancestry; they are not ORCH milestones
 or active V2 completion work. AF19 follow-ups remain separately scoped.
 
-For a project that explicitly asks to set up bounded collaboration, first run
-the metadata-only onboarding preflight in
+For a project that explicitly asks to set up bounded collaboration, use the
+public locator-only runtime bridge described in
 [`workflows/onboard-bounded-collaboration.md`](../workflows/onboard-bounded-collaboration.md).
-It reuses one unambiguous durable Coordinator/Architect pair, or plans only the
-missing durable roles. Implementer, Reviewer, Tester and Harvester remain
-per-Work transient roles.
+That RH1 path reads the project binding owner and scheduler/Work-root owner
+before it plans or verifies the durable Coordinator and Durable Architect pair.
+Its fresh default onboarding budget of at most two thread starts and two thread
+names is a per-operation safety budget, not a global thread limit. Existing
+unrelated conversations and later Work-scoped Implementer, Reviewer and Tester
+conversations remain allowed.
 
-The plan explicitly handles an eligible current thread: it can be renamed into
-a new RoleHub, while an existing RoleHub is reused only when its opaque adapter
-reference is present. A ready summary uses applied receipts for final RoleHub,
-Coordinator and Architect navigation plus bound scheduler and transient-role
-template references.
+`scripts/plan_bounded_collaboration_onboarding.py` is now a legacy compatibility
+diagnostic/router only. A closed v1 request returns a read-only v2 result that
+points to the owner-composed bridge and requires fresh owner readback. It never
+creates, discovers, reuses, renames, links or navigates native threads; caller
+apply flags and operation receipts cannot establish readiness or authority.
+Unknown or privacy-sensitive input holds without echoing caller data.
 
-The Core plan requires explicit RoleHub/current-thread/scheduler/transient-template
-projections and discover/create/rename/link/navigate capability reports. It is
-deliberately not a native-thread API. It has no transcript
-scan, history migration, thread deletion/archive, Vault write, runtime change,
-or automatic apply. The adapter owns native thread creation, navigation and
-receipts. Ambiguity, duplicate roles, legacy adoption, unavailable capability,
-privacy exposure, forged/unknown receipts and partial failures are held rather
-than guessed.
+RoleHub is an optional logical read-only projection. Its presence, absence,
+title or adapter reference neither blocks nor satisfies native onboarding. The
+historically named RoleHub adapter and runner remain compatibility components,
+not a second native authority or a prerequisite for the normal path.
 
 ### What counts as initialized
 

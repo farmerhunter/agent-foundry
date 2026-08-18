@@ -6,10 +6,14 @@ normal per-Work dispatch.
 
 ## Scope
 
-The legacy planner reads bounded metadata and returns a topology plan. It never
-scans a transcript, invokes a native thread API, writes a Vault, changes a
-repository, archives/deletes a thread, or creates a hidden registry authority.
-It is not the completion authority for **开启多agent协作**.
+Normal onboarding uses the RH1 public locator-only runtime-composition
+preflight below and, only after separate trusted authorization, the
+owner-composed native apply path. The legacy planner is a read-only
+compatibility diagnostic/router: a closed v1 request returns only the closed v2
+`owner_composed_route_required` result or a typed hold. It never returns a
+topology, mutation, or rollback plan; performs no dispatch or apply; and never
+reports readiness. It is not the completion authority for
+**开启多agent协作**.
 
 For that first-use intent, use the owner-composed initialization contract. It
 must read, in this order: the project binding owner; the scheduler/Work-root
@@ -42,11 +46,15 @@ non-serializable, one-shot permit to a distinct permit-bound topology owner for
 the second I1 call. The permit is never present in a plan, receipt, JSON, file,
 environment, configuration or public output. It binds the fresh canonical
 project UUID, project/root mapping digests, scheduler binding, exact plan,
-runtime/host identities and the fixed create budget (Coordinator and Durable
-Architect: one each). RoleHub is an optional logical read-only projection, not
-a native thread or readiness prerequisite. Missing, expired, replayed or drifted permits
-hold before the receipt store or host is touched. An exact completed retry uses
-only the unbound read-only owner and performs no native mutation.
+runtime/host identities and the fixed fresh-operation budget: at most two
+`thread/start` calls and two `thread/name/set` calls, one each for Coordinator
+and Durable Architect. This is not a global thread limit. Existing unrelated
+threads and later Work-scoped Implementer, Reviewer, and Tester threads remain
+allowed. RoleHub is an optional logical read-only projection, not a native
+thread or readiness prerequisite; this workflow never discovers, creates,
+reuses, renames, links, or navigates it. Missing, expired, replayed or drifted
+permits hold before the receipt store or host is touched. An exact completed
+retry uses only the unbound read-only owner and performs no native mutation.
 
 Before the protected topology receipt store is even opened, the owner validates
 the owner-derived lowercase UUID and digest mapping and resolves only
@@ -82,35 +90,33 @@ apply one separately authorized plan and must then be freshly reread.
    it binds the same project. This preflight is before topology planning or any
    host operation. Missing/ambiguous/unavailable binding is `repo_contract_only`,
    `partial_hold` or `unavailable`, never a fallback to role creation.
-3. Check that role binding plus the RoleHub, current-thread, scheduler and
-   transient-template projections are explicitly `supported`. Discover, create,
-   rename, link and navigate capabilities must also be explicit. `unknown` and
-   `unavailable` are fail-closed.
-4. Reuse an active RoleHub only with an opaque RoleHub reference. Otherwise
-   plan `rename_current_to_role_hub` only for an eligible current thread, or
-   `create_role_hub`; each has a preimage, idempotency key and receipt. For
-   each durable role, Coordinator and Architect, reuse exactly one active,
-   non-legacy match. Zero matches produce one planned create; two or more
-   matches are a duplicate hold. A legacy match is a historical reference,
-   never an automatic adoption.
-5. Implementer, Reviewer, Tester and Harvester are transient per-Work roles.
-   Do not create them during project onboarding.
-6. Give each planned discover/create/reuse/rename/link/navigate operation a
-   preimage, deterministic idempotency key, operation fingerprint and receipt
-   slot. Applied/failed receipts require a reference and matching fingerprint;
-   unknown, duplicate or missing receipts are held. Preserve repository dirty
-   state as metadata only.
+3. Read the owner-backed native topology. A fresh default operation owns only
+   Coordinator and Durable Architect. Reuse an exact completed owner receipt
+   without mutation; plan only the missing pair when no protected receipt or
+   partial legacy state conflicts with the fresh operation.
+4. Treat legacy three-role protected receipts as read-only migration holds.
+   Do not auto-adopt, delete, rename, or reinterpret them. RoleHub state,
+   current-thread eligibility, caller capability reports, and caller receipts
+   neither block nor establish owner-composed readiness.
+5. Keep Implementer, Reviewer, and Tester Work-scoped. Their later threads are
+   outside the fresh default onboarding operation and its 2-start/2-name
+   budget.
+6. Preserve repository dirty state as metadata only. Unknown owner state,
+   ambiguous native results, privacy exposure, or partial mutation holds
+   without automatic retry, adoption, or caller-directed repair.
 
-## OnboardingSummary
+## Diagnostic route and completion receipt
 
-The returned planner summary must include project identity; capability state
-(`complete`, `partial`, `unavailable`, or `privacy_held`); reused, created,
-unchanged and held entries; adapter-owned active navigation; historical
-references; dirty-state preservation; and the next Human action. A `ready`
-summary is only a planner result. It is never an initialization claim. The
-owner-composed `OnboardingCompletionReceipt` is the only native completion
-record; it binds fresh project, topology and scheduler/Work-root readbacks and
-uses privacy-safe opaque refs/digests only.
+The legacy planner returns only the closed v2 compatibility route or typed
+hold. Its empty operations and rollback operations are diagnostic facts, not an
+apply surface. It accepts, infers, executes, and serializes no locator values;
+the caller must supply `projects_root`, `project_root`, and `onboarding_key`
+freshly to the public runtime bridge.
+
+The owner-composed `OnboardingCompletionReceipt` is the only native completion
+record. It binds fresh project, topology, and scheduler/Work-root readbacks and
+uses privacy-safe opaque refs/digests only. RoleHub projection state is absent
+from this authority and cannot satisfy readiness.
 
 When topology was applied during this attempt, its owner must additionally
 return an opaque apply/readback commitment derived from the exact topology-plan
@@ -137,15 +143,14 @@ topology readback one by one with that stored receipt. A wholly
 self-consistent replacement is still a hold when it differs from the original
 completion identity.
 
-## Apply and rollback boundary
+## Apply boundary
 
-An adapter may execute only a `plan_ready` plan whose operation keys have been
-explicitly approved. It must record one receipt per operation and read it back.
-On the first failure, it must stop, preserve existing threads, mark
-`setup_incomplete`, and return a reverse-order rollback plan for operations
-with an applied receipt only. It restores preimages or marks attempt-created
-objects incomplete; it never deletes or archives. Failure to read back a
-rollback is `rollback_incomplete`.
+The legacy planner has no apply or rollback boundary. It cannot authorize an
+adapter, native host, or caller receipt. After the RH1 locator-only preflight,
+only the separately authorized trusted in-process owner may consume its
+one-shot permit and apply the owner-composed two-role plan. A partial or
+ambiguous native result is `setup_incomplete`; preserve its protected receipt
+and do not retry, adopt, delete, or manufacture a rollback plan.
 
 Canonical practice apply, adapter publishing, runtime installation, transcript
 migration, and project/release mutation are separate gates. The separate intent
