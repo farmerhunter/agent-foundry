@@ -126,14 +126,14 @@ class StdioJsonRpcTransport:
             raise ConnectorHold("unsupported_method")
         request_id = self._next_id
         self._next_id += 1
-        self._send({"jsonrpc": "2.0", "id": request_id, "method": method, "params": dict(params)}, dispatched_error=True)
+        self._send({"id": request_id, "method": method, "params": dict(params)}, dispatched_error=True)
         try:
             for _ in range(101):
                 try:
                     value = json.loads(self._line())
                 except (json.JSONDecodeError, UnicodeError, TypeError, ValueError) as exc:
                     raise PostDispatchHold("malformed_response") from exc
-                if not isinstance(value, Mapping) or value.get("jsonrpc") != "2.0":
+                if not isinstance(value, Mapping):
                     raise PostDispatchHold("malformed_response")
                 if "method" in value:
                     if "id" in value:
@@ -153,7 +153,10 @@ class StdioJsonRpcTransport:
     def notify(self, method: str, params: Mapping[str, Any]) -> None:
         if method != "initialized":
             raise ConnectorHold("unsupported_method")
-        self._send({"jsonrpc": "2.0", "method": method, "params": dict(params)}, dispatched_error=False)
+        envelope: dict[str, Any] = {"method": method}
+        if params:
+            envelope["params"] = dict(params)
+        self._send(envelope, dispatched_error=False)
 
     def close(self) -> None:
         if getattr(self, "_closed", True):

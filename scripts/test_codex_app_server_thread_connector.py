@@ -115,15 +115,18 @@ def test_stdio_parser_matches_id_ignores_notifications_and_rejects_server_reques
     sent = []
     transport._send = lambda envelope, dispatched_error: sent.append((envelope, dispatched_error))
     lines = iter([
-        '{"jsonrpc":"2.0","method":"thread/started","params":{}}\n',
-        '{"jsonrpc":"2.0","id":1,"result":{"data":[],"nextCursor":null}}\n',
+        '{"method":"thread/started","params":{}}\n',
+        '{"id":1,"result":{"data":[],"nextCursor":null}}\n',
     ])
     transport._line = lambda: next(lines)
     assert transport.request("thread/list", {})["data"] == []
-    assert sent[0][1] is True
+    assert sent[0] == ({"id": 1, "method": "thread/list", "params": {}}, True)
+    assert "jsonrpc" not in sent[0][0]
+    transport.notify("initialized", {})
+    assert sent[1] == ({"method": "initialized"}, False)
 
     transport._next_id = 2
-    transport._line = lambda: '{"jsonrpc":"2.0","id":9,"method":"account/login/start","params":{}}\n'
+    transport._line = lambda: '{"id":9,"method":"account/login/start","params":{}}\n'
     with pytest.raises(PostDispatchHold):
         transport.request("thread/read", {"threadId": "x", "includeTurns": False})
     with pytest.raises(ConnectorHold):
