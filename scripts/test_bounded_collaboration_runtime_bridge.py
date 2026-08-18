@@ -14,8 +14,10 @@ import jsonschema
 import yaml
 
 import bounded_collaboration_runtime_bridge as bridge
+import codex_app_server_thread_connector as app_server
 import local_collaboration_control_plane as control
 import local_collaboration_scheduler as scheduler
+from codex_app_server_thread_connector import PostDispatchHold
 from local_collaboration_ledger import LocalCollaborationLedger
 
 
@@ -143,10 +145,182 @@ def test_in_process_fixture_topology_can_plan_but_is_never_production_eligible()
         temp.cleanup()
 
 
+class _FakeAppServer:
+    def __init__(self, root: str):
+        self.root = root
+        self.items: list[dict] = []
+        self.creates = 0
+        self.names = 0
+        self.fail_start_after_dispatch = False
+        self.fail_read_after_name = False
+        self.page_size = 100
+
+    def transport(self, _identity):
+        server = self
+        class Transport:
+            def request(self, method, params):
+                if method == "initialize":
+                    return {"userAgent": "fixture", "platformFamily": "unix", "platformOs": "macos", "codexHome": "/private"}
+                if method == "thread/list":
+                    assert params["cwd"] == [server.root]
+                    assert params["sourceKinds"] == list(app_server.SOURCE_KINDS)
+                    offset = int(params.get("cursor", "0"))
+                    page = server.items[offset:offset + server.page_size]
+                    following = offset + server.page_size
+                    return {"data": [dict(item) for item in page], "nextCursor": str(following) if following < len(server.items) else None}
+                if method == "thread/start":
+                    server.creates += 1
+                    item = {"id": f"native-{server.creates}", "cwd": server.root, "name": None}
+                    server.items.append(item)
+                    if server.fail_start_after_dispatch:
+                        raise PostDispatchHold("response_lost")
+                    return {"thread": dict(item)}
+                if method == "thread/name/set":
+                    server.names += 1
+                    target = next(item for item in server.items if item["id"] == params["threadId"])
+                    target["name"] = params["name"]
+                    return {}
+                if method == "thread/read":
+                    if server.fail_read_after_name and server.names:
+                        raise PostDispatchHold("readback_lost")
+                    target = next(item for item in server.items if item["id"] == params["threadId"])
+                    assert params["includeTurns"] is False
+                    return {"thread": dict(target)}
+                raise AssertionError(method)
+            def notify(self, method, params):
+                assert (method, params) == ("initialized", {})
+            def close(self):
+                pass
+        return Transport()
+
+
+def _production_run(root: Path, selected: Path, server: _FakeAppServer, binary: Path, digest: str, key: str):
+    app_server.SUPPORTED_RELEASES[digest] = "codex-cli fixture"
+    try:
+        return bridge.trusted_initialize_local_host(
+            root, selected, key,
+            codex_binary=binary,
+            expected_binary_sha256=digest,
+            expected_binary_version="codex-cli fixture",
+            _transport_factory=server.transport,
+        )
+    finally:
+        app_server.SUPPORTED_RELEASES.pop(digest, None)
+
+
+def test_owner_verified_production_happy_path_and_exact_retry_are_closed() -> None:
+    temp, root, selected, _ = _fixture()
+    try:
+        binary = Path(temp.name) / "codex-fixture"; binary.write_bytes(b"fixture codex"); os.chmod(binary, 0o700)
+        digest = hashlib.sha256(binary.read_bytes()).hexdigest()
+        server = _FakeAppServer(str(selected))
+        first = _production_run(root, selected, server, binary, digest, "production-happy")
+        jsonschema.Draft202012Validator(SCHEMA).validate(json.loads(json.dumps(first)))
+        assert first["terminal_classification"] == "native_ready"
+        assert first["mode"] == "trusted_local_host_apply" and first["production_eligible"] is True
+        assert first["evidence_class"] == "owner_verified_local_host" and first["mutation_performed"] is True
+        assert (server.creates, server.names) == (3, 3)
+        _walk_no_raw(json.loads(json.dumps(first)), {str(root), str(selected), str(binary), *(item["id"] for item in server.items)})
+        before = (server.creates, server.names)
+        retry = _production_run(root, selected, server, binary, digest, "production-happy")
+        jsonschema.Draft202012Validator(SCHEMA).validate(json.loads(json.dumps(retry)))
+        assert retry["terminal_classification"] == "native_ready" and retry["mutation_performed"] is False
+        assert (server.creates, server.names) == before
+    finally:
+        temp.cleanup()
+
+
+def test_production_post_dispatch_create_ambiguity_is_truthful_and_not_retried() -> None:
+    temp, root, selected, _ = _fixture()
+    try:
+        binary = Path(temp.name) / "codex-fixture"; binary.write_bytes(b"fixture codex failure"); os.chmod(binary, 0o700)
+        digest = hashlib.sha256(binary.read_bytes()).hexdigest()
+        server = _FakeAppServer(str(selected)); server.fail_start_after_dispatch = True
+        result = _production_run(root, selected, server, binary, digest, "production-ambiguous")
+        jsonschema.Draft202012Validator(SCHEMA).validate(json.loads(json.dumps(result)))
+        assert result["terminal_classification"] == "setup_incomplete" and result["mutation_performed"] is True
+        assert (server.creates, server.names) == (1, 0)
+        before = (server.creates, server.names)
+        retry = _production_run(root, selected, server, binary, digest, "production-ambiguous")
+        assert retry["terminal_classification"] == "partial_hold" and retry["mutation_performed"] is False
+        assert (server.creates, server.names) == before
+    finally:
+        temp.cleanup()
+
+
+def test_production_post_name_readback_failure_is_truthful() -> None:
+    temp, root, selected, _ = _fixture()
+    try:
+        binary = Path(temp.name) / "codex-fixture"; binary.write_bytes(b"fixture codex read failure"); os.chmod(binary, 0o700)
+        digest = hashlib.sha256(binary.read_bytes()).hexdigest()
+        server = _FakeAppServer(str(selected)); server.fail_read_after_name = True
+        result = _production_run(root, selected, server, binary, digest, "production-read-failure")
+        assert result["terminal_classification"] == "setup_incomplete" and result["mutation_performed"] is True
+        assert (server.creates, server.names) == (1, 1)
+    finally:
+        temp.cleanup()
+
+
+def test_binary_mismatch_holds_before_transport_factory() -> None:
+    temp, root, selected, _ = _fixture()
+    try:
+        binary = Path(temp.name) / "codex-fixture"; binary.write_bytes(b"fixture codex mismatch"); os.chmod(binary, 0o700)
+        calls = []
+        result = bridge.trusted_initialize_local_host(
+            root, selected, "production-binary-hold",
+            codex_binary=binary,
+            expected_binary_sha256="0" * 64,
+            expected_binary_version="codex-cli fixture",
+            _transport_factory=lambda identity: calls.append(identity),
+        )
+        assert result["terminal_classification"] == "schema_or_privacy_failure"
+        assert calls == [] and result["mutation_performed"] is False
+    finally:
+        temp.cleanup()
+
+
+def test_paginated_unmanaged_duplicate_and_returned_cwd_drift_hold_before_create() -> None:
+    for drift in (False, True):
+        temp, root, selected, _ = _fixture()
+        try:
+            binary = Path(temp.name) / "codex-fixture"; binary.write_bytes(("fixture" + str(drift)).encode()); os.chmod(binary, 0o700)
+            digest = hashlib.sha256(binary.read_bytes()).hexdigest()
+            server = _FakeAppServer(str(selected)); server.page_size = 1
+            if drift:
+                server.items = [{"id": "foreign", "cwd": "/foreign", "name": "unmanaged"}]
+            else:
+                server.items = [
+                    {"id": "one", "cwd": str(selected), "name": "AF18 RoleHub"},
+                    {"id": "two", "cwd": str(selected), "name": "AF18 RoleHub"},
+                ]
+            result = _production_run(root, selected, server, binary, digest, "production-held")
+            assert result["terminal_classification"] == "setup_incomplete" and result["mutation_performed"] is False
+            assert (server.creates, server.names) == (0, 0)
+        finally:
+            temp.cleanup()
+
+
+def test_fixture_receipt_cannot_validate_as_production_branch() -> None:
+    temp, root, selected, _ = _fixture()
+    try:
+        fixture = json.loads(json.dumps(bridge.run(root, selected, "fixture-only")))
+        jsonschema.Draft202012Validator(SCHEMA).validate(fixture)
+        forged = {**fixture, "mode": "trusted_local_host_apply", "production_eligible": True, "evidence_class": "fixture_only"}
+        assert list(jsonschema.Draft202012Validator(SCHEMA).iter_errors(forged))
+    finally:
+        temp.cleanup()
+
+
 if __name__ == "__main__":
     test_ordinary_owner_fixture_holds_without_topology_owner_or_mutation()
     test_duplicate_path_and_missing_scheduler_hold_without_topology()
     test_corrupt_candidate_holds_before_topology_without_mutating_valid_authority()
     test_cli_rejects_injection_and_preserves_closed_json()
     test_in_process_fixture_topology_can_plan_but_is_never_production_eligible()
+    test_owner_verified_production_happy_path_and_exact_retry_are_closed()
+    test_production_post_dispatch_create_ambiguity_is_truthful_and_not_retried()
+    test_production_post_name_readback_failure_is_truthful()
+    test_binary_mismatch_holds_before_transport_factory()
+    test_paginated_unmanaged_duplicate_and_returned_cwd_drift_hold_before_create()
+    test_fixture_receipt_cannot_validate_as_production_branch()
     print("ok")

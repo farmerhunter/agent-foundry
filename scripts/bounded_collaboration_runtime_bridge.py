@@ -4,12 +4,20 @@ from __future__ import annotations
 
 import hashlib
 import json
+import secrets
 import sys
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
+from codex_app_server_thread_connector import (
+    BinaryIdentity,
+    CodexAppServerThreadConnector,
+    ConnectorHold,
+    JsonRpcTransport,
+    verify_codex_binary,
+)
 from bounded_collaboration_initializer import Owners, initialize
-from bounded_collaboration_native_topology_owner import NativeRoleTopologyOwner
+from bounded_collaboration_native_topology_owner import NativeRoleTopologyOwner, TrustedRuntime
 from local_collaboration_ledger import LedgerError, LocalCollaborationLedger
 from local_collaboration_scheduler import SchedulerHold, replay_scheduler_state
 
@@ -57,6 +65,22 @@ def _receipt(terminal: str, *, attention_reason: str | None, safe_next_action: s
         "mutation_performed": mutation_performed,
         "production_eligible": False,
         "evidence_class": "fixture_only",
+        "terminal_classification": terminal,
+        "attention_reason": attention_reason,
+        "safe_next_action": safe_next_action,
+    }
+    if initialization is not None and not _private(initialization):
+        value["initialization"] = dict(initialization)
+    return _freeze(value)
+
+
+def _production_receipt(terminal: str, *, attention_reason: str | None, safe_next_action: str, initialization: Mapping[str, Any] | None = None, mutation_performed: bool = False) -> Mapping[str, Any]:
+    value: dict[str, Any] = {
+        "bridge_version": VERSION,
+        "mode": "trusted_local_host_apply",
+        "mutation_performed": mutation_performed,
+        "production_eligible": True,
+        "evidence_class": "owner_verified_local_host",
         "terminal_classification": terminal,
         "attention_reason": attention_reason,
         "safe_next_action": safe_next_action,
@@ -223,6 +247,67 @@ def trusted_initialize_fixture(
         return _receipt(str(second.get("completion_state", "partial_hold")), attention_reason=second.get("attention_reason"), safe_next_action=str(second.get("safe_next_action", "Read owner state before follow-up.")), initialization=second, mutation_performed=bool(second.get("mutation_performed")))
     except Exception:
         return _receipt("owner_unavailable", attention_reason="owner_binding_unavailable", safe_next_action="Restore owner bindings.")
+
+
+def trusted_initialize_local_host(
+    projects_root: str | Path,
+    project_root: str | Path,
+    onboarding_key: str,
+    *,
+    codex_binary: str | Path,
+    expected_binary_sha256: str,
+    expected_binary_version: str,
+    _transport_factory: Callable[[BinaryIdentity], JsonRpcTransport] | None = None,
+) -> Mapping[str, Any]:
+    """Trusted in-process production seam; intentionally absent from the CLI."""
+    connector: CodexAppServerThreadConnector | None = None
+    try:
+        root = _validate_locator(projects_root, directory=True)
+        selected = _validate_locator(project_root, directory=True)
+        if not isinstance(onboarding_key, str) or not onboarding_key or len(onboarding_key) > 256 or any(ch.isspace() for ch in onboarding_key):
+            raise ValueError("invalid_onboarding_key")
+        binary = verify_codex_binary(codex_binary, expected_binary_sha256, expected_binary_version)
+    except (ValueError, ConnectorHold):
+        return _production_receipt("schema_or_privacy_failure", attention_reason="invalid_locator_onboarding_or_binary_identity", safe_next_action="Use the exact HDC-bound owner locators and Codex binary identity.")
+    try:
+        project = ProjectBindingOwner(root, selected)
+        scheduler = SchedulerBindingOwner(root)
+        binding = project.read_binding()
+        scheduled = scheduler.read_binding(binding)
+        required = ("project_id", "project_binding_ref", "project_binding_digest", "root_digest")
+        if not all(isinstance(binding.get(key), str) and binding[key] for key in required) or scheduled.get("state") != "bound":
+            return _production_receipt("owner_unavailable", attention_reason="owner_binding_unavailable", safe_next_action="Restore the owner-backed project and scheduler bindings.")
+        connector = CodexAppServerThreadConnector.open(
+            binary,
+            project_id=binding["project_id"],
+            project_root=selected,
+            transport_factory=_transport_factory,
+        )
+        host_digest = _digest({
+            "binary_sha256": binary.sha256,
+            "binary_version": binary.version,
+            "project_binding_digest": binding["project_binding_digest"],
+            "root_digest": binding["root_digest"],
+        })
+        runtime = TrustedRuntime(runtime_digest=_digest({"bridge_version": VERSION, "binary_sha256": binary.sha256, "binary_version": binary.version}))
+        owner = NativeRoleTopologyOwner(root, selected, connector, runtime=runtime, host_digest=host_digest)
+        permit = runtime.issue_permit(host_digest=host_digest, nonce=secrets.token_hex(32))
+        result = trusted_initialize_fixture(root, selected, onboarding_key, topology_owner=owner, permit=permit)
+        initialization = result.get("initialization") if isinstance(result.get("initialization"), Mapping) else None
+        return _production_receipt(
+            str(result.get("terminal_classification", "setup_incomplete")),
+            attention_reason=result.get("attention_reason"),
+            safe_next_action=str(result.get("safe_next_action", "Read owner state before any follow-up.")),
+            initialization=initialization,
+            mutation_performed=bool(result.get("mutation_performed")),
+        )
+    except (ConnectorHold, LedgerError, SchedulerHold):
+        return _production_receipt("owner_unavailable", attention_reason="owner_or_host_unavailable", safe_next_action="Restore exact owner and host bindings before another authorized attempt.")
+    except Exception:
+        return _production_receipt("owner_unavailable", attention_reason="owner_or_host_unavailable", safe_next_action="Restore exact owner and host bindings before another authorized attempt.")
+    finally:
+        if connector is not None:
+            connector.close()
 
 
 def _arguments(argv: list[str]) -> tuple[str, str, str] | None:
