@@ -1,7 +1,7 @@
 # ORCH Roadmap Milestones (historical V2 mapping)
 
 Status: evidence-first candidate roadmap; no main/release decision
-Updated: 2026-08-16
+Updated: 2026-08-20
 Scope: ORCH-01 local-first orchestration and Foundry Board, ORCH-02 SQLite Local Ledger Foundation, ORCH-03 bounded optional materialization, ORCH-04 single-machine lifecycle/front door, and ORCH-05-A0 handoff evidence. Historical V2 material below is retained as design evidence, not a primary operational command guide.
 
 ## Active ORCH sequence
@@ -11,16 +11,30 @@ Scope: ORCH-01 local-first orchestration and Foundry Board, ORCH-02 SQLite Local
 | ORCH-01 — Local-First Orchestration and Foundry Board | #292 and its historical children | Completed; historical V2 evidence |
 | ORCH-02 — SQLite Local Ledger Foundation | #525–#530 | Completed; SQLite is the operational collaboration authority |
 | ORCH-03 — Local Collaboration Authority and Selective Sync | #400, #401, #522, #404, #405, #403, #521, #402, #406 | Candidate/readiness; no automatic remote materialization, Project projection or convergence claim |
-| ORCH-04 — Integrated Collaboration Lifecycle and Product Experience | #538–#543, #536 | Single-machine functional lifecycle accepted; documentation gate in progress; main/release held |
+| ORCH-04 — Integrated Collaboration Lifecycle and Product Experience | #538–#543, #536, #564 | Single-machine functional lifecycle accepted for a separate V2 final gate; W3 docs/source acceptance in progress; main/release held |
 | ORCH-05-A0 — Single-Active Handoff Deployment Gate | #551–#559 | A0-Lite same-host/manual custody experimental; A0-Real deferred |
 
 These lanes inform a `v2.0.0` candidate only. A separate final-readiness/Human gate decides whether any capability can merge to `main` or release. `v2.0.1` is reserved for compatible fixes after release.
+
+The accepted W1/W2 prerequisites establish
+`codex/orch-05-single-active-handoff-integration` as the sole non-`main` V2
+finalization authority. `main` remains the stable V1.x/public line. The older
+`codex/v2-local-first-orchestration` line is retained only as historical
+development evidence, not as a current target.
 
 Dependency order:
 
 `ORCH-01 -> ORCH-02 SQLite LedgerStore -> ORCH-04 onboarding/status/recovery/front door/docs -> later final readiness`; bounded ORCH-03 materialization and ORCH-05-A0 evidence remain separately gated, and do not turn the single-machine path into cross-device convergence.
 
-ORCH-02 boundaries: SQLite is the only operational ledger backend; new and existing projects onboard directly to SQLite; no JSONL user-data migration, dual-write, or compatibility backend; JSONL export is optional and non-authoritative; no raw transcript/tool output; ORCH-03 owns multi-machine convergence; AF19 remains separate.
+ORCH-02 boundaries: Base Agent Foundry remains the supported/default stateless or GitHub-first practice/asset/issue/PR workflow. For Local Orchestration, SQLite is the only operational collaboration authority; new and existing single-machine projects onboard directly to SQLite. There is no JSONL user-data migration, dual-write or compatibility backend; JSONL export is optional and non-authoritative. GitHub/Project/Board surfaces are native facts, read-only views or non-authoritative projections as applicable. ORCH-03 owns multi-machine convergence; AF19 remains separate.
+
+The retained-authority receipt proves owner-recorded `native_ready`, bound
+project/control/scheduler/Work-root records and opaque durable-role references.
+It also says `native_reachability=not_checked` and `mutation_performed=false`.
+It does not prove live App Server/thread reachability, current host-process
+reachability or cross-host continuity. Fixture, static and controlled-local
+evidence prove only their named contracts, not UX, performance, real-device
+resilience, production readiness or release readiness.
 
 ## Product goal
 
@@ -88,13 +102,16 @@ runtime action belongs to the Local Orchestration layer.
   reliability/recovery behavior, and privacy/security boundaries before real
   dogfood can fairly judge the product.
 
-## Branch Policy
+## Current finalization policy
 
-V2 work uses `codex/v2-local-first-orchestration` as its integration branch.
+Current V2 closeout Work uses
+`codex/orch-05-single-active-handoff-integration` as its sole finalization
+branch. `codex/v2-local-first-orchestration` was the historical development
+integration line and is not a current target.
 
 Branch rules:
 
-- V2 child branches should target `codex/v2-local-first-orchestration`.
+- V2 closeout child branches should target `codex/orch-05-single-active-handoff-integration`.
 - V2-only changes should not target `main` while V2 is incomplete.
 - `main` remains the V1.x maintenance line and default target for backward-compatible harvest-driven Core updates.
 - V2 should regularly forward-merge from `main` to absorb V1.x maintenance and harvest improvements.
