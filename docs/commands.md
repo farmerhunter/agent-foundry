@@ -18,7 +18,7 @@ commands below. The SQLite authority is the only normal operational store.
 | `prepare local collaboration recovery` | `准备本地协作恢复` | Explain owner-guided backup, restore, takeover, source-lock and cleanup before a separately approved recovery action. |
 
 `A0-Lite` is experimental same-host/manual-custody guidance only. Real
-second-device, cross-host, transport, device-loss, independent-credential and
+second-device A0-Real, cross-host, transport, device-loss, independent-credential and
 convergence requests are deferred; do not use an old JSONL/V2 command as a
 fallback.
 
@@ -31,8 +31,25 @@ whether the durable Coordinator and Architect topology was reused, created or
 held, and verifies a durable scheduler/Work-root binding. It also says whether
 native role onboarding occurred or only repository-contract setup did. If any
 one of those facts is unavailable or ambiguous, the result is a hold with one
-next action—not `initialized`. See the developer/operator reference for the
-known candidate limitations (#548 and #549); do not improvise a repair.
+next action—not `initialized`. [#548](https://github.com/farmerhunter/agent-foundry/issues/548)
+and [#549](https://github.com/farmerhunter/agent-foundry/issues/549) remain
+historical defect/governance evidence, not unresolved current capability
+blockers. The accepted owner record reports `native_ready`, bound
+project/control/scheduler/Work-root state and opaque durable-role references,
+while `native_reachability=not_checked` and `mutation_performed=false`; do not
+infer live App Server/thread or current host-process reachability.
+
+Base stateless or GitHub-first practice/asset/issue/PR workflows remain the
+supported default. SQLite is the only Local Orchestration authority for fresh
+or existing single-machine projects; Board/GitHub/Project surfaces are native
+facts, read-only views or non-authoritative projections. Fixture, static,
+walkthrough or controlled-local results do not prove UX, performance,
+real-device resilience, production readiness or release readiness.
+
+Current V2 closeout Work targets
+`codex/orch-05-single-active-handoff-integration`. The older
+`codex/v2-local-first-orchestration` line is historical. Merge to `main`, tag,
+release and runtime/adapter publication remain separate Human gates.
 
 ## Other commands and historical diagnostics
 

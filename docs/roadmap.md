@@ -1,7 +1,7 @@
 # Agent Foundry Roadmap
 
 Status: planning document
-Updated: 2026-07-29
+Updated: 2026-08-20
 Scope: Agent Foundry productization, runtime adapter framework, Trae support, capability-system hardening, repository hygiene, role-orchestration optimization, collaboration cost-control, V1.0 public release baseline, V2 local-first orchestration planning, and memory-system readiness.
 
 ## Purpose
@@ -95,11 +95,28 @@ already integrated into `main`; they are not ORCH milestones and are not active
 V2 completion work. V2 consumes their semantic-loading, adapter-reachability and
 bounded-collaboration foundations by ancestry. ORCH-01 and ORCH-02 are complete.
 ORCH-04 has functional lifecycle evidence for its single-machine path and
-A0-Lite same-host/manual-custody evidence is experimental only. ORCH-03 remote
+A0-Lite same-host/manual-custody evidence is experimental only; A0-Real remains
+deferred. ORCH-03 remote
 materialization/convergence and all real second-device/cross-host transport
 claims remain optional, candidate or deferred as their evidence requires. AF19
-follow-ups remain separate. Final readiness, main and release remain separate
-Human gates.
+follow-ups remain separate. The accepted W1/W2 prerequisites make
+`codex/orch-05-single-active-handoff-integration` the sole V2 finalization line;
+W3 documentation is the current gate. Final readiness, merge to `main`, tag and
+release remain separate Human gates.
+
+The accepted status evidence is owner-recorded local state: `native_ready`,
+bound project/control/scheduler/Work-root records and opaque durable-role
+references. It also records `native_reachability=not_checked` and
+`mutation_performed=false`; it does not prove live App Server or thread
+reachability, current host-process reachability, cross-host continuity, UX,
+performance, real-device resilience, production readiness or release readiness.
+
+Base Agent Foundry remains the supported/default stateless or GitHub-first
+practice/asset/issue/PR layer. For fresh or existing single-machine Local
+Orchestration, SQLite is the only collaboration authority; GitHub, Project and
+Board surfaces remain native facts, read-only views or non-authoritative
+projections. Historical JSONL and `--ledger-root` paths are export/diagnostic
+evidence, not fallback authority, migration requirements or dual-write paths.
 
 AF-0 explains the existing mixed history. AF-1 starts the stricter planning and multi-agent coordination era. AF-2 designs the productization boundary. AF-3 executes the local Core/Vault split. AF-4 proves the split system works for the current real user across existing deployments and establishes the migration discipline needed for later major upgrades. AF-5 makes onboarding humane and reliable for new users. AF-6 closes the current Foundry product lifecycle so install, pack deployment, refresh, status, and rollback are usable beyond a one-off maintainer path. AF-7 upgrades runtime adapters and adds Trae CN support around a verified global Skill path. AF-8 hardens the capability system under realistic multi-user, multi-machine, multi-runtime, long-running-agent, and drift scenarios. AF-9 adds advanced capability-pack discovery, lifecycle, privacy-safe transfer planning, and user-facing Skill workflow packaging. AF-10 optimizes the Coordinator-driven role workflow using AF9 evidence, then pauses for an AF11 pilot migration, then resumes to analyze real telemetry and harden the workflow model. AF-11 is reserved for the Tiny IPA-incubated GitHub collaboration workflow helper migration pilot. AF-12 closes the V1 user-facing UX/docs/starter-pack surface. AF-13 adds the independent external-skills import/reference workflow. AF-14 adds a Tester role and test-planning workflow as V1.x maintenance. AF-15 adds collaboration readiness audit and action workflow as V1.x maintenance. AF-16 adds branch-aware collaboration safety. AF-17 adds semantic practice loading and generated Skill reachability. AF-18 adds collaboration cost-control and control-plane governance. V2.0 moves the orchestration source of truth local-first, with GitHub Project as a sync target. Memory-system planning now uses the separate MS milestone axis.
 
@@ -132,7 +149,7 @@ Suggested mapping:
 | AF-16 | `v1.1.x` maintenance candidate: branch-aware collaboration contracts and helper safety. |
 | AF-17 | `v1.1.x` maintenance candidate: semantic practice loading and generated Skill reachability. |
 | AF-18 | `v1.1.x` / pre-V2 collaboration-runtime control plane candidate; final activation and policy freeze remain separate Human-gated decisions. |
-| ORCH-01 + ORCH-02 + ORCH-03 + ORCH-04 | `v2.0.0` candidate: Board, SQLite ledger, distributed authority/selective sync, integrated lifecycle UX, and final readiness evidence. Release requires a separate Human gate. |
+| ORCH candidate | `v2.0.0` candidate: supported Base workflows plus SQLite single-machine Local Orchestration, with A0-Lite explicitly experimental. ORCH-03 remote materialization/convergence and A0-Real remain deferred or separately gated; release requires a separate Human gate. |
 
 `v1.0` is the first public release target. It includes the accepted AF-1 through AF-13 baseline plus release notes, verification, tag, and GitHub Release work needed for external users to rely on Agent Foundry without understanding this repository's personal history.
 
@@ -155,8 +172,8 @@ This matters because Agent Foundry Core can keep receiving harvest-driven, user-
 
 - `main` receives V1.x maintenance, bug fixes, documentation improvements, workflow/template/test improvements, and generic Core harvest updates.
 - `v1.1.0`, `v1.2.0`, and other V1.x tags are cut from `main` while V2 is still under development.
-- `codex/v2-local-first-orchestration` is the V2 integration branch for ledger, Foundry Board, migration, sync, and other V2-only work.
-- V2 child branches target `codex/v2-local-first-orchestration`, not `main`, unless the change is explicitly a V1.x-compatible Core maintenance improvement.
+- `codex/orch-05-single-active-handoff-integration` is the sole V2 finalization/integration authority for the current closeout Work. The contained `codex/v2-local-first-orchestration` line is historical, not a current target.
+- V2 closeout child branches target `codex/orch-05-single-active-handoff-integration`, not `main`. A separately authorized V1.x-compatible Core maintenance improvement may still target `main`.
 - V2 periodically forward-merges from `main` so V1.x maintenance and harvest improvements are not lost.
 - V2 merges back to `main` only after V2 readiness is accepted and a final human-gated release/integration decision is made.
 - AF17 and AF18 are completed pre-V2 foundations already on `main`; preserve
@@ -169,14 +186,15 @@ Default harvest routing:
 | Update type | Target |
 | --- | --- |
 | Backward-compatible Core practice/workflow/template/docs/test improvement | `main`, then forward-merge into V2 |
-| V2-only orchestration, ledger, board, migration, or sync behavior | `codex/v2-local-first-orchestration` |
+| Current V2 closeout documentation/finalization Work | `codex/orch-05-single-active-handoff-integration` |
+| Historical V2 orchestration development | `codex/v2-local-first-orchestration` (contained historical line; not a current target) |
 | Completed AF17/AF18 foundation or separate AF19 follow-up | `main` for accepted foundation lineage; a separately authorized AF19 branch when its contract requires one |
 | Private or canonical User Vault practice/asset update | selected User Vault, not Core |
 | Breaking schema/runtime/source-of-truth change | V2 branch or explicit major-version gate, not default `main` maintenance |
 
 ## Active Milestone
 
-Agent Foundry `v1.0.0` is published. The active planning area is now the ORCH-03/ORCH-04 path toward a `v2.0.0` candidate. Design acceptance is not capability completion; final readiness and release remain separately Human-gated.
+Agent Foundry `v1.0.0` is published. The active planning area is the W3 documentation/source acceptance gate toward a `v2.0.0` candidate on the non-`main` finalization line. Design or documentation acceptance is not capability completion; final readiness, `main`, tag and release remain separately Human-gated.
 
 | Milestone | GitHub records | User-facing reason | Status |
 | --- | --- | --- | --- |
@@ -187,7 +205,7 @@ Agent Foundry `v1.0.0` is published. The active planning area is now the ORCH-03
 | ORCH-01 Local-First Orchestration And Foundry Board | #292 (historical Epic); #293 through #299; #359 through #362 | Local durable Board foundation. | Completed |
 | ORCH-02 SQLite Local Ledger Foundation | #525; #526 through #530 | Transactional local authority, onboarding/action routing, replay and recovery. | Completed; final adopter acceptance recorded |
 | ORCH-03 Distributed Authority And Selective Sync | #400; #537, #522, #404, #405, #403, #521, #402, #406 | Bounded local authority and selective external materialization. | Candidate/readiness only; not automatic, production, or convergence evidence |
-| ORCH-04 Integrated Collaboration Lifecycle And Product Experience | #538; #539 through #543; #536 | SQLite single-machine onboarding, status, recovery, front door and evidence-first developer documentation. | Functional lifecycle ready for documentation gate; not milestone/release complete |
+| ORCH-04 Integrated Collaboration Lifecycle And Product Experience | #538; #539 through #543; #536; #564 | SQLite single-machine onboarding, status, recovery, front door and evidence-first developer documentation. | Functional lifecycle accepted for the separate V2 final gate; W3 docs/source acceptance pending; not milestone/release complete |
 | ORCH-05-A0 Single-Active Handoff Deployment Gate | #551 through #559 | Enrollment, immutable manual bundle, owner-verified import, target-local activation and evidence. | A0-Lite same-host/manual-custody experimental accepted; A0-Real cross-host/device evidence deferred |
 
 AF18's single high-level goal is to make Agent Foundry's multi-agent

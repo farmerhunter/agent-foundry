@@ -46,8 +46,16 @@ External skills are reviewed inputs. An import outcome is one of `discard`, `ref
 | 真正第二台设备、cross-host、device-loss、transport、独立 credentials、global convergence | `held_real_second_device_deferred` |
 
 不要把 `--ledger-root`、JSONL replay 或旧 V2 trial 当作正常入口、迁移要求或失败回退。它们仅保留为历史、export 或诊断材料。A0-Lite 的 source lock、manual custody、hold、recovery 和 cleanup 仍需显式可见；它不等于真实设备连续性。
+A0-Real 仍为 deferred/unproven，不能通过复制、mount、share 或同步 SQLite authority 绕过。
 
 性能、通用 latency、规模和真实 adopter friction 尚为 `unknown/not_exposed`，以后由真实使用反馈评估；不要从 fixture 或本文档推断它们。
+
+当前已接受的 owner receipt 记录 `native_ready`、project/control/scheduler/Work-root
+bindings 和 opaque durable-role references，同时明确
+`native_reachability=not_checked`、`mutation_performed=false`。因此它只证明
+owner-recorded local state，不证明 live App Server/thread 或当前 host process
+可达、cross-host continuity、UX、performance、真实设备韧性、production 或
+release readiness。
 
 ## Tester Evidence
 
@@ -73,10 +81,19 @@ The report should tell you whether role labels, routing templates, Execution Con
 Branch-aware readiness also tells you whether work appears to belong on `main`,
 an integration branch, a release branch, a stacked PR, or a multi-branch flow.
 Use `main` for V1.x maintenance in Agent Foundry, and
-`codex/v2-local-first-orchestration` for V2 integration. If a generic Core
+`codex/orch-05-single-active-handoff-integration` for current V2 finalization.
+The older `codex/v2-local-first-orchestration` line is historical, not a current
+target. If a generic Core
 update belongs on `main` while V2 work is active, split the work, land the
 generic update on `main`, record the later forward-merge need, and verify every
 branch line named by the action plan.
+
+The supported/default Base path remains stateless or GitHub-first
+practice/asset/issue/PR work. The SQLite owner path is the supported Local
+Orchestration path only for fresh or existing single-machine projects; optional
+Board, GitHub and Project surfaces are native facts, read-only views or
+non-authoritative projections. V2 docs/finalization acceptance does not
+authorize `main`, tag, release or runtime/adapter publication.
 
 For a new project, ask for setup planning:
 

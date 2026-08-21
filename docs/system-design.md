@@ -89,10 +89,12 @@ Core and Vault currently live in one repository for maintainability. They are se
 
 ## Local collaboration authority boundary
 
-The current collaboration front door is a separate, SQLite-backed local
-authority for a single machine. It is deliberately not a replacement for Core,
-the selected Vault, generated adapters, runtime installs, GitHub native facts,
-or GitHub/Project projections.
+Base Agent Foundry remains the supported/default stateless or GitHub-first
+practice/asset/issue/PR workflow. The Local Orchestration front door is a
+separate, SQLite-backed authority for fresh or existing single-machine
+projects. It is deliberately not a replacement for Core, the selected Vault,
+generated adapters, runtime installs, GitHub native facts, or GitHub/Project
+projections.
 
 ```mermaid
 flowchart TB
@@ -107,10 +109,25 @@ flowchart TB
 Only owner APIs may establish or mutate the SQLite authority. The Board and
 GitHub/Project projections do not become authority by agreeing with it. JSONL
 replay remains historical/export/diagnostic material, never a fallback or
-dual-write store. Same-host manual custody is `experimental`; real second
-device, cross-host transport, device-loss resilience, independent credentials
-and global convergence are deferred. Core/Vault restore is separate from this
-handoff boundary and must never copy or share SQLite authority files.
+dual-write store. A0-Lite same-host manual custody is `experimental`; real
+second-device A0-Real, cross-host transport, device-loss resilience,
+independent credentials and global convergence are deferred. Core/Vault restore
+is separate from this handoff boundary and must never copy or share SQLite
+authority files.
+
+Owner-recorded `native_ready`, project/control/scheduler/Work-root bindings and
+opaque durable-role references are evidence of the accepted local owner record.
+They coexist with `native_reachability=not_checked` and
+`mutation_performed=false`; they do not prove live App Server/thread or current
+host-process reachability, cross-host continuity, UX, performance,
+real-device resilience, production readiness or release readiness. Static,
+fixture, walkthrough and controlled-local evidence remain scoped to their named
+contracts.
+
+V2 closeout changes finalize on
+`codex/orch-05-single-active-handoff-integration`, not `main`. The older
+`codex/v2-local-first-orchestration` line is historical. Merge to `main`, tag,
+release and runtime/adapter publication remain separate Human gates.
 
 ## Core And User Vault Split
 
