@@ -8,6 +8,10 @@ cheapest workspace that satisfies the current Work's write, concurrency, Epic,
 and risk facts. It does not allocate one permanent worktree per role and does
 not introduce a workspace manager service.
 
+This document defines the target policy. Canonical practice and adapter
+publication activate agent guidance; separate runtime implementation or
+enforcement must be reported honestly and is not implied by this design.
+
 Adoption is forward-only. Existing branches and worktrees are inventoried and
 handled separately; onboarding never deletes or rewrites historical state.
 
@@ -43,7 +47,7 @@ An independent Hard Boundary finding is never downgraded by this policy.
 | --- | --- |
 | Read-only inspection | Current checkout; no branch or worktree |
 | Serial low-risk edit; clean checkout; no active Epic overlap | Task branch in the current checkout |
-| File-writing, concurrent Work, or Epic child Work | One task branch and one isolated worktree |
+| Other writable Work, concurrent Work, or Epic child Work | One task branch and one isolated worktree |
 | Live, privacy/security, destructive, external-effect, `main`, or release Work | Isolated worktree plus only the independently justified evidence and Human gates |
 
 If an Epic integration branch is active, a small edit still uses a child task
