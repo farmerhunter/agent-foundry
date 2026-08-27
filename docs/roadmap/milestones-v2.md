@@ -1,7 +1,7 @@
 # ORCH Roadmap Milestones (historical V2 mapping)
 
 Status: evidence-first candidate roadmap; no main/release decision
-Updated: 2026-08-20
+Updated: 2026-08-27
 Scope: ORCH-01 local-first orchestration and Foundry Board, ORCH-02 SQLite Local Ledger Foundation, ORCH-03 bounded optional materialization, ORCH-04 single-machine lifecycle/front door, and ORCH-05-A0 handoff evidence. Historical V2 material below is retained as design evidence, not a primary operational command guide.
 
 ## Active ORCH sequence
@@ -11,8 +11,8 @@ Scope: ORCH-01 local-first orchestration and Foundry Board, ORCH-02 SQLite Local
 | ORCH-01 — Local-First Orchestration and Foundry Board | #292 and its historical children | Completed; historical V2 evidence |
 | ORCH-02 — SQLite Local Ledger Foundation | #525–#530 | Completed; SQLite is the operational collaboration authority |
 | ORCH-03 — Local Collaboration Authority and Selective Sync | #400, #401, #522, #404, #405, #403, #521, #402, #406 | Candidate/readiness; no automatic remote materialization, Project projection or convergence claim |
-| ORCH-04 — Integrated Collaboration Lifecycle and Product Experience | #538–#543, #536, #564 | Single-machine functional lifecycle accepted for a separate V2 final gate; W3 docs/source acceptance in progress; main/release held |
-| ORCH-05-A0 — Single-Active Handoff Deployment Gate | #551–#559 | A0-Lite same-host/manual custody experimental; A0-Real deferred |
+| ORCH-04 — Integrated Collaboration Lifecycle and Product Experience | #538–#543, #536, #564 | Single-machine lifecycle plus W3 docs/source/Harvest/runtime accepted; exact-integration final readiness active; main/release held |
+| ORCH-05-A0 — Single-Active Handoff Deployment Gate | #551–#559 | A0-Lite same-host/manual custody experimental; A0-Real real-device pass prepared under #556 and deferred until accepted |
 
 These lanes inform a `v2.0.0` candidate only. A separate final-readiness/Human gate decides whether any capability can merge to `main` or release. `v2.0.1` is reserved for compatible fixes after release.
 
@@ -24,7 +24,7 @@ development evidence, not as a current target.
 
 Dependency order:
 
-`ORCH-01 -> ORCH-02 SQLite LedgerStore -> ORCH-04 onboarding/status/recovery/front door/docs -> later final readiness`; bounded ORCH-03 materialization and ORCH-05-A0 evidence remain separately gated, and do not turn the single-machine path into cross-device convergence.
+`ORCH-01 -> ORCH-02 SQLite LedgerStore -> ORCH-04 onboarding/status/recovery/front door/docs -> current exact-integration final readiness`; bounded ORCH-03 materialization and ORCH-05-A0 evidence remain separately gated, and do not turn the single-machine path into cross-device convergence.
 
 ORCH-02 boundaries: Base Agent Foundry remains the supported/default stateless or GitHub-first practice/asset/issue/PR workflow. For Local Orchestration, SQLite is the only operational collaboration authority; new and existing single-machine projects onboard directly to SQLite. There is no JSONL user-data migration, dual-write or compatibility backend; JSONL export is optional and non-authoritative. GitHub/Project/Board surfaces are native facts, read-only views or non-authoritative projections as applicable. ORCH-03 owns multi-machine convergence; AF19 remains separate.
 
@@ -151,7 +151,7 @@ complete the user-facing capability.
 | V2-13 Operational UX Contract And Management Surface | #378 | Implement stable operational ViewModels and a management surface for board, item detail, migration review, apply review, sync plan, conflicts, health, and cross-environment/version coordination. | Completed implementation |
 | V2-14 Real-Project Dogfood And UX Conclusion | #374 | Run the complete workflow on a real project, document practical friction, and decide whether the experience is good enough for adoption. | Completed dogfood |
 | V2-15 Runtime / Skill / Capability Pack Enablement | #375 | Harvest and publish layer-aware V2 practices, Skills, and packs without making Local Orchestration behavior the default for Base workflows. | Completed enablement |
-| V2-16 Final V2 Integration And Release Gate | #376 | Verify full V2 usability, dogfood conclusions, docs, enablement, and decide on merge-back to `main` plus `v2.0.0` release. | Active final readiness gate |
+| V2-16 Final V2 Integration And Release Gate | #376 | Historical final integration gate for the earlier V2 line. | Completed historical gate; not the current ORCH finalization authority |
 
 ## V2 Capability Phases
 
@@ -703,11 +703,14 @@ Required behavior:
 This milestone prevents V2 Core helper features from existing only as manual
 script commands.
 
-## V2-16 Final V2 Integration And Release Gate
+## Historical V2-16 Final Integration Gate
 
-V2-16 is the real final V2 gate.
+Issue #376 completed the earlier V2 integration gate. It remains historical
+evidence and must not be reopened or treated as the scheduler for the current
+ORCH finalization line. Current exact-integration readiness is coordinated by
+#538; #556 owns the separate A0-Real evidence slot.
 
-It should verify:
+The historical gate verified:
 
 - Phase 1 read-only/dry-run behavior still passes;
 - migration apply works for existing projects;
