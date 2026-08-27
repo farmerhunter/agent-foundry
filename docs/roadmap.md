@@ -100,9 +100,12 @@ deferred. ORCH-03 remote
 materialization/convergence and all real second-device/cross-host transport
 claims remain optional, candidate or deferred as their evidence requires. AF19
 follow-ups remain separate. The accepted W1/W2 prerequisites make
-`codex/orch-05-single-active-handoff-integration` the sole V2 finalization line;
-W3 documentation is the current gate. Final readiness, merge to `main`, tag and
-release remain separate Human gates.
+`codex/orch-05-single-active-handoff-integration` the sole V2 finalization line.
+W1 branch/worktree convergence, W2 Issue/Project reconciliation and W3
+documentation/Harvest/runtime publication are complete. Current work is the
+exact-integration final-readiness gate. A0-Real remains a separately evidenced
+real-device decision; merge to `main`, tag and release remain separate Human
+gates.
 
 The accepted status evidence is owner-recorded local state: `native_ready`,
 bound project/control/scheduler/Work-root records and opaque durable-role
@@ -194,7 +197,13 @@ Default harvest routing:
 
 ## Active Milestone
 
-Agent Foundry `v1.0.0` is published. The active planning area is the W3 documentation/source acceptance gate toward a `v2.0.0` candidate on the non-`main` finalization line. Design or documentation acceptance is not capability completion; final readiness, `main`, tag and release remain separately Human-gated.
+Agent Foundry `v1.1.0` is the latest published stable release; `v1.0.0` remains
+the first public baseline. The active planning area is exact-head final
+readiness for the `v2.0.0` candidate on the non-`main` finalization line.
+The W1/W2 convergence and W3 documentation/Harvest/runtime package are
+complete. A0-Real is separately scheduled for real-device evidence under #556;
+until accepted it remains deferred and cannot be inferred from A0-Lite. Final
+readiness, `main`, tag and release remain separately Human-gated.
 
 | Milestone | GitHub records | User-facing reason | Status |
 | --- | --- | --- | --- |
@@ -205,8 +214,8 @@ Agent Foundry `v1.0.0` is published. The active planning area is the W3 document
 | ORCH-01 Local-First Orchestration And Foundry Board | #292 (historical Epic); #293 through #299; #359 through #362 | Local durable Board foundation. | Completed |
 | ORCH-02 SQLite Local Ledger Foundation | #525; #526 through #530 | Transactional local authority, onboarding/action routing, replay and recovery. | Completed; final adopter acceptance recorded |
 | ORCH-03 Distributed Authority And Selective Sync | #400; #537, #522, #404, #405, #403, #521, #402, #406 | Bounded local authority and selective external materialization. | Candidate/readiness only; not automatic, production, or convergence evidence |
-| ORCH-04 Integrated Collaboration Lifecycle And Product Experience | #538; #539 through #543; #536; #564 | SQLite single-machine onboarding, status, recovery, front door and evidence-first developer documentation. | Functional lifecycle accepted for the separate V2 final gate; W3 docs/source acceptance pending; not milestone/release complete |
-| ORCH-05-A0 Single-Active Handoff Deployment Gate | #551 through #559 | Enrollment, immutable manual bundle, owner-verified import, target-local activation and evidence. | A0-Lite same-host/manual-custody experimental accepted; A0-Real cross-host/device evidence deferred |
+| ORCH-04 Integrated Collaboration Lifecycle And Product Experience | #538; #539 through #543; #536; #564 | SQLite single-machine onboarding, status, recovery, front door and evidence-first developer documentation. | Functional lifecycle and W3 docs/source/Harvest/runtime package accepted; ready for exact-integration final readiness, not milestone/release complete |
+| ORCH-05-A0 Single-Active Handoff Deployment Gate | #551 through #559 | Enrollment, immutable manual bundle, owner-verified import, target-local activation and evidence. | A0-Lite same-host/manual-custody experimental accepted; A0-Real real-device pass prepared under #556 and remains deferred until accepted |
 
 AF18's single high-level goal is to make Agent Foundry's multi-agent
 collaboration cost-aware, bounded, portable, and human-controllable before it
