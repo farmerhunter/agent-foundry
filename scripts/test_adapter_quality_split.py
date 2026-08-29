@@ -211,6 +211,22 @@ def main() -> int:
             if expected not in semantic_text:
                 errors.append(f"selected-output-semantic-reachability: manifest missing {expected}")
 
+        for practice_id, condition in {
+            "ARCH-001": "always_preflight",
+            "ARCH-006": "when_scoping_mvp_or_phase",
+            "ARCH-008": "when_planning_cross_owner_migration_or_scope_freeze",
+            "ARCH-010": "when_execution_evidence_can_authorize_transition",
+        }.items():
+            matching_routes = [
+                block
+                for block in semantic_text.split("  - target: ")[1:]
+                if f"practice_id: {practice_id}" in block
+            ]
+            if not matching_routes or any(f"condition: {condition}" not in block for block in matching_routes):
+                errors.append(
+                    f"selected-output-semantic-reachability: {practice_id} lacks condition {condition}"
+                )
+
         shutil.copytree(generated, id_only_generated)
         id_only_skill = id_only_generated / "codex" / "skills" / "architecture-design" / "SKILL.md"
         id_only_reference = id_only_generated / "codex" / "skills" / "architecture-design" / "references" / "ARCH-001.md"

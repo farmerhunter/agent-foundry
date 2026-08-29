@@ -135,6 +135,22 @@ evidence, or durable scheduling outweighs coordination cost.
 review -> architect acceptance/routing -> human gate when needed -> completion。
 低风险工作可以单线程完成；需要独立判断或 durable handoff 时再拆 role。
 
+## Lean Delivery Repair Budget
+
+The normal one-repair/one-re-review budget counts semantic repairs, not every edit used to make an unpublished checkpoint executable.
+
+| Finding | Mechanical only when | Route |
+| --- | --- | --- |
+| Syntax, import, cwd, `PYTHONPATH`, collection, fixture, runnable-doc command, validator false positive/negative | Outcome, owner, authority, public API, domain semantics, path family, dependencies, assertions, evidence meaning, and capability claim are unchanged. | Correct during unpublished bring-up, then require a green checkpoint. |
+| Ownership, authority, public API, currentness, receipt/Evidence truth, Mission transition, cancellation, retry, lifecycle, privacy/security, process/persistence, dependency, queue/manager, path family | Never mechanical. | Spend the one consolidated semantic repair, then independent re-review. |
+| Missing production caller, package export, canonical runnable doc, currentness validator, or path inventory exposed by repeated failures | The contract or closure audit was incomplete. | Stop the repair chain and return to Architect for rebaseline. |
+
+Mechanical correction cannot add skip, `xfail`, deselection, filtering, assertion weakening, substitute evidence, a new dependency, or a new path family. A green test run is necessary but not sufficient: ownership and evidence meaning must also be unchanged.
+
+The second substantive semantic finding triggers a clean rebaseline rather than another patch contract. Human review is not a generic fallback for test failures; use it only when a real Human-owned product, UX, privacy/security, destructive, live/runtime, distribution, or final-integration decision changes.
+
+**中文要点：** repair budget 约束的是语义和 authority 漂移，不是正常开发中的每一次机械修正。语法、import、测试收集等问题可以在 unpublished checkpoint 内修到 green；一旦暴露遗漏 caller/export/docs/path，或改变 owner、API、currentness、receipt、Mission、cancel/retry 等语义，就必须回到 Architect 或消耗一次 semantic repair。Human gate 只用于真正需要人的决定。
+
 ## Role Rules
 
 ### Coordinator

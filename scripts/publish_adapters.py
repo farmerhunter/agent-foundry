@@ -17,6 +17,12 @@ from operation_context import configured_roots, print_operation_context
 ACTIVE_STATUSES = {"active", "revised"}
 SKILL_FOLDER_ADAPTERS = {"codex", "hermes", "trae"}
 TRAE_COMPATIBLE_SKILL_ADAPTERS = {"codex", "hermes"}
+SEMANTIC_ROUTE_CONDITIONS = {
+    "ARCH-001": "always_preflight",
+    "ARCH-006": "when_scoping_mvp_or_phase",
+    "ARCH-008": "when_planning_cross_owner_migration_or_scope_freeze",
+    "ARCH-010": "when_execution_evidence_can_authorize_transition",
+}
 
 
 def read(path: Path) -> str:
@@ -214,11 +220,7 @@ def skill_artifact_records(output_root: Path, skill_assets: list[dict[str, objec
 
 
 def semantic_route_condition(practice_id: str) -> str:
-    if practice_id == "ARCH-001":
-        return "always_preflight"
-    if practice_id == "ARCH-006":
-        return "when_scoping_mvp_or_phase"
-    return "always_for_declared_asset"
+    return SEMANTIC_ROUTE_CONDITIONS.get(practice_id, "always_for_declared_asset")
 
 
 def semantic_route_paths(adapter_id: str, slug: str, practice_id: str) -> tuple[str, str, str]:

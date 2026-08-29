@@ -63,6 +63,38 @@ Native agent learning should remain useful. For agents such as Hermes that can r
 
 Do not put a practice under `meta` only because it is abstract or broadly useful. A practice belongs in `meta` only when it governs the Agent Foundry capability lifecycle itself. If it constrains general project work, durable records, maintainability, or runtime capability across projects, use `governance` or another domain that matches the work surface.
 
+## Lean Delivery Control Model
+
+Lean Delivery is a risk-proportional collaboration policy, not a separate execution engine. It reduces coordination cost while preserving the same owner, authority, review, Human, privacy, runtime, and release boundaries.
+
+The control model distinguishes three kinds of change:
+
+| Change class | Meaning | Default handling |
+| --- | --- | --- |
+| Mechanical bring-up | Syntax, import, working directory, `PYTHONPATH`, test collection, fixture setup, runnable-doc command, or bounded validator-oracle correction with unchanged behavior and evidence meaning. | Correct before candidate publication; it does not consume the semantic repair budget. |
+| Semantic repair | Changes owner, authority, public API, currentness, receipt or Evidence truth, Mission transition, cancellation, retry, lifecycle, privacy/security, dependency, process, persistence, queue, manager, or path family. | One consolidated repair and one independent re-review. |
+| Contract-closure defect | Repeated mechanical failures reveal an omitted production caller, public export, canonical runnable document, currentness validator, or incorrect path inventory. | Stop implementation and return to Architect for a clean scope or contract rebaseline. |
+
+A correction is mechanical only when outcome, owner and authority boundaries, public API and domain semantics, path family, dependencies, assertions, evidence meaning, and capability claims remain unchanged. It may not add skip, `xfail`, deselection, filtering, assertion weakening, or substitute evidence. Passing an unpublished checkpoint is necessary before publication, but green tests do not convert a semantic change into a mechanical one.
+
+The semantic repair budget is therefore a circuit breaker for design and authority drift, not a punishment for ordinary development ergonomics. A second substantive semantic failure triggers rebaseline. Human gates remain reserved for actual Human-owned product, UX, privacy/security, destructive, live/runtime, distribution, and final integration choices.
+
+```mermaid
+flowchart TD
+  F["Failed checkpoint or review finding"] --> C{"Behavior and authority unchanged?"}
+  C -->|Yes| M["Mechanical bring-up correction"]
+  M --> G{"Green unpublished checkpoint?"}
+  G -->|No| X{"Missing caller/export/docs/path closure?"}
+  X -->|Yes| A["Return to Architect"]
+  X -->|No| M
+  G -->|Yes| R["Publish candidate or continue review"]
+  C -->|No| S["Semantic repair budget"]
+  S --> O["One consolidated repair + re-review"]
+  O --> T{"Second substantive semantic failure?"}
+  T -->|Yes| A
+  T -->|No| R
+```
+
 ## Repository Layers
 
 ```text
