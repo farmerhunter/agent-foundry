@@ -1,5 +1,9 @@
 # Usage Guide
 
+系统概念、应用场景与恢复策略请先阅读
+[Practices 与 Skills 用户指南（中文）](practice-and-skill-system.md)；
+另附 [English edition](practice-and-skill-system.en.md)。
+
 This guide is for day-to-day Agent Foundry use. It keeps the user path short and leaves internal workflow details in the workflow/reference docs.
 
 **中文要点：** 这是日常使用指南。先看短命令和用户流程；内部 workflow 细节不用先读。

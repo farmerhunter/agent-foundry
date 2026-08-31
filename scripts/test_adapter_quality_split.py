@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import hashlib
+import json
+import re
 import shutil
 import subprocess
 import sys
@@ -108,6 +110,42 @@ def promote_asset_collab_002(vault_root: Path) -> None:
             1,
         )
     asset.write_text(asset_text, encoding="utf-8")
+
+
+def routed_guidance_errors(vault: Path, asset_path: Path, skill: Path, text: str) -> list[str]:
+    source = asset_path.read_text(encoding="utf-8")
+    errors: list[str] = []
+    description = re.search(r'^discovery_description: (.+)$', source, re.MULTILINE)
+    if description is None or json.loads(description.group(1)) not in text:
+        errors.append("missing complete discovery description")
+    if "Loading mode: intent" not in text:
+        errors.append("missing visible intent mode")
+    for field in ("process", "success_criteria"):
+        section = re.search(rf'^{field}:\n((?:[ \t].*\n)+)', source, re.MULTILINE)
+        if section is None:
+            errors.append(f"missing source {field}")
+            continue
+        for line in section.group(1).splitlines():
+            if line.startswith("  - ") and line[4:] not in text:
+                errors.append(f"missing source {field} instruction: {line[4:]}")
+    routes = re.search(r'^practice_routes:\n((?:[ \t].*\n)+)', source, re.MULTILINE)
+    members = re.search(r'^canonical_practices:\n((?:[ \t].*\n)+)', source, re.MULTILINE)
+    if routes is None or members is None:
+        return errors + ["missing source route catalogue"]
+    mapping = dict(re.findall(r'^  ([A-Z]+-\d+): (.+)$', routes.group(1), re.MULTILINE))
+    ids = re.findall(r'^  - ([A-Z]+-\d+)$', members.group(1), re.MULTILINE)
+    if not ids or set(mapping) != set(ids):
+        errors.append("source routes do not cover every declared practice")
+    for identifier, condition in mapping.items():
+        if f"- {identifier}: read `references/{identifier}.md` when {condition}." not in text:
+            errors.append(f"missing exact applicable route: {identifier}")
+        sources = list((vault / "practices").rglob(f"{identifier}-*.md"))
+        reference = skill.parent / "references" / f"{identifier}.md"
+        if len(sources) != 1 or not reference.is_file():
+            errors.append(f"missing unique readable rule: {identifier}")
+        elif sources[0].read_text(encoding="utf-8").strip() not in reference.read_text(encoding="utf-8"):
+            errors.append(f"missing full canonical rule: {identifier}")
+    return errors
 
 
 def main() -> int:
@@ -232,7 +270,7 @@ def main() -> int:
         id_only_reference = id_only_generated / "codex" / "skills" / "architecture-design" / "references" / "ARCH-001.md"
         id_only_skill.write_text(
             id_only_skill.read_text(encoding="utf-8").replace(
-                "`codex/skills/architecture-design/references/ARCH-001.md`", "`ARCH-001`", 1
+                "`references/ARCH-001.md`", "`ARCH-001`", 1
             ),
             encoding="utf-8",
         )
@@ -420,19 +458,23 @@ def main() -> int:
                 errors.append(f"selected-output-transition-gates: {name} agent-collaboration SKILL.md missing: {path}")
                 continue
             text = path.read_text(encoding="utf-8")
-            for expected in [
-                "rehydration checkpoint",
-                "risky collaboration transitions",
-                "`needs:*` label changes are backed by transition gate evidence",
-                "reviewer handoff to `needs:reviewer` includes peer-session dispatch evidence",
-                "Human Decision Contract",
-                "explicit authorization phrase",
-                "delegated Architect or acceptance role",
-                "Epic closure",
-                "final `main` integration",
-            ]:
-                if expected not in text:
-                    errors.append(f"selected-output-transition-gates: {name} agent-collaboration missing {expected}")
+            asset_path = temp_vault / "assets/skills/ASSET-COLLAB-001-agent-collaboration.asset.yaml"
+            if "\npractice_routes:\n" in asset_path.read_text(encoding="utf-8"):
+                errors.extend(f"selected-output-transition-gates: {name} {error}" for error in routed_guidance_errors(temp_vault, asset_path, path, text))
+            else:
+                for expected in [
+                    "rehydration checkpoint",
+                    "risky collaboration transitions",
+                    "`needs:*` label changes are backed by transition gate evidence",
+                    "reviewer handoff to `needs:reviewer` includes peer-session dispatch evidence",
+                    "Human Decision Contract",
+                    "explicit authorization phrase",
+                    "delegated Architect or acceptance role",
+                    "Epic closure",
+                    "final `main` integration",
+                ]:
+                    if expected not in text:
+                        errors.append(f"selected-output-transition-gates: {name} agent-collaboration missing {expected}")
         codex_skill = generated / "codex" / "skills" / "role-automation-planner" / "SKILL.md"
         hermes_skill = generated / "hermes" / "skills" / "role-automation-planner" / "SKILL.md"
         trae_skill = generated / "trae" / "skills" / "role-automation-planner" / "SKILL.md"
@@ -444,7 +486,20 @@ def main() -> int:
             for expected in ["ASSET-COLLAB-002", "Role Dispatch and Automation Planner", "## Responsibility", "## Process"]:
                 if expected not in text:
                     errors.append(f"selected-output-promoted-asset: {name} generated SKILL.md missing {expected}")
-            if name == "trae":
+            asset_path = temp_vault / "assets/skills/ASSET-COLLAB-002-role-automation-planner.asset.yaml"
+            routed = "\npractice_routes:\n" in asset_path.read_text(encoding="utf-8")
+            if routed:
+                errors.extend(f"selected-output-promoted-asset: {name} {error}" for error in routed_guidance_errors(temp_vault, asset_path, path, text))
+                damaged = text.replace("Loading mode: intent", "Loading mode: legacy", 1)
+                if "missing visible intent mode" not in routed_guidance_errors(temp_vault, asset_path, path, damaged):
+                    errors.append(f"routed-guidance-oracle: {name} accepted a broken intent entry")
+                reference = path.parent / "references/COLLAB-001.md"
+                original_reference = reference.read_text(encoding="utf-8")
+                reference.write_text("# COLLAB-001\n", encoding="utf-8")
+                if "missing full canonical rule: COLLAB-001" not in routed_guidance_errors(temp_vault, asset_path, path, text):
+                    errors.append(f"routed-guidance-oracle: {name} accepted an ID-only authority rule")
+                reference.write_text(original_reference, encoding="utf-8")
+            if name == "trae" and not routed:
                 for expected in [
                     "Trae SOLO orchestration prompt",
                     ".trae/subagents",
@@ -454,13 +509,14 @@ def main() -> int:
                 ]:
                     if expected not in text:
                         errors.append(f"selected-output-promoted-asset: trae generated SKILL.md missing {expected}")
-            for expected in [
-                "rehydration step from durable sources",
-                "transition gate it is satisfying",
-                "target role to rehydrate durable sources",
-            ]:
-                if expected not in text:
-                    errors.append(f"selected-output-promoted-asset: {name} generated SKILL.md missing {expected}")
+            if not routed:
+                for expected in [
+                    "rehydration step from durable sources",
+                    "transition gate it is satisfying",
+                    "target role to rehydrate durable sources",
+                ]:
+                    if expected not in text:
+                        errors.append(f"selected-output-promoted-asset: {name} generated SKILL.md missing {expected}")
         generated_text = "\n".join(path.read_text(encoding="utf-8") for path in generated.rglob("*") if path.is_file())
         if "ASSET-COLLAB-002" not in generated_text:
             errors.append("selected-output-promoted-asset: generated output missing ASSET-COLLAB-002")

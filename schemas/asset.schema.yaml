@@ -21,6 +21,8 @@ required_fields:
   success_criteria: "Observable outcomes that indicate the asset is useful"
 
 recommended_fields:
+  discovery_description: "Optional complete single-line selection description (1-1024 characters), with positive scope and important non-triggers; never silently truncated."
+  practice_routes: "Optional two-space-indented mapping of every canonical_practices ID to a nonempty single-line applicability condition using words, spaces or underscores; preserve membership. Conditions are guidance, not executable predicates."
   owner: "Human owner or maintainer"
   evidence_summary: "Why this asset exists"
   review_cadence: "monthly | quarterly | on-demand"
@@ -30,6 +32,8 @@ recommended_fields:
   superseded_by: "Asset ID that replaces this asset"
 
 rules:
+  - "Assets without explicit routing fields retain the publisher's legacy discovery and applicability behavior."
+  - "Routing conditions do not grant permissions, guarantee host loading, or require transitive loading of every related practice."
   - "Assets are not canonical practices. They are tools governed by canonical practices."
   - "New assets require human approval before becoming active."
   - "Active assets should be published to relevant direct programming agents."

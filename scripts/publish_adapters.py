@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import re
 from datetime import date
 from pathlib import Path
@@ -61,6 +62,19 @@ def active_entries(vault_root: Path, index_rel: str, list_key: str) -> list[dict
     return [entry for entry in entries if entry.get("status") in ACTIVE_STATUSES]
 
 
+def manifest_updated_date(vault_root: Path) -> str:
+    dates = []
+    for name in ("practice_index.yaml", "asset_index.yaml"):
+        values = [line.split(":", 1)[1].strip() for line in read(vault_root / "indexes" / name).splitlines() if line.startswith("updated:")]
+        if len(values) != 1:
+            raise ValueError(f"{name} must contain one top-level updated date")
+        parsed = date.fromisoformat(values[0])
+        if parsed.isoformat() != values[0]:
+            raise ValueError(f"{name} updated date must be YYYY-MM-DD")
+        dates.append(parsed)
+    return max(dates).isoformat()
+
+
 def active_practice_records(vault_root: Path) -> dict[str, dict[str, str]]:
     return {
         entry["id"]: entry
@@ -99,6 +113,56 @@ def yaml_list(text: str, key: str) -> list[str]:
         if in_list and line.strip().startswith("- "):
             values.append(line.strip()[2:].strip().strip('"').strip("'"))
     return values
+
+
+def routing_scalar(value: str) -> str:
+    value = value.strip()
+    if value.startswith('"'):
+        value = json.loads(value)
+    elif value.startswith("'") and value.endswith("'"):
+        value = value[1:-1].replace("''", "'")
+    if not isinstance(value, str) or not value.strip() or any(ch in value for ch in "\n\r`"):
+        raise ValueError("routing values must be nonempty single-line text without backticks")
+    if value in {"|", ">", "null", "~", "{}", "[]", "not_applicable"}:
+        raise ValueError("routing values must be explicit text")
+    return value
+
+
+def asset_routing(text: str, practice_ids: list[str]) -> dict[str, object]:
+    fields: dict[str, object] = {}
+    lines = text.splitlines()
+    for key in ("discovery_description", "practice_routes"):
+        starts = [i for i, line in enumerate(lines) if line.startswith(key + ":")]
+        if not starts:
+            continue
+        if len(starts) != 1:
+            raise ValueError(f"duplicate asset routing field: {key}")
+        start = starts[0]
+        value = lines[start].split(":", 1)[1].strip()
+        if key == "discovery_description":
+            description = routing_scalar(value)
+            if len(description) > 1024:
+                raise ValueError("discovery_description exceeds 1024 characters")
+            fields[key] = description
+            continue
+        if value:
+            raise ValueError("practice_routes must use an indented ID-to-text mapping")
+        routes: dict[str, str] = {}
+        for line in lines[start + 1:]:
+            if not line.strip() or line.lstrip().startswith("#"):
+                continue
+            if not line.startswith(" "):
+                break
+            match = re.fullmatch(r"  ([A-Z]+-\d+):\s*(.+)", line)
+            if match is None or match[1] in routes:
+                raise ValueError("practice_routes requires unique IDs and single-line conditions")
+            routes[match[1]] = routing_scalar(match[2])
+            if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_ ]*", routes[match[1]]):
+                raise ValueError("practice_routes conditions must use words, spaces or underscores")
+        if set(routes) != set(practice_ids):
+            raise ValueError("practice_routes keys must equal canonical_practices")
+        fields[key] = routes
+    return fields
 
 
 def slug_from_asset(entry: dict[str, str]) -> str:
@@ -143,6 +207,7 @@ def skill_asset_records(vault_root: Path, active_assets: list[dict[str, str]]) -
                 "published_to": yaml_list(text, "published_to") or inline_list(entry.get("published_to", "")),
             }
         )
+        record.update(asset_routing(text, record["canonical_practices"]))
         records.append(record)
     return records
 
@@ -288,7 +353,9 @@ def semantic_reachability_routes(
                             adapter_id, str(asset["slug"]), str(practice_id)
                         ),
                         "declared_required": "true",
-                        "condition": semantic_route_condition(str(practice_id)),
+                        "condition": asset.get("practice_routes", {}).get(
+                            str(practice_id), semantic_route_condition(str(practice_id))
+                        ),
                         "packaging": packaging,
                     }
                 )
@@ -299,10 +366,11 @@ def manifest_text(
     active_practices: list[dict[str, str]],
     active_assets: list[dict[str, str]],
     skill_artifacts: list[dict[str, str]],
+    updated: str,
 ) -> str:
     lines = [
         "schema_version: 1",
-        f"updated: {date.today().isoformat()}",
+        f"updated: {updated}",
         "source: selected_vault",
         "private_paths_recorded: false",
         "semantic_reachability_manifest: semantic-reachability-manifest.yaml",
@@ -473,7 +541,9 @@ def generated_skill_body(record: dict[str, object], adapter_id: str, semantic_ro
     description = purpose
     if trigger_summary:
         description = f"{purpose} Triggers: {trigger_summary}."
-    if len(description) > 260:
+    if record.get("discovery_description"):
+        description = str(record["discovery_description"])
+    elif len(description) > 260:
         description = description[:257].rstrip() + "..."
     quoted_description = '"' + description.replace("\\", "\\\\").replace('"', '\\"') + '"'
     lines = [
@@ -487,6 +557,7 @@ def generated_skill_body(record: dict[str, object], adapter_id: str, semantic_ro
         "Generated transitional runtime skill from the selected Agent Foundry Vault.",
         f"Canonical source: `{record.get('source_path', '')}`.",
         f"Asset ID: `{record['id']}`.",
+        f"Loading mode: {'intent (canonical conditional guidance)' if 'practice_routes' in record else 'legacy (existing asset applicability)'}. This is guidance, not host enforcement.",
         "",
         "## Purpose",
         purpose,
@@ -524,7 +595,7 @@ def generated_skill_body(record: dict[str, object], adapter_id: str, semantic_ro
     ]
     if routes:
         lines.extend(
-            f"- {route['practice_id']}: read `{route['target_path']}` "
+            f"- {route['practice_id']}: read `references/{route['practice_id']}.md` "
             f"when {route['condition']}."
             for route in routes
         )
@@ -624,10 +695,15 @@ def publish(core_root: Path, vault_root: Path, output_root: Path, apply: bool) -
 
     active_practices = active_entries(vault_root, "indexes/practice_index.yaml", "practices")
     active_assets = active_entries(vault_root, "indexes/asset_index.yaml", "assets")
+    try:
+        manifest_updated = manifest_updated_date(vault_root)
+    except ValueError as error:
+        print(f"Adapter publish failed selected Vault metadata validation: {error}")
+        return 1
     if not active_practices and not active_assets:
         print("Selected Vault has no active or revised practices/assets. Nothing to publish.")
         write_semantic_manifest(output_root, [], apply)
-        write_manifest(output_root, manifest_text(active_practices, active_assets, []), apply)
+        write_manifest(output_root, manifest_text(active_practices, active_assets, [], manifest_updated), apply)
         print_follow_up_commands(core_root, vault_root, output_root)
         return 0
 
@@ -639,8 +715,8 @@ def publish(core_root: Path, vault_root: Path, output_root: Path, apply: bool) -
         print("Refusing to overwrite Core adapter templates in place. Pass --output-root for generated outputs.")
         return 1
 
-    skill_assets = skill_asset_records(vault_root, active_assets)
     try:
+        skill_assets = skill_asset_records(vault_root, active_assets)
         semantic_routes = semantic_reachability_routes(
             vault_root, skill_assets, active_practice_records(vault_root)
         )
@@ -652,7 +728,7 @@ def publish(core_root: Path, vault_root: Path, output_root: Path, apply: bool) -
     written.extend(write_generated_skill_outputs(output_root, skill_assets, semantic_routes, apply))
     written.extend(write_semantic_reference_outputs(vault_root, output_root, semantic_routes, apply))
     write_semantic_manifest(output_root, semantic_routes, apply)
-    write_manifest(output_root, manifest_text(active_practices, active_assets, skill_artifacts), apply)
+    write_manifest(output_root, manifest_text(active_practices, active_assets, skill_artifacts, manifest_updated), apply)
     print(f"Adapter publish {'wrote' if apply else 'planned'} {len(written)} files.")
     print(f"Active practices selected: {len(active_practices)}")
     print(f"Active assets selected: {len(active_assets)}")

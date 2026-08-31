@@ -11,6 +11,7 @@ import tempfile
 from pathlib import Path
 
 import sync_adapters
+import publish_adapters
 from foundry_config import CONFIG_PATH, parse_config
 
 
@@ -53,6 +54,12 @@ def output(result: subprocess.CompletedProcess[str]) -> str:
 def main() -> int:
     vault_root = configured_vault_root()
     vault_before = digest_tree(vault_root)
+    architecture = next(
+        asset for asset in publish_adapters.skill_asset_records(
+            vault_root, publish_adapters.active_entries(vault_root, "indexes/asset_index.yaml", "assets")
+        ) if asset["id"] == "ASSET-ARCH-001"
+    )
+    architecture_practices = architecture["canonical_practices"]
     errors: list[str] = []
 
     with tempfile.TemporaryDirectory(prefix="agent-foundry-claude-semantic-") as tmp:
@@ -95,7 +102,7 @@ def main() -> int:
         semantic = generated / "semantic-reachability-manifest.yaml"
         router_text = router.read_text(encoding="utf-8") if router.exists() else ""
         semantic_text = semantic.read_text(encoding="utf-8") if semantic.exists() else ""
-        for practice_id in ["ARCH-001", "ARCH-006", "ARCH-010", "ARCH-011"]:
+        for practice_id in architecture_practices:
             installed = f"references/architecture-design/{practice_id}.md"
             generated_path = f"claude-code/references/architecture-design/{practice_id}.md"
             if installed not in router_text or generated_path in router_text:
@@ -159,7 +166,7 @@ def main() -> int:
             errors.append("Claude isolated apply did not preserve managed-block backup behavior")
         if not (runtime / "commands" / "agent-foundry" / "README.md").is_file():
             errors.append("Claude isolated apply omitted commands packaging")
-        for practice_id in ["ARCH-001", "ARCH-006", "ARCH-010", "ARCH-011"]:
+        for practice_id in architecture_practices:
             reference = runtime / "agent-foundry" / "references" / "architecture-design" / f"{practice_id}.md"
             if not reference.is_file():
                 errors.append(f"Claude isolated apply omitted {practice_id} reference")
