@@ -1,5 +1,8 @@
 # Multi-Agent Collaboration Workflow
 
+For a user-oriented explanation of roles, Work, permissions and selective
+guidance, start with [Practices and Skills](practice-and-skill-system.md).
+
 This document describes Agent Foundry's role-based issue and PR workflow. It is
 an operating guide for humans and agents. Helper commands, schemas, and
 template details remain in `workflows/github-collaboration-helper.md` and
