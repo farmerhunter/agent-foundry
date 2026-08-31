@@ -1,5 +1,8 @@
 # Usage Guide
 
+For the connected mental model, applications and recovery strategies, read
+[Practices and Skills: A User Guide](practice-and-skill-system.md).
+
 This guide is for day-to-day Agent Foundry use. It keeps the user path short and leaves internal workflow details in the workflow/reference docs.
 
 **中文要点：** 这是日常使用指南。先看短命令和用户流程；内部 workflow 细节不用先读。

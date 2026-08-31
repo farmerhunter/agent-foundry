@@ -232,7 +232,7 @@ def main() -> int:
         id_only_reference = id_only_generated / "codex" / "skills" / "architecture-design" / "references" / "ARCH-001.md"
         id_only_skill.write_text(
             id_only_skill.read_text(encoding="utf-8").replace(
-                "`codex/skills/architecture-design/references/ARCH-001.md`", "`ARCH-001`", 1
+                "`references/ARCH-001.md`", "`ARCH-001`", 1
             ),
             encoding="utf-8",
         )
