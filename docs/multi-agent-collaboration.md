@@ -1,7 +1,8 @@
 # Multi-Agent Collaboration Workflow
 
-For a user-oriented explanation of roles, Work, permissions and selective
-guidance, start with [Practices and Skills](practice-and-skill-system.md).
+角色、Work、权限与按需加载的用户说明，请先阅读
+[Practices 与 Skills 用户指南（中文）](practice-and-skill-system.md)；
+另附 [English edition](practice-and-skill-system.en.md)。
 
 This document describes Agent Foundry's role-based issue and PR workflow. It is
 an operating guide for humans and agents. Helper commands, schemas, and
