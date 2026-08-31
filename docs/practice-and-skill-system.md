@@ -9,10 +9,12 @@ Practice（实践规则）保存可复用的判断及其理由；skill（技能�
 本指南从日常场景出发，解释如何使用这套系统，以及为什么这样设计。
 你不必先记住 practice ID，也不必一次采用全部能力。
 
-**交付状态：** 本文是 #574 的候选用户指南。本次协作规则重构及按需加载方式仍处于
-提议阶段；只有获批的 canonical 内容、生成结果和选定安装目标经过实际核验后，
-才能宣告相应交付完成。既有 onboarding、分发和 runtime 能力仍受各自文档中的
-限制约束。本文不代表已启用新规则，也不是发布公告。
+**交付状态（2026-08-31）：** #574-R1 已获批准。五项 canonical 内容已合并到选定
+Vault，生成输出已发布，本机 Codex 受管文件已更新并逐项回读一致。
+版本为 COLLAB-001 v6、COLLAB-003 v5、COLLAB-009 v22、Agent Collaboration v39、
+Role Automation Planner v15。详见[实际交付回执](https://github.com/farmerhunter/agent-foundry/issues/577#issuecomment-5477345322)。
+这不表示其他机器或其他 runtime 已安装，也不启用项目 onboarding、SQLite 或自动调度。
+既有能力仍受各自文档中的限制约束；本次不是 release。
 
 ## 从你想做的事情开始
 
@@ -221,9 +223,9 @@ Skill 解释流程，但不会扩大权限。明确的 HOLD 仍然有效。
 简短描述仍应完整说明适用范围和重要排除项。如果描述在排除项之前被截断，
 可能触发一串本不需要的 skills。
 
-#574 的候选 publisher 将采用路由的 assets 标记为 `intent`，未改变的 assets 标记为
+#574 的 publisher 将采用路由的 assets 标记为 `intent`，未改变的 assets 标记为
 `legacy`。这些标签展示指令选择路径，不是 runtime 开关，也不是新 scheduler。
-拟议的协作路径使用精简入口和语义完整的条件式引用。
+已交付的协作路径使用精简入口和语义完整的条件式引用。
 普通交付不应读取清理、onboarding、自动化或迁移流程，除非这些操作确实属于当前范围；
 小范围派发也不应再读一遍全部生命周期规则。详细理由仍可查阅，不是为了减少数字而删掉。
 
@@ -233,8 +235,8 @@ Skill 解释流程，但不会扩大权限。明确的 HOLD 仍然有效。
 
 路由不确定时，必须明确显示 fallback：说明歧义，查阅相关既有指导，
 不能默默宣称已精确识别 intent、加载全部 skills 或扩大权限。
-未修改 assets 的兼容路径也应明确。本次源内容与生成行为，在候选检查和安装回读完成前，
-仍应标为提议状态。
+未修改 assets 的兼容路径也应明确。本次已验证源内容、生成结果与选定 Codex 安装副本
+一致；这不是对宿主自动选择 skill 或实际模型 token、延迟收益的保证。
 
 比较加载量时，应针对同一个任务统计修改前后的 discovery description、入口正文、
 必需的直接和传递引用，以及交接中的重复内容。既报告总暴露量，也报告去重后的内容量，
@@ -274,7 +276,18 @@ Skill 解释流程，但不会扩大权限。明确的 HOLD 仍然有效。
 
 内容 rollback 不能撤销 agent 已做过的操作、恢复已删除的外部数据，
 也不能消除已经读入对话的指令。这些属于另外的恢复问题，有各自的权限和证据要求。
-#574 要宣告可恢复的安装交付，回执必须先说明已测试的恢复方式和选定目标。
+#574 已在临时受管目标上用现有同步路径验证 old → new → old 的精确恢复，
+并保留本次真实 canonical、generated 和 Codex preimages。实际安装无需 rollback。
+备份目录为 0700、文件为 0600；备份与安装回执保留在私有位置，不纳入公共仓库。
+恢复仅覆盖本次批准的目标，不能借恢复清理其他文件。
+
+本次使用 Codex-only 同步，没有改变全局 locator、runtime manifest 或默认 receipt。
+检查此次有限交付时，将私有安装回执传给下方 status 命令；默认 status 若显示 disabled
+或 missing receipt，不应被误读为已回读文件不存在，也不能据此自动修改全局配置。
+
+```sh
+python3 scripts/sync_status.py --core-root <core> --vault-root <vault> --adapter-root <generated> --receipt-path <delivery-receipt>
+```
 
 ## 串起整个过程：修一个 bug，留下一个经验
 
