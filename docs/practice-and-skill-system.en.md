@@ -12,11 +12,13 @@ This guide connects everyday use with the reasons behind the system. Start with
 an application below, then follow the concepts you need. You do not need to learn
 practice IDs before using Agent Foundry.
 
-**Delivery status:** this is the #574 candidate guide. The focused collaboration
-refactor and its loading behavior remain proposed until the approved canonical
-changes, generated output and selected installed targets are read back. Existing
-onboarding, distribution and runtime capabilities retain their own documented
-limits. This guide does not announce activation or a release.
+**Delivery status (2026-08-31):** #574-R1 is approved. The five canonical changes
+are merged into the selected Vault, generated output is published, and this
+machine's managed Codex files are updated and individually read back in sync.
+Versions: COLLAB-001 v6, COLLAB-003 v5, COLLAB-009 v22, Agent Collaboration v39,
+and Role Automation Planner v15. See the [execution receipt](https://github.com/farmerhunter/agent-foundry/issues/577#issuecomment-5477345322).
+This does not install other machines or runtimes, enable project onboarding,
+SQLite or scheduling, or supersede existing capability limits. It is not a release.
 
 **中文导读：** practice 保存可复用的判断，skill 帮助 agent 找到合适的工作方式。
 目标不是让每个任务都走完整流程，而是在需要时读对规则、遵守已有授权，并交付
@@ -272,9 +274,9 @@ agent which guidance is necessary for this task. A concise description should
 name its positive scope and important exclusions; a description cut off before
 the exclusions can trigger an unnecessary chain of skills.
 
-The #574 candidate publisher marks routed assets as `intent` and unchanged
+The #574 publisher marks routed assets as `intent` and unchanged
 assets as `legacy`. These labels expose the instruction-selection path; they
-are not runtime switches or a new scheduler. The proposed collaboration path
+are not runtime switches or a new scheduler. The delivered collaboration path
 uses a compact entrypoint and coherent
 conditional references. Ordinary delivery should not read cleanup, onboarding,
 automation and migration procedures unless those operations are actually in
@@ -291,8 +293,9 @@ requirement. Mandatory safety must remain available before the effect it guards.
 An uncertain route needs a visible fallback. Report the ambiguity and consult the
 relevant existing guidance; do not silently claim precise intent selection, load
 every available skill or escalate permissions. Compatibility for unchanged
-assets must remain explicit. These are proposed source and projection behaviors
-until their candidate checks and installed readbacks complete.
+assets must remain explicit. Source, generated output and the selected Codex
+installation have been verified in sync; this does not guarantee host skill
+selection or actual model token and latency improvements.
 
 Measure the same task before and after: discovery description, entrypoint,
 required direct and transitive references, and repeated exposure during a
@@ -338,9 +341,22 @@ different defaults can make a correct candidate appear installed when it is not.
 
 Content rollback cannot undo actions an agent already performed, restore deleted
 external data or erase instructions already read into a conversation. Those are
-separate recovery problems with their own authority and evidence. The #574
-delivery receipt must identify the tested restoration method and selected targets
-before this candidate can claim reversible installed delivery.
+separate recovery problems with their own authority and evidence. For #574,
+the existing sync path demonstrated exact old -> new -> old restoration on
+temporary managed targets. Real canonical, generated and Codex preimages are
+retained; the actual installation did not require rollback. Backup directories
+are 0700 and files 0600. Backups and the install receipt stay private, outside the
+public repository. Restoration covers only approved targets, not unrelated cleanup.
+
+This delivery used Codex-only sync without changing the global locator, runtime
+manifest or default receipt. Pass the private install receipt to the status
+command below for this bounded delivery. A default report showing disabled
+targets or a missing receipt neither disproves the file readback nor authorizes
+automatic changes to global configuration.
+
+```sh
+python3 scripts/sync_status.py --core-root <core> --vault-root <vault> --adapter-root <generated> --receipt-path <delivery-receipt>
+```
 
 ## A connected example: fix one bug, keep one lesson
 
