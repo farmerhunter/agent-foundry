@@ -83,7 +83,13 @@ def apply_pack(vault: Path, pack: Path) -> subprocess.CompletedProcess[str]:
     return run([str(APPLY), str(pack), "--core-root", str(ROOT), "--vault-root", str(vault), "--apply"])
 
 
-def lifecycle(vault: Path, action: str, apply: bool) -> subprocess.CompletedProcess[str]:
+def lifecycle(
+    vault: Path,
+    action: str,
+    apply: bool,
+    review_token: str = "",
+    backup_root: Path | None = None,
+) -> subprocess.CompletedProcess[str]:
     args = [
         str(LIFECYCLE),
         "--core-root",
@@ -97,7 +103,31 @@ def lifecycle(vault: Path, action: str, apply: bool) -> subprocess.CompletedProc
     ]
     if apply:
         args.append("--apply")
+    if review_token:
+        args.extend(["--review-token", review_token])
+    if backup_root is not None:
+        args.extend(["--backup-root", str(backup_root)])
     return run(args)
+
+
+def restore(vault: Path, backup_root: Path, apply: bool) -> subprocess.CompletedProcess[str]:
+    args = [
+        str(LIFECYCLE),
+        "--core-root",
+        str(ROOT),
+        "--vault-root",
+        str(vault),
+        "--restore-backup",
+        str(backup_root),
+    ]
+    if apply:
+        args.append("--apply")
+    return run(args)
+
+
+def field(output: str, name: str) -> str:
+    prefix = f"{name}: "
+    return next((line[len(prefix) :] for line in output.splitlines() if line.startswith(prefix)), "")
 
 
 def assert_lifecycle_namespace() -> list[str]:
@@ -266,11 +296,97 @@ def main() -> int:
         errors.extend(expect("retire-dry-run", dry_retire, True, "writes: none"))
         errors.extend(expect("retire-dry-run-reports-records", dry_retire, True, "COLLAB-001 practice -> archived"))
 
-        activate_plan = lifecycle(vault, "activate", apply=False)
-        errors.extend(expect("activate-review-only", activate_plan, False, "status: review_required"))
-        errors.extend(expect("activate-writes-none", activate_plan, False, "writes: none"))
-        activate_apply = lifecycle(vault, "activate", apply=True)
-        errors.extend(expect("activate-apply-refused", activate_apply, False, "cannot be applied"))
+        activation_vault = base / "activation-vault"
+        errors.extend(expect("init-activation-vault", init_blank(activation_vault), True, "Blank Vault initialized"))
+        errors.extend(expect("deploy-activation-bootstrap", deploy_bootstrap(activation_vault), True, "selected Vault validated"))
+        errors.extend(expect("apply-activation-optional", apply_optional(activation_vault), True, "metadata: written"))
+        activate_plan = lifecycle(activation_vault, "activate", apply=False)
+        errors.extend(expect("activate-dry-run", activate_plan, True, "status: ready_for_review"))
+        errors.extend(expect("activate-dry-run-writes-none", activate_plan, True, "writes: none"))
+        token = field(activate_plan.stdout, "review_token")
+        if len(token) != 64:
+            errors.append("activate-dry-run: missing deterministic review token")
+        missing_backup = lifecycle(activation_vault, "activate", apply=True, review_token=token)
+        errors.extend(expect("activate-requires-backup", missing_backup, False, "status: hold_backup_required"))
+        wrong_token_backup = base / "wrong-token-backup"
+        wrong_token = lifecycle(
+            activation_vault,
+            "activate",
+            apply=True,
+            review_token="0" * 64,
+            backup_root=wrong_token_backup,
+        )
+        errors.extend(expect("activate-refuses-wrong-token", wrong_token, False, "status: hold_review_token_drift"))
+        if wrong_token_backup.exists():
+            errors.append("activate-refuses-wrong-token: backup root was created")
+        existing_backup = base / "existing-backup"
+        existing_backup.mkdir()
+        existing_backup_apply = lifecycle(
+            activation_vault,
+            "activate",
+            apply=True,
+            review_token=token,
+            backup_root=existing_backup,
+        )
+        errors.extend(expect("activate-requires-fresh-backup", existing_backup_apply, False, "status: hold_backup_unavailable"))
+        activation_backup = base / "activation-backup"
+        activate_apply = lifecycle(
+            activation_vault,
+            "activate",
+            apply=True,
+            review_token=token,
+            backup_root=activation_backup,
+        )
+        errors.extend(expect("activate-apply", activate_apply, True, "status: activated"))
+        errors.extend(expect("activate-readback", activate_apply, True, "readback: passed"))
+        if not (activation_backup / "activation-receipt.json").is_file():
+            errors.append("activate-apply: private backup receipt missing")
+        elif (activation_backup.stat().st_mode & 0o777) != 0o700:
+            errors.append("activate-apply: backup root mode is not 0700")
+        elif ((activation_backup / "activation-receipt.json").stat().st_mode & 0o777) != 0o600:
+            errors.append("activate-apply: backup receipt mode is not 0600")
+        activated_records = [
+            path
+            for path in [*activation_vault.glob("practices/**/*.md"), *activation_vault.glob("assets/**/*.yaml")]
+            if "pack.multi-agent.optional" in path.read_text(encoding="utf-8")
+        ]
+        if not activated_records or any("status: active" not in path.read_text(encoding="utf-8") for path in activated_records):
+            errors.append("activate-apply: optional members were not all active")
+        reused_backup = lifecycle(
+            activation_vault,
+            "activate",
+            apply=True,
+            review_token=token,
+            backup_root=activation_backup,
+        )
+        errors.extend(expect("activate-repeat-holds", reused_backup, False, "status: hold_prewrite"))
+        restore_plan = restore(activation_vault, activation_backup, apply=False)
+        errors.extend(expect("activation-restore-dry-run", restore_plan, True, "status: restore_ready"))
+        restore_apply = restore(activation_vault, activation_backup, apply=True)
+        errors.extend(expect("activation-restore-apply", restore_apply, True, "status: restored"))
+        restored_plan = lifecycle(activation_vault, "activate", apply=False)
+        errors.extend(expect("activation-restored-ready", restored_plan, True, "status: ready_for_review"))
+
+        drift_vault = base / "activation-drift-vault"
+        errors.extend(expect("init-activation-drift-vault", init_blank(drift_vault), True, "Blank Vault initialized"))
+        errors.extend(expect("deploy-activation-drift-bootstrap", deploy_bootstrap(drift_vault), True, "selected Vault validated"))
+        errors.extend(expect("apply-activation-drift-optional", apply_optional(drift_vault), True, "metadata: written"))
+        drift_plan = lifecycle(drift_vault, "activate", apply=False)
+        drift_token = field(drift_plan.stdout, "review_token")
+        drift_record = next(
+            path
+            for path in drift_vault.glob("practices/**/*.md")
+            if "pack.multi-agent.optional" in path.read_text(encoding="utf-8")
+        )
+        drift_record.write_text(drift_record.read_text(encoding="utf-8") + "\nlocal drift\n", encoding="utf-8")
+        drift_apply = lifecycle(
+            drift_vault,
+            "activate",
+            apply=True,
+            review_token=drift_token,
+            backup_root=base / "drift-backup",
+        )
+        errors.extend(expect("activate-local-drift-holds", drift_apply, False, "status: hold_prewrite"))
 
         exportable_plan = lifecycle(vault, "exportable", apply=False)
         errors.extend(expect("exportable-review-only", exportable_plan, False, "target_lifecycle_status: exportable"))
