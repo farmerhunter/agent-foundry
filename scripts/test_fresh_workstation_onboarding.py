@@ -44,6 +44,14 @@ def value(output: str, field: str) -> str:
     return next((line[len(prefix) :] for line in output.splitlines() if line.startswith(prefix)), "")
 
 
+def isolated_core_ignore(directory: str, names: list[str]) -> set[str]:
+    ignored = {name for name in names if name in {".git", "__pycache__"}}
+    relative = Path(directory).resolve().relative_to(SOURCE_ROOT.resolve())
+    if relative in {Path("runtime"), Path("sync")} and "local" in names:
+        ignored.add("local")
+    return ignored
+
+
 def main() -> int:
     deployment = (SOURCE_ROOT / "docs" / "deployment.md").read_text(encoding="utf-8")
     readme = (SOURCE_ROOT / "README.md").read_text(encoding="utf-8")
@@ -71,8 +79,11 @@ def main() -> int:
         shutil.copytree(
             SOURCE_ROOT,
             core,
-            ignore=shutil.ignore_patterns(".git", "__pycache__", "runtime/local", "sync/local"),
+            ignore=isolated_core_ignore,
         )
+        for excluded in [core / "runtime" / "local", core / "sync" / "local"]:
+            if excluded.exists():
+                raise AssertionError(f"temporary Core copied machine-local state: {excluded.relative_to(core)}")
 
         init = run(core, home, "scripts/init_vault.py", str(vault), "--core-root", str(core), "--apply")
         require("blank-vault", init, True, "Blank Vault initialized and validated.")
