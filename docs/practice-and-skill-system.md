@@ -120,6 +120,29 @@ Pack 是可选分发单元，不是所有重构的组织原则。通用基础与
 当前 pack 预览和应用限制见[使用说明](usage.md#capability-pack-safety)；
 旧导出包不能自动视为等同于今天的 canonical Vault。
 
+### 安装、升级和恢复 capability pack
+
+Core 当前公开两个知识 pack，不再增加第三个：
+
+- `pack.bootstrap.minimal` 是首次使用需要的最小基础，包含 harvest、source-of-truth、runtime 边界和 pack 分层判断；
+- `pack.multi-agent.optional` 是可选的 GitHub Issue/PR 协作与 role dispatch 指导，仅在确实采用这类工作方式时安装。
+
+从 Core checkout 使用 `fixtures/capability-packs/bootstrap-minimal` 和
+`fixtures/capability-packs/optional-multi-agent`。先 preview，再对明确的 selected Vault
+执行 reviewed apply。optional 成员导入后是 `proposed`，不会自动成为 active，也不会自动
+publish generated adapter 或安装 runtime。
+
+已经安装旧版本时，先运行 `scripts/update_capability_pack.py` 的只读预览。只有版本确实更新、
+将被修改的旧记录仍与部署回执一致时，才可以指定一个全新的私有 backup 目录执行 apply。
+如果用户改过相关记录，工具返回 `merge_required` 并保持零写入；应先审阅合并内容，不能用
+升级覆盖本地判断。升级回执可用于恢复旧版本，但恢复前也会核对当前文件仍是本次升级的
+postimage。升级后又发生过修改时，恢复会整体暂停。
+
+旧 0.4.0 optional pack 的 `COLLAB-PACK-001` 和 `ASSET-COLLAB-PACK-001` 只是示例
+candidate。升级到 0.5.0 后，它们作为非成员历史证据保留，不删除、不激活；当前 owner 是
+`COLLAB-001` 至 `COLLAB-017`、配套最小依赖，以及 `ASSET-COLLAB-001/002`。
+具体命令、备份和恢复参数见[使用说明](usage.md#capability-pack-safety)。
+
 <a id="ordinary-work-from-request-to-result"></a>
 
 ## 完成一次普通 Work：从请求到结果

@@ -3,10 +3,10 @@ pack_id: pack.bootstrap.minimal
 title: Minimal Agent Foundry Bootstrap Pack
 description: Minimal public bootstrap snapshot for first-run harvest, review, refresh, publish, root, and runtime-boundary workflows.
 lifecycle_status: reviewed
-version: 0.2.1
-exported_at: 2026-07-06
+version: 0.3.0
+exported_at: 2026-09-01
 distribution_type: mandatory_bootstrap
-source_provenance: "Agent Foundry public Core fixture for issue #77"
+source_provenance: "Agent Foundry issue #579 public bootstrap refresh from reviewed canonical records."
 maintainer_contact: "https://github.com/farmerhunter/agent-foundry"
 license: "repository license"
 sensitivity: public
@@ -88,6 +88,16 @@ included_records:
     membership_role: bootstrap_required
     activation_default: active
     import_action: create_or_review_update
+  - id: GOV-007
+    kind: practice
+    lifecycle_status: active
+    path: records/practices/GOV-007-classify-package-layers-before-making-them-active-sources.md
+    source_version: 2
+    content_sha256: "cd13b592f4af833613f93507a5552f12e11222375495f04c38862b1cdb1eb7ce"
+    destination_layer: canonical_vault_record
+    membership_role: bootstrap_required
+    activation_default: active
+    import_action: create_or_review_update
   - id: META-001
     kind: practice
     lifecycle_status: active
@@ -112,8 +122,8 @@ included_records:
     kind: practice
     lifecycle_status: active
     path: records/practices/META-003-borrow-external-skills-through-review.md
-    source_version: 2
-    content_sha256: "0ba4bae1a029069c543dee68f1335721a94f24eb4ff704b0829ca1f7a3a73cbb"
+    source_version: 1
+    content_sha256: "ee3c7c051f185bc3b7d3747a5dac140effb8284933f30ecb151dd25f1db2f7b7"
     destination_layer: canonical_vault_record
     membership_role: bootstrap_required
     activation_default: active
@@ -192,8 +202,8 @@ included_records:
     kind: practice
     lifecycle_status: active
     path: records/practices/META-011-route-artifacts-before-abstracting-practices.md
-    source_version: 1
-    content_sha256: "a144755298e994ac9be820cd59e588cb73271666416d3bfc514f96f591593344"
+    source_version: 2
+    content_sha256: "9feb8ca22ffabe14fcf1316620d11fd50d38fcaa68163e9d849ddcd904bf06b8"
     destination_layer: canonical_vault_record
     membership_role: bootstrap_required
     activation_default: active
@@ -202,8 +212,8 @@ included_records:
     kind: practice
     lifecycle_status: active
     path: records/practices/META-012-treat-user-corrections-as-process-evidence-before-content-evidence.md
-    source_version: 3
-    content_sha256: "2ec58adada8a3c72dd00629905e2dea3fb4f44c3e11266588b2852b194b467e5"
+    source_version: 4
+    content_sha256: "fa5b371e9a249f677091b4b240f5a08192403b9cd1a0f99e05693c13f28a491c"
     destination_layer: canonical_vault_record
     membership_role: bootstrap_required
     activation_default: active
@@ -212,8 +222,8 @@ included_records:
     kind: practice
     lifecycle_status: active
     path: records/practices/META-013-apply-generalization-gate-before-promoting-insights-into-practices.md
-    source_version: 1
-    content_sha256: "6c4341cb08f1fac6302223ccabac565f1ec181759d1a9b8ab15a306d772ee81f"
+    source_version: 2
+    content_sha256: "7259f6fb9f6c4c1824dfb97122296eadd7f48005306d65c130595ac5660ee17c"
     destination_layer: canonical_vault_record
     membership_role: bootstrap_required
     activation_default: active
@@ -282,8 +292,8 @@ included_records:
     kind: asset
     lifecycle_status: active
     path: records/assets/ASSET-META-001-practice-harvester.asset.yaml
-    source_version: 3
-    content_sha256: "c69cc0ec3a45a81dfd7d4dd30d0c55448345b736d7c72f978a0b216fd4509427"
+    source_version: 6
+    content_sha256: "cee7b1c6222bec28b8c1ef7677189415ad9b5d588577bb23d501542609ec5bf0"
     destination_layer: canonical_vault_record
     membership_role: bootstrap_required
     activation_default: active

@@ -52,6 +52,14 @@ executable_payload_fields:
   dependencies: "Declared runtime dependencies."
   runtime_impact: "Human-readable statement of affected runtime targets after managed install."
 
+upgrade_mapping_fields:
+  from_version: "Previously supported pack version described by this mapping."
+  removed_members: "Members no longer owned by the newer pack."
+  replacement_practices: "Current practice owners replacing legacy illustrative members."
+  replacement_assets: "Current asset owners replacing legacy illustrative members."
+  legacy_member_behavior: "How non-current legacy records are preserved without becoming active owners."
+  local_edit_behavior: "Must stop before writes when a touched deployed record differs from its recorded deployed hash."
+
 advanced_metadata_sections:
   pack_contract:
     promised_use_case: "Human-readable capability promise for reviewers and deployers."
@@ -122,6 +130,9 @@ rules:
   - "Same id, same version, different hash must fail closed and require review."
   - "Same id from unrelated provenance or incompatible kind must fail closed."
   - "Local Vault edits must be treated as canonical user state and handled through a reviewed merge proposal."
+  - "Optional records with activation_default manual_review must import as proposed; pack apply is not automatic activation."
+  - "A reviewed update must target a newer deployed version, preserve untouched legacy evidence, create an exact private backup before writes, and stop on local-edit drift."
+  - "Restore must verify every expected update postimage before restoring any preimage."
   - "Runtime installation is out of scope for the manifest fixture; generated or managed runtime outputs come later."
   - "Persisted lifecycle_status fields must use the pack_canonical_lifecycle namespace only."
   - "Do not persist previewed, recommended, compatible, merge_required, drifted, generated_missing, runtime_current, detected, split, or merged as pack lifecycle_status."

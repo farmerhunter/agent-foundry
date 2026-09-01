@@ -1,215 +1,74 @@
-# Optional GitHub Collaboration Starter Pack
+# Optional Multi-Agent Collaboration Pack
 
-Official Core catalog entry for the reviewed optional GitHub collaboration
-starter pack.
+中文（默认） | English summary below
 
-This entry deliberately keeps the existing `pack.multi-agent.optional` fixture
-identity so older capability-pack planning, apply, update, and lifecycle tests
-continue to exercise the same compatibility path. The pack is discoverable as a
-first-party starter, while its member records still deploy as manual-review
-candidate records in the selected User Vault.
+`pack.multi-agent.optional` 为确实通过 GitHub Issues/PRs 分工的项目提供公开、可审阅的
+bounded collaboration 与 role-dispatch 指导。它不是 scheduler、runtime installer 或
+自动项目管理器。
 
-## User Value / 用户价值
+## 0.5.0 实际内容
 
-`pack.multi-agent.optional` helps teams use Agent Foundry with GitHub issues
-and pull requests without losing handoff context between Implementer, Reviewer,
-Architect, Coordinator, and Human decision points. Its value is repeatable
-collaboration discipline, not automatic project management.
+旧 0.4.0 虽然描述了大量能力，实际只携带两个示例 candidate。0.5.0 用当前已验收的真实
+内容替换这种占位关系：
 
-**中文要点：** 这个 pack 帮团队在 GitHub issue/PR 协作中保留 handoff context。
-它提供可重复的协作纪律，不是自动项目管理。
+- practices：`COLLAB-001` 至 `COLLAB-017`；
+- 最小直接依赖：`GOV-005`、`GOV-006`、`IMPL-001`、`PROD-002`、
+  `TEST-001`、`TEST-004`、`TEST-005`；
+- assets：`ASSET-COLLAB-001` 与 `ASSET-COLLAB-002`。
 
-## Supported Workflow / 支持的协作流程
+`META-004`、`META-005`、`GOV-002`、`GOV-004`、`RUNTIME-001` 和
+`RUNTIME-003` 已由必需的 bootstrap pack 提供，因此不在 optional pack 中重复。
+本包没有 executable payload。
 
-The pack supports GitHub issue/PR collaboration with role labels, durable issue
-comments, explicit Execution Contracts, dependency-gated queues, review
-handoffs, and read-only audit before write automation. It is useful when work
-must move between multiple role sessions while GitHub remains the durable source
-of truth.
+这些内容支持普通 Issue/PR 交付、durable handoff、lean Execution Contract、review、
+Epic/branch/workspace 判断，以及明确请求时的 role dispatch/onboarding 规划。它不会凭
+pack 安装创建原生 threads、SQLite ledger、RoleHub、Project 状态或 runtime capability。
 
-**中文要点：** 它覆盖 role labels、durable comments、Execution Contracts、
-dependency-gated queues、review handoffs，以及 write automation 前的 read-only
-audit。
+## 首次导入
 
-## Branch-Aware Collaboration / Branch-Aware 协作
+先安装 bootstrap，然后运行：
 
-The current starter guidance includes the AF16 branch-aware collaboration
-model. Execution Contracts should use `Target branch` as the canonical field
-and `Branch strategy` to describe the workflow family:
-`mainline-maintenance`, `integration-branch`, `release-branch`, `trunk-based`,
-`stacked-pr`, `multi-branch`, or `custom`. Older `Branch target` wording is
-legacy compatibility input, not the preferred field.
+```bash
+python3 scripts/plan_capability_pack.py fixtures/capability-packs/optional-multi-agent --vault-root <vault-root>
+python3 scripts/apply_capability_pack.py fixtures/capability-packs/optional-multi-agent --vault-root <vault-root> --apply
+```
 
-**中文要点：** AF16 后，Execution Contract 使用 `Target branch` 和
-`Branch strategy`。`Branch target` 只作为旧字段兼容，不是新 contract 的推荐写法。
+首次导入的 optional 成员状态为 `proposed`。这一步不会自动 activate、publish generated
+output 或安装 runtime。用户审阅并接受 selected Vault 内容后，再按 canonical lifecycle
+完成激活和下游发布。
 
-Agent Foundry's V1/V2 behavior is a project preset on top of the generic
-strategy model: V1.x maintenance targets `main`; V2 integration targets
-`codex/v2-local-first-orchestration`; V2 merge-back remains a later readiness
-and Human-gated decision. Other projects may use custom, integration, release,
-trunk-based, stacked PR, or multi-branch strategies without being forced into
-the Agent Foundry preset.
+## 从 0.4.0 升级
 
-**中文要点：** Agent Foundry 的 V1/V2 只是项目 preset：V1.x 走 `main`，V2 走
-`codex/v2-local-first-orchestration`。其他项目可使用 generic strategy，不应被硬编码成
-Agent Foundry 分支模型。
+```bash
+python3 scripts/update_capability_pack.py fixtures/capability-packs/optional-multi-agent --vault-root <vault-root>
+python3 scripts/update_capability_pack.py fixtures/capability-packs/optional-multi-agent --vault-root <vault-root> --backup-root <fresh-private-backup-path> --apply
+```
 
-Branch readiness reports should be action plans only. They can say
-`current_branch_ok`, `switch_context_required`, `split_work_recommended`,
-`forward_merge_needed_later`, `verify_on_multiple_lines`, or
-`architect_decision_required`, but they must not switch branches, create
-worktrees, retarget PRs, rebase, merge, reset, clean, or repair branches.
+预览默认零写入。apply 只接受更高版本，并在写入前确认所有将被覆盖的旧成员仍与部署记录
+一致；否则返回 `merge_required`。0.4.0 的 `COLLAB-PACK-001` 与
+`ASSET-COLLAB-PACK-001` 会作为非成员 candidate 证据保留，不删除、不激活，也不再是
+当前 owner。
 
-**中文要点：** Branch readiness 只给 action plan，不执行 checkout/switch、worktree
-creation、PR retarget、rebase、merge、reset、clean 或 branch repair。
+恢复前先 preview；真正恢复需要 `--apply`：
 
-## Local Orchestration Layer / Local Orchestration 层
+```bash
+python3 scripts/update_capability_pack.py --restore <backup-path> --vault-root <vault-root>
+python3 scripts/update_capability_pack.py --restore <backup-path> --vault-root <vault-root> --apply
+```
 
-The current starter guidance includes the V2 Local Orchestration activation
-model. Base collaboration remains the default for ordinary GitHub issue/PR
-coordination, practice harvest, generated Skill guidance, runtime actions, and
-capability-pack behavior. Local Orchestration guidance appears only when durable
-evidence says it is in scope: an explicit user request, repo or local
-capability config, accepted local ledger state or manifest, issue/task contract
-field, capability pack or runtime profile, or accepted operational UX contract.
+如果升级后任一目标文件发生变化，恢复整体 HOLD，避免覆盖用户后续修改。backup 保留，
+不会自动清理。
 
-**中文要点：** Base 是默认层。只有明确 user request、local capability config、
-accepted ledger state、issue contract、runtime profile 或 accepted operational UX
-contract 这类 durable signal 出现时，才启用 Local Orchestration 指导。
+## English summary
 
-Branch names, release lines, and PR targets are readiness and warning evidence.
-They can explain why a branch context looks suspicious, but they are not the
-canonical trigger that turns Base work into Local Orchestration work.
+Version 0.5.0 replaces two illustrative candidates with 24 accepted practice
+records and the two current collaboration assets. Bootstrap owns six shared
+dependencies. Fresh imports remain `proposed`; no runtime or generated output is
+activated. The bounded update path requires a newer version, stops on touched
+local edits, creates a private exact backup and restores only when every expected
+postimage still matches. Legacy 0.4.0 candidates are retained as non-member
+evidence.
 
-**中文要点：** branch / release line / PR target 只能作为 readiness 或 warning
-evidence，不能单独决定启用 Local Orchestration。
-
-Mixed work should say which actions remain Base and which require Local
-Orchestration surfaces such as Local Collaboration Ledger, Foundry Board,
-migration apply, local action apply, Project sync plan/apply, mixed-state
-recovery, or operational cockpit.
-
-## Collaboration Readiness / 协作就绪检查
-
-The current starter guidance includes the AF15 collaboration readiness model:
-new projects can check whether role labels, routing templates, Execution
-Contracts, Testing Contracts, and optional Project/Kanban mirrors are present
-before they start multi-agent work. Existing projects can audit drift and get a
-dry-run repair plan without changing GitHub or Project state.
-
-**中文要点：** 新项目先检查 role labels、routing templates、Execution Contracts、
-Testing Contracts 和可选 Project/Kanban mirrors；老项目 audit drift 并得到安全
-action plan。
-
-Readiness reports are expected to stay read-only. They should show
-`mutation_performed: false`, use REST-first GitHub access, query Project v2 only
-when configured and needed, avoid default full Project scans, and report
-degraded GitHub or Project access instead of hiding it.
-
-Normal users should read the action-plan layer before raw JSON evidence:
-`readiness_status`, summary, blocking gaps, unknown/degraded sources,
-recommended next actions, forbidden actions, and telemetry. Recommended actions
-are informational-only, handled through existing workflow, explicit human gate,
-or unsupported/deferred repair/apply.
-
-**中文要点：** 普通用户先看 action-plan layer：status、summary、blocking gaps、
-unknown/degraded sources、recommended next actions、forbidden actions 和 telemetry。
-Raw JSON 是 evidence/debug output。
-
-Readiness reports stay read-only. They show `mutation_performed: false`,
-use REST-first GitHub access, query Project v2 only when configured and needed,
-avoid default full Project scans, and report degraded GitHub or Project access
-instead of hiding it.
-
-**中文要点：** Readiness report 仍是 read-only：不执行 repair/apply，不默认扫全量
-Project，访问 degraded 时明确报告。
-
-## What Remains Manual Or Review-Gated / 仍需手动或 Review-Gated 的内容
-
-People or delegated workflow roles still decide scope, architecture direction,
-dependency release, merge authorization, issue closure, and any action that
-changes protected branches or crosses privacy/security boundaries. Project v2
-may mirror status when configured, but labels and durable comments remain the
-handoff mechanism.
-
-**中文要点：** scope、architecture、release、merge、closure 和隐私/安全边界仍由
-人或被委托的 workflow roles 决定；Project v2 只是可选 mirror。
-
-## What It Does Not Automate / 不自动化什么
-
-This pack does not merge PRs, close issues, create hidden access control, apply
-runtime helpers, publish generated Skills, mutate Project v2 by default, execute
-dry-run repair plans, enable Local Orchestration by branch name alone, export
-private Vault content, or treat local helper receipts as authority.
-
-**中文要点：** 它不 merge/close、不执行 live repair/apply、不 mutate Project v2、
-不 publish generated Skills、不 export private Vault。
-
-## When To Accept / 何时接受安装
-
-Accept or install this pack when a project coordinates implementation and
-review through GitHub issues/PRs and needs durable role handoffs. Skip it when a
-project is single-user, local-only, or not ready to use GitHub labels and issue
-comments as the workflow record.
-
-**中文要点：** 项目通过 GitHub issues/PRs 协调并需要 durable handoffs 时安装；
-纯本地单人项目可跳过。
-
-## Authority
-
-- Core hosts this official catalog entry and reviewed manifest reference.
-- The selected User Vault remains canonical after accepted deployment.
-- Generated adapters and runtime installs remain downstream projections.
-- Project-specific repository names, issue numbers, branch names, Project ids,
-  local caches, runtime receipts, raw sessions, secrets, and private Vault
-  content are excluded.
-
-## Scope
-
-The pack covers a base GitHub collaboration workflow: role labels, durable
-issue/PR comments, explicit Execution Contract fields, dependency-gated queues,
-Testing Contract evidence when needed, collaboration readiness audit, dry-run
-repair planning, branch-aware action plans, degraded GitHub/Project access
-reporting, and read-only audit before write automation.
-
-Project v2 status may be a configured visual mirror, but it is not the scheduler
-source of truth. Runtime helper install, generated Skill publish, and mutating
-automation remain deferred to later reviewed workflows.
-
-## Use Safely
-
-This pack is optional after bootstrap and first value. Normal users should start
-with `list capability packs`, `recommend capability packs for my setup`, and
-`preview capability pack deployment <pack-path>` before any apply request.
-
-Preview, verify, update comparison, and disable review paths should report
-`writes: none`. Accepted apply paths must name the selected Vault write target.
-Generated adapters, runtime installs, Project status mirrors, and local helper
-receipts remain downstream status surfaces, not catalog or pack authority.
-
-## Versioning
-
-Pack version `0.4.0` identifies the reviewed V2 Local Orchestration
-capability-layer activation contract. Pack version `0.3.2` identified the
-branch-aware GitHub collaboration starter contract. Pack version `0.3.1`
-identified the AF15 collaboration readiness action-plan contract. Pack version
-`0.2.0` identified the earlier GitHub collaboration starter contract. Core git
-tags and releases identify repository snapshots. These are related but
-independent axes.
-
-## Review
-
-Review evidence:
-
-- https://github.com/farmerhunter/agent-foundry/issues/252
-- https://github.com/farmerhunter/agent-foundry/issues/253
-- https://github.com/farmerhunter/agent-foundry/issues/315
-- https://github.com/farmerhunter/agent-foundry/issues/316
-- https://github.com/farmerhunter/agent-foundry/issues/317
-- https://github.com/farmerhunter/agent-foundry/issues/374
-- https://github.com/farmerhunter/agent-foundry/issues/375
-- https://github.com/farmerhunter/agent-foundry/issues/318
-- https://github.com/farmerhunter/agent-foundry/issues/319
-- https://github.com/farmerhunter/agent-foundry/issues/350
-- https://github.com/farmerhunter/agent-foundry/issues/351
-- https://github.com/farmerhunter/agent-foundry/issues/352
+Review evidence: [issue #579](https://github.com/farmerhunter/agent-foundry/issues/579),
+[issue #576](https://github.com/farmerhunter/agent-foundry/issues/576), and
+[Core PR #583](https://github.com/farmerhunter/agent-foundry/pull/583).

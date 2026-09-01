@@ -2,16 +2,17 @@ id: ASSET-META-001
 title: Practice Harvester
 asset_type: skill
 status: active
-version: 3
+version: 6
 created: 2026-05-26
-updated: 2026-06-09
-purpose: Maintain reusable practices and assets by harvesting lessons, discovering reusable skills/assets, importing external skills, publishing adapters, and reviewing skill rot.
-responsibility: Maintain the Agent Foundry lifecycle of practices, assets, indexes, adapters, usage evidence, and related review reports.
+updated: 2026-08-18
+purpose: Maintain reusable practices, assets, and capability packs by harvesting lessons, discovering reusable skills/assets, importing external skills, publishing adapters, and reviewing skill rot.
+responsibility: Maintain the Agent Foundry lifecycle of practices, assets, capability-pack review workflows, indexes, adapters, usage evidence, and related review reports.
 non_responsibility: Does not perform domain-specific engineering work except to harvest or package reusable lessons from it.
 inputs:
   - current session context
   - linked issue, PR, commit, or roadmap history when the user asks to review a whole session or phase
   - external skill source
+  - capability pack root, deployed pack id, or transfer package when the user asks for pack review
   - existing practice and asset indexes
   - recent work history when discovering assets
 process:
@@ -26,9 +27,15 @@ process:
   - present a concise review list before canonical mutation
   - apply approved items
   - publish relevant adapters only after approved canonical changes are applied
+  - when asked to evaluate or discover a capability pack, read `workflows/discover-capability-packs.md`, produce candidate or false-positive evidence only, and keep writes disabled
+  - when asked to preview capability pack deployment, run `scripts/plan_capability_pack.py` with the selected Vault and report review gates before any apply
+  - when asked to apply a reviewed capability pack, require the accepted review/approval evidence, run the reviewed apply path, then publish or inspect downstream adapters separately
+  - when asked to review a capability pack lifecycle transition, read `workflows/manage-capability-pack-lifecycle.md`, use dry-run lifecycle reports first, and preserve human gates for activation, exportability, split, merge, deprecation, disable, or retire
+  - when asked to preview capability pack export or import, read `workflows/export-import-capability-packs.md` and use privacy-safe transfer validation with `writes: none`
 outputs:
   - harvest report or review list
   - asset discovery review list
+  - capability pack candidate, deployment preview, lifecycle report, or transfer review
   - proposed or active practice entries
   - active asset records
   - updated indexes
@@ -52,6 +59,7 @@ canonical_practices:
   - GOV-002
   - GOV-003
   - GOV-004
+  - GOV-007
   - RUNTIME-001
   - RUNTIME-002
   - RUNTIME-003
@@ -73,6 +81,12 @@ usage_triggers:
   - publish practices
   - review practices
   - 检查 skill rot
+  - discover capability packs
+  - evaluate capability pack
+  - preview capability pack deployment
+  - apply reviewed capability pack
+  - review capability pack lifecycle
+  - preview capability pack transfer
 success_criteria:
   - artifact routing, generalization, rejected-as-practice, canonical impact, adapter impact, and runtime impact are visible before approval
   - candidates are deduplicated against existing practices and assets
@@ -82,7 +96,9 @@ success_criteria:
   - broad approval language is not interpreted as permission to skip unshown workflow steps
   - self-referential workflow changes stop at a review list before canonical mutation
   - approved items are activated and published to relevant adapters
+  - capability pack requests are handled through Skill-first intents while raw scripts remain implementation details or advanced/debug commands
+  - capability pack discovery, deployment preview, lifecycle, and transfer paths preserve dry-run-first behavior, review gates, and human approval gates
   - changed files and deferred items are reported clearly
 review_cadence: monthly
 review_after_days: 90
-evidence_summary: Created as the first core asset for this repository.
+evidence_summary: Created as the first core asset for this repository. Revised after v1.1 release harvest to include package-layer and Capability Pack impact checks in the practice-harvester capability surface. Public pack snapshot excludes repository-specific merge authority.
