@@ -602,7 +602,12 @@ def plan_records(
         source_hash = entry.get("content_sha256", "")
         deployed_hash = ""
         if source_path.exists():
-            deployed_text = deployed_record_text(kind, read(source_path), manifest)
+            deployed_text = deployed_record_text(
+                kind,
+                read(source_path),
+                manifest,
+                entry.get("activation_default", ""),
+            )
             deployed_hash = hashlib.sha256(deployed_text.encode("utf-8")).hexdigest()
         indexed_entry = indexed.get(item_id)
 

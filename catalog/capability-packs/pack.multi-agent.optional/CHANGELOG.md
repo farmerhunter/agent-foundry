@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.5.0
+
+- Replaced two illustrative candidate members with the 24-practice minimum
+  collaboration closure and current `ASSET-COLLAB-001/002` snapshots accepted
+  through #576 and Core PR #583.
+- Kept six shared meta/governance/runtime dependencies in required bootstrap
+  instead of duplicating them.
+- Removed the stale helper example; the pack has no executable payloads.
+- Fresh optional imports remain `proposed`, so import does not auto-activate
+  canonical, generated or runtime behavior.
+- Added a bounded 0.4.0-to-0.5.0 mapping. Legacy candidates are retained as
+  non-member evidence; touched local edits HOLD before writes.
+- Added exact private backup and postimage-checked restore behavior.
+
 ## 0.4.0
 
 - Added V2 Local Orchestration capability-layer activation guidance.

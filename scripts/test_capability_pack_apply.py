@@ -264,24 +264,26 @@ def main() -> int:
         errors.extend(expect("deploy-bootstrap", deploy_bootstrap(vault), True, "selected Vault validated"))
         optional = apply_pack(OPTIONAL_PACK, vault, apply=True)
         errors.extend(expect("apply-optional-multi-agent", optional, True, "metadata: written"))
-        optional_practice = vault / "practices" / "agent-collaboration" / "COLLAB-PACK-001-review-handoff.md"
-        optional_asset = vault / "assets" / "skills" / "ASSET-COLLAB-PACK-001-review-handoff-helper.asset.yaml"
+        optional_practice = vault / "practices" / "agent-collaboration" / "COLLAB-001-issue-code-work-uses-prs.md"
+        optional_asset = vault / "assets" / "skills" / "ASSET-COLLAB-001-agent-collaboration.asset.yaml"
         if not optional_practice.exists():
             errors.append("apply-optional-multi-agent: candidate practice missing")
         if not optional_asset.exists():
             errors.append("apply-optional-multi-agent: candidate asset missing")
         vault_text = "\n".join(path.read_text(encoding="utf-8") for path in vault.rglob("*") if path.is_file())
-        for expected in ["pack.multi-agent.optional", "COLLAB-PACK-001", "ASSET-COLLAB-PACK-001"]:
+        for expected in ["pack.multi-agent.optional", "COLLAB-001", "ASSET-COLLAB-001"]:
             if expected not in vault_text:
                 errors.append(f"apply-optional-multi-agent: Vault missing {expected}")
-        if "review_handoff_summary.py" in vault_text:
-            errors.append("apply-optional-multi-agent: deferred helper payload leaked into Vault records")
+        if "status: proposed" not in optional_practice.read_text(encoding="utf-8"):
+            errors.append("apply-optional-multi-agent: practice was activated instead of proposed")
+        if "status: proposed" not in optional_asset.read_text(encoding="utf-8"):
+            errors.append("apply-optional-multi-agent: asset was activated instead of proposed")
 
         generated = base / "generated-after-optional"
         published = publish_adapters(vault, generated)
         errors.extend(expect("publish-after-optional", published, True, "Adapter publish wrote"))
         generated_text = "\n".join(path.read_text(encoding="utf-8") for path in generated.rglob("*") if path.is_file())
-        for candidate_id in ["COLLAB-PACK-001", "ASSET-COLLAB-PACK-001"]:
+        for candidate_id in ["COLLAB-001", "ASSET-COLLAB-001"]:
             if candidate_id in generated_text:
                 errors.append(f"publish-after-optional: candidate record leaked into generated output: {candidate_id}")
 

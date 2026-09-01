@@ -482,8 +482,16 @@ Use plan commands before apply commands when operating manually or debugging:
 ```bash
 python3 scripts/plan_capability_pack.py <pack-path> --vault-root <vault-root>
 python3 scripts/apply_capability_pack.py <pack-path> --vault-root <vault-root>
+python3 scripts/update_capability_pack.py <newer-pack-path> --vault-root <vault-root>
+python3 scripts/update_capability_pack.py <newer-pack-path> --vault-root <vault-root> --backup-root <fresh-private-backup-path> --apply
+python3 scripts/update_capability_pack.py --restore <backup-path> --vault-root <vault-root>
+python3 scripts/update_capability_pack.py --restore <backup-path> --vault-root <vault-root> --apply
 python3 scripts/manage_capability_pack_lifecycle.py --vault-root <vault-root> --pack-id <pack-id> --action disable
 ```
+
+Fresh optional-pack import writes member records as `proposed`; it does not activate generated output or install a runtime. Update apply is allowed only for a newer deployed version when every touched existing member still matches its recorded deployed hash. `merge_required` stops before backup or writes. Restore checks every expected update postimage before changing any file, so a later adopter edit blocks the whole restore instead of being overwritten.
+
+**中文要点：** optional pack 首次导入只会形成 `proposed` 内容，不会自动激活。升级前必须确认目标记录没有本地改动，并写入新的私有 backup；恢复时先核对升级后的 postimage，发现后续改动就整体停止。
 
 **中文要点：** power-user workflows 只在明确要求时使用，默认输出 review packet。没有后续 reviewed step，不得 create/activate/export/publish/deploy pack。
 

@@ -6,9 +6,9 @@ entries:
     title: Minimal Agent Foundry Bootstrap Pack
     channel: official
     catalog_status: available
-    latest_version: 0.2.1
+    latest_version: 0.3.0
     manifest_path: fixtures/capability-packs/bootstrap-minimal/manifest.yaml
-    manifest_sha256: 63a0923121ba9bb428d22c7777cbc642fc777d3d8f98342770b6958f828be4a3
+    manifest_sha256: a671654502eb90a0a8c9ee9eebc33495ecbb777aff08e395408d81c50c88e8b7
     compatibility_summary: "Core schema 1; Vault layout [1]; bootstrap not required."
     compatibility_metadata:
       core_schema_version_min: 1
@@ -17,19 +17,19 @@ entries:
       requires_bootstrap_pack: false
     changelog_path: catalog/capability-packs/pack.bootstrap.minimal/CHANGELOG.md
     readme_path: catalog/capability-packs/pack.bootstrap.minimal/README.md
-    review_evidence: https://github.com/farmerhunter/agent-foundry/issues/232
+    review_evidence: https://github.com/farmerhunter/agent-foundry/issues/579
     authority_after_deployment: selected_user_vault
     private_local_evidence: excluded
     core_release_axis: independent
     candidate_review_packet: false
     release_artifact_published: false
   - pack_id: pack.multi-agent.optional
-    title: Optional GitHub Collaboration Starter Pack
+    title: Optional Multi-Agent Collaboration Pack
     channel: official
     catalog_status: available
-    latest_version: 0.4.0
+    latest_version: 0.5.0
     manifest_path: fixtures/capability-packs/optional-multi-agent/manifest.yaml
-    manifest_sha256: 293fba4cdfbf9a7a1933647361c1fbc89fa6d39b4695432242ecd321a335fa9d
+    manifest_sha256: fe815d1c20758013009670d50d6d57c805cca724ea8f2fbf767d09b873395340
     compatibility_summary: "Core schema 1; Vault layout [1]; bootstrap required; selected Vault review required."
     compatibility_metadata:
       core_schema_version_min: 1
@@ -38,7 +38,7 @@ entries:
       requires_bootstrap_pack: true
     changelog_path: catalog/capability-packs/pack.multi-agent.optional/CHANGELOG.md
     readme_path: catalog/capability-packs/pack.multi-agent.optional/README.md
-    review_evidence: https://github.com/farmerhunter/agent-foundry/issues/375
+    review_evidence: https://github.com/farmerhunter/agent-foundry/issues/579
     authority_after_deployment: selected_user_vault
     private_local_evidence: excluded
     core_release_axis: independent

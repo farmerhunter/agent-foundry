@@ -219,7 +219,7 @@ def main() -> int:
         newer_version = copy_optional_variant(
             base,
             "newer-version-pack",
-            {"version: 0.4.0": "version: 0.4.1"},
+            {"version: 0.5.0": "version: 0.5.1"},
         )
         errors.extend(
             expect(
@@ -250,8 +250,8 @@ def main() -> int:
             ),
         )
         user_before = digest(user_record)
-        practice = vault / "practices" / "agent-collaboration" / "COLLAB-PACK-001-review-handoff.md"
-        asset = vault / "assets" / "skills" / "ASSET-COLLAB-PACK-001-review-handoff-helper.asset.yaml"
+        practice = vault / "practices" / "agent-collaboration" / "COLLAB-001-issue-code-work-uses-prs.md"
+        asset = vault / "assets" / "skills" / "ASSET-COLLAB-001-agent-collaboration.asset.yaml"
         metadata = vault / "packs" / "deployed-pack-index.yaml"
         metadata_before = digest(metadata)
 
@@ -264,7 +264,7 @@ def main() -> int:
 
         dry_retire = lifecycle(vault, "retire", apply=False)
         errors.extend(expect("retire-dry-run", dry_retire, True, "writes: none"))
-        errors.extend(expect("retire-dry-run-reports-records", dry_retire, True, "COLLAB-PACK-001 practice -> archived"))
+        errors.extend(expect("retire-dry-run-reports-records", dry_retire, True, "COLLAB-001 practice -> archived"))
 
         activate_plan = lifecycle(vault, "activate", apply=False)
         errors.extend(expect("activate-review-only", activate_plan, False, "status: review_required"))
@@ -278,7 +278,7 @@ def main() -> int:
 
         deprecate_plan = lifecycle(vault, "deprecate", apply=False)
         errors.extend(expect("deprecate-review-only", deprecate_plan, False, "target_lifecycle_status: deprecated"))
-        errors.extend(expect("deprecate-reports-records", deprecate_plan, False, "ASSET-COLLAB-PACK-001 asset"))
+        errors.extend(expect("deprecate-reports-records", deprecate_plan, False, "ASSET-COLLAB-001 asset"))
 
         split_plan = lifecycle(vault, "split", apply=False)
         errors.extend(expect("split-review-only", split_plan, False, "before-after membership diff"))
@@ -339,9 +339,9 @@ def main() -> int:
         metadata_text = metadata.read_text(encoding="utf-8")
         if "lifecycle_status: disabled" not in metadata_text:
             errors.append("disable-apply: metadata missing disabled lifecycle")
-        if "status: candidate" not in practice.read_text(encoding="utf-8"):
+        if "status: proposed" not in practice.read_text(encoding="utf-8"):
             errors.append("disable-apply: practice status changed during metadata-only disable")
-        if "status: candidate" not in asset.read_text(encoding="utf-8"):
+        if "status: proposed" not in asset.read_text(encoding="utf-8"):
             errors.append("disable-apply: asset status changed during metadata-only disable")
 
         apply_retire = lifecycle(vault, "retire", apply=True)
@@ -363,7 +363,7 @@ def main() -> int:
 
         errors.extend(expect("publish-after-retire", publish(vault, generated), True, "Adapter publish wrote"))
         generated_text = "\n".join(path.read_text(encoding="utf-8") for path in generated.rglob("*") if path.is_file())
-        for retired_id in ["COLLAB-PACK-001", "ASSET-COLLAB-PACK-001"]:
+        for retired_id in ["COLLAB-001", "ASSET-COLLAB-001"]:
             if retired_id in generated_text:
                 errors.append(f"publish-after-retire: retired candidate leaked into generated output: {retired_id}")
         restore_status = status(vault, generated, base / "missing-receipt.json")
@@ -389,7 +389,7 @@ def main() -> int:
         wrong_metadata = wrong_path_vault / "packs" / "deployed-pack-index.yaml"
         wrong_metadata.write_text(
             wrong_metadata.read_text(encoding="utf-8").replace(
-                "path: practices/agent-collaboration/COLLAB-PACK-001-review-handoff.md",
+                "path: practices/agent-collaboration/COLLAB-001-issue-code-work-uses-prs.md",
                 "path: practices/user/USER-LOCAL-001.md",
             ),
             encoding="utf-8",
@@ -402,17 +402,17 @@ def main() -> int:
             wrong_path_vault
             / "practices"
             / "agent-collaboration"
-            / "COLLAB-PACK-001-review-handoff.md"
+            / "COLLAB-001-issue-code-work-uses-prs.md"
         )
-        if "status: candidate" not in original_pack_record.read_text(encoding="utf-8"):
+        if "status: proposed" not in original_pack_record.read_text(encoding="utf-8"):
             errors.append("retire-refuses-wrong-path: original pack record changed")
 
         partial_vault = base / "partial-vault"
         errors.extend(expect("init-partial-vault", init_blank(partial_vault), True, "Blank Vault initialized"))
         errors.extend(expect("deploy-partial-bootstrap", deploy_bootstrap(partial_vault), True, "selected Vault validated"))
         errors.extend(expect("apply-partial-optional", apply_optional(partial_vault), True, "metadata: written"))
-        partial_practice = partial_vault / "practices" / "agent-collaboration" / "COLLAB-PACK-001-review-handoff.md"
-        partial_asset = partial_vault / "assets" / "skills" / "ASSET-COLLAB-PACK-001-review-handoff-helper.asset.yaml"
+        partial_practice = partial_vault / "practices" / "agent-collaboration" / "COLLAB-001-issue-code-work-uses-prs.md"
+        partial_asset = partial_vault / "assets" / "skills" / "ASSET-COLLAB-001-agent-collaboration.asset.yaml"
         partial_metadata = partial_vault / "packs" / "deployed-pack-index.yaml"
         before_partial = {
             "practice": digest(partial_practice),
@@ -447,7 +447,7 @@ def main() -> int:
         )
         asset_index.write_text(
             asset_index.read_text(encoding="utf-8").replace(
-                "path: assets/skills/ASSET-COLLAB-PACK-001-review-handoff-helper.asset.yaml",
+                "path: assets/skills/ASSET-COLLAB-001-agent-collaboration.asset.yaml",
                 "path: assets/skills/ASSET-OTHER-001.yaml",
             ),
             encoding="utf-8",

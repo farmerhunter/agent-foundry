@@ -105,16 +105,16 @@ For a new Agent Foundry setup, install these two first-party capability packs af
 Quick-start install path:
 
 ```text
-preview capability pack deployment catalog/capability-packs/pack.bootstrap.minimal
-apply reviewed capability pack catalog/capability-packs/pack.bootstrap.minimal
+preview capability pack deployment fixtures/capability-packs/bootstrap-minimal
+apply reviewed capability pack fixtures/capability-packs/bootstrap-minimal
 verify capability pack pack.bootstrap.minimal
 
-preview capability pack deployment catalog/capability-packs/pack.multi-agent.optional
-apply reviewed capability pack catalog/capability-packs/pack.multi-agent.optional
+preview capability pack deployment fixtures/capability-packs/optional-multi-agent
+apply reviewed capability pack fixtures/capability-packs/optional-multi-agent
 verify capability pack pack.multi-agent.optional
 ```
 
-The preview step should report the selected Vault impact before any apply. After an accepted apply, the selected User Vault is canonical; generated adapters and runtime installs remain separate follow-up surfaces.
+The preview step should report the selected Vault impact before any apply. Optional members import as `proposed`, not automatically active. For an existing installation, use `scripts/update_capability_pack.py` with a fresh private backup path; the same receipt supports a drift-checked restore. After an accepted apply, the selected User Vault is canonical; generated adapters and runtime installs remain separate follow-up surfaces.
 
 For full capability-pack behavior, see [docs/usage.md](docs/usage.md), [docs/commands.md](docs/commands.md), and the catalog pages under `catalog/capability-packs/`.
 

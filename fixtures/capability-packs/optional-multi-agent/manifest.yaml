@@ -1,38 +1,32 @@
 manifest_schema_version: 1
 pack_id: pack.multi-agent.optional
 title: Optional Multi-Agent Collaboration Pack
-description: Reviewed optional first-party starter pack for role-generic GitHub issue and PR collaboration helpers, collaboration readiness, branch-aware action plans, Local Orchestration activation guidance, and dry-run repair planning.
+description: Reviewed public snapshot of Agent Foundry's bounded GitHub collaboration and role-dispatch guidance.
 lifecycle_status: reviewed
-version: 0.4.0
-exported_at: 2026-07-10
+version: 0.5.0
+exported_at: 2026-09-01
 distribution_type: optional_capability
-source_provenance: "Agent Foundry public Core fixture reviewed through AF12-3 issue #253."
+source_provenance: "Agent Foundry issue #579 using accepted #576 source from Vault PR #16 and Core PR #583."
 maintainer_contact: "https://github.com/farmerhunter/agent-foundry"
 license: "repository license"
 sensitivity: public
 review_state: reviewed
 
 pack_contract:
-  promised_use_case: "Help a project operate GitHub issues, PRs, labels, comments, collaboration readiness reports, branch-aware action plans, dry-run repair plans, and optional visual status mirrors as a lightweight multi-agent scheduler."
+  promised_use_case: "Provide reviewable bounded GitHub Issue/PR collaboration and role-dispatch guidance without requiring the maintainer's private Vault."
   deployment_role: "optional user-selected capability after bootstrap"
   source_authority_after_deployment: "selected User Vault records"
-  non_authority_boundaries: [generated adapters are downstream only, runtime installs are downstream only, pack staging is transfer evidence only, Core fixtures are schema and test evidence only]
+  non_authority_boundaries: [generated adapters are downstream only, runtime installs are downstream only, pack staging and Core fixtures are transfer evidence only]
 
 evidence_sources:
-  - "Agent Foundry issue 252 public starter-pack selection decision"
-  - "Agent Foundry issue 253 public starter-pack implementation review"
-  - "Agent Foundry issue 315 collaboration readiness model decision"
-  - "Agent Foundry issues 316-319 AF15 helper, docs, dry-run repair, and dogfood review"
-  - "Agent Foundry issues 328-331 AF15 action-plan UX correction and dogfood review"
-  - "Agent Foundry issues 348-352 AF16 branch-aware collaboration readiness and docs/template enablement"
-  - "Agent Foundry issues 359-374 V2 Local Collaboration Ledger, Foundry Board, apply, sync, mixed-state recovery, operational cockpit, and dogfood evidence"
-  - "Agent Foundry issue 375 V2 runtime Skill and capability-pack enablement"
-  - "Agent Foundry public first-party starter-pack review"
+  - "Agent Foundry issue 576 accepted canonical collaboration source"
+  - "Agent Foundry Core pull request 583 accepted public delivery"
+  - "Agent Foundry issue 579 package membership and upgrade review"
 
 export_policy:
   exportability: review_required
   privacy_class: sanitized
-  excluded_material: [private project ids, local runtime receipts, raw session history]
+  excluded_material: [private paths, credentials, raw sessions, usage rows, local receipts, project state, repository-specific merge grants]
   review_required: true
 
 runtime_projection:
@@ -47,86 +41,277 @@ lifecycle_policy:
   deprecation_behavior: review_required
   update_behavior: reviewed_diff_required
 
-starter_contents:
-  practices:
-    - "role-generic needs:<role> routing"
-    - "durable pickup and handoff comments"
-    - "explicit Execution Contract role fields"
-    - "Testing Contract evidence routing when explicit testing is needed"
-    - "dependency-gated ready queues"
-    - "collaboration readiness before new project adoption"
-    - "existing project drift audit and dry-run repair planning"
-    - "user-facing readiness action-plan output"
-    - "branch-aware Execution Contract fields: Branch strategy, Target branch, affected branches, and verification branches"
-    - "generic branch strategy families with Agent Foundry V1/V2 presets as project overlays"
-    - "multi-branch, stacked PR, split-work, forward-merge, and multi-line verification action-plan concepts"
-    - "capability-layer classification: base, local_orchestration, and mixed"
-    - "Local Orchestration activation only from durable signals such as explicit user request, local capability config, accepted ledger state, issue contract, runtime profile, or accepted operational UX contract"
-    - "Base remains the default for ordinary collaboration, harvest, Skill, runtime, and capability-pack behavior"
-    - "degraded GitHub/Project access reporting"
-    - "read-only audit before write automation"
-  assets:
-    - "role-generic GitHub scheduler helper set"
-  docs_templates:
-    - "role routing config example"
-    - "Execution Contract template"
-    - "Testing Contract template"
-    - "pickup and handoff comment templates"
-    - "collaboration readiness adoption guidance"
-    - "branch-aware Execution Contract and role dispatch examples"
-  executable_payload_candidates:
-    - "agent-inbox"
-    - "agent-ready-queue"
-    - "agent-pickup"
-    - "agent-handoff"
-    - "agent-audit"
-    - "agent-collaboration-readiness"
-    - "agent-issue-context"
-    - "agent-pr-context"
-    - "agent-label"
-    - "agent-role-config"
-    - "gh-retry"
-    - "role routing library and config"
-
-excluded_project_local_overlays:
-  - "GH_REPO default repository"
-  - "GitHub Project ids, field ids, and status option ids"
-  - "Roadmap Status mapping"
-  - "issue type labels and project-specific label policy"
-  - "Project cache paths"
-
-rejected_as_pack:
-  - "project issue numbers, branch names, Project ids, and local cache files"
-  - "Project v2 as the scheduler source of truth"
-  - "mutating apply behavior before managed helper install exists"
-  - "execution from product project paths, pack staging, or canonical Vault payload paths"
-  - "active Agent Foundry practices without separate harvest review"
-  - "live Project repair/apply behavior without later reviewed gate"
-  - "branch repair/apply, checkout/switch, worktree creation, PR retarget, rebase, merge, reset, clean, or force-push behavior"
-
 compatibility:
   core_schema_version_min: 1
   core_schema_version_max: 1
   vault_layout_versions: [1]
   requires_bootstrap_pack: true
 
+upgrade_mapping:
+  from_version: 0.4.0
+  removed_members: [COLLAB-PACK-001, ASSET-COLLAB-PACK-001]
+  replacement_practices: [COLLAB-001, COLLAB-002, COLLAB-003, COLLAB-004, COLLAB-005, COLLAB-006, COLLAB-007, COLLAB-008, COLLAB-009, COLLAB-010, COLLAB-011, COLLAB-012, COLLAB-013, COLLAB-014, COLLAB-015, COLLAB-016, COLLAB-017]
+  replacement_assets: [ASSET-COLLAB-001, ASSET-COLLAB-002]
+  legacy_member_behavior: preserve_nonmember_candidate
+  local_edit_behavior: hold_before_write
+
 included_records:
-  - id: COLLAB-PACK-001
+  - id: COLLAB-001
     kind: practice
-    lifecycle_status: candidate
-    path: records/practices/COLLAB-PACK-001-review-handoff.md
+    lifecycle_status: active
+    path: records/practices/agent-collaboration/COLLAB-001-issue-code-work-uses-prs.md
     source_version: 6
-    content_sha256: "d90c256ed1b2a0e7445cf4e006011fc7073fdd427cf978076589da2e05a00702"
+    content_sha256: "3f9bcedb4893d0186a5a5562b88a399f54475ef93111c078f1ad6e7bb4c4e01e"
     destination_layer: canonical_vault_record
     membership_role: optional_member
     activation_default: manual_review
     import_action: create_or_review_update
-  - id: ASSET-COLLAB-PACK-001
+  - id: COLLAB-002
+    kind: practice
+    lifecycle_status: active
+    path: records/practices/agent-collaboration/COLLAB-002-issue-review-comments-include-completion-and-verification.md
+    source_version: 1
+    content_sha256: "93f98bf7cc6f9b929bad290026f6d93b1644fb99698a57a6f9a531177b8c18bf"
+    destination_layer: canonical_vault_record
+    membership_role: optional_member
+    activation_default: manual_review
+    import_action: create_or_review_update
+  - id: COLLAB-003
+    kind: practice
+    lifecycle_status: active
+    path: records/practices/agent-collaboration/COLLAB-003-auto-merge-validated-prs-by-default.md
+    source_version: 5
+    content_sha256: "dc27a03239bf366191c4dba4ce2fa879fc9fc3e4bea49246d77630da60e2e547"
+    destination_layer: canonical_vault_record
+    membership_role: optional_member
+    activation_default: manual_review
+    import_action: create_or_review_update
+  - id: COLLAB-004
+    kind: practice
+    lifecycle_status: active
+    path: records/practices/agent-collaboration/COLLAB-004-sync-repository-before-multi-agent-issue-work.md
+    source_version: 1
+    content_sha256: "a5625fc015737a5598622b70282d1aac3416b15879056eb87375e73ac614a9e6"
+    destination_layer: canonical_vault_record
+    membership_role: optional_member
+    activation_default: manual_review
+    import_action: create_or_review_update
+  - id: COLLAB-005
+    kind: practice
+    lifecycle_status: active
+    path: records/practices/agent-collaboration/COLLAB-005-do-not-infer-session-ending.md
+    source_version: 3
+    content_sha256: "832acca26947c311da8fb5d86f109a6ec3cfddf6d27c2db6507850fe134e2da3"
+    destination_layer: canonical_vault_record
+    membership_role: optional_member
+    activation_default: manual_review
+    import_action: create_or_review_update
+  - id: COLLAB-006
+    kind: practice
+    lifecycle_status: active
+    path: records/practices/agent-collaboration/COLLAB-006-verify-task-completion-against-original-spec.md
+    source_version: 1
+    content_sha256: "5e3c9d51497b5c84774e7d0f3ad168481b49f147e25e839f1263e5ef0fdde421"
+    destination_layer: canonical_vault_record
+    membership_role: optional_member
+    activation_default: manual_review
+    import_action: create_or_review_update
+  - id: COLLAB-007
+    kind: practice
+    lifecycle_status: active
+    path: records/practices/agent-collaboration/COLLAB-007-bootstrap-repo-local-agent-workflow-contract.md
+    source_version: 2
+    content_sha256: "1b57b2683338972ed7177a23832538ba145b43b00d04505ebb2ae0a43626bd04"
+    destination_layer: canonical_vault_record
+    membership_role: optional_member
+    activation_default: manual_review
+    import_action: create_or_review_update
+  - id: COLLAB-008
+    kind: practice
+    lifecycle_status: active
+    path: records/practices/agent-collaboration/COLLAB-008-use-github-project-as-lightweight-agent-scheduler.md
+    source_version: 14
+    content_sha256: "6601e92f4a97f593b70ee63f90280a03f6660f23078b3038eb2b449bfbc298d9"
+    destination_layer: canonical_vault_record
+    membership_role: optional_member
+    activation_default: manual_review
+    import_action: create_or_review_update
+  - id: COLLAB-009
+    kind: practice
+    lifecycle_status: active
+    path: records/practices/agent-collaboration/COLLAB-009-execution-contract-gates-implementer-work.md
+    source_version: 22
+    content_sha256: "122fc50c8f5baf0c96e41f40ca5e1767f49fbe61a8a29589038f56bda2de6545"
+    destination_layer: canonical_vault_record
+    membership_role: optional_member
+    activation_default: manual_review
+    import_action: create_or_review_update
+  - id: COLLAB-010
+    kind: practice
+    lifecycle_status: active
+    path: records/practices/agent-collaboration/COLLAB-010-ready-queue-uses-dependency-gates.md
+    source_version: 3
+    content_sha256: "737382035ed63d289e94d9ed0850b1be5a4c584e7ec35c596ef53b885df8a5be"
+    destination_layer: canonical_vault_record
+    membership_role: optional_member
+    activation_default: manual_review
+    import_action: create_or_review_update
+  - id: COLLAB-011
+    kind: practice
+    lifecycle_status: active
+    path: records/practices/agent-collaboration/COLLAB-011-prefer-epic-integration-branches-for-multi-agent-feature-work.md
+    source_version: 3
+    content_sha256: "764596e8a1effc05ac91794d992ff7b16bcf6fda53977cc7800f672e5ee48cd8"
+    destination_layer: canonical_vault_record
+    membership_role: optional_member
+    activation_default: manual_review
+    import_action: create_or_review_update
+  - id: COLLAB-012
+    kind: practice
+    lifecycle_status: active
+    path: records/practices/agent-collaboration/COLLAB-012-dual-surface-review-handoff.md
+    source_version: 11
+    content_sha256: "44cefc6939d0f77b30417d5d6e8254d9c0c57ef525d970cd6d9b21e38f244f18"
+    destination_layer: canonical_vault_record
+    membership_role: optional_member
+    activation_default: manual_review
+    import_action: create_or_review_update
+  - id: COLLAB-013
+    kind: practice
+    lifecycle_status: active
+    path: records/practices/agent-collaboration/COLLAB-013-manual-edit-safety-protocol.md
+    source_version: 5
+    content_sha256: "0662e5dcf12eacfa93e8a292884eca56b04f4db089b439922f4fc534d5b9020c"
+    destination_layer: canonical_vault_record
+    membership_role: optional_member
+    activation_default: manual_review
+    import_action: create_or_review_update
+  - id: COLLAB-014
+    kind: practice
+    lifecycle_status: active
+    path: records/practices/agent-collaboration/COLLAB-014-preserve-knowledge-state-before-action-planning-in-handoff.md
+    source_version: 1
+    content_sha256: "e16602f3d52c67c107684c7d9a6aa38a6402ea781099f6e2d9f7cdd65958e0f2"
+    destination_layer: canonical_vault_record
+    membership_role: optional_member
+    activation_default: manual_review
+    import_action: create_or_review_update
+  - id: COLLAB-015
+    kind: practice
+    lifecycle_status: active
+    path: records/practices/agent-collaboration/COLLAB-015-describe-user-facing-capability-before-milestone-closure.md
+    source_version: 7
+    content_sha256: "4ddf63f7e3dbc74658d1f0c6276202890b6ba28b4636e4e03ee1e9c16ed31a49"
+    destination_layer: canonical_vault_record
+    membership_role: optional_member
+    activation_default: manual_review
+    import_action: create_or_review_update
+  - id: COLLAB-016
+    kind: practice
+    lifecycle_status: active
+    path: records/practices/agent-collaboration/COLLAB-016-use-bounded-collaboration-by-default.md
+    source_version: 3
+    content_sha256: "0eedb5147a985f9a440687e25d5a8c8196574a932e10dc084b72bb5936554c44"
+    destination_layer: canonical_vault_record
+    membership_role: optional_member
+    activation_default: manual_review
+    import_action: create_or_review_update
+  - id: COLLAB-017
+    kind: practice
+    lifecycle_status: active
+    path: records/practices/agent-collaboration/COLLAB-017-onboard-bounded-project-collaboration.md
+    source_version: 5
+    content_sha256: "4390a1b70606c82a76ff9a03ab94bf2cf1099737da5263239c19b2406c61c83d"
+    destination_layer: canonical_vault_record
+    membership_role: optional_member
+    activation_default: manual_review
+    import_action: create_or_review_update
+  - id: GOV-005
+    kind: practice
+    lifecycle_status: active
+    path: records/practices/governance/GOV-005-do-not-use-future-architecture-as-current-operating-substrate.md
+    source_version: 1
+    content_sha256: "af056c504994c5944d5172e96622c1c557c81449c496f52f8434bf10c937aa89"
+    destination_layer: canonical_vault_record
+    membership_role: optional_member
+    activation_default: manual_review
+    import_action: create_or_review_update
+  - id: GOV-006
+    kind: practice
+    lifecycle_status: active
+    path: records/practices/governance/GOV-006-explicitly-mark-current-capability-versus-proposed-capability.md
+    source_version: 4
+    content_sha256: "24242c3695382efbef1e4f911ae756f9c4bc04fbb58f39852f20601b3fe17418"
+    destination_layer: canonical_vault_record
+    membership_role: optional_member
+    activation_default: manual_review
+    import_action: create_or_review_update
+  - id: IMPL-001
+    kind: practice
+    lifecycle_status: active
+    path: records/practices/implementation/IMPL-001-avoid-shell-interpreted-markdown-in-cli-comments.md
+    source_version: 2
+    content_sha256: "c11a757cf903a9b860f2615a8c8d44b9119986f845055364908f623a446d9272"
+    destination_layer: canonical_vault_record
+    membership_role: optional_member
+    activation_default: manual_review
+    import_action: create_or_review_update
+  - id: PROD-002
+    kind: practice
+    lifecycle_status: active
+    path: records/practices/product/PROD-002-design-onboarding-as-an-end-to-end-activation-journey.md
+    source_version: 2
+    content_sha256: "642f8121c7f51d8f96500356466c92770dde6659850dfbc6d17bb35cce7b661c"
+    destination_layer: canonical_vault_record
+    membership_role: optional_member
+    activation_default: manual_review
+    import_action: create_or_review_update
+  - id: TEST-001
+    kind: practice
+    lifecycle_status: active
+    path: records/practices/testing/TEST-001-render-verify-format-conversions.md
+    source_version: 2
+    content_sha256: "ba8c31bf831baeba2cce9755a7daa4fe905cf634a57e6c789d796411b9f7eb22"
+    destination_layer: canonical_vault_record
+    membership_role: optional_member
+    activation_default: manual_review
+    import_action: create_or_review_update
+  - id: TEST-004
+    kind: practice
+    lifecycle_status: active
+    path: records/practices/testing/TEST-004-verify-through-project-local-dependency-environments.md
+    source_version: 2
+    content_sha256: "7930336d1f379f80f45802fce8ac437f491e7db4acb204da9c638b7e0bd42060"
+    destination_layer: canonical_vault_record
+    membership_role: optional_member
+    activation_default: manual_review
+    import_action: create_or_review_update
+  - id: TEST-005
+    kind: practice
+    lifecycle_status: active
+    path: records/practices/testing/TEST-005-smoke-test-user-facing-path-not-process-startup.md
+    source_version: 9
+    content_sha256: "49eba30bd669031be4e8fb77f510d75cf4c12f3da6c322f2d2a9bcbf853bab21"
+    destination_layer: canonical_vault_record
+    membership_role: optional_member
+    activation_default: manual_review
+    import_action: create_or_review_update
+  - id: ASSET-COLLAB-001
     kind: asset
-    lifecycle_status: candidate
-    path: records/assets/ASSET-COLLAB-PACK-001-review-handoff-helper.asset.yaml
-    source_version: 6
-    content_sha256: "0b9dd2a59594a219c9a317015df601904668d1d72023f0d8ba19371dbc03e989"
+    lifecycle_status: active
+    path: records/assets/skills/ASSET-COLLAB-001-agent-collaboration.asset.yaml
+    source_version: 39
+    content_sha256: "2b89cea589b5920d63991cf489802a16c35ac74dc63c4754bb83d02a25bcd03d"
+    destination_layer: canonical_vault_record
+    membership_role: optional_member
+    activation_default: manual_review
+    import_action: create_or_review_update
+  - id: ASSET-COLLAB-002
+    kind: asset
+    lifecycle_status: active
+    path: records/assets/skills/ASSET-COLLAB-002-role-automation-planner.asset.yaml
+    source_version: 15
+    content_sha256: "2fa136faa7f271273bc3f151f61a79142d045ed01ec7b300d1929ba6362e3eb7"
     destination_layer: canonical_vault_record
     membership_role: optional_member
     activation_default: manual_review
@@ -139,7 +324,7 @@ conflict_policy:
   same_version_hash_mismatch: fail_closed
   newer_version_update: reviewed_diff_required
   local_edit_behavior: preserve_vault_and_propose_merge
-  rollback_notes: "Keep local Vault edits canonical; remove generated runtime copies through receipts when later install support exists."
+  rollback_notes: "A reviewed update writes a private local backup receipt; restore stops when the update postimage has drifted."
 
 integrity:
   digest_algorithm: sha256

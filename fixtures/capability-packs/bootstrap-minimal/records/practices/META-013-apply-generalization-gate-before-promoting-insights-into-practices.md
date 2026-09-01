@@ -4,9 +4,9 @@ title: Apply a generalization gate before promoting insights into practices
 domain: meta
 type: checklist
 status: active
-version: 1
+version: 2
 created: 2026-06-08
-updated: 2026-06-08
+updated: 2026-08-10
 tags: [harvesting, generalization, practice-governance, dedupe]
 aliases:
   - META-013
@@ -18,7 +18,7 @@ applies_when:
   - reviewing harvest output for over-specific entries
   - deciding whether to create, merge, defer, or reject a candidate
 review_required: false
-provenance: "Corrected harvest outcome from ChatGPT memory-system design and harvest discipline discussion; source context: docs/memory-system-handoff-dump.md."
+provenance: "Corrected harvest outcome from ChatGPT memory-system design and harvest discipline discussion; source context: docs/memory-system-handoff-dump.md. Extended after AF18 scope-drift review on 2026-08-10."
 ---
 
 ## Principle
@@ -36,6 +36,8 @@ Before drafting or promoting a practice candidate, ask:
 - Would this help in unrelated future work?
 - Would it help more than one agent or runtime?
 - Does it describe a repeatable judgment or process?
+
+Reject candidates that merely name a project issue, branch, host-specific limitation, or future architecture component. Preserve those as evidence or a separately scoped design follow-up unless the reusable judgment can be stated without that project's vocabulary.
 - Can it be triggered operationally?
 - Is it independent of the current domain's vocabulary?
 - Is it more than a local design decision?
