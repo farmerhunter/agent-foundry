@@ -637,6 +637,9 @@ def plan_records(
         elif destination_path.exists() and imported_hash and current_hash != imported_hash:
             outcome = "merge_required"
             detail = "current Vault record differs from prior deployed hash; preserve local edit"
+        elif destination_path.exists() and not imported_hash:
+            outcome = "merge_required"
+            detail = "record predates this pack membership and differs from reviewed source; preserve adopter record"
         elif destination_path.exists():
             outcome = "update"
             detail = "record exists and differs from pack source; reviewed update required"

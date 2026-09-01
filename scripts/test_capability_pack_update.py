@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import hashlib
+import shutil
 import stat
 import subprocess
 import sys
@@ -405,6 +406,25 @@ def main() -> int:
             errors.append("update-apply: backup receipt is not mode 0600")
         if "Version two." not in target.read_text(encoding="utf-8"):
             errors.append("update-apply: record content did not update")
+        cross_vault = base / "cross-vault"
+        shutil.copytree(vault, cross_vault)
+        cross_vault_state = (
+            sha256(cross_vault / "practices" / "meta" / "UPDATE-001.md"),
+            sha256(cross_vault / "packs" / "deployed-pack-index.yaml"),
+        )
+        errors.extend(
+            expect(
+                "restore-cross-vault-blocked",
+                restore_pack(backup, cross_vault, apply=True),
+                False,
+                "selected Vault root does not match",
+            )
+        )
+        if cross_vault_state != (
+            sha256(cross_vault / "practices" / "meta" / "UPDATE-001.md"),
+            sha256(cross_vault / "packs" / "deployed-pack-index.yaml"),
+        ):
+            errors.append("restore-cross-vault-blocked: files changed despite HOLD")
         errors.extend(expect("restore-dry-run", restore_pack(backup, vault), True, "status: restore_ready"))
         errors.extend(expect("restore-apply", restore_pack(backup, vault, apply=True), True, "status: restored"))
         if (vault / "packs" / "deployed-pack-index.yaml").read_text(encoding="utf-8") != index_after_apply:
@@ -440,6 +460,54 @@ def main() -> int:
         errors.extend(expect("legacy-init", init_blank(legacy_vault), True, "Blank Vault initialized"))
         errors.extend(expect("legacy-bootstrap", deploy_bootstrap(legacy_vault), True, "selected Vault validated"))
         errors.extend(expect("legacy-apply-0.4", apply_pack(legacy_pack, legacy_vault), True, "metadata: written"))
+        legacy_conflict_vault = base / "legacy-conflict-vault"
+        shutil.copytree(legacy_vault, legacy_conflict_vault)
+        entering_member = (
+            legacy_conflict_vault
+            / "practices"
+            / "agent-collaboration"
+            / "COLLAB-001-issue-code-work-uses-prs.md"
+        )
+        entering_member.parent.mkdir(parents=True, exist_ok=True)
+        entering_member.write_text(practice_text("COLLAB-001", "Adopter-owned pre-pack content."), encoding="utf-8")
+        practice_index = legacy_conflict_vault / "indexes" / "practice_index.yaml"
+        practice_index.write_text(
+            practice_index.read_text(encoding="utf-8").rstrip()
+            + "\n  - id: COLLAB-001\n"
+            + "    title: Adopter-owned pre-pack content\n"
+            + "    path: practices/agent-collaboration/COLLAB-001-issue-code-work-uses-prs.md\n"
+            + "    domain: agent-collaboration\n"
+            + "    type: playbook\n"
+            + "    status: active\n",
+            encoding="utf-8",
+        )
+        conflict_state = (
+            sha256(entering_member),
+            sha256(practice_index),
+            sha256(legacy_conflict_vault / "packs" / "deployed-pack-index.yaml"),
+        )
+        conflict_backup = base / "legacy-conflict-backup"
+        errors.extend(
+            expect(
+                "legacy-entering-member-holds",
+                update_pack(
+                    OPTIONAL_PACK,
+                    legacy_conflict_vault,
+                    apply=True,
+                    backup_root=conflict_backup,
+                ),
+                False,
+                "status: merge_required",
+            )
+        )
+        if conflict_backup.exists():
+            errors.append("legacy-entering-member-holds: backup created despite HOLD")
+        if conflict_state != (
+            sha256(entering_member),
+            sha256(practice_index),
+            sha256(legacy_conflict_vault / "packs" / "deployed-pack-index.yaml"),
+        ):
+            errors.append("legacy-entering-member-holds: files changed despite HOLD")
         legacy_practice = legacy_vault / "practices" / "agent-collaboration" / "COLLAB-PACK-001-review-handoff.md"
         legacy_asset = legacy_vault / "assets" / "skills" / "ASSET-COLLAB-PACK-001-review-handoff-helper.asset.yaml"
         legacy_hashes = (sha256(legacy_practice), sha256(legacy_asset))

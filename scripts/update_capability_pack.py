@@ -190,6 +190,7 @@ def create_backup(
         "pack_id": pack_id,
         "from_version": from_version,
         "to_version": to_version,
+        "vault_root": str(vault_root.resolve()),
         "vault_marker_sha256": digest_path(vault_root / ".agent-foundry-vault.yaml"),
         "files": entries,
     }
@@ -293,6 +294,11 @@ def restore_update(vault_root: Path, backup_root: Path, apply: bool) -> int:
     if receipt.get("schema_version") != 1 or receipt.get("operation") != "capability_pack_update":
         print("status: failed")
         print("detail: unsupported backup receipt")
+        return 1
+    if str(vault_root.resolve()) != receipt.get("vault_root"):
+        print("status: restore_blocked")
+        print("- selected Vault root does not match the update receipt")
+        print("writes: none")
         return 1
     marker_path = vault_root / ".agent-foundry-vault.yaml"
     if not marker_path.exists() or digest_path(marker_path) != receipt.get("vault_marker_sha256"):
