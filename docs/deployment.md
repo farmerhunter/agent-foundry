@@ -20,55 +20,146 @@ Do not copy another machine's `runtime/local/`, `~/.agent-foundry/config.yaml`, 
 
 ## Fresh Install
 
-Use this on a new machine after cloning or unpacking the Agent Foundry Core checkout.
+这是新工作站唯一 canonical onboarding 路径。先读当前 checkout 的 `AGENTS.md`、本节、两个 pack 的 `manifest.yaml`，再运行相关 CLI 的 `--help`。不要用旧会话记忆、另一台机器的路径或维护者自己的 Vault/runtime 代替当前接口。
 
-1. Initialize or select a User Vault.
+### 完成后会得到什么
+
+四层各自就绪，但不会混成一个 authority：
+
+| 层 | 作用 | 完成标志 |
+| --- | --- | --- |
+| Core | 公共工具、schema、文档和 first-party pack | 当前 checkout 可验证 |
+| selected Vault | 使用者自己拥有的 canonical practices/assets | locator 指向该 Vault，starter pack metadata 可读 |
+| Generated | 从 selected Vault 生成、可审查的 adapter output | selected-output quality 通过 |
+| Runtime | 从同一个 Generated root 安装的受管副本 | managed marker、receipt 和 `sync_status` 一致 |
+
+这只表示 **Agent Foundry 工作站层** 就绪；不表示某个项目已经 onboarding，也不表示 SQLite ledger、scheduler、native roles、跨设备协作或 release 已启用。
+
+### 三个 Human 决策
+
+Agent 只在有真实后果时暂停：
+
+1. **Vault 归属**：选择使用者自己的 Vault 位置，以及是否连接使用者控制的 private remote。不要复制维护者 Vault。
+2. **Optional pack adoption**：使用者审阅 dry-run 列出的 exact version/members，决定是否采用并激活 `pack.multi-agent.optional`。`review_token` 只防 drift，不代表批准。
+3. **Runtime 写入**：使用者确认具体 enabled targets 和 install paths 后，才执行 runtime `--apply`。
+
+已授权阶段内的机械 validation、Generated publish 和 readback 不重复索要批准。以后只有新增操作引入新的实质权限、隐私边界、持久写入或不可逆风险时，才增加同类 gate。
+
+### 确定执行顺序
+
+以下占位符在一次执行中保持不变：`<vault-root>` 是使用者自己的 selected Vault；`<generated-root>` 是 machine-local Generated；`<private-backup-parent>` 已存在且 mode 为 `0700`，而 `<activation-backup-root>` 必须尚不存在。
+
+1. Clone/update Core，确认 checkout 与接口。
 
    ```bash
-   python3 scripts/init_vault.py ~/.agent-foundry/vault/my-agent-foundry-vault --core-root . --apply
-   ```
-
-2. Write and verify the machine-local Core/Vault locator.
-
-   ```bash
-   python3 scripts/foundry_config.py write --core-root . --vault-root ~/.agent-foundry/vault/my-agent-foundry-vault
+   git clone <public-core-url> agent-foundry-core
+   cd agent-foundry-core
+   git pull --ff-only
    python3 scripts/foundry_config.py status
+   python3 scripts/manage_capability_pack_lifecycle.py --help
    ```
 
-3. Initialize and inspect the runtime manifest.
+2. 在 Human 决定的位置 preview，然后建立 blank Vault；写 locator 并 read back。
+
+   ```bash
+   python3 scripts/init_vault.py <vault-root> --core-root .
+   python3 scripts/init_vault.py <vault-root> --core-root . --apply
+   python3 scripts/foundry_config.py write --core-root . --vault-root <vault-root>
+   python3 scripts/foundry_config.py status
+   python3 scripts/check_foundry_roots.py --core-root . --vault-root <vault-root>
+   ```
+
+3. Preview/apply mandatory `pack.bootstrap.minimal`。
+
+   ```bash
+   python3 scripts/deploy_capability_pack.py fixtures/capability-packs/bootstrap-minimal \
+     --core-root . --vault-root <vault-root>
+   python3 scripts/deploy_capability_pack.py fixtures/capability-packs/bootstrap-minimal \
+     --core-root . --vault-root <vault-root> --apply
+   ```
+
+4. 如果使用者考虑 GitHub multi-agent collaboration，先 preview/import optional pack。Import 只产生 `proposed` members。
+
+   ```bash
+   python3 scripts/plan_capability_pack.py fixtures/capability-packs/optional-multi-agent \
+     --core-root . --vault-root <vault-root>
+   python3 scripts/apply_capability_pack.py fixtures/capability-packs/optional-multi-agent \
+     --core-root . --vault-root <vault-root> --apply
+   ```
+
+5. Dry-run activation，向使用者解释输出中的 pack version、完整 member 列表和采用后行为。使用者批准后，原样使用当前 `review_token`，并指定 fresh private backup root。
+
+   ```bash
+   python3 scripts/manage_capability_pack_lifecycle.py \
+     --core-root . --vault-root <vault-root> \
+     --pack-id pack.multi-agent.optional --action activate
+
+   python3 scripts/manage_capability_pack_lifecycle.py \
+     --core-root . --vault-root <vault-root> \
+     --pack-id pack.multi-agent.optional --action activate \
+     --review-token <review-token> \
+     --backup-root <activation-backup-root> --apply
+   ```
+
+   任何 token、member、hash、path、status、index 或 metadata drift 都在写入前 HOLD。成功 apply 保留 `0700` backup root、`0600` preimages/receipt；不自动 publish 或 install。
+
+6. 从 selected Vault preview/publish 到同一个 Generated root，并做 selected-output quality readback。
+
+   ```bash
+   python3 scripts/publish_adapters.py \
+     --core-root . --vault-root <vault-root> --output-root <generated-root>
+   python3 scripts/publish_adapters.py \
+     --core-root . --vault-root <vault-root> --output-root <generated-root> --apply
+   python3 scripts/check_adapter_quality.py \
+     --core-root . --vault-root <vault-root> \
+     --surface selected-output --generated-root <generated-root>
+   ```
+
+7. Detect runtime，启用且只配置使用者选择的 targets。Codex 只是示例；实际 target 从当前 manifest/CLI 读取。
 
    ```bash
    python3 scripts/runtime_manifest.py init
    python3 scripts/runtime_manifest.py detect
+   python3 scripts/runtime_manifest.py status
+   python3 scripts/runtime_manifest.py enable <target>
+   python3 scripts/runtime_manifest.py configure <target> --path <runtime-path>
    python3 scripts/runtime_manifest.py plan
    ```
 
-4. Enable only the runtimes that should receive Agent Foundry content.
+8. 从步骤 6 的同一个 Generated root dry-run install。向使用者列明 targets/paths；经第三个 Human 决策后 apply，并做最终 readback。
 
    ```bash
-   python3 scripts/runtime_manifest.py enable codex
-   python3 scripts/runtime_manifest.py enable claude-code
-   python3 scripts/runtime_manifest.py enable hermes
-   python3 scripts/runtime_manifest.py enable trae
+   python3 scripts/install_foundry.py \
+     --core-root . --vault-root <vault-root> --adapter-root <generated-root>
+   python3 scripts/sync_status.py \
+     --core-root . --vault-root <vault-root> --adapter-root <generated-root>
+
+   python3 scripts/install_foundry.py \
+     --core-root . --vault-root <vault-root> --adapter-root <generated-root> --apply
+   python3 scripts/sync_status.py \
+     --core-root . --vault-root <vault-root> --adapter-root <generated-root>
    ```
 
-5. Dry-run install, then read status.
+### Stop、恢复与成功标准
 
-   ```bash
-   python3 scripts/install_foundry.py
-   python3 scripts/sync_status.py
-   ```
+遇到 incompatible schema/layout/pack、错误 authority、missing marker、local edit、hash/status drift、unmanaged runtime target、异常 CLI 输出或缺失批准时立即停止；报告一个具体恢复条件，不猜测迁移、不覆盖现状。版本、member 数、runtime 列表、默认路径和 receipt 字段均以当前 checkout 的 manifest/config/CLI 输出为准。
 
-   In split Core/Vault mode, `install_foundry.py` defaults to the selected generated adapter root and refuses Core reference adapters as a runtime source. When in doubt, pass the generated root printed by `publish_adapters.py` explicitly with `--adapter-root`.
+Activation apply 失败会从 fresh backup 自动补偿。若成功后需要恢复，先 dry-run；只有所有当前文件仍等于 receipt postimages 时才允许 restore：
 
-6. Apply only after the dry-run and status report identify the expected Core, selected Vault, generated output, manual targets, receipt state, and runtime-write approval needs.
+```bash
+python3 scripts/manage_capability_pack_lifecycle.py \
+  --core-root . --vault-root <vault-root> --restore-backup <activation-backup-root>
+python3 scripts/manage_capability_pack_lifecycle.py \
+  --core-root . --vault-root <vault-root> --restore-backup <activation-backup-root> --apply
+```
 
-   ```bash
-   python3 scripts/install_foundry.py --apply
-   python3 scripts/sync_status.py
-   ```
+成功条件是：root validation passed；optional pack（若采用）的 exact members/indexes 为 `active`；Generated quality passed；enabled runtime 具有 managed marker 和 receipt；最终 `sync_status` 报告 Generated ready、installed selected-output in sync，并明确 ChatGPT 等 manual targets。随后如要把某个项目接入 bounded collaboration，另走该项目的 onboarding contract；它不是本工作站流程的隐式下一步。
 
-**中文要点：** 新机器先建/选 Vault，再写 locator、配置 runtime manifest、dry-run install、读 status。只有 dry-run/status 明确目标和写入需求后才 apply。
+### 可直接交给 AI agent 的入口 prompt
+
+```text
+请读取当前 checkout 的 AGENTS.md 和 docs/deployment.md#fresh-install，严格按 canonical fresh-workstation 顺序执行。先读取当前 manifests、foundry_config.py status 和相关 CLI --help，只询问三个有实质后果的 Human 决策：我的 selected Vault 位置/private remote、是否采用并激活 optional collaboration pack、是否向列出的 runtime targets 写入。每个写阶段先 dry-run 并回读；在已授权阶段内自动完成机械 validation/publish/readback。任何 authority、schema、member/hash/status、local edit、unmanaged target 或异常输出 drift 都 HOLD，并告诉我一个恢复条件。不要把工作站 Skill install 声称为项目 onboarding、SQLite、scheduler、native role、cross-device 或 release readiness。
+```
 
 ## Cross-Machine Restore
 
