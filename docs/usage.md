@@ -358,6 +358,22 @@ python3 scripts/install_foundry.py --apply             # only after reviewing dr
 python3 scripts/sync_status.py
 ```
 
+Omitting `--target` processes the manifest and installs every target whose
+status is `enabled`; disabled targets are skipped and manual targets remain
+manual. To select one runtime, supply `--target <name>` exactly once, for
+example `--target codex`. Repeated `--target` options, including repeated
+`--target=<name>` forms, are rejected before configuration, launcher, runtime,
+receipt, or other external installer work begins. The installer intentionally
+does not provide a multi-target list option: omit `--target` for all enabled
+targets, or make separate single-target calls when separate evidence is needed.
+
+Each successful `--apply` invocation overwrites the on-disk adapter install
+receipt with the targets installed by that invocation. Consecutive
+single-target applies do not accumulate or merge receipt target entries.
+Preserve each call's receipt/status evidence if a staged install must prove
+multiple runtimes, or use one authorized all-enabled apply when that target set
+is intended.
+
 Do not copy another machine's `runtime/local/`, `~/.agent-foundry/config.yaml`, runtime directories, or ChatGPT project files as canonical truth. Recreate local state from Core plus the selected Vault, then verify with `sync_status.py`.
 
 **中文要点：** 新机器从 Core + selected Vault 重建；不要复制另一台机器的 runtime/local、config 或 runtime directories。
