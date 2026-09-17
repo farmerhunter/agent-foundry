@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.0
+
+- Updated `COLLAB-017` and `ASSET-COLLAB-002` for fresh-only native Coordinator
+  and Durable Architect onboarding.
+- Added fail-closed pending identity handling, public owner readback, optional
+  token-bound peer handshake, cursor discipline, and explicit readiness stages.
+- Kept RoleHub logical, assigned no Work, and prohibited private-session recovery,
+  duplicate creation, historical task mutation, deletion, archive, and implicit rollback.
+
 ## 0.5.0
 
 - Replaced two illustrative candidate members with the 24-practice minimum

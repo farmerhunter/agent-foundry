@@ -3,10 +3,10 @@ pack_id: pack.multi-agent.optional
 title: Optional Multi-Agent Collaboration Pack
 description: Reviewed public snapshot of Agent Foundry's bounded GitHub collaboration and role-dispatch guidance.
 lifecycle_status: reviewed
-version: 0.5.0
-exported_at: 2026-09-01
+version: 0.6.0
+exported_at: 2026-09-18
 distribution_type: optional_capability
-source_provenance: "Agent Foundry issue #579 using accepted #576 source from Vault PR #16 and Core PR #583."
+source_provenance: "Agent Foundry issue #579 using accepted #576 source from Vault PR #16 and Core PR #583; refreshed after approved 2026-09-18 native onboarding harvest."
 maintainer_contact: "https://github.com/farmerhunter/agent-foundry"
 license: "repository license"
 sensitivity: public
@@ -220,8 +220,8 @@ included_records:
     kind: practice
     lifecycle_status: active
     path: records/practices/agent-collaboration/COLLAB-017-onboard-bounded-project-collaboration.md
-    source_version: 5
-    content_sha256: "4390a1b70606c82a76ff9a03ab94bf2cf1099737da5263239c19b2406c61c83d"
+    source_version: 6
+    content_sha256: "3b46739f164dd48045b447075a74c1a6096bbc32b937ef7a16ab663d9bbb1d7e"
     destination_layer: canonical_vault_record
     membership_role: optional_member
     activation_default: manual_review
@@ -310,8 +310,8 @@ included_records:
     kind: asset
     lifecycle_status: active
     path: records/assets/skills/ASSET-COLLAB-002-role-automation-planner.asset.yaml
-    source_version: 15
-    content_sha256: "2fa136faa7f271273bc3f151f61a79142d045ed01ec7b300d1929ba6362e3eb7"
+    source_version: 16
+    content_sha256: "f33f87db47511a2c6752f2cf54e738ba2569578493e8e8d0e78e6aa02e1b3f85"
     destination_layer: canonical_vault_record
     membership_role: optional_member
     activation_default: manual_review

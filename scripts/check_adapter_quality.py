@@ -289,9 +289,15 @@ def check_generated_skill_artifacts(generated_root: Path, vault_root: Path, mani
             "final `main` integration",
         ],
         "ASSET-COLLAB-002": [
-            "rehydration step from durable sources",
-            "transition gate it is satisfying",
-            "target role to rehydrate durable sources",
+            "create_thread",
+            "setup_pending",
+            "fresh_only",
+            "thread_id_unresolved",
+            "reply_to_thread_id",
+            "One onboarding executor owns both sends and verification",
+            "carry the wait_threads cursor forward",
+            "do not scan private sessions, databases or transcripts",
+            "Accepted creation, initialized owner readback, peer acknowledgement and ready are distinct states",
         ],
     }
     for record in active_skill_assets(vault_root):

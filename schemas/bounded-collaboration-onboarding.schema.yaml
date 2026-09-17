@@ -1,22 +1,21 @@
 $schema: "https://json-schema.org/draft/2020-12/schema"
 $id: "https://agent-foundry.local/schemas/bounded-collaboration-onboarding.schema.yaml"
-title: Bounded Collaboration Onboarding Plan
+title: Native Bounded Collaboration Onboarding
 description: >-
-  Portable metadata-only planning contract, not authority for native threads,
-  transcript access, Vault writes, or runtime activation.
+  Side-effect-free planning and receipt contract for Coordinator plus Durable
+  Architect onboarding. RoleHub is logical; private task-state discovery is forbidden.
 type: object
 additionalProperties: false
 oneOf:
-  - required: [onboarding_version, request, runtime_capabilities, role_hub, current_thread, existing_roles, repository_state]
+  - required: [onboarding_version, request, runtime_capabilities, existing_roles, repository_state]
     not: {required: [state]}
   - $ref: "#/$defs/PlanResult"
 properties:
-  onboarding_version:
-    const: bounded-collaboration-onboarding-v1
+  onboarding_version: {const: bounded-collaboration-onboarding-v2}
   request:
     type: object
     additionalProperties: false
-    required: [project_identity, onboarding_key, apply_authorized]
+    required: [project_identity, onboarding_key, apply_authorized, reuse_policy, handshake_requested]
     properties:
       project_identity:
         type: object
@@ -28,72 +27,42 @@ properties:
           integration_branch: {type: string, minLength: 1}
       onboarding_key: {type: string, minLength: 1}
       apply_authorized: {type: boolean}
+      reuse_policy: {enum: [fresh_only, reuse_allowed]}
+      handshake_requested: {type: boolean}
       role_display_names:
         type: object
         additionalProperties: false
         properties:
           Coordinator: {type: string, minLength: 1}
-          Architect: {type: string, minLength: 1}
+          Durable Architect: {type: string, minLength: 1}
   runtime_capabilities:
     type: object
     additionalProperties: false
-    required: [role_binding, projections, operations]
+    required: [operations]
     properties:
-      role_binding:
-        type: object
-        additionalProperties: false
-        required: [status]
-        properties:
-          status: {enum: [supported, unavailable, unknown]}
-      projections:
-        type: object
-        additionalProperties: false
-        required: [role_hub, current_thread, scheduler, transient_template]
-        properties:
-          role_hub: {$ref: "#/$defs/Capability"}
-          current_thread: {$ref: "#/$defs/Capability"}
-          scheduler: {$ref: "#/$defs/SchedulerProjection"}
-          transient_template: {$ref: "#/$defs/TransientProjection"}
       operations:
         type: object
         additionalProperties: false
-        required: [discover, create, rename, link, navigate]
+        required: [list_projects, list_threads, create_thread, read_thread, wait_threads, send_message_to_thread]
         properties:
-          discover: {$ref: "#/$defs/Capability"}
-          create: {$ref: "#/$defs/Capability"}
-          rename: {$ref: "#/$defs/Capability"}
-          link: {$ref: "#/$defs/Capability"}
-          navigate: {$ref: "#/$defs/Capability"}
-  role_hub:
-    type: object
-    additionalProperties: false
-    required: [status]
-    properties:
-      status: {enum: [missing, active, held, ambiguous]}
-      role_hub_ref: {type: string, minLength: 1}
-  current_thread:
-    type: object
-    additionalProperties: false
-    required: [eligible, current_thread_ref, name]
-    properties:
-      eligible: {type: boolean}
-      current_thread_ref: {type: string, minLength: 1}
-      name: {type: string, minLength: 1}
+          list_projects: {$ref: "#/$defs/Capability"}
+          list_threads: {$ref: "#/$defs/Capability"}
+          create_thread: {$ref: "#/$defs/Capability"}
+          read_thread: {$ref: "#/$defs/Capability"}
+          wait_threads: {$ref: "#/$defs/Capability"}
+          send_message_to_thread: {$ref: "#/$defs/Capability"}
   existing_roles:
     type: array
     items:
       type: object
       additionalProperties: false
-      required: [project_id, role, role_ref, durable_anchor, state, legacy]
+      required: [project_id, role, thread_id, state]
       properties:
         project_id: {type: string, minLength: 1}
-        role: {enum: [Coordinator, Architect, Implementer, Reviewer, Tester, Harvester]}
-        role_ref: {type: string, minLength: 1}
-        durable_anchor: {type: string, minLength: 1}
+        role: {enum: [Coordinator, Durable Architect]}
+        thread_id: {type: string, minLength: 1}
         state: {enum: [active, held, historical_reference]}
-        legacy: {type: boolean}
         display_name: {type: string, minLength: 1}
-        linked_to_role_hub: {type: boolean}
   repository_state:
     type: object
     additionalProperties: false
@@ -104,24 +73,10 @@ properties:
   operation_receipts:
     type: array
     items: {$ref: "#/$defs/OperationReceipt"}
-  rollback_receipts:
-    type: array
-    items:
-      type: object
-      additionalProperties: false
-      required: [source_idempotency_key, status, receipt_ref, source_operation_fingerprint, rollback_fingerprint]
-      properties:
-        source_idempotency_key: {type: string, minLength: 1}
-        status: {enum: [applied, failed]}
-        receipt_ref: {type: string, minLength: 1}
-        source_operation_fingerprint: {type: string, minLength: 1}
-        rollback_fingerprint: {type: string, minLength: 1}
-  plan_result:
-    $ref: "#/$defs/PlanResult"
   read_only: {const: true}
   mutation_performed: {const: false}
   dispatch_performed: {const: false}
-  state: {enum: [preflight, plan_ready, applying, ready, partial_hold, rollback_planned, rolled_back, rollback_incomplete]}
+  state: {type: string}
   transition_history: {type: array}
   stop_conditions: {type: array}
   operations: {type: array}
@@ -134,115 +89,97 @@ $defs:
     required: [status]
     properties:
       status: {enum: [supported, unavailable, unknown]}
-  SchedulerProjection:
-    type: object
-    additionalProperties: false
-    required: [status, binding_ref, binding_status]
-    properties:
-      status: {enum: [supported, unavailable, unknown]}
-      binding_ref: {type: string, minLength: 1}
-      binding_status: {enum: [bound, unavailable]}
-  TransientProjection:
-    type: object
-    additionalProperties: false
-    required: [status, template_refs]
-    properties:
-      status: {enum: [supported, unavailable, unknown]}
-      template_refs:
-        type: object
-        additionalProperties: false
-        required: [Implementer, Reviewer, Tester, Harvester]
-        properties:
-          Implementer: {type: string, minLength: 1}
-          Reviewer: {type: string, minLength: 1}
-          Tester: {type: string, minLength: 1}
-          Harvester: {type: string, minLength: 1}
   PlanResult:
     type: object
     additionalProperties: false
     required: [onboarding_version, read_only, mutation_performed, dispatch_performed, state, transition_history, stop_conditions, operations, summary]
     properties:
-      onboarding_version: {const: bounded-collaboration-onboarding-v1}
+      onboarding_version: {const: bounded-collaboration-onboarding-v2}
       read_only: {const: true}
       mutation_performed: {const: false}
       dispatch_performed: {const: false}
-      state: {enum: [preflight, plan_ready, applying, ready, partial_hold, rollback_planned, rolled_back, rollback_incomplete]}
+      state: {enum: [plan_ready, applying, setup_pending, ready, partial_hold]}
       transition_history:
         type: array
         minItems: 1
-        items: {type: string}
+        items: {type: string, minLength: 1}
+      stop_conditions:
+        type: array
+        items: {type: string, minLength: 1}
       operations:
         type: array
         items: {$ref: "#/$defs/Operation"}
       rollback_operations:
         type: array
-        items: {$ref: "#/$defs/RollbackOperation"}
-      summary:
-        $ref: "#/$defs/OnboardingSummary"
-      stop_conditions:
-        type: array
-        items: {type: string, minLength: 1}
+        items:
+          type: object
+          additionalProperties: false
+          required: [kind, subject, source_idempotency_key, automatic, never_delete_or_archive]
+          properties:
+            kind: {const: mark_setup_incomplete}
+            subject: {enum: [Coordinator, Durable Architect]}
+            source_idempotency_key: {type: string, minLength: 1}
+            automatic: {const: false}
+            never_delete_or_archive: {const: true}
+      summary: {$ref: "#/$defs/OnboardingSummary"}
   Operation:
     type: object
     additionalProperties: false
     required: [kind, subject, idempotency_key, preimage, desired_state, operation_fingerprint]
     properties:
-      kind: {type: string, minLength: 1}
-      subject: {type: string, minLength: 1}
+      kind: {enum: [resolve_saved_project, create_thread, reuse_thread, owner_readback, peer_handshake_send, peer_handshake_readback]}
+      subject: {enum: [Project, Coordinator, Durable Architect]}
       idempotency_key: {type: string, minLength: 1}
       preimage: {type: object}
       desired_state: {type: object}
       depends_on:
         type: array
         items: {type: string, minLength: 1}
-      operation_fingerprint: {type: string, minLength: 1}
-  RollbackOperation:
-    type: object
-    additionalProperties: false
-    required: [kind, subject, source_idempotency_key, source_operation_fingerprint, preimage, automatic, never_delete_or_archive, rollback_fingerprint]
-    properties:
-      kind: {enum: [mark_setup_incomplete, restore_preimage]}
-      subject: {type: string, minLength: 1}
-      source_idempotency_key: {type: string, minLength: 1}
-      source_operation_fingerprint: {type: string, minLength: 1}
-      preimage: {type: object}
-      automatic: {const: false}
-      never_delete_or_archive: {const: true}
-      rollback_fingerprint: {type: string, minLength: 1}
-  OnboardingSummary:
-    type: object
-    additionalProperties: false
-    required: [project_identity, capability, reused, created, unchanged, held, active_navigation, historical_references, dirty_state, next_human_action]
-    properties:
-      project_identity: {type: object}
-      capability: {enum: [complete, partial, unavailable, privacy_held]}
-      reused: {type: array}
-      created: {type: array}
-      unchanged: {type: array}
-      held: {type: array}
-      active_navigation: {type: object}
-      historical_references: {type: array}
-      dirty_state: {type: object}
-      next_human_action: {type: string, minLength: 1}
-      projections: {type: object}
+      operation_fingerprint: {type: string, pattern: "^sha256:[0-9a-f]{64}$"}
   OperationReceipt:
     type: object
     additionalProperties: false
     required: [idempotency_key, status]
     properties:
       idempotency_key: {type: string, minLength: 1}
-      status: {enum: [applied, failed, not_attempted]}
+      status: {enum: [applied, failed, not_attempted, setup_pending]}
       receipt_ref: {type: string, minLength: 1}
       operation_fingerprint: {type: string, minLength: 1}
       result_ref: {type: string, minLength: 1}
-    allOf:
-      - if:
-          properties:
-            status: {enum: [applied, failed]}
-        then:
-          required: [receipt_ref, operation_fingerprint]
-      - if:
-          properties:
-            status: {const: applied}
-        then:
-          required: [result_ref]
+      pending_task_id: {type: string, minLength: 1}
+      evidence: {type: object}
+  OnboardingSummary:
+    type: object
+    additionalProperties: false
+    required: [project_identity, capability, reuse_policy, roles, held, role_hub, historical_references, dirty_state, work_assigned, private_history_scanned, duplicate_create_allowed, native_onboarding_receipt, next_human_action]
+    properties:
+      project_identity: {type: object}
+      capability: {enum: [complete, unavailable]}
+      reuse_policy: {enum: [fresh_only, reuse_allowed, null]}
+      roles:
+        type: object
+        additionalProperties: false
+        required: [Coordinator, Durable Architect]
+        properties:
+          Coordinator: {$ref: "#/$defs/RoleState"}
+          Durable Architect: {$ref: "#/$defs/RoleState"}
+      held:
+        type: array
+        items: {type: string}
+      role_hub: {type: object}
+      historical_references: {type: array, maxItems: 0}
+      dirty_state: {type: object}
+      work_assigned: {const: false}
+      private_history_scanned: {const: false}
+      duplicate_create_allowed: {const: false}
+      native_onboarding_receipt: {type: [object, "null"]}
+      next_human_action: {type: string, minLength: 1}
+  RoleState:
+    type: object
+    additionalProperties: false
+    required: [accepted, initialized, acknowledged, ready]
+    properties:
+      accepted: {type: boolean}
+      initialized: {type: boolean}
+      acknowledged: {type: [boolean, string]}
+      ready: {type: boolean}

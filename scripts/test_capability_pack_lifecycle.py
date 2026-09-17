@@ -249,7 +249,7 @@ def main() -> int:
         newer_version = copy_optional_variant(
             base,
             "newer-version-pack",
-            {"version: 0.5.0": "version: 0.5.1"},
+            {"version: 0.6.0": "version: 0.6.1"},
         )
         errors.extend(
             expect(

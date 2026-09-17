@@ -54,6 +54,17 @@ Role Automation Planner v15。详见[实际交付回执](https://github.com/farm
 状态回读；只有计划不足以证明已经就绪。当前 Core 版本支持的确切接口见
 [onboarding workflow](../workflows/onboard-bounded-collaboration.md)。
 
+面向人的请求应保持简短，例如：“hydrate 当前 saved project，然后用 `fresh_only`
+初始化 bounded collaboration，并让两个角色握手。”Role Automation Planner 负责补全
+协议细节。`fresh_only` 不读取、复用、改名或归档旧 task；它只新建 Coordinator 与
+Durable Architect。创建返回的 pending task ID 不是 `threadId`。如果公开能力无法解析，
+必须以 `thread_id_unresolved` HOLD 停止，不能扫描私有 session，也不能重复创建。
+
+两个真实 `threadId` 都完成 owner readback 后，才可执行明确请求的可选握手。握手由
+一个执行者统一负责，双方使用同一 token、显式 `reply_to_thread_id` 和新的 wait cursor。
+最终 `NativeOnboardingReceipt` 分开记录 accepted、initialized、acknowledged、ready；
+它只证明初始化，不分配 Work，也不授予 scheduler 或 GitHub 权限。
+
 如果 preflight 返回 `owner_unavailable`，不要借用其他项目的 ledger、试探性创建
 角色，或反复重跑同一检查。应先确定缺失的责任组件或前置条件，再走获准的准备路径。
 这不妨碍普通的 GitHub issue 和 PR 工作。同样，安装 skill 不等于完成项目 onboarding，
