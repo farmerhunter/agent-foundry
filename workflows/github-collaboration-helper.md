@@ -49,6 +49,24 @@ Useful smoke commands:
 ~/.agent-foundry/bin/agent-foundry-github-collab permission-smoke agent-label
 ```
 
+`activation-report` accepts two bounded guidance layouts independently for the
+generated and installed Codex skills. Legacy skills pass when all three
+top-level anchors (`activation evidence`, `target runtime`, and `user-facing
+activation instructions`) remain inline. Intent-routed skills pass only when
+their own `SKILL.md` explicitly routes `COLLAB-015` to
+`references/COLLAB-015.md` and that same skill-local, non-symlink reference
+retains the activation/pending, target-environment/smoke-path, and user-facing
+enablement obligations. The report does not search another skill, Core, Vault,
+or a parent directory for substitute evidence. Its `required_text_present`
+field continues to describe top-level text only; routed evidence is identified
+separately by `guidance_mode`, `evidence_paths`, `checks`, and `problems`.
+
+An `ok` activation report proves only this static launcher, workflow, routing,
+and guidance inspection. It does not prove generated or installed content is
+fresh, every enabled target was installed, a model loaded the skill, or a real
+user completed the documented trial. Use publish manifests, per-target install
+receipts/status, and an adopter smoke or explicit follow-up for those claims.
+
 The last command must fail closed because `agent-label` mutates scheduler
 ownership and is outside AF11 activation scope.
 
