@@ -161,6 +161,15 @@ def main() -> int:
         id_only_generated = base / "id-only-generated-adapters"
         missing_generated = base / "missing-generated"
         shutil.copytree(real_vault, temp_vault)
+        fixture_root = ROOT / "fixtures" / "capability-packs" / "optional-multi-agent" / "records"
+        shutil.copy2(
+            fixture_root / "assets" / "skills" / "ASSET-COLLAB-002-role-automation-planner.asset.yaml",
+            temp_vault / "assets" / "skills" / "ASSET-COLLAB-002-role-automation-planner.asset.yaml",
+        )
+        shutil.copy2(
+            fixture_root / "practices" / "agent-collaboration" / "COLLAB-017-onboard-bounded-project-collaboration.md",
+            temp_vault / "practices" / "agent-collaboration" / "COLLAB-017-onboard-bounded-project-collaboration.md",
+        )
         promote_asset_collab_002(temp_vault)
 
         core_quality = run(
@@ -509,14 +518,19 @@ def main() -> int:
                 ]:
                     if expected not in text:
                         errors.append(f"selected-output-promoted-asset: trae generated SKILL.md missing {expected}")
-            if not routed:
-                for expected in [
-                    "rehydration step from durable sources",
-                    "transition gate it is satisfying",
-                    "target role to rehydrate durable sources",
-                ]:
-                    if expected not in text:
-                        errors.append(f"selected-output-promoted-asset: {name} generated SKILL.md missing {expected}")
+            for expected in [
+                "create_thread",
+                "setup_pending",
+                "fresh_only",
+                "thread_id_unresolved",
+                "reply_to_thread_id",
+                "One onboarding executor owns both sends and verification",
+                "carry the wait_threads cursor forward",
+                "do not scan private sessions, databases or transcripts",
+                "Accepted creation, initialized owner readback, peer acknowledgement and ready are distinct states",
+            ]:
+                if expected not in text:
+                    errors.append(f"selected-output-promoted-asset: {name} generated SKILL.md missing {expected}")
         generated_text = "\n".join(path.read_text(encoding="utf-8") for path in generated.rglob("*") if path.is_file())
         if "ASSET-COLLAB-002" not in generated_text:
             errors.append("selected-output-promoted-asset: generated output missing ASSET-COLLAB-002")

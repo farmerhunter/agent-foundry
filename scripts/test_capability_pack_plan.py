@@ -579,7 +579,7 @@ def main() -> int:
         write_deployed_index(
             vault,
             "pack.multi-agent.optional",
-            "0.5.0",
+            "0.6.0",
             "0" * 64,
             "COLLAB-001",
             "",

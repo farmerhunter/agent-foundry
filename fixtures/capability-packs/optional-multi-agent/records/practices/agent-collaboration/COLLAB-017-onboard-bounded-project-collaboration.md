@@ -4,10 +4,10 @@ title: Onboard a bounded collaboration project
 domain: agent-collaboration
 type: playbook
 status: active
-version: 5
+version: 6
 created: 2026-08-05
-updated: 2026-08-27
-tags: [agent-collaboration, onboarding, bounded-collaboration, logical-role-directory, privacy, human-handoff, adaptive-isolation]
+updated: 2026-09-18
+tags: [agent-collaboration, onboarding, bounded-collaboration, logical-role-directory, privacy, human-handoff, adaptive-isolation, pending-identity, fresh-only, peer-handshake]
 aliases:
   - COLLAB-017
   - bounded project collaboration onboarding
@@ -19,7 +19,7 @@ aliases:
 related: [COLLAB-016, COLLAB-001, COLLAB-002, COLLAB-009, COLLAB-011, COLLAB-013]
 applies_when: A project explicitly asks for one-time preparation to use bounded multi-agent collaboration by default.
 review_required: true
-provenance: AF18 #497/#500 and #515; Human-approved canonical onboarding apply plus successful metadata-only Codex host dogfood; #548 owner-composed public runtime preflight boundary; v5 adds forward-only Adaptive Isolation adoption from Agent Foundry #568.
+provenance: AF18 #497/#500 and #515; Human-approved canonical onboarding apply plus successful metadata-only Codex host dogfood; #548 owner-composed public runtime preflight boundary; v5 adds forward-only Adaptive Isolation adoption from Agent Foundry #568; v6 harvests fresh-only pending-identity and peer-handshake failure evidence from 2026-09-17 native onboarding dogfood.
 ---
 
 ## Principle
@@ -37,6 +37,9 @@ Onboarding prepares the two durable coordination roles that have ongoing respons
 - Accept only explicit onboarding intent. Run a read-only preflight and produce a plan, summary, or fail-closed hold.
 - Reuse or propose fresh deterministic Coordinator and Durable Architect role records only when identity and capability are unambiguous. Legacy, duplicate, ambiguous, missing-capability, privacy, dirty-preservation, partial-operation, or rollback-incomplete states must hold with the next Human action.
 - When native apply is explicitly authorized, materialize or reuse only Coordinator and Durable Architect; set or verify each requested title only after a preimage check, then read back the same objects. Treat a successful receipt as host metadata proof, not RoleHub activation.
+- A pending creation handle is not a durable role identity. Do not message peers or claim initialization until the public owner surface resolves and reads back the final identity. If no public capability can resolve a pending handle, return a typed HOLD and do not repeat creation.
+- Make the reuse policy explicit. Under `fresh_only`, do not inspect, read, reuse, rename or archive historical role sessions; create exactly the two requested durable roles once and leave all old state untouched. A `reuse_allowed` path may inspect only the public owner surface and must hold on ambiguity.
+- A peer handshake is optional post-onboarding proof when explicitly requested. It must bind both final identities and one token through explicit reply targets and fresh readback. It is not scheduler, GitHub, Work-dispatch or merge authority.
 - Keep RoleHub logical. Derive any role-directory or front-door projection from owner receipts and scheduler/Work state. Do not create a native RoleHub thread or use one as scheduler, controller, authority, telemetry store, or readiness evidence.
 - Treat a pre-existing RoleHub-titled thread as non-authoritative metadata. Do not adopt, rename, delete, or use it to satisfy readiness.
 - Until matching owner-composed runtime evidence is integrated and installed, report the native onboarding path as unavailable or held; do not fall back to the old three-thread claim.
@@ -45,7 +48,7 @@ Onboarding prepares the two durable coordination roles that have ongoing respons
 - Record `adaptive_isolation` as the repository's forward-only default workspace policy for new bounded Work. Return `enabled`, `enabled_with_existing_state`, or a typed `held` result; do not require the user to select worktree paths.
 - Treat existing branches and worktrees as separate inventory. Onboarding does not delete, rewrite, adopt, or claim cleanup of historical state.
 - Bind new writable Work to one owner and one writable task branch/worktree. Delegate workspace selection and terminal reclamation to `COLLAB-009`, `COLLAB-011`, and `COLLAB-013`; do not create a second scheduler, branch authority, workspace manager, or daemon.
-- Native create, rename, link, navigate, delete, archive, history scan, migration, and hidden registry or Vault writes remain separately bounded operations. A separately approved adapter-owned plan/apply gate is required for native operations; this practice covers only the minimal create/reuse/name/readback proof.
+- Native create, reuse, rename, link, navigate, delete, archive, history scan, migration, and hidden registry or Vault writes remain separately bounded operations. A separately approved adapter-owned plan/apply gate is required for native operations; this practice covers only minimal create/reuse and owner-readback proof. Fresh-only onboarding authorizes none of the historical-state operations.
 - Preserve project history and dirty changes. Do not retain raw transcripts, prompts, tool output, identities, secrets, or other private session content in onboarding records.
 - Treat the OnboardingSummary as a handoff, not proof that native operations succeeded. It must name the plan, holds, Human action, evidence, and residual risk.
 
@@ -54,7 +57,7 @@ Onboarding prepares the two durable coordination roles that have ongoing respons
 - Tier: task_router
 - Phases: explicit onboarding intake, public runtime-composition preflight, plan handoff, Human review
 - Signals: `开启多agent协作`, project requests one-time collaboration setup, missing durable Coordinator/Architect role records, onboarding hold
-- Evidence: owner-backed project and scheduler/Work-root preflight, deterministic plan, OnboardingSummary, repository workspace-policy result, and any separately authorized native-operation receipt with operation states, readback, fallback, and privacy-safe metadata only
+- Evidence: owner-backed project and scheduler/Work-root preflight, deterministic plan, OnboardingSummary, repository workspace-policy result, and any separately authorized native-operation receipt with accepted, initialized, optional acknowledged and ready states, readback, fallback, and privacy-safe metadata only
 
 ## Watch Out For
 
@@ -62,6 +65,7 @@ Onboarding prepares the two durable coordination roles that have ongoing respons
 - The public runtime-composition preflight is not native completion. Native topology apply remains a separate trusted, in-process permit-bound operation with owner readback; a missing, stale, or unavailable owner state must remain a typed hold.
 - A plan or summary is not an active collaboration session. Daily behavior starts only after the separately authorized native apply and target-project readback.
 - Do not silently repair legacy or ambiguous state; hold and name the next Human decision.
+- Do not turn a pending handle into an identity by scanning private sessions, databases or transcripts. Do not create a replacement merely because public resolution is unavailable.
 
 ## Example
 

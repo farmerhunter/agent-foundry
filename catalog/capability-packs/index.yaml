@@ -27,9 +27,9 @@ entries:
     title: Optional Multi-Agent Collaboration Pack
     channel: official
     catalog_status: available
-    latest_version: 0.5.0
+    latest_version: 0.6.0
     manifest_path: fixtures/capability-packs/optional-multi-agent/manifest.yaml
-    manifest_sha256: fe815d1c20758013009670d50d6d57c805cca724ea8f2fbf767d09b873395340
+    manifest_sha256: 9a8e743c0763429d4b3a2288826872920106341f028cae50efdb416fd5ba8eed
     compatibility_summary: "Core schema 1; Vault layout [1]; bootstrap required; selected Vault review required."
     compatibility_metadata:
       core_schema_version_min: 1

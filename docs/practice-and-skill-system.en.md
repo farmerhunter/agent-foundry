@@ -69,6 +69,20 @@ a plan alone does not establish readiness. See the
 [onboarding workflow](../workflows/onboard-bounded-collaboration.md) for the exact
 supported interface in your selected Core version.
 
+Keep the human request short, for example: “Hydrate the current saved project,
+run `fresh_only` bounded-collaboration onboarding, and let the two roles
+handshake.” Role Automation Planner supplies the protocol. `fresh_only` does not
+read, reuse, rename or archive old tasks; it creates only Coordinator and Durable
+Architect. A pending task ID is not a `threadId`. If public capabilities cannot
+resolve it, stop with `thread_id_unresolved` HOLD without private-session scans or
+duplicate creation.
+
+Only after both real `threadId` values pass owner readback may one executor run
+the optional requested handshake, using one token, explicit
+`reply_to_thread_id`, and fresh wait cursors. `NativeOnboardingReceipt` keeps
+accepted, initialized, acknowledged and ready distinct. It proves initialization
+only; it assigns no Work and grants no scheduler or GitHub authority.
+
 If preflight reports `owner_unavailable`, do not borrow another project's ledger,
 create roles speculatively or repeatedly rerun the same check. Establish which
 owner prerequisite is missing and use the authorized setup path. This condition

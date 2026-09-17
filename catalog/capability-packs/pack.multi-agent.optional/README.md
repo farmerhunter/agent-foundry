@@ -6,7 +6,7 @@
 bounded collaboration 与 role-dispatch 指导。它不是 scheduler、runtime installer 或
 自动项目管理器。
 
-## 0.5.0 实际内容
+## 0.6.0 实际内容
 
 旧 0.4.0 虽然描述了大量能力，实际只携带两个示例 candidate。0.5.0 用当前已验收的真实
 内容替换这种占位关系：
@@ -19,6 +19,10 @@ bounded collaboration 与 role-dispatch 指导。它不是 scheduler、runtime i
 `META-004`、`META-005`、`GOV-002`、`GOV-004`、`RUNTIME-001` 和
 `RUNTIME-003` 已由必需的 bootstrap pack 提供，因此不在 optional pack 中重复。
 本包没有 executable payload。
+
+0.6.0 更新 native onboarding：`fresh_only` 不读取或修改旧 task；pending ID 无法经
+公开能力解析时 HOLD；两个真实 `threadId` 完成 owner readback 后，才可由单一执行者
+进行显式 reply target、同 token、fresh cursor 的可选握手。
 
 这些内容支持普通 Issue/PR 交付、durable handoff、lean Execution Contract、review、
 Epic/branch/workspace 判断，以及明确请求时的 role dispatch/onboarding 规划。它不会凭
@@ -61,7 +65,9 @@ python3 scripts/update_capability_pack.py --restore <backup-path> --vault-root <
 
 ## English summary
 
-Version 0.5.0 replaces two illustrative candidates with 24 accepted practice
+Version 0.6.0 retains the 0.5.0 accepted member set and updates native onboarding
+for fresh-only creation, fail-closed pending identity, public owner readback and
+an optional token-bound peer handshake. Version 0.5.0 replaced two illustrative candidates with 24 accepted practice
 records and the two current collaboration assets. Bootstrap owns six shared
 dependencies. Fresh imports remain `proposed`; no runtime or generated output is
 activated. The bounded update path requires a newer version, stops on touched

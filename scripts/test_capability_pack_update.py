@@ -518,7 +518,7 @@ def main() -> int:
                 "legacy-update-apply",
                 update_pack(OPTIONAL_PACK, legacy_vault, apply=True, backup_root=legacy_backup),
                 True,
-                "to_version: 0.5.0",
+                "to_version: 0.6.0",
             )
         )
         current_practice = legacy_vault / "practices" / "agent-collaboration" / "COLLAB-001-issue-code-work-uses-prs.md"
@@ -531,7 +531,7 @@ def main() -> int:
             errors.append("legacy-update-apply: legacy candidate evidence changed")
         errors.extend(expect("legacy-restore", restore_pack(legacy_backup, legacy_vault, apply=True), True, "status: restored"))
         if current_practice.exists() or current_asset.exists():
-            errors.append("legacy-restore: new 0.5.0 members remain after restore")
+            errors.append("legacy-restore: new 0.6.0 members remain after restore")
         if legacy_hashes != (sha256(legacy_practice), sha256(legacy_asset)):
             errors.append("legacy-restore: legacy candidate evidence changed")
         drift_backup = base / "legacy-drift-backup"

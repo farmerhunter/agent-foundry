@@ -2,10 +2,10 @@ id: ASSET-COLLAB-002
 title: Role Dispatch and Automation Planner
 asset_type: skill
 status: active
-version: 15
+version: 16
 created: 2026-06-10
-updated: 2026-08-31
-purpose: Prepare bounded role-session dispatch and explicitly requested recurring automation using current runtime capabilities.
+updated: 2026-09-18
+purpose: Prepare bounded role-session dispatch, fresh native onboarding, and explicitly requested recurring automation using current runtime capabilities.
 discovery_description: "Use for explicit role dispatch, role-session setup or recurring agent automation. Not for ordinary Issue/PR delivery, Project cleanup or all architecture tasks; those remain with their existing owners."
 responsibility: Bind a requested role operation to existing Work authority and available session/automation tools; prepare the minimal prompt, runtime mapping and honest dispatch handoff.
 non_responsibility: Does not grant execution authority, own GitHub delivery policy, perform domain work, activate canonical content, change private runtime/config, merge main or close Epics.
@@ -14,6 +14,7 @@ inputs:
   - Current repository policy, Work/branch/writer binding and current session tool availability
   - Recurrence only when requested, with a user schedule or an explicitly requested schedule recommendation
   - Optional source task callback and already-known target role session
+  - For native onboarding, a saved project binding, fresh_only or reuse_allowed policy, and whether a peer handshake was requested
 capability_model:
   durable_scheduler_state:
     portability: portable
@@ -33,8 +34,11 @@ capability_model:
   live_thread_dispatch:
     portability: codex_app_only
     mechanisms:
+      - list_projects
       - list_threads
+      - create_thread
       - read_thread
+      - wait_threads
       - send_message_to_thread
     availability_note: Treat these as current-session tool-surface capabilities. They may be visible in one Codex thread or launch mode and absent in another.
   subagent_dispatch:
@@ -57,7 +61,9 @@ capability_model:
       - external scheduler adapters such as cron, launchd, GitHub Actions, or manual prompts for non-Codex runtimes
 runtime_capability_boundaries:
   codex_only:
+    - Resolving saved projects with list_projects and creating user-owned role tasks with create_thread.
     - Inspecting existing Codex app threads with list_threads/read_thread.
+    - Waiting on known real thread IDs with wait_threads and carrying forward its cursor.
     - Sending prompts into another live Codex thread with send_message_to_thread.
     - Spawning bounded subagents when existing role-thread dispatch is unavailable or unsuitable.
     - Creating or updating Codex heartbeat and cron automations with automation_update.
@@ -97,12 +103,17 @@ process:
   - Preserve durable GitHub state before dispatch. Use the repo's helper fast path when present; delegate Project reconciliation or issue-policy repair to Agent Collaboration rather than turning this prompt task into a scheduler project.
   - When dispatch is authorized and the current runtime permits it, use the exposed tool and report acceptance or failure. A portable prompt is not a live call; tool acceptance is not Work completion. Return a concise durable result link and non-authoritative source callback when requested.
   - For recurrence only, resolve the user schedule and runtime mapping; preserve unrelated existing fields. Prefer a thread heartbeat for follow-up roles when supported, and workspace mode from the writable Work facts rather than creating per-role worktrees.
-  - For explicit onboarding plans only, use COLLAB-017 and available owner surfaces. Coordinator and Durable Architect are the default persistent roles; RoleHub is only a logical read-only view, Work roles stay scoped, and two initial roles do not cap future project threads. A prompt cannot prove native readiness.
+  - For explicit native onboarding, use COLLAB-017 and choose exactly one policy: fresh_only creates one new Coordinator and one new Durable Architect without listing, reading, reusing, renaming or archiving old tasks; reuse_allowed may inspect only public task summaries before selecting an unambiguous owner. RoleHub stays a logical read-only view and is never created as a task.
+  - Resolve the saved project with list_projects before create_thread. Treat a returned threadId as the durable identity and a clientThreadId or other pending task ID only as setup_pending. Resolve pending setup only through a public capability; if no public resolver exists, return thread_id_unresolved HOLD, do not scan private sessions, databases or transcripts, and do not repeat create_thread.
+  - Initialize each new role with compact RoleSessionInit/v1 metadata: project identity, role, initialization_only=true, no Work assignment, peer role, onboarding token and required public owner readback. Accepted creation, initialized owner readback, peer acknowledgement and ready are distinct states.
+  - After both real thread IDs have public owner readback, optionally perform PeerHandshake/v1 when requested. One onboarding executor owns both sends and verification; use the same token, set explicit reply_to_thread_id to the peer's real thread ID, and carry the wait_threads cursor forward so an old completed turn cannot satisfy the handshake.
+  - Finish native onboarding only with a NativeOnboardingReceipt naming both real thread IDs, accepted/initialized/acknowledged/ready state, handshake status, public evidence and any hold. This receipt proves initialization only; it grants no Work, scheduler, GitHub or merge authority.
   - For Trae-specific plans only, keep shared Skills as the default; use approved isolated subagent prompts or Single Chat fallback, not ambient per-role rules. Do not write private application state or unsolicited summary artifacts.
   - On a missing external prerequisite, record one resume condition and hold without polling or inventing substitute Work. Preserve privacy-safe evidence and all real Human gates; defer self-updating practices/runtime to Practice Harvester.
 outputs:
   - Minimal role/session/automation prompt with owner, authority, current capability and stop condition
   - Actual dispatch result or explicit portable fallback, plus durable next-owner handoff
+  - NativeOnboardingReceipt or a typed setup_pending/thread_id_unresolved HOLD with no duplicate creation
 canonical_practices:
   - META-004
   - META-005
@@ -164,6 +175,7 @@ usage_triggers:
   - Prepare or initialize a role-session prompt
   - Plan an explicitly requested agent reminder or recurring automation
   - Map an approved role workflow to another runtime
+  - Fresh native Coordinator and Durable Architect onboarding
 success_criteria:
   - An ordinary PR request does not trigger role automation; dispatch requests consume the Work contract without loading Agent Collaboration and every reference again.
   - Existing suitable sessions are preferred; current tool availability, actual dispatch and completion are reported separately.
@@ -171,6 +183,9 @@ success_criteria:
   - Prompts preserve current scope, holds, one writer, dependencies and Human gates; no runtime-enforcement or native-readiness claim comes from prompt text.
   - GitHub remains durable handoff authority; callbacks are notifications and portable fallbacks are labelled.
   - No native RoleHub requirement, private runtime-state write, automatic Harvest/activation or unintended broad queue drain is introduced.
+  - fresh_only never reads, reuses, renames or archives old tasks; unresolved pending setup holds without private scanning or duplicate create_thread calls.
+  - A requested handshake uses one owner, the same token, explicit reply_to_thread_id and cursor-aware readback after both real thread IDs are initialized.
+  - Native readiness is reported only by a NativeOnboardingReceipt that separates accepted, initialized, acknowledged and ready.
 review_cadence: monthly
 review_after_days: 60
-evidence_summary: "#576 proposed narrowing of dispatch/session/recurrence ownership. Existing capability/portability declarations and practice membership are retained; delivery and lifecycle policy remain with their canonical owners."
+evidence_summary: "#576 narrowed dispatch/session/recurrence ownership. v16 harvests native onboarding dogfood where pending IDs, private-session recovery, duplicate repair and stale wait results made a prompt-heavy flow unreliable; delivery and lifecycle policy remain with their canonical owners."
