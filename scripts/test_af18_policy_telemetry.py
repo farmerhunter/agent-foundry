@@ -53,6 +53,26 @@ def main() -> int:
     base = receipt()
     normal = collector.collect_receipt(base, NOW)
     errors += expect("unavailable-normal-receipt", normal["observations"]["total_context_tokens"]["value"] is None and normal["observations"]["context_age_hours"]["provenance"] == "unavailable" and normal["mutation_performed"] is False, normal)
+    current = receipt()
+    current["policy"]["version"] = "v1"
+    current["route"]["adapter_mapping"]["model_id"] = "gpt-6.1-sol"
+    current_event = collector.collect_receipt(current, NOW)
+    errors += expect("current-v1-normal-receipt", current_event["policy"]["version"] == "v1" and current_event["route"]["adapter_mapping"]["model_id"] == "gpt-6.1-sol", current_event)
+    current_with_legacy_model = copy.deepcopy(current)
+    current_with_legacy_model["route"]["adapter_mapping"]["model_id"] = "gpt-5.6-terra"
+    errors += expect("v1-rejects-legacy-model", holds(current_with_legacy_model, "route_model_mapping_mismatch"), current_with_legacy_model)
+    current_economy = receipt()
+    current_economy["policy"].update({"version": "v1", "profile": "economy"})
+    current_economy["work"]["root_budget_tokens"] = 60000
+    current_economy["route"] = {"kind": "default", "logical_model_class": "cost_optimized", "adapter_mapping": {"adapter": "codex", "model_id": "gpt-6-luna", "reasoning": "medium"}, "override_evidence": None}
+    current_economy["limits"] = {"context_tokens": 12000, "context_age_hours": 12, "context_turns": 6, "profile_ceiling_tokens": 60000, "effective_work_cap_tokens": 60000}
+    errors += expect("v1-economy-medium-default", collector.collect_receipt(current_economy, NOW)["route"]["kind"] == "default", current_economy)
+    current_economy_low = copy.deepcopy(current_economy)
+    current_economy_low["route"] = {"kind": "permitted_work_reasoned_override", "logical_model_class": "cost_optimized", "adapter_mapping": {"adapter": "codex", "model_id": "gpt-6-luna", "reasoning": "low"}, "override_evidence": {"classification": "mechanical_work", "risk_level": "low", "reason": "fixed fixture", "fixed_input_output": True, "verification_oracle_present": True, "requires_judgment": False, "external_side_effect": False, "failure_rerunnable": True}}
+    errors += expect("v1-economy-low-mechanical-override", collector.collect_receipt(current_economy_low, NOW)["route"]["kind"] == "permitted_work_reasoned_override", current_economy_low)
+    current_economy_low_bad = copy.deepcopy(current_economy_low)
+    current_economy_low_bad["route"]["override_evidence"]["verification_oracle_present"] = False
+    errors += expect("v1-economy-low-invalid-evidence-holds", holds(current_economy_low_bad, "invalid_override_evidence"), current_economy_low_bad)
     held = receipt()
     held["capability_validation"] = {"status": "held", "allowlist_compliant": False, "risk_compliant": True, "privacy_compliant": True, "compatibility_hold": False, "safety_hold": True}
     held_event = collector.collect_receipt(held, NOW)

@@ -21,7 +21,7 @@ WORK_TERMINAL_HANDOFF_VERSION = "WorkTerminalLearningSignalHandoff-v1"
 ROLE_LIFECYCLE_VERSION = "af18-role-lifecycle-v1"
 NORMAL_WORK_RESOURCES = {
     "profile": "normal",
-    "model": "gpt-5.6-terra",
+    "model": "gpt-6.1-sol",
     "reasoning": "medium",
     "root_budget_tokens": 120000,
     "max_age_hours": 24,
