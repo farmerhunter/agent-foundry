@@ -12,10 +12,17 @@ from typing import Any
 
 
 VERSION = "af18-policy-telemetry-v1"
-PROFILE_TABLE = {
-    "economy": ("cost_optimized", "gpt-5.6-luna", "low", 12000, 12, 6, 60000),
-    "normal": ("general", "gpt-5.6-terra", "medium", 24000, 24, 12, 150000),
-    "performance": ("high_capability", "gpt-5.6-sol", "medium", 48000, 24, 20, 300000),
+PROFILE_TABLES = {
+    "v0": {
+        "economy": ("cost_optimized", "gpt-5.6-luna", "low", 12000, 12, 6, 60000),
+        "normal": ("general", "gpt-5.6-terra", "medium", 24000, 24, 12, 150000),
+        "performance": ("high_capability", "gpt-5.6-sol", "medium", 48000, 24, 20, 300000),
+    },
+    "v1": {
+        "economy": ("cost_optimized", "gpt-6-luna", "low", 12000, 12, 6, 60000),
+        "normal": ("general", "gpt-6.1-sol", "medium", 24000, 24, 12, 150000),
+        "performance": ("high_capability", "gpt-6-astra", "medium", 48000, 24, 20, 300000),
+    },
 }
 OVERRIDES = {
     ("economy", "cost_optimized", "medium"): "low_risk_multi_step_execution_or_test",
@@ -74,8 +81,8 @@ def scalar(value: Any, field: str, context_only: bool, trusted: bool) -> dict[st
     return item
 
 
-def validate_route(receipt: dict[str, Any], profile: str, route: dict[str, Any]) -> None:
-    logical, model_id, reasoning, *_ = PROFILE_TABLE[profile]
+def validate_route(receipt: dict[str, Any], profile: str, route: dict[str, Any], profile_table: dict[str, tuple[Any, ...]]) -> None:
+    logical, model_id, reasoning, *_ = profile_table[profile]
     require_keys(route, {"kind", "logical_model_class", "adapter_mapping", "override_evidence"}, {"kind", "logical_model_class", "adapter_mapping", "override_evidence"}, "route")
     mapping = require_keys(route["adapter_mapping"], {"adapter", "model_id", "reasoning"}, {"adapter", "model_id", "reasoning"}, "adapter_mapping")
     if mapping["adapter"] != "codex" or not isinstance(mapping["model_id"], str) or not isinstance(mapping["reasoning"], str):
@@ -127,10 +134,11 @@ def collect_receipt(receipt: dict[str, Any], now: dt.datetime, trusted_bindings:
         raise TelemetryError("missing_event_id")
     observed_at = parse_time(root["observed_at"], "observed_at")
     policy = require_keys(root["policy"], {"version", "profile", "compatibility_mode"}, {"version", "profile", "compatibility_mode"}, "policy")
-    if policy["version"] != "v0" or policy["profile"] not in PROFILE_TABLE or policy["compatibility_mode"] != "normal_profile":
+    profile_table = PROFILE_TABLES.get(policy["version"])
+    if profile_table is None or policy["profile"] not in profile_table or policy["compatibility_mode"] != "normal_profile":
         raise TelemetryError("unsupported_policy_profile")
     profile = policy["profile"]
-    logical, model_id, reasoning, context_tokens, age_hours, turns, ceiling = PROFILE_TABLE[profile]
+    logical, model_id, reasoning, context_tokens, age_hours, turns, ceiling = profile_table[profile]
     if now.astimezone(dt.timezone.utc) - observed_at > dt.timedelta(hours=age_hours) or observed_at > now.astimezone(dt.timezone.utc) + dt.timedelta(minutes=5):
         raise TelemetryError("stale_or_out_of_window_event")
     work = require_keys(root["work"], {"work_id", "task_classification", "root_budget_tokens"}, {"work_id", "task_classification", "root_budget_tokens"}, "work")
@@ -149,7 +157,7 @@ def collect_receipt(receipt: dict[str, Any], now: dt.datetime, trusted_bindings:
     producer = require_keys(root["producer"], {"producer_id", "receipt_anchor", "runtime_owned"}, {"producer_id", "receipt_anchor", "runtime_owned"}, "producer")
     if producer["runtime_owned"] is not False or not isinstance(producer["producer_id"], str) or not producer["producer_id"] or not isinstance(producer["receipt_anchor"], str) or not producer["receipt_anchor"]:
         raise TelemetryError("forged_or_malformed_producer")
-    validate_route(root, profile, root["route"])
+    validate_route(root, profile, root["route"], profile_table)
     if root["lifecycle_action"] not in {"completed", "validated", "reviewed", "held"}:
         raise TelemetryError("invalid_lifecycle_action")
     require_keys(root["outcome"], {"acceptance", "quality"}, {"acceptance", "quality"}, "outcome")

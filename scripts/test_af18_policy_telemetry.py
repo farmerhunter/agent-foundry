@@ -53,6 +53,14 @@ def main() -> int:
     base = receipt()
     normal = collector.collect_receipt(base, NOW)
     errors += expect("unavailable-normal-receipt", normal["observations"]["total_context_tokens"]["value"] is None and normal["observations"]["context_age_hours"]["provenance"] == "unavailable" and normal["mutation_performed"] is False, normal)
+    current = receipt()
+    current["policy"]["version"] = "v1"
+    current["route"]["adapter_mapping"]["model_id"] = "gpt-6.1-sol"
+    current_event = collector.collect_receipt(current, NOW)
+    errors += expect("current-v1-normal-receipt", current_event["policy"]["version"] == "v1" and current_event["route"]["adapter_mapping"]["model_id"] == "gpt-6.1-sol", current_event)
+    current_with_legacy_model = copy.deepcopy(current)
+    current_with_legacy_model["route"]["adapter_mapping"]["model_id"] = "gpt-5.6-terra"
+    errors += expect("v1-rejects-legacy-model", holds(current_with_legacy_model, "route_model_mapping_mismatch"), current_with_legacy_model)
     held = receipt()
     held["capability_validation"] = {"status": "held", "allowlist_compliant": False, "risk_compliant": True, "privacy_compliant": True, "compatibility_hold": False, "safety_hold": True}
     held_event = collector.collect_receipt(held, NOW)
