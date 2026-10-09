@@ -206,16 +206,31 @@ def effective_snapshot(policy: dict[str, Any], work: dict[str, Any]) -> dict[str
         override_allowed, override_stops, override_evidence = validate_override(work, profile_name, requested_pair)
         stops.extend(override_stops)
     controls = {"profile": profile_control, "logical_model": model, "reasoning": reasoning, "context_tokens": context}
-    output = hold_snapshot(policy, work_id, stops, controls)
-    output["effective_work_cap_tokens"] = min(root_budget, profile["work_ceiling_tokens"])
-    output["root_budget_tokens"] = root_budget
-    output["profile_ceiling_tokens"] = profile["work_ceiling_tokens"]
     adapter_model = profile["adapter_mapping"]["codex"]["model_id"]
     if override_allowed and requested_pair in PERMITTED_OVERRIDES:
         for override in policy["controlled_overrides"].values():
             if (override["logical_model"], override["reasoning"]) == requested_pair:
                 adapter_model = override["adapter_mapping"]["codex"]["model_id"]
                 break
+    if policy["policy_version"] == "v1":
+        capability = work.get("adapter_capability")
+        if not isinstance(capability, dict):
+            stops.append("adapter_model_availability_unknown")
+        else:
+            status = capability.get("status")
+            controls["adapter_model_availability"] = {"adapter": capability.get("adapter"), "model_id": capability.get("model_id"), "status": status}
+            if capability.get("adapter") != "codex" or capability.get("model_id") != adapter_model:
+                stops.append("adapter_model_binding_mismatch")
+            elif status == "unavailable":
+                stops.append("adapter_model_unavailable")
+            elif status == "unsupported":
+                stops.append("adapter_model_unsupported")
+            elif status != "available":
+                stops.append("adapter_model_availability_unknown")
+    output = hold_snapshot(policy, work_id, stops, controls)
+    output["effective_work_cap_tokens"] = min(root_budget, profile["work_ceiling_tokens"])
+    output["root_budget_tokens"] = root_budget
+    output["profile_ceiling_tokens"] = profile["work_ceiling_tokens"]
     output["adapter_metadata"] = {"adapter": "codex", "model_id": adapter_model}
     output["override_evidence"] = compact_override_evidence(override_evidence) if override_allowed and override_evidence else None
     return output

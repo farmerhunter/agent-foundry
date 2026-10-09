@@ -39,6 +39,10 @@ def work(**overrides: object) -> dict:
         "safety": {"allowlist_compliant": True, "risk_compliant": True, "privacy_compliant": True},
     }
     value.update(overrides)
+    profile = value.get("profile")
+    profile_name = profile if isinstance(profile, str) else "normal"
+    model_id = {"economy": "gpt-6-luna", "normal": "gpt-6.1-sol", "performance": "gpt-6-astra"}.get(profile_name, "gpt-6.1-sol")
+    value.setdefault("adapter_capability", {"adapter": "codex", "model_id": model_id, "status": "available"})
     return value
 
 
@@ -108,6 +112,15 @@ def main() -> int:
         errors += expect(f"unlisted-{label}-holds", held["route_decision"] == "hold_for_decision" and "human_attention_required_for_unlisted_model_or_effort" in held["stop_conditions"], held)
     unavailable = policy.effective_snapshot(source, work(requested_envelope={"logical_model": {"state": "unavailable"}}))
     errors += expect("unavailable-holds", unavailable["route_decision"] == "hold_for_decision", unavailable)
+    for profile_name, model_id, status, stop in (
+        ("economy", "gpt-6-luna", "unavailable", "adapter_model_unavailable"),
+        ("normal", "gpt-6.1-sol", "unsupported", "adapter_model_unsupported"),
+        ("performance", "gpt-6-astra", "unknown", "adapter_model_availability_unknown"),
+    ):
+        held_model = policy.effective_snapshot(source, work(profile=profile_name, adapter_capability={"adapter": "codex", "model_id": model_id, "status": status}))
+        errors += expect(f"{profile_name}-exact-model-{status}-holds", held_model["route_decision"] == "hold_for_decision" and stop in held_model["stop_conditions"] and held_model["adapter_metadata"]["model_id"] == model_id, held_model)
+    mismatched_model = policy.effective_snapshot(source, work(adapter_capability={"adapter": "codex", "model_id": "gpt-6-luna", "status": "available"}))
+    errors += expect("adapter-model-binding-mismatch-holds", mismatched_model["route_decision"] == "hold_for_decision" and "adapter_model_binding_mismatch" in mismatched_model["stop_conditions"] and mismatched_model["adapter_metadata"]["model_id"] == "gpt-6.1-sol", mismatched_model)
     unsafe = policy.effective_snapshot(source, work(safety={"allowlist_compliant": False, "risk_compliant": True, "privacy_compliant": True}))
     errors += expect("stricter-safety-prevails", "allowlist_not_confirmed" in unsafe["stop_conditions"], unsafe)
     risk = policy.effective_snapshot(source, work(safety={"allowlist_compliant": True, "risk_compliant": False, "privacy_compliant": True}))
