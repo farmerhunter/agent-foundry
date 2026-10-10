@@ -11,6 +11,7 @@ from pathlib import Path
 
 import plan_capability_pack as planner
 from deploy_capability_pack import (
+    deployment_status,
     deployed_record_text,
     destination_for as deploy_destination_for,
     read,
@@ -101,11 +102,16 @@ def metadata_text(
     for record in records:
         raw = by_id.get(record.item_id, {})
         deployed_sha = record.current_sha256
-        if record.outcome == "add":
+        if record.outcome in {"add", "update"}:
             deployed_sha = hashlib.sha256(
-                deployed_record_text(record.kind, read(record.source_path), manifest).encode("utf-8")
+                deployed_record_text(
+                    record.kind,
+                    read(record.source_path),
+                    manifest,
+                    by_id.get(record.item_id, {}).get("activation_default", ""),
+                ).encode("utf-8")
             ).hexdigest()
-        current_state = "unchanged" if record.outcome in {"add", "skip"} else "unknown"
+        current_state = "unchanged" if record.outcome in {"add", "update", "skip"} else "unknown"
         lines.extend(
             [
                 f"      - id: {record.item_id}",
@@ -141,7 +147,10 @@ def update_deployed_pack_index(
         print(f"pack metadata already present: {manifest.get('pack_id', '')}")
         return
     if state == "different":
-        raise SystemExit("Refusing to overwrite existing pack metadata with a different manifest hash; use #101 update flow")
+        raise SystemExit(
+            "Refusing to overwrite existing pack metadata with a different manifest hash; "
+            "use update_capability_pack.py"
+        )
     if path.exists():
         text = path.read_text(encoding="utf-8").rstrip() + "\n" + metadata_text(
             vault_root=vault_root,
@@ -162,10 +171,22 @@ def update_deployed_pack_index(
     write(path, text, apply)
 
 
-def apply_records(vault_root: Path, manifest: dict[str, str], records: list[planner.PlannedRecord], apply: bool) -> None:
+def apply_records(
+    vault_root: Path,
+    manifest: dict[str, str],
+    records_raw: list[dict[str, str]],
+    records: list[planner.PlannedRecord],
+    apply: bool,
+) -> None:
+    records_by_id = record_entry_by_id(records_raw)
     added = [record for record in records if record.outcome == "add" and record.import_action != "stage_only"]
     for record in added:
-        text = deployed_record_text(record.kind, read(record.source_path), manifest)
+        text = deployed_record_text(
+            record.kind,
+            read(record.source_path),
+            manifest,
+            records_by_id.get(record.item_id, {}).get("activation_default", ""),
+        )
         write(record.destination_path, text, apply)
 
     practice_adds = []
@@ -176,6 +197,8 @@ def apply_records(vault_root: Path, manifest: dict[str, str], records: list[plan
             raise SystemExit("; ".join(errors))
         if destination_path != record.destination_path:
             raise SystemExit(f"{record.item_id}: destination changed during apply planning")
+        raw = records_by_id.get(record.item_id, {})
+        index_entry["status"] = deployment_status(index_entry.get("status", ""), raw.get("activation_default", ""))
         if record.kind == "practice":
             practice_adds.append(index_entry)
         elif record.kind == "asset":
@@ -212,10 +235,10 @@ def apply_pack(core_root: Path, vault_root: Path, pack_root: Path, apply: bool) 
     metadata_state = existing_pack_metadata_state(vault_root, manifest.get("pack_id", ""), planner.manifest_hash(pack_root))
     if metadata_state == "different":
         print("Apply refused:")
-        print("- existing pack metadata has a different manifest hash; use #101 update flow")
+        print("- existing pack metadata has a different manifest hash; use update_capability_pack.py")
         return 1
 
-    apply_records(vault_root, manifest, records, apply)
+    apply_records(vault_root, manifest, records_raw, records, apply)
     update_deployed_pack_index(vault_root, pack_root, manifest, records_raw, records, apply)
     print("Apply summary:")
     print(f"added: {sum(1 for record in records if record.outcome == 'add')}")

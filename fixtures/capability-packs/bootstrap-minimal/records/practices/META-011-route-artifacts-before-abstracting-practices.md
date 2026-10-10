@@ -4,10 +4,10 @@ title: Route artifacts before abstracting practices
 domain: meta
 type: heuristic
 status: active
-version: 1
+version: 2
 created: 2026-06-08
-updated: 2026-06-08
-tags: [harvesting, artifact-routing, practice-governance, review]
+updated: 2026-08-10
+tags: [harvesting, artifact-routing, practice-governance, review, user-journey, scope]
 aliases:
   - META-011
   - route artifacts before practices
@@ -18,7 +18,7 @@ applies_when:
   - extracting lessons from session notes or handoff dumps
   - deciding whether a session insight belongs in practices
 review_required: false
-provenance: "Corrected harvest outcome from ChatGPT memory-system design and harvest discipline discussion; source context: docs/memory-system-handoff-dump.md."
+provenance: "Corrected harvest outcome from ChatGPT memory-system design and harvest discipline discussion; source context: docs/memory-system-handoff-dump.md. Extended after AF18 scope-drift review on 2026-08-10."
 ---
 
 ## Principle
@@ -36,6 +36,8 @@ Before abstracting a lesson, route the source artifact into one of these classes
 - evidence only;
 - design note;
 - research/reference material;
+
+For user-facing workflow lessons, route the end-to-end scenario separately from its implementation artifacts. A candidate record, cursor, index, storage layer, or adapter is not evidence that the user can complete the intended workflow; keep those artifacts as implementation evidence until the user journey is demonstrated.
 - project-local decision;
 - workflow update;
 - practice candidate;

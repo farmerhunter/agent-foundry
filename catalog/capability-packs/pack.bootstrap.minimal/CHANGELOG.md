@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.0
+
+- Refreshed `META-003`, `META-011`, `META-012`, `META-013`, and the sanitized
+  public `ASSET-META-001` snapshot from current reviewed canonical guidance.
+- Added direct Practice Harvester dependency `GOV-007`; bootstrap now has 26
+  members and still excludes optional collaboration content.
+- Removed repository-specific selected-Vault merge authority from the public
+  asset snapshot.
+- Added the supported newer-version update, exact private backup and
+  drift-checked restore path without implying generated/runtime activation.
+
 ## 0.2.1
 
 - Added AF13 external-skill import/reference baseline semantics to bootstrap.

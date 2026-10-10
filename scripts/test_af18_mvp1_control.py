@@ -397,7 +397,7 @@ def main() -> int:
         "issue": 459,
         "durable_anchor": "https://github.com/farmerhunter/agent-foundry/issues/459",
         "profile": "normal",
-        "model": "gpt-5.6-terra",
+        "model": "gpt-6.1-sol",
         "reasoning": "medium",
         "root_budget_tokens": 120000,
         "max_age_hours": 24,
@@ -502,13 +502,13 @@ def main() -> int:
         if category == "successor_failure":
             incident["recovery_attempts"] = 0
         if category == "escalation_failure":
-            incident.update({"requested_model": "gpt-5.6-terra", "effective_model": "gpt-5.6-terra", "requested_reasoning": "medium", "effective_reasoning": "medium"})
+            incident.update({"requested_model": "gpt-6.1-sol", "effective_model": "gpt-6.1-sol", "requested_reasoning": "medium", "effective_reasoning": "medium"})
         projected = planner.incident_projection({"incident": incident}, NOW)
         expect(f"incident-{category}-material", projected["valid"] is True and projected["decision"] == decision and projected["attention_summary"]["human_attention_required"] is True, projected)
         expect(f"incident-{category}-privacy-safe-receipt", forbidden_paths(projected["incident_receipt"]) == [], projected)
     unavailable_with_value = planner.incident_projection({"incident": {**incident_base, "category": "unavailable_observation", "observation": {"provenance": "unavailable", "value": 0}}}, NOW)
     expect("unavailable-incident-never-zero", "unavailable_observation_must_not_supply_value" in unavailable_with_value["stop_conditions"], unavailable_with_value)
-    silent_escalation = planner.incident_projection({"incident": {**incident_base, "category": "escalation_failure", "requested_model": "gpt-5.6-terra", "effective_model": "gpt-5.5", "requested_reasoning": "medium", "effective_reasoning": "low"}}, NOW)
+    silent_escalation = planner.incident_projection({"incident": {**incident_base, "category": "escalation_failure", "requested_model": "gpt-6.1-sol", "effective_model": "gpt-5.5", "requested_reasoning": "medium", "effective_reasoning": "low"}}, NOW)
     expect("incident-no-silent-model-effort-change", "silent_model_change_forbidden" in silent_escalation["stop_conditions"] and "silent_reasoning_change_forbidden" in silent_escalation["stop_conditions"], silent_escalation)
     private_incident = planner.incident_projection({"incident": {**incident_base, "category": "evidence_conflict", "prompt": "private"}}, NOW)
     expect("incident-privacy-holds", "privacy_exposure" in private_incident["stop_conditions"], private_incident)

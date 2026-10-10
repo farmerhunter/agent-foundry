@@ -1,5 +1,9 @@
 # Multi-Agent Collaboration Workflow
 
+角色、Work、权限与按需加载的用户说明，请先阅读
+[Practices 与 Skills 用户指南（中文）](practice-and-skill-system.md)；
+另附 [English edition](practice-and-skill-system.en.md)。
+
 This document describes Agent Foundry's role-based issue and PR workflow. It is
 an operating guide for humans and agents. Helper commands, schemas, and
 template details remain in `workflows/github-collaboration-helper.md` and
@@ -134,6 +138,22 @@ evidence, or durable scheduling outweighs coordination cost.
 **中文要点：** 标准流程是 intake -> design/contract -> implementation/evidence ->
 review -> architect acceptance/routing -> human gate when needed -> completion。
 低风险工作可以单线程完成；需要独立判断或 durable handoff 时再拆 role。
+
+## Lean Delivery Repair Budget
+
+The normal one-repair/one-re-review budget counts semantic repairs, not every edit used to make an unpublished checkpoint executable.
+
+| Finding | Mechanical only when | Route |
+| --- | --- | --- |
+| Syntax, import, cwd, `PYTHONPATH`, collection, fixture, runnable-doc command, validator false positive/negative | Outcome, owner, authority, public API, domain semantics, path family, dependencies, assertions, evidence meaning, and capability claim are unchanged. | Correct during unpublished bring-up, then require a green checkpoint. |
+| Ownership, authority, public API, currentness, receipt/Evidence truth, Mission transition, cancellation, retry, lifecycle, privacy/security, process/persistence, dependency, queue/manager, path family | Never mechanical. | Spend the one consolidated semantic repair, then independent re-review. |
+| Missing production caller, package export, canonical runnable doc, currentness validator, or path inventory exposed by repeated failures | The contract or closure audit was incomplete. | Stop the repair chain and return to Architect for rebaseline. |
+
+Mechanical correction cannot add skip, `xfail`, deselection, filtering, assertion weakening, substitute evidence, a new dependency, or a new path family. A green test run is necessary but not sufficient: ownership and evidence meaning must also be unchanged.
+
+The second substantive semantic finding triggers a clean rebaseline rather than another patch contract. Human review is not a generic fallback for test failures; use it only when a real Human-owned product, UX, privacy/security, destructive, live/runtime, distribution, or final-integration decision changes.
+
+**中文要点：** repair budget 约束的是语义和 authority 漂移，不是正常开发中的每一次机械修正。语法、import、测试收集等问题可以在 unpublished checkpoint 内修到 green；一旦暴露遗漏 caller/export/docs/path，或改变 owner、API、currentness、receipt、Mission、cancel/retry 等语义，就必须回到 Architect 或消耗一次 semantic repair。Human gate 只用于真正需要人的决定。
 
 ## Role Rules
 
@@ -396,42 +416,35 @@ AF17 and AF18 are completed pre-V2 enabling foundations already integrated into
 capabilities are consumed by V2 through ancestry; they are not ORCH milestones
 or active V2 completion work. AF19 follow-ups remain separately scoped.
 
-For a project that explicitly asks to set up bounded collaboration, use the
-public locator-only runtime bridge described in
-[`workflows/onboard-bounded-collaboration.md`](../workflows/onboard-bounded-collaboration.md).
-That RH1 path reads the project binding owner and scheduler/Work-root owner
-before it plans or verifies the durable Coordinator and Durable Architect pair.
-Its fresh default onboarding budget of at most two thread starts and two thread
-names is a per-operation safety budget, not a global thread limit. Existing
-unrelated conversations and later Work-scoped Implementer, Reviewer and Tester
-conversations remain allowed.
+### Native role initialization
 
-`scripts/plan_bounded_collaboration_onboarding.py` is now a legacy compatibility
-diagnostic/router only. A closed v1 request returns a read-only v2 result that
-points to the owner-composed bridge and requires fresh owner readback. It never
-creates, discovers, reuses, renames, links or navigates native threads; caller
-apply flags and operation receipts cannot establish readiness or authority.
-Unknown or privacy-sensitive input holds without echoing caller data.
+项目明确请求原生 bounded collaboration 时，使用
+[`workflows/onboard-bounded-collaboration.md`](../workflows/onboard-bounded-collaboration.md)
+中的当前公共 task 协议。`fresh_only` 创建 Coordinator 与 Durable Architect，
+不读取或认领历史 task；`reuse_allowed` 才允许检查公共摘要并复用唯一匹配角色。
+Implementer、Reviewer、Tester 和 Harvester 仍按 Work 需要创建。
 
-RoleHub is an optional logical read-only projection. Its presence, absence,
-title or adapter reference neither blocks nor satisfies native onboarding. The
-historically named RoleHub adapter and runner remain compatibility components,
-not a second native authority or a prerequisite for the normal path.
+`scripts/plan_bounded_collaboration_onboarding.py` 生成 side-effect-free native
+计划。pending/client task ID 只代表 `setup_pending`，不能冒充真实 `threadId`。
+公共 owner readback 验证两个角色后，按请求执行可选 peer handshake；
+`NativeOnboardingReceipt/v1` 分开记录 accepted、initialized、acknowledged 和 ready。
+该 receipt 只证明原生角色初始化，不证明 SQLite、scheduler 或跨设备 handoff。
+RoleHub 是可选逻辑只读投影，不是原生 task、authority 或 readiness prerequisite。
 
-### What counts as initialized
+### SQLite-backed local lifecycle
 
-For the first-use phrase **“开启多agent协作”**, repository contracts or prompts
-alone are not successful initialization. The result must name the bound project,
-say whether the durable Coordinator/Architect topology was reused, created or
-held, verify a durable scheduler/Work-root binding, and distinguish native role
-onboarding from repository-contract-only setup. If any part is missing or
-ambiguous, report a hold with one next action instead of `initialized`.
+SQLite 项目绑定、scheduler/Work-root 和 owner-composed completion 是独立能力。
+显式采用这条路径时，公共 locator-only
+`scripts/bounded_collaboration_runtime_bridge.py` 先读 project binding owner，
+再读 scheduler/Work-root owner；缺失或含糊的绑定返回 unavailable/HOLD。
+原生角色存在不能替代这些 readbacks，也不能触发自动初始化或修复。
 
-Two current candidate limitations make this explicit: [#548](https://github.com/farmerhunter/agent-foundry/issues/548)
-records an onboarding path that lacked durable role topology, while [#549](https://github.com/farmerhunter/agent-foundry/issues/549)
-records topology without a durable scheduler/Work root. They are separate
-Architect-owned fixes; users should not repair them by creating roles, scheduler
-state, or Work roots manually.
+旧 owner-composed `OnboardingCompletionReceipt` 继续只证明其绑定的
+project、scheduler/Work-root 与 topology，不替代新的 native-only receipt。
+[#548](https://github.com/farmerhunter/agent-foundry/issues/548) 和
+[#549](https://github.com/farmerhunter/agent-foundry/issues/549) 的修复已验收，
+但项目仍需自己的显式 onboarding/activation；真实跨设备证据留在
+[#556](https://github.com/farmerhunter/agent-foundry/issues/556)。
 
 ## Start Local Collaboration
 
