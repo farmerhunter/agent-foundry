@@ -31,6 +31,18 @@ class LocalCollaborationFrontDoorTests(unittest.TestCase):
         self.assertIn("### SQLite-backed local lifecycle", self.guide)
         self.assertNotIn("legacy compatibility", self.guide)
         self.assertNotIn("owner_composed_route_required", self.guide)
+        for filename, section, sqlite_lane in (
+            ("practice-and-skill-system.md", "### 为项目准备有边界的多 agent 协作", "#### 显式选择 SQLite local lifecycle"),
+            ("practice-and-skill-system.en.md", "### Prepare a project for bounded collaboration", "#### Explicit SQLite local lifecycle adoption"),
+        ):
+            text = (ROOT / "docs" / filename).read_text(encoding="utf-8")
+            native_section = text.split(section, 1)[1].split(sqlite_lane, 1)[0]
+            self.assertIn("saved project", native_section)
+            self.assertIn("create_thread_capability_unavailable", native_section)
+            self.assertIn("thread_id_unresolved", native_section)
+            self.assertIn("NativeOnboardingReceipt", native_section)
+            self.assertNotIn("owner_unavailable", native_section)
+            self.assertNotIn("owner-composed onboarding", native_section)
 
     def test_supported_owner_lanes_and_read_only_board_are_explicit(self):
         for module in (

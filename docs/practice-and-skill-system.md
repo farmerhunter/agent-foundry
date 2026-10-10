@@ -44,10 +44,10 @@ Role Automation Planner v15。详见[实际交付回执](https://github.com/farm
 每个 Work 都有目标、负责人、范围、验证证据和最终交接。采用是逐项目、面向未来的，
 不要求先迁移所有历史 issue 或清理所有旧 worktree。
 
-首次准备从检查项目绑定和真实协调状态开始。仓库文档写着“使用两个角色”，并不能
-证明原生角色或 scheduler 已经存在。如果当前版本提供由实际责任组件组合的 onboarding
-入口，其公开 preflight 是只读检查。归属缺失或不明确时，应给出 HOLD（暂停）
-及下一步，而不能编造成功回执。
+原生角色首次准备从当前 saved project 和公开 task capabilities 的只读检查开始。
+仓库文档写着“使用两个角色”不能证明原生角色已经存在；缺失 create capability
+应返回 `create_thread_capability_unavailable` HOLD，而不能编造成功回执。
+这条 native-only 路径不要求 SQLite ledger 或 scheduler，也不自动启用它们。
 
 通常的常驻原生角色是 Coordinator 和 Durable Architect。创建或复用它们是需要
 单独限定范围的操作，不是阅读本指南的自动结果。初始化成功需要相应责任组件的
@@ -65,10 +65,13 @@ Durable Architect。创建返回的 pending task ID 不是 `threadId`。如果�
 最终 `NativeOnboardingReceipt` 分开记录 accepted、initialized、acknowledged、ready；
 它只证明初始化，不分配 Work，也不授予 scheduler 或 GitHub 权限。
 
-如果 preflight 返回 `owner_unavailable`，不要借用其他项目的 ledger、试探性创建
-角色，或反复重跑同一检查。应先确定缺失的责任组件或前置条件，再走获准的准备路径。
-这不妨碍普通的 GitHub issue 和 PR 工作。同样，安装 skill 不等于完成项目 onboarding，
-本机验证也不能证明跨设备交接成功。
+#### 显式选择 SQLite local lifecycle
+
+只有另外明确采用 SQLite local lifecycle 时，才检查该项目的 ledger 与
+scheduler/Work-root owners。该独立 preflight 的 `owner_unavailable` 不允许借用
+其他项目的 ledger 或试探性修复，也不阻止 native-only 初始化或普通 GitHub issue/PR
+工作。安装 skill、原生角色初始化和 SQLite activation 是不同结果；本机验证仍不能
+证明跨设备交接成功。
 
 <a id="use-role-support-only-when-it-helps"></a>
 

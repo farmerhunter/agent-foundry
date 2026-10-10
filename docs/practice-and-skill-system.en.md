@@ -56,11 +56,11 @@ owner, limits, evidence and a terminal handoff. Adoption is project-specific and
 forward-only; historical issues and worktrees do not have to be migrated or
 cleaned up before new work can use that model.
 
-First-use preparation starts by inspecting the project binding and its actual
-coordination state. A repository document saying “use two roles” is not evidence
-that native roles or a scheduler exist. Where the owner-composed onboarding path
-is available, its public preflight is read-only. Missing or ambiguous ownership
-must produce a hold with a next action, not an invented success receipt.
+Native first-use preparation starts with read-only checks of the current saved
+project and public task capabilities. A repository document saying “use two
+roles” does not prove that native roles exist. A missing create capability returns
+`create_thread_capability_unavailable` HOLD, not an invented success receipt.
+This native-only path neither requires nor automatically enables SQLite or a scheduler.
 
 The normal durable native roles are Coordinator and Durable Architect. Native
 creation or reuse is a separately bounded operation, not an effect of reading
@@ -83,12 +83,15 @@ the optional requested handshake, using one token, explicit
 accepted, initialized, acknowledged and ready distinct. It proves initialization
 only; it assigns no Work and grants no scheduler or GitHub authority.
 
-If preflight reports `owner_unavailable`, do not borrow another project's ledger,
-create roles speculatively or repeatedly rerun the same check. Establish which
-owner prerequisite is missing and use the authorized setup path. This condition
-does not prevent ordinary GitHub-based issue and PR work. Likewise, guidance
-installation is not project onboarding, and same-machine evidence is not proof
-of a cross-device handoff.
+#### Explicit SQLite local lifecycle adoption
+
+Only separately requested SQLite local lifecycle adoption checks that project's
+ledger and scheduler/Work-root owners. An `owner_unavailable` result in this
+independent preflight does not authorize borrowing another project's ledger or
+speculative repair, and does not block native-only initialization or ordinary
+GitHub issue/PR work. Guidance installation, native role initialization and
+SQLite activation are distinct results; same-machine evidence does not prove
+a cross-device handoff.
 
 ### Use role support only when it helps
 
