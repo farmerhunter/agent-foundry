@@ -23,6 +23,25 @@ DEFAULT_BOOTSTRAP_PACK = ROOT / "fixtures" / "capability-packs" / "bootstrap-min
 DEFAULT_GENERATED_ROOT = Path.home() / ".agent-foundry" / "generated" / "agent-foundry-adapters"
 
 
+class SingleTargetAction(argparse.Action):
+    """Reject repeated --target before installer setup or external execution."""
+
+    def __call__(
+        self,
+        parser: argparse.ArgumentParser,
+        namespace: argparse.Namespace,
+        values: str,
+        option_string: str | None = None,
+    ) -> None:
+        if getattr(namespace, "_target_seen", False):
+            parser.error(
+                "--target may be supplied only once for one target; "
+                "omit --target to process all enabled targets"
+            )
+        setattr(namespace, "_target_seen", True)
+        setattr(namespace, self.dest, values)
+
+
 def run(command: list[str], execute: bool) -> int:
     print("$ " + " ".join(command), flush=True)
     if not execute:
@@ -215,12 +234,17 @@ def fresh_install(args: argparse.Namespace) -> int:
     return 0
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Install Agent Foundry adapters from runtime manifest.")
     parser.add_argument("--fresh-install", action="store_true", help="Run the Fresh Install setup workflow before runtime install.")
     parser.add_argument("--apply", action="store_true", help="Write managed runtime files, or Fresh Install Vault/generated setup.")
     parser.add_argument("--runtime-apply", action="store_true", help="With --fresh-install, write managed runtime files and receipt.")
-    parser.add_argument("--target", default="", help="Install only one target from the manifest.")
+    parser.add_argument(
+        "--target",
+        default="",
+        action=SingleTargetAction,
+        help="Install one target from the manifest. Omit to process all enabled targets.",
+    )
     parser.add_argument("--skip-check", action="store_true", help="Skip consistency check.")
     parser.add_argument("--core-root", default="", help="Core root to validate and record in the local locator.")
     parser.add_argument("--vault-root", default="", help="Vault root to validate and record in the local locator.")
@@ -233,7 +257,7 @@ def main() -> int:
     parser.add_argument("--bootstrap-pack", default=str(DEFAULT_BOOTSTRAP_PACK), help="Mandatory bootstrap capability pack root.")
     parser.add_argument("--force", action="store_true", help="Allow blank Vault initialization over existing marker files.")
     parser.add_argument("--no-write-locator", action="store_true", help="With --fresh-install, do not write the machine-local locator.")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     if args.fresh_install:
         return fresh_install(args)
 

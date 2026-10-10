@@ -12,14 +12,27 @@ from typing import Any
 
 
 VERSION = "af18-policy-telemetry-v1"
-PROFILE_TABLE = {
-    "economy": ("cost_optimized", "gpt-5.6-luna", "low", 12000, 12, 6, 60000),
-    "normal": ("general", "gpt-5.6-terra", "medium", 24000, 24, 12, 150000),
-    "performance": ("high_capability", "gpt-5.6-sol", "medium", 48000, 24, 20, 300000),
+PROFILE_TABLES = {
+    "v0": {
+        "economy": ("cost_optimized", "gpt-5.6-luna", "low", 12000, 12, 6, 60000),
+        "normal": ("general", "gpt-5.6-terra", "medium", 24000, 24, 12, 150000),
+        "performance": ("high_capability", "gpt-5.6-sol", "medium", 48000, 24, 20, 300000),
+    },
+    "v1": {
+        "economy": ("cost_optimized", "gpt-6-luna", "medium", 12000, 12, 6, 60000),
+        "normal": ("general", "gpt-6.1-sol", "medium", 24000, 24, 12, 150000),
+        "performance": ("high_capability", "gpt-6-astra", "medium", 48000, 24, 20, 300000),
+    },
 }
-OVERRIDES = {
-    ("economy", "cost_optimized", "medium"): "low_risk_multi_step_execution_or_test",
-    ("normal", "general", "low"): "small_time_sensitive_locally_ambiguous",
+OVERRIDES_BY_VERSION = {
+    "v0": {
+        ("economy", "cost_optimized", "medium"): "low_risk_multi_step_execution_or_test",
+        ("normal", "general", "low"): "small_time_sensitive_locally_ambiguous",
+    },
+    "v1": {
+        ("economy", "cost_optimized", "low"): "mechanical_work",
+        ("normal", "general", "low"): "small_time_sensitive_locally_ambiguous",
+    },
 }
 PRIVATE_KEYS = {"prompt", "messages", "message", "transcript", "tool_output", "tool_outputs", "log", "logs", "private", "secret", "content"}
 SCALAR_FIELDS = {"latency_ms", "input_tokens", "cached_input_tokens", "output_tokens", "credit_scalars", "total_context_tokens", "context_age_hours", "root_budget_used_tokens"}
@@ -74,8 +87,8 @@ def scalar(value: Any, field: str, context_only: bool, trusted: bool) -> dict[st
     return item
 
 
-def validate_route(receipt: dict[str, Any], profile: str, route: dict[str, Any]) -> None:
-    logical, model_id, reasoning, *_ = PROFILE_TABLE[profile]
+def validate_route(receipt: dict[str, Any], policy_version: str, profile: str, route: dict[str, Any], profile_table: dict[str, tuple[Any, ...]]) -> None:
+    logical, model_id, reasoning, *_ = profile_table[profile]
     require_keys(route, {"kind", "logical_model_class", "adapter_mapping", "override_evidence"}, {"kind", "logical_model_class", "adapter_mapping", "override_evidence"}, "route")
     mapping = require_keys(route["adapter_mapping"], {"adapter", "model_id", "reasoning"}, {"adapter", "model_id", "reasoning"}, "adapter_mapping")
     if mapping["adapter"] != "codex" or not isinstance(mapping["model_id"], str) or not isinstance(mapping["reasoning"], str):
@@ -85,11 +98,16 @@ def validate_route(receipt: dict[str, Any], profile: str, route: dict[str, Any])
         if route["logical_model_class"] != logical or mapping["model_id"] != model_id or mapping["reasoning"] != reasoning or route["override_evidence"] is not None:
             raise TelemetryError("route_model_mapping_mismatch")
         return
-    classification = OVERRIDES.get(key)
+    classification = OVERRIDES_BY_VERSION[policy_version].get(key)
     if route["kind"] != "permitted_work_reasoned_override" or classification is None or mapping["model_id"] != model_id:
         raise TelemetryError("unsupported_route_or_model_mapping")
-    evidence = require_keys(route["override_evidence"], {"classification", "risk_level", "reason"}, {"classification", "risk_level", "reason"}, "override_evidence")
+    evidence_keys = {"classification", "risk_level", "reason"}
+    if policy_version == "v1" and classification == "mechanical_work":
+        evidence_keys |= {"fixed_input_output", "verification_oracle_present", "requires_judgment", "external_side_effect", "failure_rerunnable"}
+    evidence = require_keys(route["override_evidence"], evidence_keys, evidence_keys, "override_evidence")
     if evidence["classification"] != classification or evidence["risk_level"] != "low" or not isinstance(evidence["reason"], str) or not evidence["reason"].strip():
+        raise TelemetryError("invalid_override_evidence")
+    if classification == "mechanical_work" and (evidence["fixed_input_output"] is not True or evidence["verification_oracle_present"] is not True or evidence["requires_judgment"] is not False or evidence["external_side_effect"] is not False or evidence["failure_rerunnable"] is not True):
         raise TelemetryError("invalid_override_evidence")
     safety = receipt["capability_validation"]
     if safety["risk_compliant"] is not True or safety["privacy_compliant"] is not True or safety["allowlist_compliant"] is not True:
@@ -127,10 +145,11 @@ def collect_receipt(receipt: dict[str, Any], now: dt.datetime, trusted_bindings:
         raise TelemetryError("missing_event_id")
     observed_at = parse_time(root["observed_at"], "observed_at")
     policy = require_keys(root["policy"], {"version", "profile", "compatibility_mode"}, {"version", "profile", "compatibility_mode"}, "policy")
-    if policy["version"] != "v0" or policy["profile"] not in PROFILE_TABLE or policy["compatibility_mode"] != "normal_profile":
+    profile_table = PROFILE_TABLES.get(policy["version"])
+    if profile_table is None or policy["profile"] not in profile_table or policy["compatibility_mode"] != "normal_profile":
         raise TelemetryError("unsupported_policy_profile")
     profile = policy["profile"]
-    logical, model_id, reasoning, context_tokens, age_hours, turns, ceiling = PROFILE_TABLE[profile]
+    logical, model_id, reasoning, context_tokens, age_hours, turns, ceiling = profile_table[profile]
     if now.astimezone(dt.timezone.utc) - observed_at > dt.timedelta(hours=age_hours) or observed_at > now.astimezone(dt.timezone.utc) + dt.timedelta(minutes=5):
         raise TelemetryError("stale_or_out_of_window_event")
     work = require_keys(root["work"], {"work_id", "task_classification", "root_budget_tokens"}, {"work_id", "task_classification", "root_budget_tokens"}, "work")
@@ -149,7 +168,7 @@ def collect_receipt(receipt: dict[str, Any], now: dt.datetime, trusted_bindings:
     producer = require_keys(root["producer"], {"producer_id", "receipt_anchor", "runtime_owned"}, {"producer_id", "receipt_anchor", "runtime_owned"}, "producer")
     if producer["runtime_owned"] is not False or not isinstance(producer["producer_id"], str) or not producer["producer_id"] or not isinstance(producer["receipt_anchor"], str) or not producer["receipt_anchor"]:
         raise TelemetryError("forged_or_malformed_producer")
-    validate_route(root, profile, root["route"])
+    validate_route(root, policy["version"], profile, root["route"], profile_table)
     if root["lifecycle_action"] not in {"completed", "validated", "reviewed", "held"}:
         raise TelemetryError("invalid_lifecycle_action")
     require_keys(root["outcome"], {"acceptance", "quality"}, {"acceptance", "quality"}, "outcome")

@@ -83,7 +83,13 @@ def apply_pack(vault: Path, pack: Path) -> subprocess.CompletedProcess[str]:
     return run([str(APPLY), str(pack), "--core-root", str(ROOT), "--vault-root", str(vault), "--apply"])
 
 
-def lifecycle(vault: Path, action: str, apply: bool) -> subprocess.CompletedProcess[str]:
+def lifecycle(
+    vault: Path,
+    action: str,
+    apply: bool,
+    review_token: str = "",
+    backup_root: Path | None = None,
+) -> subprocess.CompletedProcess[str]:
     args = [
         str(LIFECYCLE),
         "--core-root",
@@ -97,7 +103,31 @@ def lifecycle(vault: Path, action: str, apply: bool) -> subprocess.CompletedProc
     ]
     if apply:
         args.append("--apply")
+    if review_token:
+        args.extend(["--review-token", review_token])
+    if backup_root is not None:
+        args.extend(["--backup-root", str(backup_root)])
     return run(args)
+
+
+def restore(vault: Path, backup_root: Path, apply: bool) -> subprocess.CompletedProcess[str]:
+    args = [
+        str(LIFECYCLE),
+        "--core-root",
+        str(ROOT),
+        "--vault-root",
+        str(vault),
+        "--restore-backup",
+        str(backup_root),
+    ]
+    if apply:
+        args.append("--apply")
+    return run(args)
+
+
+def field(output: str, name: str) -> str:
+    prefix = f"{name}: "
+    return next((line[len(prefix) :] for line in output.splitlines() if line.startswith(prefix)), "")
 
 
 def assert_lifecycle_namespace() -> list[str]:
@@ -219,7 +249,7 @@ def main() -> int:
         newer_version = copy_optional_variant(
             base,
             "newer-version-pack",
-            {"version: 0.4.0": "version: 0.4.1"},
+            {"version: 0.6.0": "version: 0.6.1"},
         )
         errors.extend(
             expect(
@@ -250,8 +280,8 @@ def main() -> int:
             ),
         )
         user_before = digest(user_record)
-        practice = vault / "practices" / "agent-collaboration" / "COLLAB-PACK-001-review-handoff.md"
-        asset = vault / "assets" / "skills" / "ASSET-COLLAB-PACK-001-review-handoff-helper.asset.yaml"
+        practice = vault / "practices" / "agent-collaboration" / "COLLAB-001-issue-code-work-uses-prs.md"
+        asset = vault / "assets" / "skills" / "ASSET-COLLAB-001-agent-collaboration.asset.yaml"
         metadata = vault / "packs" / "deployed-pack-index.yaml"
         metadata_before = digest(metadata)
 
@@ -264,13 +294,99 @@ def main() -> int:
 
         dry_retire = lifecycle(vault, "retire", apply=False)
         errors.extend(expect("retire-dry-run", dry_retire, True, "writes: none"))
-        errors.extend(expect("retire-dry-run-reports-records", dry_retire, True, "COLLAB-PACK-001 practice -> archived"))
+        errors.extend(expect("retire-dry-run-reports-records", dry_retire, True, "COLLAB-001 practice -> archived"))
 
-        activate_plan = lifecycle(vault, "activate", apply=False)
-        errors.extend(expect("activate-review-only", activate_plan, False, "status: review_required"))
-        errors.extend(expect("activate-writes-none", activate_plan, False, "writes: none"))
-        activate_apply = lifecycle(vault, "activate", apply=True)
-        errors.extend(expect("activate-apply-refused", activate_apply, False, "cannot be applied"))
+        activation_vault = base / "activation-vault"
+        errors.extend(expect("init-activation-vault", init_blank(activation_vault), True, "Blank Vault initialized"))
+        errors.extend(expect("deploy-activation-bootstrap", deploy_bootstrap(activation_vault), True, "selected Vault validated"))
+        errors.extend(expect("apply-activation-optional", apply_optional(activation_vault), True, "metadata: written"))
+        activate_plan = lifecycle(activation_vault, "activate", apply=False)
+        errors.extend(expect("activate-dry-run", activate_plan, True, "status: ready_for_review"))
+        errors.extend(expect("activate-dry-run-writes-none", activate_plan, True, "writes: none"))
+        token = field(activate_plan.stdout, "review_token")
+        if len(token) != 64:
+            errors.append("activate-dry-run: missing deterministic review token")
+        missing_backup = lifecycle(activation_vault, "activate", apply=True, review_token=token)
+        errors.extend(expect("activate-requires-backup", missing_backup, False, "status: hold_backup_required"))
+        wrong_token_backup = base / "wrong-token-backup"
+        wrong_token = lifecycle(
+            activation_vault,
+            "activate",
+            apply=True,
+            review_token="0" * 64,
+            backup_root=wrong_token_backup,
+        )
+        errors.extend(expect("activate-refuses-wrong-token", wrong_token, False, "status: hold_review_token_drift"))
+        if wrong_token_backup.exists():
+            errors.append("activate-refuses-wrong-token: backup root was created")
+        existing_backup = base / "existing-backup"
+        existing_backup.mkdir()
+        existing_backup_apply = lifecycle(
+            activation_vault,
+            "activate",
+            apply=True,
+            review_token=token,
+            backup_root=existing_backup,
+        )
+        errors.extend(expect("activate-requires-fresh-backup", existing_backup_apply, False, "status: hold_backup_unavailable"))
+        activation_backup = base / "activation-backup"
+        activate_apply = lifecycle(
+            activation_vault,
+            "activate",
+            apply=True,
+            review_token=token,
+            backup_root=activation_backup,
+        )
+        errors.extend(expect("activate-apply", activate_apply, True, "status: activated"))
+        errors.extend(expect("activate-readback", activate_apply, True, "readback: passed"))
+        if not (activation_backup / "activation-receipt.json").is_file():
+            errors.append("activate-apply: private backup receipt missing")
+        elif (activation_backup.stat().st_mode & 0o777) != 0o700:
+            errors.append("activate-apply: backup root mode is not 0700")
+        elif ((activation_backup / "activation-receipt.json").stat().st_mode & 0o777) != 0o600:
+            errors.append("activate-apply: backup receipt mode is not 0600")
+        activated_records = [
+            path
+            for path in [*activation_vault.glob("practices/**/*.md"), *activation_vault.glob("assets/**/*.yaml")]
+            if "pack.multi-agent.optional" in path.read_text(encoding="utf-8")
+        ]
+        if not activated_records or any("status: active" not in path.read_text(encoding="utf-8") for path in activated_records):
+            errors.append("activate-apply: optional members were not all active")
+        reused_backup = lifecycle(
+            activation_vault,
+            "activate",
+            apply=True,
+            review_token=token,
+            backup_root=activation_backup,
+        )
+        errors.extend(expect("activate-repeat-holds", reused_backup, False, "status: hold_prewrite"))
+        restore_plan = restore(activation_vault, activation_backup, apply=False)
+        errors.extend(expect("activation-restore-dry-run", restore_plan, True, "status: restore_ready"))
+        restore_apply = restore(activation_vault, activation_backup, apply=True)
+        errors.extend(expect("activation-restore-apply", restore_apply, True, "status: restored"))
+        restored_plan = lifecycle(activation_vault, "activate", apply=False)
+        errors.extend(expect("activation-restored-ready", restored_plan, True, "status: ready_for_review"))
+
+        drift_vault = base / "activation-drift-vault"
+        errors.extend(expect("init-activation-drift-vault", init_blank(drift_vault), True, "Blank Vault initialized"))
+        errors.extend(expect("deploy-activation-drift-bootstrap", deploy_bootstrap(drift_vault), True, "selected Vault validated"))
+        errors.extend(expect("apply-activation-drift-optional", apply_optional(drift_vault), True, "metadata: written"))
+        drift_plan = lifecycle(drift_vault, "activate", apply=False)
+        drift_token = field(drift_plan.stdout, "review_token")
+        drift_record = next(
+            path
+            for path in drift_vault.glob("practices/**/*.md")
+            if "pack.multi-agent.optional" in path.read_text(encoding="utf-8")
+        )
+        drift_record.write_text(drift_record.read_text(encoding="utf-8") + "\nlocal drift\n", encoding="utf-8")
+        drift_apply = lifecycle(
+            drift_vault,
+            "activate",
+            apply=True,
+            review_token=drift_token,
+            backup_root=base / "drift-backup",
+        )
+        errors.extend(expect("activate-local-drift-holds", drift_apply, False, "status: hold_prewrite"))
 
         exportable_plan = lifecycle(vault, "exportable", apply=False)
         errors.extend(expect("exportable-review-only", exportable_plan, False, "target_lifecycle_status: exportable"))
@@ -278,7 +394,7 @@ def main() -> int:
 
         deprecate_plan = lifecycle(vault, "deprecate", apply=False)
         errors.extend(expect("deprecate-review-only", deprecate_plan, False, "target_lifecycle_status: deprecated"))
-        errors.extend(expect("deprecate-reports-records", deprecate_plan, False, "ASSET-COLLAB-PACK-001 asset"))
+        errors.extend(expect("deprecate-reports-records", deprecate_plan, False, "ASSET-COLLAB-001 asset"))
 
         split_plan = lifecycle(vault, "split", apply=False)
         errors.extend(expect("split-review-only", split_plan, False, "before-after membership diff"))
@@ -339,9 +455,9 @@ def main() -> int:
         metadata_text = metadata.read_text(encoding="utf-8")
         if "lifecycle_status: disabled" not in metadata_text:
             errors.append("disable-apply: metadata missing disabled lifecycle")
-        if "status: candidate" not in practice.read_text(encoding="utf-8"):
+        if "status: proposed" not in practice.read_text(encoding="utf-8"):
             errors.append("disable-apply: practice status changed during metadata-only disable")
-        if "status: candidate" not in asset.read_text(encoding="utf-8"):
+        if "status: proposed" not in asset.read_text(encoding="utf-8"):
             errors.append("disable-apply: asset status changed during metadata-only disable")
 
         apply_retire = lifecycle(vault, "retire", apply=True)
@@ -363,7 +479,7 @@ def main() -> int:
 
         errors.extend(expect("publish-after-retire", publish(vault, generated), True, "Adapter publish wrote"))
         generated_text = "\n".join(path.read_text(encoding="utf-8") for path in generated.rglob("*") if path.is_file())
-        for retired_id in ["COLLAB-PACK-001", "ASSET-COLLAB-PACK-001"]:
+        for retired_id in ["COLLAB-001", "ASSET-COLLAB-001"]:
             if retired_id in generated_text:
                 errors.append(f"publish-after-retire: retired candidate leaked into generated output: {retired_id}")
         restore_status = status(vault, generated, base / "missing-receipt.json")
@@ -389,7 +505,7 @@ def main() -> int:
         wrong_metadata = wrong_path_vault / "packs" / "deployed-pack-index.yaml"
         wrong_metadata.write_text(
             wrong_metadata.read_text(encoding="utf-8").replace(
-                "path: practices/agent-collaboration/COLLAB-PACK-001-review-handoff.md",
+                "path: practices/agent-collaboration/COLLAB-001-issue-code-work-uses-prs.md",
                 "path: practices/user/USER-LOCAL-001.md",
             ),
             encoding="utf-8",
@@ -402,17 +518,17 @@ def main() -> int:
             wrong_path_vault
             / "practices"
             / "agent-collaboration"
-            / "COLLAB-PACK-001-review-handoff.md"
+            / "COLLAB-001-issue-code-work-uses-prs.md"
         )
-        if "status: candidate" not in original_pack_record.read_text(encoding="utf-8"):
+        if "status: proposed" not in original_pack_record.read_text(encoding="utf-8"):
             errors.append("retire-refuses-wrong-path: original pack record changed")
 
         partial_vault = base / "partial-vault"
         errors.extend(expect("init-partial-vault", init_blank(partial_vault), True, "Blank Vault initialized"))
         errors.extend(expect("deploy-partial-bootstrap", deploy_bootstrap(partial_vault), True, "selected Vault validated"))
         errors.extend(expect("apply-partial-optional", apply_optional(partial_vault), True, "metadata: written"))
-        partial_practice = partial_vault / "practices" / "agent-collaboration" / "COLLAB-PACK-001-review-handoff.md"
-        partial_asset = partial_vault / "assets" / "skills" / "ASSET-COLLAB-PACK-001-review-handoff-helper.asset.yaml"
+        partial_practice = partial_vault / "practices" / "agent-collaboration" / "COLLAB-001-issue-code-work-uses-prs.md"
+        partial_asset = partial_vault / "assets" / "skills" / "ASSET-COLLAB-001-agent-collaboration.asset.yaml"
         partial_metadata = partial_vault / "packs" / "deployed-pack-index.yaml"
         before_partial = {
             "practice": digest(partial_practice),
@@ -447,7 +563,7 @@ def main() -> int:
         )
         asset_index.write_text(
             asset_index.read_text(encoding="utf-8").replace(
-                "path: assets/skills/ASSET-COLLAB-PACK-001-review-handoff-helper.asset.yaml",
+                "path: assets/skills/ASSET-COLLAB-001-agent-collaboration.asset.yaml",
                 "path: assets/skills/ASSET-OTHER-001.yaml",
             ),
             encoding="utf-8",

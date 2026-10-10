@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Focused no-I/O regressions for the legacy onboarding diagnostic router."""
+"""Focused no-I/O regressions for native bounded-collaboration onboarding."""
 
 from __future__ import annotations
 
 import importlib.util
-import json
 from pathlib import Path
 
 import jsonschema
@@ -12,60 +11,31 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCHEMA = yaml.safe_load(
-    (ROOT / "schemas" / "bounded-collaboration-onboarding.schema.yaml").read_text(
-        encoding="utf-8"
-    )
-)
-spec = importlib.util.spec_from_file_location(
-    "onboarding", ROOT / "scripts" / "plan_bounded_collaboration_onboarding.py"
-)
+SCHEMA = yaml.safe_load((ROOT / "schemas" / "bounded-collaboration-onboarding.schema.yaml").read_text(encoding="utf-8"))
+spec = importlib.util.spec_from_file_location("onboarding", ROOT / "scripts" / "plan_bounded_collaboration_onboarding.py")
 onboarding = importlib.util.module_from_spec(spec)
 assert spec.loader is not None
 spec.loader.exec_module(onboarding)
 
 
-def capability_set():
-    projections = {name: {"status": "supported"} for name in onboarding.PROJECTIONS}
-    projections["scheduler"] = {
-        "status": "supported",
-        "binding_ref": "scheduler:legacy",
-        "binding_status": "bound",
-    }
-    projections["transient_template"] = {
-        "status": "supported",
-        "template_refs": {
-            role: f"template:{role}" for role in onboarding.TRANSIENT_ROLES
-        },
-    }
-    return {
-        "role_binding": {"status": "supported"},
-        "projections": projections,
-        "operations": {
-            name: {"status": "supported"} for name in onboarding.CAPABILITIES
-        },
-    }
+def capabilities(**overrides):
+    values = {name: {"status": "supported"} for name in onboarding.CAPABILITIES}
+    for name, status in overrides.items():
+        values[name] = {"status": status}
+    return {"operations": values}
 
 
 def fixture(**overrides):
     value = {
-        "onboarding_version": onboarding.LEGACY_VERSION,
+        "onboarding_version": onboarding.VERSION,
         "request": {
-            "project_identity": {
-                "project_id": "legacy-project",
-                "repository": "farmerhunter/agent-foundry",
-                "integration_branch": "codex/integration",
-            },
-            "onboarding_key": "legacy-onboarding-key",
+            "project_identity": {"project_id": "agent-foundry", "repository": "farmerhunter/agent-foundry", "integration_branch": "main"},
+            "onboarding_key": "native-onboarding-1",
             "apply_authorized": False,
+            "reuse_policy": "fresh_only",
+            "handshake_requested": True,
         },
-        "runtime_capabilities": capability_set(),
-        "role_hub": {"status": "missing"},
-        "current_thread": {
-            "eligible": False,
-            "current_thread_ref": "opaque-current",
-            "name": "Current",
-        },
+        "runtime_capabilities": capabilities(),
         "existing_roles": [],
         "repository_state": {"dirty": True, "dirty_preserved": True},
     }
@@ -73,155 +43,92 @@ def fixture(**overrides):
     return value
 
 
-def role(role_name, *, state="active", role_ref="opaque-role"):
-    return {
-        "project_id": "legacy-project",
-        "role": role_name,
-        "role_ref": role_ref,
-        "durable_anchor": "issue:548",
-        "state": state,
-        "legacy": False,
-    }
+def expect(name, condition, value):
+    if not condition:
+        raise AssertionError(f"{name}: {value}")
+    print(f"{name}: ok")
 
 
-def receipt(key, status="applied"):
-    value = {
-        "idempotency_key": key,
-        "status": status,
-        "receipt_ref": "opaque-receipt",
-        "operation_fingerprint": "sha256:caller-claim",
-    }
-    if status == "applied":
-        value["result_ref"] = "opaque-result"
+def receipt(item, result_ref, *, status="applied", evidence=None, pending_task_id=None, fingerprint=True):
+    value = {"idempotency_key": item["idempotency_key"], "status": status, "receipt_ref": f"receipt:{item['subject']}"}
+    if fingerprint:
+        value["operation_fingerprint"] = item["operation_fingerprint"]
+    if result_ref is not None:
+        value["result_ref"] = result_ref
+    if evidence is not None:
+        value["evidence"] = evidence
+    if pending_task_id is not None:
+        value["pending_task_id"] = pending_task_id
     return value
 
 
-def expect_route(name, value):
-    result = onboarding.plan(value)
-    assert result["state"] == "owner_composed_route_required", (name, result)
-    assert result["operations"] == [] and result["rollback_operations"] == [], result
-    assert result["read_only"] is True
-    assert result["mutation_performed"] is False
-    assert result["dispatch_performed"] is False
-    assert result["next_route"] == onboarding.ROUTE
-    assert result["role_hub"] == onboarding.ROLE_HUB_PROJECTION
-    assert result["stop_conditions"] == []
-    jsonschema.Draft202012Validator(SCHEMA).validate(result)
-    print(f"{name}: ok")
-    return result
+def role_receipts(plan):
+    return [
+        receipt(plan["operations"][0], "project:saved"),
+        receipt(plan["operations"][1], "thread:coordinator", evidence={"identity_kind": "thread_id", "source": "public_owner_surface"}),
+        receipt(plan["operations"][2], "thread:architect", evidence={"identity_kind": "thread_id", "source": "public_owner_surface"}),
+    ]
 
 
-def expect_hold(name, value, reason):
-    result = onboarding.plan(value)
-    assert result["state"] == "partial_hold", (name, result)
-    assert result["stop_conditions"] == [reason]
-    assert result["operations"] == [] and result["rollback_operations"] == []
-    assert result["mutation_performed"] is False
-    assert result["dispatch_performed"] is False
-    jsonschema.Draft202012Validator(SCHEMA).validate(result)
-    print(f"{name}: ok")
+def owner_receipts(plan):
+    result = []
+    for item in plan["operations"][3:5]:
+        thread_id = "thread:coordinator" if item["subject"] == "Coordinator" else "thread:architect"
+        result.append(receipt(item, thread_id, evidence={"owner_role": item["subject"], "thread_id": thread_id, "initialized": True, "cursor": f"cursor:{item['subject']}"}))
     return result
 
 
 def main():
-    jsonschema.Draft202012Validator.check_schema(SCHEMA)
-    schema = jsonschema.Draft202012Validator(SCHEMA)
-    schema.validate(fixture())
+    fresh = onboarding.plan(fixture())
+    kinds = [item["kind"] for item in fresh["operations"]]
+    expect("fresh-only-plan", fresh["state"] == "plan_ready" and kinds == ["resolve_saved_project", "create_thread", "create_thread"], fresh)
+    expect("no-native-rolehub", all(item["subject"] != "RoleHub" for item in fresh["operations"]), fresh)
+    expect("compact-init", all(item["desired_state"].get("schema") == "RoleSessionInit/v1" and item["desired_state"].get("work_assigned") is False for item in fresh["operations"][1:]), fresh)
+    expect("retry-idempotence", fresh["operations"] == onboarding.plan(fixture())["operations"], fresh)
 
-    expect_route("missing-rolehub-routes", fixture())
-    expect_route(
-        "active-rolehub-routes",
-        fixture(role_hub={"status": "active", "role_hub_ref": "opaque-hub"}),
-    )
-    expect_route("held-rolehub-does-not-block", fixture(role_hub={"status": "held"}))
-    expect_route(
-        "eligible-current-thread-is-not-adopted",
-        fixture(
-            current_thread={
-                "eligible": True,
-                "current_thread_ref": "opaque-current",
-                "name": "Legacy RoleHub",
-            }
-        ),
-    )
+    apply_request = {**fixture()["request"], "apply_authorized": True}
+    pending = onboarding.plan(fixture(request=apply_request, operation_receipts=[receipt(fresh["operations"][0], "project:saved"), receipt(fresh["operations"][1], None, status="setup_pending", pending_task_id="client:1"), receipt(fresh["operations"][2], None, status="setup_pending", pending_task_id="client:2")]))
+    expect("pending-hold", pending["state"] == "setup_pending" and pending["stop_conditions"] == ["thread_id_unresolved"] and pending["summary"]["duplicate_create_allowed"] is False, pending)
 
-    caller_receipts = [
-        receipt("caller-operation"),
-        receipt("caller-operation"),
-        receipt("partial-operation", "failed"),
-    ]
-    apply_claim = expect_route(
-        "apply-and-receipts-cannot-authorize",
-        fixture(
-            request={**fixture()["request"], "apply_authorized": True},
-            operation_receipts=caller_receipts,
-            rollback_receipts=[
-                {
-                    "source_idempotency_key": "caller-operation",
-                    "status": "applied",
-                    "receipt_ref": "opaque-rollback",
-                    "source_operation_fingerprint": "sha256:caller-claim",
-                    "rollback_fingerprint": "sha256:caller-rollback",
-                }
-            ],
-        ),
-    )
-    assert "ready" not in json.dumps(apply_claim, sort_keys=True)
+    applying_owner = onboarding.plan(fixture(request=apply_request, operation_receipts=role_receipts(fresh)))
+    expect("owner-readback-stage", applying_owner["state"] == "applying" and [item["kind"] for item in applying_owner["operations"][-2:]] == ["owner_readback", "owner_readback"], applying_owner)
+    owners = role_receipts(fresh) + owner_receipts(applying_owner)
+    applying_handshake = onboarding.plan(fixture(request=apply_request, operation_receipts=owners))
+    expect("handshake-stage", [item["kind"] for item in applying_handshake["operations"][-4:]] == ["peer_handshake_send", "peer_handshake_send", "peer_handshake_readback", "peer_handshake_readback"], applying_handshake)
+    sends = [receipt(item, f"message:{item['subject']}") for item in applying_handshake["operations"][5:7]]
+    token = applying_handshake["operations"][5]["desired_state"]["token"]
+    reads = []
+    for item in applying_handshake["operations"][7:9]:
+        reads.append(receipt(item, f"ack:{item['subject']}", evidence={"schema": "PeerHandshake/v1", "token": token, "reply_to_thread_id": item["desired_state"]["reply_to_thread_id"], "acknowledged": True, "cursor": f"cursor:ack:{item['subject']}"}))
+    ready = onboarding.plan(fixture(request=apply_request, operation_receipts=owners + sends + reads))
+    native = ready["summary"]["native_onboarding_receipt"]
+    expect("ready-receipt", ready["state"] == "ready" and native["schema"] == "NativeOnboardingReceipt/v1" and all(value["ready"] for value in native["roles"].values()), ready)
+    expect("explicit-reply-target", all(item["desired_state"].get("reply_to_thread_id") for item in ready["operations"] if item["kind"].startswith("peer_handshake")), ready)
+    expect("single-owner-token-cursor", len({item["desired_state"].get("token") for item in ready["operations"] if item["kind"].startswith("peer_handshake")}) == 1 and all(item["desired_state"].get("owner") == "onboarding_executor" for item in ready["operations"] if item["kind"] == "peer_handshake_send") and all(item["desired_state"].get("cursor_rule") == "after_owner_readback" for item in ready["operations"] if item["kind"] == "peer_handshake_readback"), ready)
 
-    duplicate_and_held = [
-        role("Coordinator", role_ref="opaque-a"),
-        role("Coordinator", role_ref="opaque-b"),
-        role("Architect", state="held", role_ref="opaque-held"),
-    ]
-    expect_route(
-        "duplicate-and-held-role-metadata-has-no-authority",
-        fixture(existing_roles=duplicate_and_held),
-    )
+    no_handshake_request = {**apply_request, "handshake_requested": False}
+    no_handshake_owner = onboarding.plan(fixture(request=no_handshake_request, operation_receipts=role_receipts(fresh)))
+    no_handshake_ready = onboarding.plan(fixture(request=no_handshake_request, operation_receipts=role_receipts(fresh) + owner_receipts(no_handshake_owner)))
+    expect("optional-handshake", no_handshake_ready["state"] == "ready" and no_handshake_ready["summary"]["native_onboarding_receipt"]["handshake"]["status"] == "not_requested", no_handshake_ready)
 
-    privacy = expect_hold(
-        "privacy-input-holds",
-        fixture(extra={"tool_output": "secret-tool-output"}),
-        "privacy_sensitive_input",
-    )
-    assert "secret-tool-output" not in json.dumps(privacy, sort_keys=True)
-    expect_hold("unknown-input-holds", fixture(unexpected="caller-text"), "invalid_legacy_request")
-    expect_hold(
-        "invalid-legacy-version-holds",
-        fixture(onboarding_version=onboarding.VERSION),
-        "invalid_legacy_request",
-    )
+    old_input = onboarding.plan(fixture(existing_roles=[{"project_id": "agent-foundry", "role": "Coordinator", "thread_id": "old", "state": "active"}]))
+    expect("fresh-only-no-history", old_input["state"] == "partial_hold" and "fresh_only_existing_role_input_forbidden" in old_input["stop_conditions"], old_input)
+    missing = onboarding.plan(fixture(runtime_capabilities=capabilities(create_thread="unavailable")))
+    expect("capability-hold", "create_thread_capability_unavailable" in missing["stop_conditions"], missing)
+    private = onboarding.plan(fixture(private_session={"path": "forbidden"}))
+    expect("privacy-hold", "privacy_exposure" in private["stop_conditions"], private)
+    forged = onboarding.plan(fixture(request=apply_request, operation_receipts=[receipt(fresh["operations"][0], "project:saved", fingerprint=False)]))
+    expect("forged-receipt", "forged_receipt_fingerprint" in forged["stop_conditions"], forged)
+    duplicate_identity = onboarding.plan(fixture(request=apply_request, operation_receipts=[receipt(fresh["operations"][0], "project:saved"), receipt(fresh["operations"][1], "thread:same", evidence={"identity_kind": "thread_id", "source": "public_owner_surface"}), receipt(fresh["operations"][2], "thread:same", evidence={"identity_kind": "thread_id", "source": "public_owner_surface"})]))
+    expect("duplicate-identity", "duplicate_thread_identity" in duplicate_identity["stop_conditions"], duplicate_identity)
+    unproven = onboarding.plan(fixture(request=apply_request, operation_receipts=[receipt(fresh["operations"][0], "project:saved"), receipt(fresh["operations"][1], "client:not-a-thread"), receipt(fresh["operations"][2], "thread:architect", evidence={"identity_kind": "thread_id", "source": "public_owner_surface"})]))
+    expect("pending-is-not-identity", "durable_thread_identity_unproven" in unproven["stop_conditions"], unproven)
 
-    old_ready = {
-        "onboarding_version": onboarding.LEGACY_VERSION,
-        "read_only": True,
-        "mutation_performed": False,
-        "dispatch_performed": False,
-        "state": "ready",
-        "transition_history": ["preflight", "ready"],
-        "stop_conditions": [],
-        "operations": [{"kind": "create_role_hub"}],
-        "summary": {},
-    }
-    try:
-        schema.validate(old_ready)
-    except jsonschema.ValidationError:
-        print("schema-rejects-v1-ready-mutation-envelope: ok")
-    else:
-        raise AssertionError("v1 ready/mutation envelope unexpectedly validated")
-
-    docs = " ".join(
-        (ROOT / "docs" / "multi-agent-collaboration.md")
-        .read_text(encoding="utf-8")
-        .split()
-    )
-    required_docs = (
-        "public locator-only runtime bridge",
-        "legacy compatibility diagnostic/router",
-        "optional logical read-only projection",
-        "not a global thread limit",
-    )
-    assert all(text in docs for text in required_docs), required_docs
-    print("docs-route-and-thread-budget: ok")
+    for name, value in (("plan", fresh), ("pending", pending), ("ready", ready), ("hold", old_input)):
+        jsonschema.Draft202012Validator(SCHEMA).validate(value)
+        print(f"schema-{name}: ok")
+    jsonschema.Draft202012Validator(SCHEMA).validate(fixture())
+    print("schema-input: ok")
     return 0
 
 

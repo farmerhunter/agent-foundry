@@ -216,6 +216,123 @@ def path_status(path: Path, required_text: list[str] | None = None) -> dict[str,
     return payload
 
 
+ACTIVATION_INLINE_TERMS = [
+    "activation evidence",
+    "target runtime",
+    "user-facing activation instructions",
+]
+ACTIVATION_REFERENCE_ROUTE = "references/COLLAB-015.md"
+ACTIVATION_REFERENCE_CHECKS = {
+    "activation_evidence_and_pending": [
+        "add activation evidence before closure",
+        "if any activation evidence is missing",
+        "activation-pending",
+    ],
+    "target_environment_and_smoke_path": [
+        "the target environment where it was tried",
+        "the smoke path that proves",
+    ],
+    "user_facing_enablement_instructions": [
+        "the user-facing enablement instructions",
+    ],
+}
+
+
+def activation_skill_status(path: Path) -> dict[str, Any]:
+    """Validate one skill's inline or explicitly routed activation guidance."""
+    payload: dict[str, Any] = {
+        "path": str(path),
+        "exists": path.exists(),
+        "required_text_present": {item: False for item in ACTIVATION_INLINE_TERMS},
+        "guidance_mode": "unrecognized",
+        "evidence_paths": [],
+        "checks": {},
+        "problems": [],
+        "ok": False,
+    }
+    if not payload["exists"]:
+        payload["problems"].append("skill file is missing")
+        return payload
+    if path.is_symlink() or path.parent.is_symlink():
+        payload["problems"].append("skill file and skill directory must not be symlinks")
+        return payload
+    try:
+        skill_text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as exc:
+        payload["problems"].append(f"skill file is unreadable: {exc}")
+        return payload
+
+    payload["evidence_paths"] = [str(path)]
+    payload["required_text_present"] = {
+        item: item in skill_text for item in ACTIVATION_INLINE_TERMS
+    }
+    inline_ok = all(payload["required_text_present"].values())
+    payload["checks"]["inline_legacy_three_anchors"] = inline_ok
+    if inline_ok:
+        payload["guidance_mode"] = "inline_legacy"
+        payload["ok"] = True
+        return payload
+
+    routes_section = re.search(
+        r"^## Semantic Practice Routes\s*$\n(.*?)(?=^##\s|\Z)",
+        skill_text,
+        re.MULTILINE | re.DOTALL,
+    )
+    routes = re.findall(
+        r"^\s*-\s*COLLAB-015:\s+read\s+`([^`]+)`(?:\s+when\b.*)?\s*$",
+        routes_section.group(1) if routes_section else "",
+        re.MULTILINE,
+    )
+    payload["checks"]["collab_015_route_declared"] = len(routes) == 1
+    if not routes:
+        payload["problems"].append("COLLAB-015 routed reference is not declared")
+        return payload
+    if len(routes) != 1:
+        payload["problems"].append("COLLAB-015 must have exactly one routed reference")
+        return payload
+    route = routes[0]
+    payload["checks"]["collab_015_route_is_bounded"] = route == ACTIVATION_REFERENCE_ROUTE
+    if route != ACTIVATION_REFERENCE_ROUTE:
+        payload["problems"].append(
+            f"COLLAB-015 route must be exactly {ACTIVATION_REFERENCE_ROUTE!r}; got {route!r}"
+        )
+        return payload
+
+    skill_dir = path.parent
+    reference_path = skill_dir / ACTIVATION_REFERENCE_ROUTE
+    reference_parent = reference_path.parent
+    if reference_parent.is_symlink() or reference_path.is_symlink():
+        payload["problems"].append("COLLAB-015 routed reference must not use symlinks")
+        return payload
+    try:
+        resolved_skill_dir = skill_dir.resolve(strict=True)
+        resolved_reference = reference_path.resolve(strict=True)
+    except (OSError, RuntimeError) as exc:
+        payload["problems"].append(f"COLLAB-015 routed reference is missing or unreadable: {exc}")
+        return payload
+    if resolved_reference.parent.parent != resolved_skill_dir:
+        payload["problems"].append("COLLAB-015 routed reference escapes the current skill directory")
+        return payload
+    try:
+        reference_text = reference_path.read_text(encoding="utf-8").lower()
+    except (OSError, UnicodeError) as exc:
+        payload["problems"].append(f"COLLAB-015 routed reference is unreadable: {exc}")
+        return payload
+
+    payload["guidance_mode"] = "routed_reference"
+    payload["evidence_paths"].append(str(reference_path))
+    for check_name, terms in ACTIVATION_REFERENCE_CHECKS.items():
+        present = {term: term in reference_text for term in terms}
+        payload["checks"][check_name] = present
+        if not all(present.values()):
+            missing = [term for term, found in present.items() if not found]
+            payload["problems"].append(
+                f"COLLAB-015 routed reference is missing {check_name}: {', '.join(missing)}"
+            )
+    payload["ok"] = not payload["problems"]
+    return payload
+
+
 def repo_from_remote(cwd: Path) -> str | None:
     result = subprocess.run(
         ["git", "remote", "get-url", "origin"],
@@ -6568,11 +6685,6 @@ def cmd_activation_report(args: argparse.Namespace) -> None:
         / "agent-collaboration"
         / "SKILL.md"
     )
-    activation_terms = [
-        "activation evidence",
-        "target runtime",
-        "user-facing activation instructions",
-    ]
     helper_terms = [
         "activation-report",
         "GitHub collaboration helper",
@@ -6585,8 +6697,8 @@ def cmd_activation_report(args: argparse.Namespace) -> None:
         "helper": path_status(helper, ["Read-only and dry-run GitHub collaboration helper pilot"]),
         "workflow_contract": path_status(workflow, helper_terms),
         "routing_template": path_status(routing, ["needs_labels", "optional_visual_mirror"]),
-        "installed_runtime_skill": path_status(runtime_skill, activation_terms),
-        "generated_skill": path_status(generated_skill, activation_terms),
+        "installed_runtime_skill": activation_skill_status(runtime_skill),
+        "generated_skill": activation_skill_status(generated_skill),
         "safe_trial_commands": [
             f"{launcher} --repo <owner>/<repo> auth-smoke",
             f"{launcher} role-config-check --config {routing}",

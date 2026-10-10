@@ -602,7 +602,12 @@ def plan_records(
         source_hash = entry.get("content_sha256", "")
         deployed_hash = ""
         if source_path.exists():
-            deployed_text = deployed_record_text(kind, read(source_path), manifest)
+            deployed_text = deployed_record_text(
+                kind,
+                read(source_path),
+                manifest,
+                entry.get("activation_default", ""),
+            )
             deployed_hash = hashlib.sha256(deployed_text.encode("utf-8")).hexdigest()
         indexed_entry = indexed.get(item_id)
 
@@ -632,6 +637,9 @@ def plan_records(
         elif destination_path.exists() and imported_hash and current_hash != imported_hash:
             outcome = "merge_required"
             detail = "current Vault record differs from prior deployed hash; preserve local edit"
+        elif destination_path.exists() and not imported_hash:
+            outcome = "merge_required"
+            detail = "record predates this pack membership and differs from reviewed source; preserve adopter record"
         elif destination_path.exists():
             outcome = "update"
             detail = "record exists and differs from pack source; reviewed update required"

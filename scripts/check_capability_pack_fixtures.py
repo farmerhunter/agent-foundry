@@ -19,6 +19,7 @@ from plan_capability_pack import validate_advanced_metadata_text
 ROOT = Path(__file__).resolve().parents[1]
 PACK_ROOT = ROOT / "fixtures" / "capability-packs"
 VAULT_FIXTURE_ROOT = ROOT / "fixtures" / "vaults"
+CATALOG_PATH = ROOT / "catalog" / "capability-packs" / "index.yaml"
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 REQUIRED_MANIFEST_FIELDS = {
@@ -67,6 +68,8 @@ REQUIRED_PAYLOAD_FIELDS = {
 FORBIDDEN_PACK_TEXT = {
     "/Users/",
     "gho_",
+    "selected Vault PR #7",
+    "when the exact personal Vault opts in",
 }
 
 
@@ -142,6 +145,20 @@ def list_entries(text: str, section: str) -> list[dict[str, str]]:
     return entries
 
 
+def block_list(text: str, section: str) -> list[str]:
+    values: list[str] = []
+    in_section = False
+    for raw in text.splitlines():
+        if raw == f"{section}:":
+            in_section = True
+            continue
+        if in_section and raw and not raw.startswith(" "):
+            break
+        if in_section and raw.startswith("  - "):
+            values.append(unquote(raw[4:].strip()))
+    return values
+
+
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -208,6 +225,11 @@ def check_manifest(path: Path) -> list[str]:
         seen_ids.add(item_id)
         if entry.get("destination_layer") != "canonical_vault_record":
             errors.append(f"{rel_manifest}: {item_id} must target canonical_vault_record in MVP fixtures")
+        expected_activation = "active" if manifest.get("distribution_type") == "mandatory_bootstrap" else "manual_review"
+        if entry.get("activation_default") != expected_activation:
+            errors.append(
+                f"{rel_manifest}: {item_id} activation_default must be {expected_activation}"
+            )
         digest = entry.get("content_sha256", "")
         if not SHA256_RE.match(digest):
             errors.append(f"{rel_manifest}: {item_id} has invalid content_sha256")
@@ -248,6 +270,62 @@ def check_manifest(path: Path) -> list[str]:
     return errors
 
 
+def check_catalog() -> list[str]:
+    errors: list[str] = []
+    if not CATALOG_PATH.exists():
+        return ["catalog/capability-packs/index.yaml: missing"]
+    entries = list_entries(read(CATALOG_PATH), "entries")
+    by_id = {entry.get("pack_id", ""): entry for entry in entries}
+    expected_ids = {"pack.bootstrap.minimal", "pack.multi-agent.optional"}
+    if set(by_id) != expected_ids:
+        errors.append(f"catalog pack ids must be exactly {sorted(expected_ids)}; got {sorted(by_id)}")
+    for pack_id, entry in by_id.items():
+        manifest_path = ROOT / entry.get("manifest_path", "")
+        if not manifest_path.exists():
+            errors.append(f"catalog {pack_id}: manifest missing: {entry.get('manifest_path', '')}")
+            continue
+        manifest = top_level_scalars(read(manifest_path))
+        if entry.get("latest_version") != manifest.get("version"):
+            errors.append(
+                f"catalog {pack_id}: latest_version {entry.get('latest_version', '')} != manifest {manifest.get('version', '')}"
+            )
+        if entry.get("manifest_sha256") != sha256(manifest_path):
+            errors.append(f"catalog {pack_id}: manifest_sha256 mismatch")
+        if entry.get("title") != manifest.get("title"):
+            errors.append(f"catalog {pack_id}: title does not match manifest")
+        for field in ["readme_path", "changelog_path"]:
+            if not (ROOT / entry.get(field, "")).exists():
+                errors.append(f"catalog {pack_id}: {field} missing")
+    return errors
+
+
+def check_dependency_closure(manifest_paths: list[Path]) -> list[str]:
+    errors: list[str] = []
+    manifests = {top_level_scalars(read(path)).get("pack_id", ""): path for path in manifest_paths}
+    bootstrap_path = manifests.get("pack.bootstrap.minimal")
+    bootstrap_ids = (
+        {entry.get("id", "") for entry in list_entries(read(bootstrap_path), "included_records")}
+        if bootstrap_path
+        else set()
+    )
+    for pack_id, manifest_path in manifests.items():
+        text = read(manifest_path)
+        entries = list_entries(text, "included_records")
+        available = {entry.get("id", "") for entry in entries}
+        if section_scalars(text, "compatibility").get("requires_bootstrap_pack") == "true":
+            available |= bootstrap_ids
+        for entry in entries:
+            if entry.get("kind") != "asset":
+                continue
+            asset_path = manifest_path.parent / entry.get("path", "")
+            if not asset_path.exists():
+                continue
+            missing = sorted(set(block_list(read(asset_path), "canonical_practices")) - available)
+            if missing:
+                errors.append(f"{pack_id}: {entry.get('id', '')} missing dependency closure {missing}")
+    return errors
+
+
 def check_no_forbidden_fixture_text(manifest_rel: Path, path: Path) -> list[str]:
     errors: list[str] = []
     text = read(path)
@@ -279,6 +357,8 @@ def main() -> int:
     for required_type in ["mandatory_bootstrap", "optional_capability"]:
         if required_type not in distribution_types:
             errors.append(f"Missing capability pack fixture with distribution_type {required_type}")
+    errors.extend(check_dependency_closure(manifest_paths))
+    errors.extend(check_catalog())
     errors.extend(check_vault_fixtures())
 
     if errors:

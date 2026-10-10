@@ -88,9 +88,159 @@ def expect_text_contains(name: str, text: str, snippets: list[str]) -> list[str]
     return [f"{name}: missing {missing!r}"]
 
 
+def activation_fixture_checks() -> list[str]:
+    errors: list[str] = []
+    route_skill = "\n".join(
+        [
+            "# Routed collaboration skill",
+            "",
+            "## Semantic Practice Routes",
+            "- COLLAB-015: read `references/COLLAB-015.md` when before_accepting_user_facing_capability.",
+            "",
+        ]
+    )
+    reference_text = "\n".join(
+        [
+            "# Canonical Practice COLLAB-015",
+            "",
+            "Add activation evidence before closure.",
+            "If any activation evidence is missing, retain an explicit activation-pending follow-up.",
+            "Record the target environment where it was tried.",
+            "Record the smoke path that proves the intended audience can invoke it.",
+            "Provide the user-facing enablement instructions.",
+            "",
+        ]
+    )
+    legacy_text = "activation evidence\ntarget runtime\nuser-facing activation instructions\n"
+
+    with tempfile.TemporaryDirectory(prefix="agent-foundry-activation-report-") as raw:
+        base = Path(raw)
+        launcher = base / "bin" / "agent-foundry-github-collab"
+        write(launcher, "#!/bin/sh\nexit 0\n")
+
+        def make_skill(name: str, skill_text: str, reference: str | None = None) -> Path:
+            skill = base / name / "SKILL.md"
+            write(skill, skill_text)
+            if reference is not None:
+                write(skill.parent / "references" / "COLLAB-015.md", reference)
+            return skill
+
+        def report(runtime_skill: Path, generated_skill: Path) -> subprocess.CompletedProcess[str]:
+            return run(
+                [
+                    "--json",
+                    "activation-report",
+                    "--launcher",
+                    str(launcher),
+                    "--runtime-skill",
+                    str(runtime_skill),
+                    "--generated-skill",
+                    str(generated_skill),
+                ],
+                base,
+            )
+
+        legacy = make_skill("legacy", legacy_text)
+        routed = make_skill("routed", route_skill, reference_text)
+        legacy_result = report(legacy, legacy)
+        errors.extend(expect_ok("activation-legacy-inline", legacy_result, '"guidance_mode": "inline_legacy"'))
+        routed_result = report(routed, routed)
+        errors.extend(expect_ok("activation-routed-reference", routed_result, '"guidance_mode": "routed_reference"'))
+        if routed_result.returncode == 0:
+            routed_payload = json.loads(routed_result.stdout)
+            generated = routed_payload["generated_skill"]
+            if any(generated["required_text_present"].values()):
+                errors.append("activation-routed-top-level: routed evidence was misreported as top-level text")
+            if generated["evidence_paths"] != [
+                str(routed),
+                str(routed.parent / "references" / "COLLAB-015.md"),
+            ]:
+                errors.append("activation-routed-evidence-paths: actual evidence paths were not reported")
+            if routed_payload["mutation_performed"] is not False:
+                errors.append("activation-routed-mutation: report did not remain read-only")
+
+        no_route = make_skill("no-route", "# COLLAB-015 is listed but not routed\n", reference_text)
+        errors.extend(expect_fail("activation-reference-without-route", report(legacy, no_route), "routed reference is not declared"))
+
+        wrong_section = make_skill(
+            "wrong-section",
+            "# Routed collaboration skill\n\n## Process\n"
+            "- COLLAB-015: read `references/COLLAB-015.md` when closing.\n",
+            reference_text,
+        )
+        errors.extend(expect_fail("activation-route-wrong-section", report(legacy, wrong_section), "routed reference is not declared"))
+
+        missing_reference = make_skill("missing-reference", route_skill)
+        errors.extend(expect_fail("activation-route-missing-reference", report(legacy, missing_reference), "missing or unreadable"))
+
+        unreadable_reference = make_skill("unreadable-reference", route_skill)
+        (unreadable_reference.parent / "references" / "COLLAB-015.md").mkdir(parents=True)
+        errors.extend(expect_fail("activation-route-unreadable-reference", report(legacy, unreadable_reference), "is unreadable"))
+
+        vague_reference = make_skill(
+            "vague-reference",
+            route_skill,
+            "COLLAB-015\nactivation evidence\ntarget environment\nuser-facing enablement instructions\n",
+        )
+        errors.extend(expect_fail("activation-route-vague-anchors", report(legacy, vague_reference), "activation_evidence_and_pending"))
+
+        for name, phrase, expected in [
+            ("missing-activation", "add activation evidence before closure", "activation_evidence_and_pending"),
+            ("missing-target-smoke", "the target environment where it was tried", "target_environment_and_smoke_path"),
+            ("missing-enablement", "the user-facing enablement instructions", "user_facing_enablement_instructions"),
+        ]:
+            incomplete = make_skill(name, route_skill, reference_text.lower().replace(phrase, "removed obligation"))
+            errors.extend(expect_fail(f"activation-route-{name}", report(legacy, incomplete), expected))
+
+        traversal_skill = make_skill(
+            "traversal",
+            route_skill.replace("references/COLLAB-015.md", "../outside/COLLAB-015.md"),
+        )
+        write(traversal_skill.parent.parent / "outside" / "COLLAB-015.md", reference_text)
+        errors.extend(expect_fail("activation-route-traversal", report(legacy, traversal_skill), "must be exactly"))
+
+        symlink_skill = make_skill("symlink", route_skill)
+        outside_reference = base / "outside-reference.md"
+        write(outside_reference, reference_text)
+        symlink_path = symlink_skill.parent / "references" / "COLLAB-015.md"
+        symlink_path.parent.mkdir(parents=True)
+        symlink_path.symlink_to(outside_reference)
+        errors.extend(expect_fail("activation-route-symlink", report(legacy, symlink_skill), "must not use symlinks"))
+
+        real_skill_dir = base / "real-skill-dir"
+        write(real_skill_dir / "SKILL.md", route_skill)
+        write(real_skill_dir / "references" / "COLLAB-015.md", reference_text)
+        symlink_skill_dir = base / "symlink-skill-dir"
+        symlink_skill_dir.symlink_to(real_skill_dir, target_is_directory=True)
+        errors.extend(
+            expect_fail(
+                "activation-skill-directory-symlink",
+                report(legacy, symlink_skill_dir / "SKILL.md"),
+                "skill directory must not be symlinks",
+            )
+        )
+
+        generated_bad = report(legacy, missing_reference)
+        installed_bad = report(missing_reference, routed)
+        for name, result, good_key, bad_key in [
+            ("activation-independent-generated-bad", generated_bad, "installed_runtime_skill", "generated_skill"),
+            ("activation-independent-installed-bad", installed_bad, "generated_skill", "installed_runtime_skill"),
+        ]:
+            if result.returncode != 8:
+                errors.append(f"{name}: expected exit 8, got {result.returncode}")
+                continue
+            payload = json.loads(result.stdout)
+            if not payload[good_key]["ok"] or payload[bad_key]["ok"] or payload["status"] != "incomplete":
+                errors.append(f"{name}: one skill incorrectly supplied evidence for the other")
+            else:
+                print(f"{name}: ok")
+    return errors
+
+
 def main() -> int:
     errors: list[str] = []
     errors.extend(terminal_handoff_fixture_checks())
+    errors.extend(activation_fixture_checks())
     workflow_text = WORKFLOW.read_text(encoding="utf-8")
     template_text = TEMPLATE.read_text(encoding="utf-8")
     errors.extend(

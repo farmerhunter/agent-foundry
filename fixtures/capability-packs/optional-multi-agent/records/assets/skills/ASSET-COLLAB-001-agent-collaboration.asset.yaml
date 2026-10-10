@@ -1,0 +1,96 @@
+id: ASSET-COLLAB-001
+title: Agent Collaboration
+asset_type: skill
+status: active
+version: 39
+created: 2026-05-28
+updated: 2026-08-31
+purpose: Deliver GitHub Issue/PR work and coordinate Epic, handoff and workspace lifecycle decisions.
+discovery_description: "Use for GitHub Issue/PR delivery, review handoff, Epic coordination or workspace lifecycle. Not for every code task. Delegate role-session/automation planning to Role Automation Planner and reusable-lesson changes to Practice Harvester."
+responsibility: Own durable Work scope, delivery authority, review/handoff and truthful completion; select the applicable existing practice before acting.
+non_responsibility: Does not own domain architecture, canonical Harvest, runtime installation or detailed role automation; mentioning a repository alone does not invoke this workflow.
+inputs:
+  - Current user request, repository policy and issue/PR/Epic scope
+  - Relevant current branch/workspace, dependencies, review evidence and next owner
+  - Only for the selected operation, Project state, runtime locators or explicit external prerequisite
+process:
+  - Identify the requested operation; load COLLAB-001 for authority and only the matching practice_routes before acting. A reference catalogue is not an instruction to read everything or follow every Related Practices link.
+  - If intent or rule applicability is uncertain, state legacy fallback, inspect only relevant existing rules, and resolve the uncertainty before the affected action; never silently load the full library or expand authority.
+  - For Work execution or handoff, apply COLLAB-009 to make outcome, writer, branch/target, relevant checks and next owner clear; reuse durable decisions and the adopted adaptive-isolation/Epic policy.
+  - Perform already-authorized checks, task commits, push and PR updates without repeated approval; explicit holds and protected boundaries remain binding.
+  - Verify current candidate behavior and finish against the original task, not implementation momentum. Classify failed evidence before requesting product repair; use the lean review/repair rules, not extra role counts or repeated same-environment trials.
+  - Record what changed, verification, residuals and next permitted action on the existing issue/PR; coordinate labels/Project only when the requested transition warrants it.
+  - For a role dispatch or schedule, hand the bounded Work and authority to Role Automation Planner. Do not load its full policy for ordinary delivery or mistake a copied prompt for dispatch.
+  - For explicit bounded onboarding, follow COLLAB-017 public locator-only preflight; report owner-backed project/control/scheduler state or hold. Native apply needs its own authorization and readback; two default persistent roles are Coordinator and Durable Architect, not RoleHub, and two roles are not a project-wide thread cap.
+  - For an architecture decision use Architecture Design; for reusable lessons, skills, packs or canonical publication use Practice Harvester. Passing issue checks does not activate canonical or installed content.
+  - Before a protected effect or final closure, check current authority and evidence again. Explain any real Human decision in chat; if an unavailable external prerequisite is decisive, hold with one resume condition instead of inventing substitute Work.
+outputs:
+  - Scoped delivery or review with durable evidence, next owner and explicit merge/closure status
+  - Applicable permission/hold or specialist handoff, not an automatic new role or framework
+canonical_practices:
+  - COLLAB-001
+  - COLLAB-002
+  - COLLAB-003
+  - COLLAB-004
+  - COLLAB-005
+  - COLLAB-006
+  - COLLAB-007
+  - COLLAB-008
+  - COLLAB-009
+  - COLLAB-010
+  - COLLAB-011
+  - COLLAB-012
+  - COLLAB-013
+  - COLLAB-014
+  - COLLAB-015
+  - COLLAB-016
+  - COLLAB-017
+  - GOV-006
+  - IMPL-001
+  - TEST-001
+  - TEST-004
+  - TEST-005
+practice_routes:
+  COLLAB-001: always_for_declared_asset
+  COLLAB-002: when_reporting_completion_or_requesting_review
+  COLLAB-003: before_merging_a_PR
+  COLLAB-004: before_writable_multi_agent_work_or_remote_sync
+  COLLAB-005: when_resuming_interrupted_work_or_rebinding_a_session
+  COLLAB-006: before_claiming_the_requested_task_complete
+  COLLAB-007: when_bootstrapping_a_repo_workflow_contract
+  COLLAB-008: when_changing_Project_or_role_inbox_state
+  COLLAB-009: when_planning_executing_handing_off_or_repairing_Work
+  COLLAB-010: when_selecting_from_a_dependency_queue
+  COLLAB-011: when_Work_belongs_to_an_Epic_or_branch_strategy_is_chosen
+  COLLAB-012: when_handing_off_review_or_a_Human_decision
+  COLLAB-013: before_dirty_concurrent_manual_edits_or_workspace_rebind_cleanup
+  COLLAB-014: when_transferring_design_research_or_long_running_knowledge
+  COLLAB-015: before_accepting_user_facing_capability_or_Epic_milestone_closure
+  COLLAB-016: when_bounded_collaboration_is_adopted_or_a_non_substitutable_prerequisite_blocks
+  COLLAB-017: when_explicitly_onboarding_or_diagnosing_bounded_collaboration
+  GOV-006: when_claiming_design_implementation_runtime_or_deferred_capability
+  IMPL-001: when_posting_Markdown_through_a_CLI
+  TEST-001: when_converting_or_delivering_a_rendered_document
+  TEST-004: when_running_repository_verification_or_resolving_test_environment
+  TEST-005: when_verifying_a_user_facing_path_or_activation_claim
+published_to:
+  - codex
+  - claude-code
+  - hermes
+  - trae
+  - chatgpt
+usage_triggers:
+  - Implement or review a GitHub issue or pull request
+  - Coordinate an Epic or dependency-gated Work handoff
+  - Resume repository work or plan authorized workspace cleanup
+  - Diagnose or explicitly onboard bounded multi-agent collaboration
+success_criteria:
+  - Ordinary Issue/PR work loads its authority and delivery guidance, not onboarding, scheduling or cleanup procedures without their trigger.
+  - The requested operation reaches verification and its authorized handoff; dispatch, design acceptance, code integration and runtime activation remain distinct claims.
+  - No explicit hold or privacy/security/destructive/canonical/runtime boundary is bypassed; no redundant Human gate is invented for delegated steps.
+  - Workspace selection preserves one writer and Epic integration preference; cleanup and future Work never inherit permission from a merge alone.
+  - Positive, negative and specialist-delegation requests choose a clear owner; reference lookup does not chain through the entire asset library.
+  - Blockers and repairs remain decision-relevant; ordinary cost estimates are not measured telemetry and no small-sample trial or score is fabricated.
+review_cadence: monthly
+review_after_days: 90
+evidence_summary: "#576 proposed content synthesis of existing delivery, lean-contract and owner-routing guidance. All canonical practice memberships are retained; long procedures move to their conditionally selected existing owners, not a second authority."

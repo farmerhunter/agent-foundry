@@ -4,9 +4,9 @@ title: Treat user corrections as process evidence before content evidence
 domain: meta
 type: heuristic
 status: active
-version: 3
+version: 4
 created: 2026-06-08
-updated: 2026-06-10
+updated: 2026-08-10
 tags: [feedback-learning, corrections, harvesting, process-evidence]
 aliases:
   - META-012
@@ -18,7 +18,7 @@ applies_when:
   - reviewing an agent failure or workflow drift
   - deciding whether correction content belongs in a domain record or process rule
 review_required: false
-provenance: "Corrected harvest outcome from ChatGPT memory-system design and harvest discipline discussion; source context: docs/memory-system-handoff-dump.md."
+provenance: "Corrected harvest outcome from ChatGPT memory-system design and harvest discipline discussion; source context: docs/memory-system-handoff-dump.md. Extended after AF18 repeated corrections about scope drift, over-gating, and confusing internal structure with user experience on 2026-08-10."
 ---
 
 ## Principle
@@ -36,6 +36,10 @@ Analyze corrections for:
 - agent failure mode;
 - workflow weakness;
 - prompting gap;
+
+- scope drift or an issue that has absorbed another owner or lifecycle lane;
+- a missing stop condition or capability-state vocabulary;
+- a mismatch between the internal implementation shape and the user's requested workflow;
 - review checklist gap;
 - handoff risk;
 - harvest risk;

@@ -13,6 +13,7 @@ import re
 from pathlib import Path
 
 from foundry_config import CONFIG_PATH, parse_config
+from publish_adapters import asset_routing
 
 
 DEFAULT_ROOT = Path(__file__).resolve().parents[1]
@@ -288,12 +289,24 @@ def check_generated_skill_artifacts(generated_root: Path, vault_root: Path, mani
             "final `main` integration",
         ],
         "ASSET-COLLAB-002": [
-            "rehydration step from durable sources",
-            "transition gate it is satisfying",
-            "target role to rehydrate durable sources",
+            "create_thread",
+            "setup_pending",
+            "fresh_only",
+            "thread_id_unresolved",
+            "reply_to_thread_id",
+            "One onboarding executor owns both sends and verification",
+            "carry the wait_threads cursor forward",
+            "do not scan private sessions, databases or transcripts",
+            "Accepted creation, initialized owner readback, peer acknowledgement and ready are distinct states",
         ],
     }
     for record in active_skill_assets(vault_root):
+        source_text = read(vault_root / str(record["source_path"]))
+        try:
+            routing = asset_routing(source_text, record["canonical_practices"])
+        except ValueError as error:
+            errors.append(f"Selected output canonical routing invalid: {record['id']}: {error}")
+            continue
         published_to = record.get("published_to", [])
         if not isinstance(published_to, list):
             continue
@@ -344,12 +357,21 @@ def check_generated_skill_artifacts(generated_root: Path, vault_root: Path, mani
                     errors.append(
                         f"Selected output skill artifact: {adapter_id} {record['id']} SKILL.md missing {label}: {path}"
                     )
-            for phrase in asset_contract_phrases.get(str(record["id"]), []):
+            phrases = asset_contract_phrases.get(str(record["id"]), [])
+            if "practice_routes" in routing:
+                phrases = [yaml_scalar(source_text, "non_responsibility")]
+                for field in ("inputs", "process", "outputs", "success_criteria", "usage_triggers"):
+                    phrases.extend(yaml_list(source_text, field))
+            for phrase in phrases:
                 if phrase not in text:
                     errors.append(
                         f"Selected output skill artifact: {adapter_id} {record['id']} "
                         f"SKILL.md missing contract phrase {phrase!r}: {path}"
                     )
+            if "discovery_description" in routing:
+                actual = yaml_scalar(text, "description").replace('\\"', '"').replace("\\\\", "\\")
+                if actual != routing["discovery_description"]:
+                    errors.append(f"Selected output discovery description differs from canonical asset: {path}")
     return errors
 
 
@@ -424,6 +446,8 @@ def expected_semantic_routes(vault_root: Path) -> dict[tuple[str, str, str], dic
         published_to = asset.get("published_to", [])
         if not isinstance(practices_for_asset, list) or not isinstance(published_to, list):
             continue
+        source_asset = vault_root / str(asset.get("source_path", asset.get("path", "")))
+        routing = asset_routing(read(source_asset), practices_for_asset)
         for practice_id in practices_for_asset:
             practice = practices.get(str(practice_id))
             if practice is None:
@@ -446,6 +470,8 @@ def expected_semantic_routes(vault_root: Path) -> dict[tuple[str, str, str], dic
                     "installed_path": semantic_installed_path(target, str(asset["slug"]), str(practice_id)),
                     "packaging": packaging,
                 }
+                if "practice_routes" in routing:
+                    expected[(target, str(asset["id"]), str(practice_id))]["condition"] = routing["practice_routes"][str(practice_id)]
     return expected
 
 
@@ -473,7 +499,10 @@ def check_semantic_reachability(generated_root: Path, vault_root: Path, manifest
             "selected-output root. Re-run publish_adapters.py for the exact --generated-root."
         ]
 
-    expected = expected_semantic_routes(vault_root)
+    try:
+        expected = expected_semantic_routes(vault_root)
+    except ValueError as error:
+        return [f"Selected output canonical routing invalid: {error}"]
     routes = semantic_manifest_routes(semantic_path)
     seen: set[tuple[str, str, str]] = set()
     for route in routes:
@@ -493,6 +522,8 @@ def check_semantic_reachability(generated_root: Path, vault_root: Path, manifest
             errors.append(f"Selected output semantic reachability: required mapping not declared required: {key}")
         if not route.get("condition") or route.get("condition") == "not_applicable":
             errors.append(f"Selected output semantic reachability: missing conditional route: {key}")
+        if "condition" in contract and route.get("condition") != contract["condition"]:
+            errors.append(f"Selected output semantic reachability: condition differs from canonical asset: {key}")
         if route.get("route_kind") != "reference_file":
             errors.append(f"Selected output semantic reachability: unsupported or ID-only route kind: {key}")
         for field in ["source_path", "source_sha256", "router_path", "target_path", "installed_path", "packaging"]:
@@ -507,16 +538,30 @@ def check_semantic_reachability(generated_root: Path, vault_root: Path, manifest
         target = contained_generated_path(generated_root, route.get("target_path", ""))
         if router is None or not router.is_file():
             errors.append(f"Selected output semantic reachability: missing or out-of-root router for {key}")
-        elif key[2] not in read(router) or (
-            route.get("installed_path") or route.get("target_path", "")
-        ) not in read(router):
+        elif key[2] not in read(router) or not any(
+            locator and locator in read(router)
+            for locator in (
+                route.get("installed_path") or route.get("target_path", ""),
+                f"references/{key[2]}.md" if key[0] in SKILL_FOLDER_ADAPTERS else "",
+            )
+        ):
             errors.append(
                 f"Selected output semantic reachability: ID-only router has no readable reference route for {key}"
             )
+        elif "condition" in contract:
+            if key[0] in SKILL_FOLDER_ADAPTERS:
+                expected_line = f"- {key[2]}: read `references/{key[2]}.md` when {contract['condition']}."
+            else:
+                locator = contract["installed_path"] or contract["target_path"]
+                expected_line = f"- {key[1]} -> {key[2]}: `{locator}` ({contract['condition']})"
+            if expected_line not in read(router).splitlines():
+                errors.append(f"Selected output router omits canonical condition binding: {key}")
         if target is None or not target.is_file():
             errors.append(f"Selected output semantic reachability: missing or out-of-root readable target for {key}")
         elif key[2] not in read(target) or route.get("source_sha256", "") not in read(target):
             errors.append(f"Selected output semantic reachability: readable target lacks provenance for {key}")
+        elif not read(target).endswith(read(vault_root / contract["source_path"]).rstrip() + "\n"):
+            errors.append(f"Selected output semantic reachability: reference content differs from canonical source: {key}")
 
     for key in expected:
         if key not in seen:

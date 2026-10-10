@@ -24,17 +24,16 @@ fallback.
 
 ### Bounded collaboration initialization postcondition
 
-`prepare this repo for multi-agent collaboration` and the first-use phrase
-**“开启多agent协作”** are not successful merely because a repository contract
-or prompt was created. A successful result names the bound project, reports
-whether the durable Coordinator and Architect topology was reused, created or
-held, and verifies a durable scheduler/Work-root binding. It also says whether
-native role onboarding occurred or only repository-contract setup did. If any
-one of those facts is unavailable or ambiguous, the result is a hold with one
-next action—not `initialized`. [#548](https://github.com/farmerhunter/agent-foundry/issues/548)
-and [#549](https://github.com/farmerhunter/agent-foundry/issues/549) remain
-historical defect/governance evidence, not unresolved current capability
-blockers. The accepted owner record reports `native_ready`, bound
+原生双角色初始化使用 [native onboarding workflow](../workflows/onboard-bounded-collaboration.md)。
+`NativeOnboardingReceipt/v1` 只证明 Coordinator 和 Durable Architect 的公共
+owner readback，以及按请求完成的 peer handshake；不要求或证明 SQLite/scheduler。
+Repository contract 或 prompt 仍不能替代实际角色初始化。
+
+显式选择 SQLite local lifecycle 时，另行验证 project binding 与
+scheduler/Work-root，缺失或含糊的 readback 返回 HOLD。
+[#548](https://github.com/farmerhunter/agent-foundry/issues/548) 和
+[#549](https://github.com/farmerhunter/agent-foundry/issues/549) 是已修复的历史证据。
+该旧 owner-composed 路径的 accepted owner record reports `native_ready`, bound
 project/control/scheduler/Work-root state and opaque durable-role references,
 while `native_reachability=not_checked` and `mutation_performed=false`; do not
 infer live App Server/thread or current host-process reachability.
@@ -74,6 +73,8 @@ maintenance commands retain their normal meanings.
 | `recommend capability packs for my setup` | `推荐适合当前环境的 capability packs` | Recommend reviewed packs using compatibility, availability, generated output, and runtime status as report signals only. |
 | `preview capability pack deployment <path>` | `预览 capability pack 部署 <路径>` | Plan selected Vault impact and review gates before any apply; preview reports `writes: none`. |
 | `apply reviewed capability pack <path>` | `应用已 review 的 capability pack <路径>` | Apply only after the reviewed plan and required gates are accepted. Selected Vault is canonical; generated/runtime follow-up stays separate. |
+| `activate reviewed optional pack <pack-id>` | `激活已批准的 optional pack <pack-id>` | Dry-run the exact proposed membership first; after Human adoption approval, apply with the unchanged `review_token` and a fresh private backup root. This changes selected Vault lifecycle state only. |
+| `restore optional pack activation <backup-root>` | `从备份恢复 optional pack activation <backup-root>` | Validate that current files still match the activation receipt postimages, then restore exact preimages only with explicit `--apply`. Generated/runtime remain separate. |
 | `verify capability pack <pack-id>` | `验证 capability pack <pack-id>` | Read pack metadata, selected Vault impact, generated output, runtime receipts, and manual target state before declaring the pack usable. |
 | `update capability pack <pack-id-or-path>` | `更新 capability pack <pack-id-or-path>` | Compare a reviewed newer pack against deployed metadata and local edits; report clean update, merge required, blocked, or unsupported before writes. |
 | `disable capability pack <pack-id>` | `停用 capability pack <pack-id>` | Produce a dry-run lifecycle/rollback plan first; do not delete selected Vault records or mutate runtime files silently. |

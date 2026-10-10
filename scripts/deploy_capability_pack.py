@@ -334,7 +334,52 @@ def add_yaml_deployment_metadata(text: str, manifest: dict[str, str]) -> str:
     return text.rstrip() + "\n" + metadata + "\n"
 
 
-def deployed_record_text(kind: str, source_text: str, manifest: dict[str, str]) -> str:
+def deployment_status(source_status: str, activation_default: str) -> str:
+    if activation_default == "manual_review":
+        return "proposed"
+    return source_status
+
+
+def set_record_status(kind: str, text: str, status: str) -> str:
+    if not status:
+        return text
+    lines = text.splitlines()
+    if kind == "practice":
+        if not lines or lines[0] != "---":
+            return text
+        for index in range(1, len(lines)):
+            if lines[index] == "---":
+                break
+            if lines[index].startswith("status:"):
+                lines[index] = f"status: {status}"
+                return "\n".join(lines).rstrip() + "\n"
+        return text
+    if kind == "asset":
+        for index, line in enumerate(lines):
+            if line.startswith("status:"):
+                lines[index] = f"status: {status}"
+                return "\n".join(lines).rstrip() + "\n"
+    return text
+
+
+def deployed_record_text(
+    kind: str,
+    source_text: str,
+    manifest: dict[str, str],
+    activation_default: str = "",
+) -> str:
+    source_status = ""
+    if kind == "practice":
+        source_status = next(
+            (line.split(":", 1)[1].strip().strip('"') for line in source_text.splitlines() if line.startswith("status:")),
+            "",
+        )
+    elif kind == "asset":
+        source_status = next(
+            (line.split(":", 1)[1].strip().strip('"') for line in source_text.splitlines() if line.startswith("status:")),
+            "",
+        )
+    source_text = set_record_status(kind, source_text, deployment_status(source_status, activation_default))
     if kind == "practice":
         return add_markdown_deployment_metadata(source_text, manifest)
     if kind == "asset":
@@ -374,8 +419,9 @@ def parse_pack_records(
             errors.append(f"included_record {item_id} content_sha256 mismatch")
             continue
         source_text = read(source_path)
-        text = deployed_record_text(entry["kind"], source_text, manifest)
+        text = deployed_record_text(entry["kind"], source_text, manifest, entry.get("activation_default", ""))
         destination_path, index_entry, destination_errors = destination_for(vault_root, entry["kind"], source_path)
+        index_entry["status"] = deployment_status(index_entry.get("status", ""), entry.get("activation_default", ""))
         errors.extend(destination_errors)
         if index_entry.get("id") and index_entry.get("id") != item_id:
             errors.append(f"included_record {item_id} id does not match record metadata {index_entry.get('id')}")

@@ -1,5 +1,9 @@
 # Usage Guide
 
+系统概念、应用场景与恢复策略请先阅读
+[Practices 与 Skills 用户指南（中文）](practice-and-skill-system.md)；
+另附 [English edition](practice-and-skill-system.en.md)。
+
 This guide is for day-to-day Agent Foundry use. It keeps the user path short and leaves internal workflow details in the workflow/reference docs.
 
 **中文要点：** 这是日常使用指南。先看短命令和用户流程；内部 workflow 细节不用先读。
@@ -164,6 +168,22 @@ python3 scripts/install_foundry.py --apply             # only after reviewing dr
 python3 scripts/sync_status.py
 ```
 
+Omitting `--target` processes the manifest and installs every target whose
+status is `enabled`; disabled targets are skipped and manual targets remain
+manual. To select one runtime, supply `--target <name>` exactly once, for
+example `--target codex`. Repeated `--target` options, including repeated
+`--target=<name>` forms, are rejected before configuration, launcher, runtime,
+receipt, or other external installer work begins. The installer intentionally
+does not provide a multi-target list option: omit `--target` for all enabled
+targets, or make separate single-target calls when separate evidence is needed.
+
+Each successful `--apply` invocation overwrites the on-disk adapter install
+receipt with the targets installed by that invocation. Consecutive
+single-target applies do not accumulate or merge receipt target entries.
+Preserve each call's receipt/status evidence if a staged install must prove
+multiple runtimes, or use one authorized all-enabled apply when that target set
+is intended.
+
 Do not copy another machine's `runtime/local/`, `~/.agent-foundry/config.yaml`, runtime directories, or ChatGPT project files as canonical truth. Recreate local state from Core plus the selected Vault, then verify with `sync_status.py`.
 
 **中文要点：** 新机器从 Core + selected Vault 重建；不要复制另一台机器的 runtime/local、config 或 runtime directories。
@@ -288,8 +308,16 @@ Use plan commands before apply commands when operating manually or debugging:
 ```bash
 python3 scripts/plan_capability_pack.py <pack-path> --vault-root <vault-root>
 python3 scripts/apply_capability_pack.py <pack-path> --vault-root <vault-root>
+python3 scripts/update_capability_pack.py <newer-pack-path> --vault-root <vault-root>
+python3 scripts/update_capability_pack.py <newer-pack-path> --vault-root <vault-root> --backup-root <fresh-private-backup-path> --apply
+python3 scripts/update_capability_pack.py --restore <backup-path> --vault-root <vault-root>
+python3 scripts/update_capability_pack.py --restore <backup-path> --vault-root <vault-root> --apply
 python3 scripts/manage_capability_pack_lifecycle.py --vault-root <vault-root> --pack-id <pack-id> --action disable
 ```
+
+Fresh optional-pack import writes member records as `proposed`; it does not activate generated output or install a runtime. Update apply is allowed only for a newer deployed version when every touched existing member still matches its recorded deployed hash. `merge_required` stops before backup or writes. Restore checks every expected update postimage before changing any file, so a later adopter edit blocks the whole restore instead of being overwritten.
+
+**中文要点：** optional pack 首次导入只会形成 `proposed` 内容，不会自动激活。升级前必须确认目标记录没有本地改动，并写入新的私有 backup；恢复时先核对升级后的 postimage，发现后续改动就整体停止。
 
 **中文要点：** power-user workflows 只在明确要求时使用，默认输出 review packet。没有后续 reviewed step，不得 create/activate/export/publish/deploy pack。
 

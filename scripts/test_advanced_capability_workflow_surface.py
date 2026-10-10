@@ -220,11 +220,10 @@ def validate_official_catalog() -> list[str]:
     )
     for snippet in [
         "ASSET-META-001",
-        "runtime and generated status",
-        "standalone capability pack",
         "architecture boundary",
         "Generated and Runtime downstream-status orientation",
         "Local Private evidence exclusion",
+        "standalone architecture-boundary optional pack records",
     ]:
         if snippet not in bootstrap_manifest + bootstrap_readme:
             errors.append(f"bootstrap starter catalog must preserve {snippet!r}")
@@ -238,11 +237,36 @@ def validate_official_catalog() -> list[str]:
         "pack.multi-agent.optional",
         "manual_review",
         "selected User Vault records",
-        "Project v2 as the scheduler source of truth",
-        "project issue numbers, branch names, Project ids, and local cache files",
+        "project state",
+        "repository-specific merge grants",
     ]:
         if snippet not in multi_manifest:
             errors.append(f"GitHub collaboration starter missing compatibility anchor {snippet!r}")
+    if "Project v2 as the scheduler source of truth" in multi_manifest:
+        errors.append("GitHub collaboration starter must not claim Project v2 scheduler authority")
+
+    multi_changelog = (
+        ROOT / "catalog" / "capability-packs" / "pack.multi-agent.optional" / "CHANGELOG.md"
+    ).read_text(encoding="utf-8")
+    if "Project v2 as an optional visual mirror, not scheduler authority" not in multi_changelog:
+        errors.append("GitHub collaboration starter must retain the optional Project v2 mirror boundary")
+
+    scheduler_practice = (
+        ROOT
+        / "fixtures"
+        / "capability-packs"
+        / "optional-multi-agent"
+        / "records"
+        / "practices"
+        / "agent-collaboration"
+        / "COLLAB-008-use-github-project-as-lightweight-agent-scheduler.md"
+    ).read_text(encoding="utf-8")
+    for snippet in [
+        "GitHub Project, with issues, labels, comments, PRs, and CI",
+        "durable issue, PR, label, or Execution Contract state is updated",
+    ]:
+        if snippet not in scheduler_practice:
+            errors.append(f"GitHub collaboration starter missing scheduler authority boundary {snippet!r}")
 
     architecture_pack_paths = [
         ROOT / "catalog" / "capability-packs" / "pack.architecture-boundary-review.starter",
@@ -487,7 +511,7 @@ def main() -> int:
         )
 
         basic_plan = run([str(PLAN), str(BOOTSTRAP_PACK), "--core-root", str(ROOT), "--vault-root", str(vault)])
-        errors.extend(expect("advanced-basic-pack-flow-still-works", basic_plan, True, "add: 25"))
+        errors.extend(expect("advanced-basic-pack-flow-still-works", basic_plan, True, "add: 26"))
         errors.extend(expect("advanced-basic-pack-writes-none", basic_plan, True, "writes: none"))
 
         candidate_pack = write_candidate_as_manifest(base)

@@ -22,6 +22,16 @@ class LocalCollaborationFrontDoorTests(unittest.TestCase):
         self.assertIn("start local collaboration", self.workflow)
         self.assertIn("local-collaboration-lifecycle.md", self.guide)
 
+    def test_native_only_initialization_stays_separate_from_sqlite_activation(self):
+        native = (ROOT / "workflows" / "onboard-bounded-collaboration.md").read_text(encoding="utf-8")
+        self.assertIn("NativeOnboardingReceipt/v1", native)
+        self.assertIn("receipt proves only native role initialization", native)
+        self.assertIn("does not assign Work or grant scheduler", native)
+        self.assertIn("### Native role initialization", self.guide)
+        self.assertIn("### SQLite-backed local lifecycle", self.guide)
+        self.assertNotIn("legacy compatibility", self.guide)
+        self.assertNotIn("owner_composed_route_required", self.guide)
+
     def test_supported_owner_lanes_and_read_only_board_are_explicit(self):
         for module in (
             "sqlite_collaboration_workflow.py",

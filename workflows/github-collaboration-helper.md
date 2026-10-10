@@ -14,15 +14,14 @@ mutate GitHub state, or write Vault/private state.
 > only as historical, compatibility or diagnostic reference; they are neither
 > primary onboarding nor a fallback authority, and must not imply dual-write.
 
-> **Initialization postcondition.** The related first-use request
-> **“开启多agent协作”** is successful only when it identifies the bound project,
-> reports the durable Coordinator/Architect topology as reused, created or
-> held, and verifies a durable scheduler/Work-root binding. It must distinguish
-> native role onboarding from repository-contract-only setup. Missing or
-> ambiguous evidence is a typed hold with one next action, never `initialized`.
-> Current candidate defects #548 and #549 show why both topology and Work-root
-> evidence are required; this workflow documents the boundary and does not
-> repair it.
+> **Initialization boundaries.** Native role initialization uses
+> [onboard-bounded-collaboration.md](onboard-bounded-collaboration.md) and its
+> public owner readbacks. Its receipt proves only the two roles and requested
+> handshake, not SQLite/scheduler. Explicit SQLite local lifecycle adoption
+> separately requires project and scheduler/Work-root owner readbacks.
+> Repository-contract setup, native role initialization and SQLite activation
+> are distinct; missing evidence holds only the requested capability.
+> #548 and #549 are repaired historical evidence, not current blockers.
 
 ## Codex Target Activation
 
@@ -64,6 +63,24 @@ Useful smoke commands:
 ~/.agent-foundry/bin/agent-foundry-github-collab --repo farmerhunter/agent-foundry issue-context 222 --comment-limit 3
 ~/.agent-foundry/bin/agent-foundry-github-collab permission-smoke agent-label
 ```
+
+`activation-report` accepts two bounded guidance layouts independently for the
+generated and installed Codex skills. Legacy skills pass when all three
+top-level anchors (`activation evidence`, `target runtime`, and `user-facing
+activation instructions`) remain inline. Intent-routed skills pass only when
+their own `SKILL.md` explicitly routes `COLLAB-015` to
+`references/COLLAB-015.md` and that same skill-local, non-symlink reference
+retains the activation/pending, target-environment/smoke-path, and user-facing
+enablement obligations. The report does not search another skill, Core, Vault,
+or a parent directory for substitute evidence. Its `required_text_present`
+field continues to describe top-level text only; routed evidence is identified
+separately by `guidance_mode`, `evidence_paths`, `checks`, and `problems`.
+
+An `ok` activation report proves only this static launcher, workflow, routing,
+and guidance inspection. It does not prove generated or installed content is
+fresh, every enabled target was installed, a model loaded the skill, or a real
+user completed the documented trial. Use publish manifests, per-target install
+receipts/status, and an adopter smoke or explicit follow-up for those claims.
 
 The last command must fail closed because `agent-label` mutates scheduler
 ownership and is outside AF11 activation scope.

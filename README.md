@@ -87,21 +87,7 @@ DeepSeek, MiniMax, and similar model providers are treated as underlying models 
 
 ## Quick Start
 
-Run these from the Agent Foundry Core checkout on a new machine:
-
-```bash
-cd "/path/to/agent-foundry"
-python3 scripts/init_vault.py ~/.agent-foundry/vault/my-agent-foundry-vault --core-root . --apply
-python3 scripts/foundry_config.py write --core-root . --vault-root ~/.agent-foundry/vault/my-agent-foundry-vault
-python3 scripts/foundry_config.py status
-python3 scripts/runtime_manifest.py init
-python3 scripts/runtime_manifest.py detect
-python3 scripts/runtime_manifest.py plan
-```
-
-The locator step writes `~/.agent-foundry/config.yaml`. Agents working in other repositories use that locator to find both the Core checkout and the selected User Vault.
-
-For full install, adding or removing agents, and offline/online sync, see [docs/deployment.md](docs/deployment.md).
+新工作站请直接阅读并交给 agent 执行 [canonical Fresh Install runbook](docs/deployment.md#fresh-install)。它从使用者自己的 blank/selected Vault 开始，串联 starter packs、reviewed optional activation、Generated publish、runtime dry-run/apply 和逐层 readback，并明确三个真正需要 Human 决策的节点。不要从 README、pack README 和脚本源码自行拼接第二套安装流程。
 
 ## Daily Use
 
@@ -125,19 +111,7 @@ For a new Agent Foundry setup, install these two first-party capability packs af
 | `pack.bootstrap.minimal` | Gives the selected User Vault the minimal reviewed baseline for safe harvest, review, refresh, status, source-of-truth boundaries, and external-skill import/reference review. Install this first. |
 | `pack.multi-agent.optional` | Adds GitHub issue/PR collaboration habits: role labels, durable handoffs, Execution Contracts, Tester evidence routing, collaboration readiness audit, and safe action-plan guidance. Install this when you coordinate work through GitHub. |
 
-Quick-start install path:
-
-```text
-preview capability pack deployment catalog/capability-packs/pack.bootstrap.minimal
-apply reviewed capability pack catalog/capability-packs/pack.bootstrap.minimal
-verify capability pack pack.bootstrap.minimal
-
-preview capability pack deployment catalog/capability-packs/pack.multi-agent.optional
-apply reviewed capability pack catalog/capability-packs/pack.multi-agent.optional
-verify capability pack pack.multi-agent.optional
-```
-
-The preview step should report the selected Vault impact before any apply. After an accepted apply, the selected User Vault is canonical; generated adapters and runtime installs remain separate follow-up surfaces.
+完整、可执行且可恢复的 starter-pack 顺序只维护在 [Fresh Install runbook](docs/deployment.md#fresh-install)。Optional members import as `proposed`, not automatically active；activation、Generated publish 和 Runtime install 是三个不同边界。
 
 For full capability-pack behavior, see [docs/usage.md](docs/usage.md), [docs/commands.md](docs/commands.md), and the catalog pages under `catalog/capability-packs/`.
 
